@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BottomBar } from './components/BottomBar';
 import { Palette } from './components/Palette';
-import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } from './components/StoryCanvas';
+import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } from './components/canvas/StoryCanvas';
 import { Symbol } from './components/Symbol';
 import { TopBar } from './components/TopBar';
-import { laneRows } from './model/layout';
-import { addLane, isProtected, removeObject, renameProject, spanDependents, updateLane } from './model/project';
+import { laneRows, nodeBox } from './model/layout';
+import { addLane, isProtected, removeConnection, removeObject, renameProject, spanDependents, updateLane } from './model/project';
+import { findIssues } from './model/validate';
 import { TYPE_LABEL } from './model/semantics';
 import type { ObjectType } from './model/types';
 import { useStudio } from './use-studio';
@@ -50,8 +51,24 @@ export const App = () => {
 
   // A selection that no longer exists (after undo, say) is dropped.
   useEffect(() => {
-    if (selection && !project.objects[selection]) setSelection(null);
+    if (selection && !project.objects[selection] && !project.connections.some((c) => c.id === selection)) setSelection(null);
   }, [project, selection]);
+
+  const issues = useMemo(() => findIssues(project), [project]);
+  const issueMap = useMemo(() => new Map(issues.map((i) => [i.id, i.message])), [issues]);
+
+  /** Step through what needs a look: select it, bring it into view and say what's wrong. */
+  const showNextIssue = () => {
+    if (issues.length === 0) return;
+    const at = issues.findIndex((i) => i.id === selection);
+    const issue = issues[(at + 1) % issues.length]!;
+    setSelection(issue.id);
+    say(issue.message);
+    const box = nodeBox(project, issue.id);
+    if (!box) return;
+    const { w, h } = canvasSize();
+    setViewState((v) => ({ ...v, panX: (w + 130) / 2 - (box.x + box.w / 2) * v.zoom, panY: h / 2 - (box.y + box.h / 2) * v.zoom }));
+  };
 
   // ------------------------------------------------------------ palette drag
 
@@ -93,13 +110,18 @@ export const App = () => {
 
   // ------------------------------------------------------------ commands
 
-  const deleteSelection = () => {
-    if (!selection || !project.objects[selection]) return;
-    if (isProtected(project, selection)) {
+  const deleteItem = (id: string | null) => {
+    if (!id) return;
+    if (project.connections.some((c) => c.id === id)) {
+      commit(removeConnection(project, id));
+      setSelection(null);
+      return;
+    }
+    if (!project.objects[id]) return;
+    if (isProtected(project, id)) {
       say('Beginning and Ending are protected. You can rename them but not remove them.');
       return;
     }
-    const id = selection;
     const remove = () => {
       commit(removeObject(project, id));
       setSelection(null);
@@ -112,7 +134,7 @@ export const App = () => {
     const names = dependents.map((l) => `“${l.name}”`).join(', ');
     setAsk({
       title: `Delete “${project.objects[id]!.name}”?`,
-      message: `${names} ${dependents.length === 1 ? 'starts or stops' : 'start or stop'} here. The span will move to the neighbouring spine node.`,
+      message: `${names} ${dependents.length === 1 ? 'branches off or rejoins' : 'branch off or rejoin'} the spine here. It will move to the neighbouring spine node.`,
       confirmLabel: 'Delete',
       onConfirm: remove,
     });
@@ -159,9 +181,13 @@ export const App = () => {
       } else if (mod && key === '0') {
         e.preventDefault();
         fit();
+      } else if (!mod && (e.key === '=' || e.key === '+')) {
+        zoomBy(1.2);
+      } else if (!mod && (e.key === '-' || e.key === '_')) {
+        zoomBy(1 / 1.2);
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selection) {
         e.preventDefault();
-        deleteSelection();
+        deleteItem(selection);
       } else if ((e.key === 'F2' || e.key === 'Enter') && selection) {
         e.preventDefault();
         canvas.current?.rename(selection);
@@ -186,6 +212,8 @@ export const App = () => {
         onBible={() => say('The Game Bible is not built yet.')}
         onEngine={() => say('Engine handoff is not built yet.')}
         saveState={studio.saveState}
+        issueCount={issues.length}
+        onIssues={showNextIssue}
       />
       <Palette active={drag?.placing ? drag.type : null} onStart={startPaletteDrag} />
       <main className="main">
@@ -200,6 +228,9 @@ export const App = () => {
           paletteDrag={showGhost ? drag : null}
           bottomInset={BOTTOM_BAR}
           onConfirm={setAsk}
+          onDelete={deleteItem}
+          issues={issueMap}
+          onSay={say}
         />
         <BottomBar
           lanes={project.lanes}

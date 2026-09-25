@@ -394,18 +394,6 @@ a:hover {
   background: linear-gradient(180deg, rgba(201, 164, 92, 0.08), rgba(201, 164, 92, 0.03));
 }
 
-.track-subplot {
-  border-top: 1px solid var(--c-subplot-line);
-  border-bottom: 1px solid var(--c-subplot-line);
-  background: rgba(143, 168, 196, 0.025);
-}
-
-.track-subplot.track-new {
-  border-top: 1px dashed var(--c-subplot);
-  border-bottom: 1px dashed var(--c-subplot);
-  background: rgba(143, 168, 196, 0.05);
-}
-
 .track-character {
   border-top: 1px solid color-mix(in srgb, var(--lane) 30%, var(--ground));
   border-bottom: 1px solid color-mix(in srgb, var(--lane) 30%, var(--ground));
@@ -424,12 +412,6 @@ a:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   opacity: 0.85;
-}
-
-.span-region {
-  position: absolute;
-  background: rgba(143, 168, 196, 0.07);
-  pointer-events: none;
 }
 
 .span-handle {
@@ -1094,4 +1076,384 @@ a:hover {
 .danger-btn {
   border-color: #7a3336;
   color: #f19a9d;
+}
+
+/* ------------------------------------------------------------ subplots */
+
+/* A subplot is a short band below the spine, from where it branches off to where it rejoins. */
+.subplot-band {
+  position: absolute;
+  border-top: 1px solid var(--c-subplot-line);
+  border-bottom: 1px solid var(--c-subplot-line);
+  background: rgba(143, 168, 196, 0.07);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.subplot-band.empty {
+  border-style: dashed;
+  border-color: var(--c-subplot);
+  background: rgba(143, 168, 196, 0.05);
+}
+
+.subplot-band.locked {
+  background: rgba(143, 168, 196, 0.035);
+}
+
+.subplot-tab {
+  position: absolute;
+  left: 14px;
+  top: 4px;
+  right: 14px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.subplot-tab b {
+  font-family: var(--font-label);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--c-subplot);
+}
+
+.subplot-name {
+  font-size: 10.5px;
+  color: #b9c7d8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.subplot-tab .header-icons {
+  margin: 0 0 0 auto;
+  gap: 0;
+}
+
+.subplot-tab .header-icons button {
+  width: 18px;
+  height: 16px;
+}
+
+.subplot-tab .header-input {
+  width: 140px;
+  font-size: 10.5px;
+}
+
+.subplot-tab .lane-menu {
+  left: auto;
+  right: 0;
+  top: 20px;
+  bottom: auto;
+}
+
+.band-hint {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 8px;
+  font-size: 10.5px;
+  color: var(--c-subplot);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+.subplot-path {
+  fill: none;
+}
+
+.subplot-leg {
+  stroke-width: 2;
+}
+
+.subplot-through {
+  stroke-width: 2.5;
+}
+
+.subplot-through.empty {
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+}
+
+/* ------------------------------------------------------------ connections */
+
+.connectors {
+  pointer-events: none;
+}
+
+.connection-line {
+  fill: none;
+  stroke: var(--connector);
+  stroke-width: 1.8;
+}
+
+.connection-arcEvent .connection-line {
+  stroke-width: 1.2;
+  stroke-dasharray: 2 3;
+  opacity: 0.85;
+}
+
+.connection-laneTie .connection-line {
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+
+.connection.selected .connection-line {
+  stroke: var(--gold-hi) !important;
+  stroke-width: 2.5;
+  opacity: 1;
+}
+
+.connection-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.connection-hit:hover + .connection-line,
+.connection:hover .connection-line {
+  stroke-width: 2.5;
+}
+
+.draft {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.draft.valid {
+  stroke: var(--c-environment);
+}
+
+.draft.refused {
+  stroke: var(--c-error);
+}
+
+.canvas.linking,
+.canvas.linking * {
+  cursor: crosshair !important;
+}
+
+.pill-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--ground);
+  border: 1px solid var(--border);
+  font-size: 10.5px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pill-label.selected {
+  border-color: var(--gold-hi);
+}
+
+.pill-label input {
+  width: 120px;
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.branch-hint {
+  position: absolute;
+  width: 460px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------ nodes, step 4 */
+
+.port-ring {
+  cursor: crosshair;
+  z-index: 1;
+}
+
+.port-ring:hover {
+  background: var(--gold);
+  box-shadow: 0 0 0 4px rgba(201, 164, 92, 0.25);
+}
+
+.node.choice .port-ring {
+  right: -9px;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+}
+
+.node.pill .port-ring {
+  right: -8px;
+}
+
+.card-dialogue .card-kicker i {
+  background: var(--c-dialogue);
+}
+
+.card-outcome {
+  border-style: dashed !important;
+  border-color: var(--border-strong) !important;
+}
+
+.card-outcome .card-kicker i {
+  background: var(--text);
+}
+
+.node.target-valid {
+  outline: 2px solid var(--c-environment);
+  outline-offset: 3px;
+}
+
+.node.target-invalid {
+  outline: 2px solid var(--c-error);
+  outline-offset: 3px;
+}
+
+.issue-badge {
+  position: absolute;
+  right: 6px;
+  top: -8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--c-error);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.node.choice .issue-badge {
+  right: -6px;
+}
+
+.node.arc-event {
+  border-radius: 17px;
+  background: var(--node);
+  border: 1.5px solid var(--lane);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.node.arc-up {
+  background: color-mix(in srgb, var(--lane) 14%, var(--node));
+}
+
+.arc-mark {
+  color: var(--lane);
+  font-size: 14px;
+  width: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.arc-mark i {
+  width: 8px;
+  height: 8px;
+  transform: rotate(45deg);
+  background: var(--lane);
+}
+
+.arc-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node.arc-event .node-input {
+  width: 64px;
+  margin: 0;
+  font-size: 11px;
+}
+
+.node.arc-event.selected {
+  box-shadow: 0 0 0 2px var(--ground), 0 0 0 3.5px var(--gold-hi);
+}
+
+/* ------------------------------------------------------------ menus, top bar */
+
+.context-menu {
+  position: absolute;
+  z-index: 30;
+  min-width: 180px;
+  padding: 4px;
+  background: #26221a;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+}
+
+.context-menu button {
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.context-menu button:hover {
+  background: #3a3222;
+}
+
+.context-menu .danger {
+  color: #f19a9d;
+}
+
+.menu-check {
+  width: 12px;
+  font-size: 8px;
+  color: var(--gold-hi);
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--border-strong);
+}
+
+.issues-btn {
+  gap: 8px;
+}
+
+.issue-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-error);
 }

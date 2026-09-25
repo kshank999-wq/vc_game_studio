@@ -213,3 +213,124 @@ describe('undo', () => {
     expect(h.present).toBe(p1);
   });
 });
+
+// ---------------------------------------------------------------- step 4
+
+import { connect, connectionRefusal, relabelConnection, setOutcome, setPolarity, settle } from '../project';
+import { findIssues } from '../validate';
+
+const node = (p: Project, type: string, n = 0) => Object.values(p.objects).filter((o) => o.type === type)[n]!;
+
+describe('a subplot', () => {
+  it('grows to fit what is dropped into it, pushing the spine apart where it rejoins', () => {
+    const added = addLane(createProject(), 'subplot');
+    let p = added.project;
+    const end = spineSequence(p).at(-1)!;
+    const before = p.placements[end]!.x;
+    for (let i = 0; i < 4; i++) {
+      const range = spanRange(p, p.lanes.find((l) => l.id === added.laneId)!)!;
+      p = place(p, 'scene', added.laneId, range.to + 100).project;
+    }
+    expect(p.placements[end]!.x).toBeGreaterThan(before);
+    const lane = p.lanes.find((l) => l.id === added.laneId)!;
+    const range = spanRange(p, lane)!;
+    for (const id of laneSequence(p, added.laneId)) {
+      const x = p.placements[id]!.x;
+      expect(x).toBeGreaterThanOrEqual(range.from);
+      expect(x + nodeSize('scene', 'subplot').w).toBeLessThanOrEqual(range.to);
+    }
+    noOverlaps(p, spineId(p));
+    noOverlaps(p, added.laneId);
+  });
+
+  it('always rejoins the spine: its ends are spine nodes, and a deleted rejoin moves on', () => {
+    let p = createProject();
+    p = place(p, 'scene', spineId(p), 400).project;
+    const added = addLane(p, 'subplot');
+    p = added.project;
+    const lane = () => p.lanes.find((l) => l.id === added.laneId)!;
+    p = removeObject(p, lane().span!.endRef);
+    expect(spineSequence(p)).toContain(lane().span!.endRef);
+    expect(spineSequence(p)).toContain(lane().span!.startRef);
+    expect(lane().span!.startRef).not.toBe(lane().span!.endRef);
+  });
+
+  it('keeps its beats inside when an end is dragged in, opening the spine if it must', () => {
+    let p = createProject();
+    p = place(p, 'scene', spineId(p), 400).project;
+    p = place(p, 'scene', spineId(p), 700).project;
+    const added = addLane(p, 'subplot');
+    p = setSpanEdge(added.project, added.laneId, 'end', spineSequence(added.project).at(-1)!);
+    for (let i = 0; i < 3; i++) p = place(p, 'plotPoint', added.laneId, 5000).project;
+    p = setSpanEdge(p, added.laneId, 'end', spineSequence(p)[2]!);
+    const range = spanRange(p, p.lanes.find((l) => l.id === added.laneId)!)!;
+    const last = laneSequence(p, added.laneId).at(-1)!;
+    expect(p.placements[last]!.x + nodeSize('plotPoint', 'subplot').w).toBeLessThanOrEqual(range.to);
+    expect(settle(p)).toBe(p);
+  });
+});
+
+describe('branches', () => {
+  it('float above the spine and never sit on it', () => {
+    const p = createProject();
+    const { project, id } = place(p, 'scene', null as unknown as string, 200);
+    expect(project.placements[id]!.laneId).toBeNull();
+    expect(project.placements[id]!.y + nodeSize('scene').h).toBeLessThan(0);
+    const moved = moveNode(project, id, 260, 500);
+    expect(moved.placements[id]!.y + nodeSize('scene').h).toBeLessThan(0);
+    expect(moved.placements[id]!.x).toBe(260);
+  });
+
+  it('connect from a choice with a numbered option label that can be renamed', () => {
+    let p = createProject();
+    p = place(p, 'choice', spineId(p), 120).project;
+    const branch = placeNew(p, 'scene', null, 200, -200)!;
+    p = branch.project;
+    const choice = node(p, 'choice');
+    const made = connect(p, choice.id, branch.id);
+    if ('error' in made) throw new Error(made.error);
+    const c = made.project.connections[0]!;
+    expect(c).toMatchObject({ kind: 'branch', label: 'Option 1', sourceId: choice.id });
+    p = relabelConnection(made.project, c.id, 'Crawl through');
+    expect(p.connections[0]!.label).toBe('Crawl through');
+    expect(connect(p, choice.id, branch.id)).toEqual({ error: 'These are already connected' });
+  });
+
+  it('refuse connections that the tracks already express', () => {
+    let p = createProject();
+    const [begin, pp1, end] = spineSequence(p);
+    expect(connectionRefusal(p, pp1!, end!)).toMatch(/track order/);
+    expect(connectionRefusal(p, pp1!, begin!)).toMatch(/Beginning/);
+    expect(connectionRefusal(p, pp1!, pp1!)).toMatch(/itself/);
+    p = place(p, 'choice', spineId(p), 120).project;
+    expect(connectionRefusal(p, node(p, 'choice').id, end!)).toBeNull();
+  });
+
+  it('flag dead ends until they lead on or are marked as an ending', () => {
+    let p = createProject();
+    p = place(p, 'choice', spineId(p), 120).project;
+    const choice = node(p, 'choice');
+    expect(findIssues(p).map((i) => i.id)).toEqual([choice.id]);
+    const branch = placeNew(p, 'scene', null, 200, -200)!;
+    const made = connect(branch.project, choice.id, branch.id);
+    if ('error' in made) throw new Error(made.error);
+    p = made.project;
+    expect(findIssues(p)).toEqual([{ id: branch.id, message: expect.stringMatching(/Dead end/) }]);
+    p = setOutcome(p, branch.id, 'gameOver');
+    expect(findIssues(p)).toEqual([]);
+  });
+});
+
+describe('arc events', () => {
+  it('land on a character lane tied to the spine moment above them', () => {
+    let p = createProject();
+    const added = addLane(p, 'character');
+    p = added.project;
+    const pp1 = spineSequence(p)[1]!;
+    const { project, id } = place(p, 'arcEvent', added.laneId, p.placements[pp1]!.x);
+    expect(project.connections).toEqual([expect.objectContaining({ sourceId: id, targetId: pp1, kind: 'arcEvent' })]);
+    expect(canPlace(project, 'arcEvent', spineId(project))).toBe(false);
+    const setback = setPolarity(project, id, 'down');
+    expect(setback.objects[id]).toMatchObject({ name: 'Setback', data: { polarity: 'down' } });
+  });
+});

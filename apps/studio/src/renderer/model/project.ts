@@ -1,6 +1,16 @@
-import { CHARACTER_COLORS, COLORS, LANE_ACCEPTS } from './semantics';
-import { NODE_GAP, laneSequence, nodeSize, spineLane, spineSequence } from './layout';
-import type { Lane, LaneKind, ObjectType, Project, StoryObject } from './types';
+import { BRANCH_ACCEPTS, CHARACTER_COLORS, COLORS, LANE_ACCEPTS } from './semantics';
+import {
+  BRANCH_CLEARANCE,
+  MIN_SPAN,
+  NODE_GAP,
+  SPAN_PAD,
+  laneSequence,
+  nodeSize,
+  spanRange,
+  spineLane,
+  spineSequence,
+} from './layout';
+import type { Connection, ConnectionKind, Lane, LaneKind, ObjectType, Project, StoryObject } from './types';
 
 /**
  * Operations on a project. Each takes a project and returns a new one (or the
@@ -67,6 +77,7 @@ const CODE_FORMAT: Partial<Record<ObjectType, { prefix: string; pad: number }>> 
   scene: { prefix: 'SC-', pad: 2 },
   cinematic: { prefix: 'CIN-', pad: 2 },
   choice: { prefix: 'C', pad: 0 },
+  dialogue: { prefix: 'DLG-', pad: 2 },
 };
 const SUBPLOT_POINT = { prefix: 'SP', pad: 0 };
 
@@ -85,24 +96,21 @@ const DEFAULT_NAME: Partial<Record<ObjectType, (code: string) => string>> = {
   scene: () => 'New scene',
   cinematic: () => 'New cinematic',
   choice: () => 'Choice',
+  dialogue: () => 'New dialogue',
+  arcEvent: () => 'Growth',
 };
 
-// ---------------------------------------------------------------- placing
+// ---------------------------------------------------------------- settling
 
-const laneById = (project: Project, laneId: string): Lane | undefined => project.lanes.find((l) => l.id === laneId);
-
-export const canPlace = (project: Project, type: ObjectType, laneId: string): boolean => {
-  const lane = laneById(project, laneId);
-  if (!lane || (lane.locked && lane.kind !== 'spine')) return false;
-  return LANE_ACCEPTS[lane.kind].includes(type);
-};
+const laneById = (project: Project, laneId: string | null): Lane | undefined =>
+  laneId === null ? undefined : project.lanes.find((l) => l.id === laneId);
 
 /**
  * Keep a track in order without overlaps. Nodes are taken left to right by x
  * (on the spine Beginning is always first and Ending always last) and each is
  * pushed right just far enough to clear its neighbour. Nothing moves left.
  */
-export const packLane = (project: Project, laneId: string): Project => {
+export const packLane = (project: Project, laneId: string, floor = -Infinity): Project => {
   const lane = laneById(project, laneId);
   if (!lane) return project;
   const ids = laneSequence(project, laneId);
@@ -115,7 +123,7 @@ export const packLane = (project: Project, laneId: string): Project => {
   }
   const placements = { ...project.placements };
   let changed = false;
-  let edge = -Infinity;
+  let edge = floor;
   for (const id of ids) {
     const placement = placements[id];
     const object = project.objects[id];
@@ -130,6 +138,65 @@ export const packLane = (project: Project, laneId: string): Project => {
   return changed ? { ...project, placements } : project;
 };
 
+/** Move every spine node from `fromId` onward right by `delta`. */
+const shiftSpineFrom = (project: Project, fromId: string, delta: number): Project => {
+  const sequence = spineSequence(project);
+  const at = sequence.indexOf(fromId);
+  if (at < 0 || delta <= 0) return project;
+  const placements = { ...project.placements };
+  for (const id of sequence.slice(at)) {
+    const placement = placements[id];
+    if (placement) placements[id] = { ...placement, x: placement.x + Math.ceil(delta) };
+  }
+  return { ...project, placements };
+};
+
+/**
+ * Bring the whole graph back into shape after any change: the spine in order,
+ * and every subplot's beats inside its band. A subplot always rejoins the
+ * spine, so when its beats need more room than the band has, the spine opens
+ * up at the node it rejoins, and everything after that moves along.
+ */
+export const settle = (project: Project): Project => {
+  let next = packLane(project, spineLane(project).id);
+  for (let pass = 0; pass < 12; pass++) {
+    let grew = false;
+    const subplots = next.lanes
+      .filter((l) => l.kind === 'subplot' && l.span)
+      .map((l) => ({ lane: l, range: spanRange(next, l) }))
+      .sort((a, b) => (a.range?.from ?? 0) - (b.range?.from ?? 0));
+    for (const { lane } of subplots) {
+      const range = spanRange(next, lane);
+      if (!range || !lane.span) continue;
+      next = packLane(next, lane.id, range.from + SPAN_PAD);
+      const ids = laneSequence(next, lane.id);
+      const last = ids[ids.length - 1];
+      const lastPlacement = last ? next.placements[last] : undefined;
+      const lastObject = last ? next.objects[last] : undefined;
+      const needed =
+        lastPlacement && lastObject
+          ? lastPlacement.x + nodeSize(lastObject.type, 'subplot').w + SPAN_PAD
+          : range.from + MIN_SPAN;
+      if (needed > range.to + 0.5) {
+        next = packLane(shiftSpineFrom(next, lane.span.endRef, needed - range.to), spineLane(next).id);
+        grew = true;
+      }
+    }
+    if (!grew) break;
+  }
+  return next;
+};
+
+// ---------------------------------------------------------------- placing
+
+/** `laneId` null means the open canvas above the spine, where branches float. */
+export const canPlace = (project: Project, type: ObjectType, laneId: string | null): boolean => {
+  if (laneId === null) return BRANCH_ACCEPTS.includes(type);
+  const lane = laneById(project, laneId);
+  if (!lane || (lane.locked && lane.kind !== 'spine')) return false;
+  return LANE_ACCEPTS[lane.kind].includes(type);
+};
+
 /** The leftmost x a spine node may take: just clear of Beginning. */
 const spineFloor = (project: Project): number => {
   const beginId = spineSequence(project).find((id) => project.objects[id]?.type === 'begin');
@@ -137,29 +204,73 @@ const spineFloor = (project: Project): number => {
   return begin ? begin.x + nodeSize('begin').w + NODE_GAP : -Infinity;
 };
 
-/** Drop a new node from the palette onto a track at world x (its left edge). */
+/** Branch nodes float above the spine, never on or below it. */
+const branchY = (type: ObjectType, y: number): number => Math.min(Math.round(y), -nodeSize(type).h - BRANCH_CLEARANCE);
+
+/** The spine node whose centre is nearest x: what an arc event ties to when it lands. */
+const nearestSpineNode = (project: Project, x: number): string | undefined => {
+  let best: string | undefined;
+  let distance = Infinity;
+  for (const id of spineSequence(project)) {
+    const object = project.objects[id];
+    const placement = project.placements[id];
+    if (!object || !placement || object.type === 'begin' || object.type === 'end') continue;
+    const d = Math.abs(placement.x + nodeSize(object.type).w / 2 - x);
+    if (d < distance) {
+      best = id;
+      distance = d;
+    }
+  }
+  return best;
+};
+
+/**
+ * Drop a new node from the palette at world (x, y), its top-left corner. On a
+ * track only x matters; above the spine it floats as a branch.
+ */
 export const placeNew = (
   project: Project,
   type: ObjectType,
-  laneId: string,
+  laneId: string | null,
   x: number,
+  y = 0,
   now = stamp(),
 ): { project: Project; id: string } | null => {
   if (!canPlace(project, type, laneId)) return null;
   const lane = laneById(project, laneId);
-  if (!lane) return null;
-  const format = lane.kind === 'subplot' && type === 'plotPoint' ? SUBPLOT_POINT : CODE_FORMAT[type];
+  if (laneId !== null && !lane) return null;
+  const inSubplot = lane?.kind === 'subplot';
+  const format = inSubplot && type === 'plotPoint' ? SUBPLOT_POINT : CODE_FORMAT[type];
   const code = format ? nextCode(project, format) : undefined;
-  const name =
-    lane.kind === 'subplot' && type === 'plotPoint' ? 'Subplot beat' : (DEFAULT_NAME[type]?.(code ?? '') ?? 'Untitled');
-  const object = makeObject(type, name, now, code ? { code } : {});
-  const floor = lane.kind === 'spine' ? spineFloor(project) : -Infinity;
-  const placed: Project = {
+  const name = inSubplot && type === 'plotPoint' ? 'Subplot beat' : (DEFAULT_NAME[type]?.(code ?? '') ?? 'Untitled');
+  const data: StoryObject['data'] = code ? { code } : {};
+  if (type === 'arcEvent') data.polarity = 'up';
+  const object = makeObject(type, name, now, data);
+
+  let placeX = Math.round(x);
+  if (lane?.kind === 'spine') placeX = Math.max(placeX, spineFloor(project));
+  if (lane && inSubplot) {
+    // Dropped past the band's end, a beat joins the end and the band grows to fit it.
+    const range = spanRange(project, lane);
+    if (range) placeX = Math.min(Math.max(placeX, range.from + SPAN_PAD), Math.max(range.from + SPAN_PAD, range.to - SPAN_PAD - nodeSize(type, 'subplot').w));
+  }
+  const placement = { laneId, x: placeX, y: laneId === null ? branchY(type, y) : 0 };
+  let placed: Project = {
     ...project,
     objects: { ...project.objects, [object.id]: object },
-    placements: { ...project.placements, [object.id]: { laneId, x: Math.max(Math.round(x), floor), y: 0 } },
+    placements: { ...project.placements, [object.id]: placement },
   };
-  return { project: packLane(placed, laneId), id: object.id };
+  if (laneId !== null) placed = packLane(placed, laneId);
+  if (type === 'arcEvent') {
+    const moment = nearestSpineNode(placed, placeX + nodeSize(type).w / 2);
+    if (moment) {
+      placed = {
+        ...placed,
+        connections: [...placed.connections, { id: newId('conn'), sourceId: object.id, targetId: moment, kind: 'arcEvent' }],
+      };
+    }
+  }
+  return { project: settle(placed), id: object.id };
 };
 
 /** Beginning and Ending are protected: their content is editable, their place is not. */
@@ -168,17 +279,27 @@ export const isProtected = (project: Project, id: string): boolean => {
   return type === 'begin' || type === 'end';
 };
 
-/** Slide a node along its track. Its new x decides its new place in the order. */
-export const moveNode = (project: Project, id: string, x: number): Project => {
+/**
+ * Move a node. On a track it slides along, and its new x decides its place
+ * in the order; a branch moves freely above the spine.
+ */
+export const moveNode = (project: Project, id: string, x: number, y?: number): Project => {
   const placement = project.placements[id];
-  if (!placement || placement.laneId === null || isProtected(project, id)) return project;
+  const object = project.objects[id];
+  if (!placement || !object || isProtected(project, id)) return project;
+  if (placement.laneId === null) {
+    const nextX = Math.round(x);
+    const nextY = branchY(object.type, y ?? placement.y);
+    if (nextX === placement.x && nextY === placement.y) return project;
+    return { ...project, placements: { ...project.placements, [id]: { ...placement, x: nextX, y: nextY } } };
+  }
   const lane = laneById(project, placement.laneId);
   if (!lane || (lane.locked && lane.kind !== 'spine')) return project;
   const floor = lane.kind === 'spine' ? spineFloor(project) : -Infinity;
   const nextX = Math.max(Math.round(x), floor);
   if (nextX === placement.x) return project;
   const moved = { ...project, placements: { ...project.placements, [id]: { ...placement, x: nextX } } };
-  return packLane(moved, placement.laneId);
+  return settle(packLane(moved, placement.laneId));
 };
 
 export const renameObject = (project: Project, id: string, name: string, now = stamp()): Project => {
@@ -198,13 +319,40 @@ export const renameProject = (project: Project, name: string): Project => {
   return !trimmed || trimmed === project.name ? project : { ...project, name: trimmed };
 };
 
+const patchData = (project: Project, id: string, patch: Partial<StoryObject['data']>, now = stamp()): Project => {
+  const object = project.objects[id];
+  if (!object) return project;
+  const data = { ...object.data, ...patch };
+  for (const key of Object.keys(patch)) if (patch[key] === undefined) delete data[key];
+  return { ...project, objects: { ...project.objects, [id]: { ...object, data, modified: now } } };
+};
+
+/** Mark a branch node as an alternate ending or a game over (or clear it). */
+export const setOutcome = (project: Project, id: string, outcome: 'ending' | 'gameOver' | null): Project => {
+  const object = project.objects[id];
+  if (!object || project.placements[id]?.laneId !== null || (object.data.outcome ?? null) === outcome) return project;
+  return patchData(project, id, { outcome: outcome ?? undefined });
+};
+
+const POLARITY_NAME = { up: 'Growth', down: 'Setback', turn: 'Turning point' } as const;
+
+/** Growth (+), setback (−) or turning point (◆). A default name follows the change. */
+export const setPolarity = (project: Project, id: string, polarity: 'up' | 'down' | 'turn'): Project => {
+  const object = project.objects[id];
+  if (!object || object.type !== 'arcEvent' || object.data.polarity === polarity) return project;
+  let next = patchData(project, id, { polarity });
+  if (Object.values(POLARITY_NAME).includes(object.name as never)) next = renameObject(next, id, POLARITY_NAME[polarity]);
+  return next;
+};
+
 /** Subplot lanes whose span starts or ends at this spine node. */
 export const spanDependents = (project: Project, id: string): Lane[] =>
   project.lanes.filter((l) => l.span && (l.span.startRef === id || l.span.endRef === id));
 
 /**
  * Delete a node. A subplot that started or ended on it moves to the
- * neighbouring spine node, so no span is ever left pointing at nothing.
+ * neighbouring spine node, so no span is ever left pointing at nothing, and
+ * connections to it go with it.
  */
 export const removeObject = (project: Project, id: string): Project => {
   if (!project.objects[id] || isProtected(project, id)) return project;
@@ -216,21 +364,115 @@ export const removeObject = (project: Project, id: string): Project => {
     if (!lane.span) return lane;
     let { startRef, endRef } = lane.span;
     if (startRef === id) startRef = after ?? before ?? startRef;
-    if (endRef === id) endRef = before ?? after ?? endRef;
+    if (endRef === id) endRef = after ?? before ?? endRef;
+    if (startRef === endRef) {
+      // A span needs two ends; widen it by one node rather than collapse it.
+      const s = sequence.filter((n) => n !== id);
+      const at = s.indexOf(startRef);
+      if (at < s.length - 1) endRef = s[at + 1]!;
+      else if (at > 0) startRef = s[at - 1]!;
+    }
     return startRef === lane.span.startRef && endRef === lane.span.endRef ? lane : { ...lane, span: { startRef, endRef } };
   });
   const objects = { ...project.objects };
   delete objects[id];
   const placements = { ...project.placements };
   delete placements[id];
-  return {
+  return settle({
     ...project,
     objects,
     placements,
     lanes,
     connections: project.connections.filter((c) => c.sourceId !== id && c.targetId !== id),
+  });
+};
+
+// ---------------------------------------------------------------- connections
+
+export type ConnectResult = { project: Project; id: string } | { error: string };
+
+const laneKindOf = (project: Project, id: string): LaneKind | 'branch' | null => {
+  const placement = project.placements[id];
+  if (!placement) return null;
+  if (placement.laneId === null) return 'branch';
+  return laneById(project, placement.laneId)?.kind ?? null;
+};
+
+/** Can a drag from `sourceId`'s port end on `targetId`? Returns why not, or null. */
+export const connectionRefusal = (project: Project, sourceId: string, targetId: string): string | null => {
+  const source = project.objects[sourceId];
+  const target = project.objects[targetId];
+  if (!source || !target) return 'Nothing to connect to';
+  if (sourceId === targetId) return 'A node can’t lead to itself';
+  const from = laneKindOf(project, sourceId);
+  const to = laneKindOf(project, targetId);
+  if (target.type === 'begin') return 'Nothing leads back to Beginning';
+  if (source.type === 'end') return 'The story ends at Ending';
+  if (source.type === 'arcEvent' || target.type === 'arcEvent') {
+    const other = source.type === 'arcEvent' ? target : source;
+    const otherLane = source.type === 'arcEvent' ? to : from;
+    if (other.type === 'arcEvent' || otherLane === 'character') return 'Tie an arc event to a story moment';
+    if (other.type === 'begin' || other.type === 'end') return 'Tie an arc event to a plot point, choice or scene';
+  } else {
+    if (from === 'character' || to === 'character') return 'Character lanes connect through arc events';
+    if (from === 'spine' && to === 'spine' && source.type !== 'choice') {
+      return 'Spine nodes follow each other in track order; a choice can skip ahead';
+    }
+    const sourceLane = project.placements[sourceId]?.laneId;
+    if (from === 'subplot' && sourceLane === project.placements[targetId]?.laneId) {
+      return 'Beats on a subplot follow each other in order';
+    }
+  }
+  const [a, b] = source.type !== 'arcEvent' && target.type === 'arcEvent' ? [targetId, sourceId] : [sourceId, targetId];
+  if (project.connections.some((c) => c.sourceId === a && c.targetId === b)) return 'These are already connected';
+  return null;
+};
+
+const kindFor = (project: Project, sourceId: string, targetId: string): ConnectionKind => {
+  if (project.objects[sourceId]?.type === 'arcEvent') return 'arcEvent';
+  const from = laneKindOf(project, sourceId);
+  const to = laneKindOf(project, targetId);
+  if ((from === 'subplot' && to === 'spine') || (from === 'spine' && to === 'subplot')) return 'laneTie';
+  return 'branch';
+};
+
+/**
+ * Connect two nodes (drag from a port to a node). Branches from a choice get
+ * an option label for their pill. An arc event is always the source of its tie.
+ */
+export const connect = (project: Project, sourceId: string, targetId: string): ConnectResult => {
+  const refusal = connectionRefusal(project, sourceId, targetId);
+  if (refusal) return { error: refusal };
+  let [from, to] = [sourceId, targetId];
+  if (project.objects[to]?.type === 'arcEvent') [from, to] = [to, from];
+  const kind = kindFor(project, from, to);
+  const connection: Connection = { id: newId('conn'), sourceId: from, targetId: to, kind };
+  if (kind === 'branch' && project.objects[from]?.type === 'choice') {
+    const options = project.connections.filter((c) => c.sourceId === from && c.kind === 'branch').length;
+    connection.label = `Option ${options + 1}`;
+  }
+  return { project: { ...project, connections: [...project.connections, connection] }, id: connection.id };
+};
+
+export const relabelConnection = (project: Project, id: string, label: string): Project => {
+  const trimmed = label.trim();
+  const connection = project.connections.find((c) => c.id === id);
+  if (!connection || (connection.label ?? '') === trimmed) return project;
+  return {
+    ...project,
+    connections: project.connections.map((c) => {
+      if (c.id !== id) return c;
+      const next: Connection = { ...c, label: trimmed };
+      if (!trimmed) delete next.label;
+      return next;
+    }),
   };
 };
+
+export const removeConnection = (project: Project, id: string): Project =>
+  project.connections.some((c) => c.id === id)
+    ? { ...project, connections: project.connections.filter((c) => c.id !== id) }
+    : project;
 
 // ---------------------------------------------------------------- lanes
 
@@ -254,12 +496,12 @@ export const addLane = (
   };
   let objects = project.objects;
   if (kind === 'subplot') {
-    // A new subplot starts at the first node after Beginning and runs to Ending;
-    // its handles set where it really starts and stops.
+    // A new subplot branches off the first node after Beginning and rejoins at
+    // the next one; dropping beats in makes it longer.
     const sequence = spineSequence(project);
     const startRef = sequence[1] ?? sequence[0];
-    const endRef = sequence[sequence.length - 1];
-    if (startRef && endRef) lane.span = { startRef, endRef };
+    const endRef = sequence[2] ?? sequence[sequence.length - 1];
+    if (startRef && endRef && startRef !== endRef) lane.span = { startRef, endRef };
   } else {
     const used = new Set(project.lanes.map((l) => l.color.toUpperCase()));
     lane.color = CHARACTER_COLORS.find((c) => !used.has(c)) ?? CHARACTER_COLORS[count % CHARACTER_COLORS.length]!;
@@ -268,7 +510,7 @@ export const addLane = (
     lane.characterId = character.id;
     objects = { ...objects, [character.id]: character };
   }
-  return { project: { ...project, objects, lanes: [...project.lanes, lane] }, laneId: lane.id };
+  return { project: settle({ ...project, objects, lanes: [...project.lanes, lane] }), laneId: lane.id };
 };
 
 export type LanePatch = Partial<Pick<Lane, 'name' | 'subtitle' | 'visible' | 'locked'>>;
@@ -289,17 +531,22 @@ export const updateLane = (project: Project, laneId: string, patch: LanePatch, n
   return result;
 };
 
-/** Move one end of a subplot's span to another spine node. The start always stays before the end. */
+/**
+ * Move one end of a subplot to another spine node. The start always stays
+ * before the end. The beats close up from the start, and if they still need
+ * more room than the new ends give, the spine opens up to fit them.
+ */
 export const setSpanEdge = (project: Project, laneId: string, edge: 'start' | 'end', ref: string): Project => {
   const lane = laneById(project, laneId);
   if (!lane?.span || lane.locked) return project;
   const sequence = spineSequence(project);
-  const at = sequence.indexOf(ref);
-  if (at < 0) return project;
+  if (sequence.indexOf(ref) < 0) return project;
   const span = { ...lane.span, [edge === 'start' ? 'startRef' : 'endRef']: ref };
   if (sequence.indexOf(span.startRef) >= sequence.indexOf(span.endRef)) return project;
   if (span.startRef === lane.span.startRef && span.endRef === lane.span.endRef) return project;
-  return { ...project, lanes: project.lanes.map((l) => (l.id === laneId ? { ...l, span } : l)) };
+  const placements = { ...project.placements };
+  laneSequence(project, laneId).forEach((id, i) => (placements[id] = { ...placements[id]!, x: -1e9 + i }));
+  return settle({ ...project, placements, lanes: project.lanes.map((l) => (l.id === laneId ? { ...l, span } : l)) });
 };
 
 /** Remove a lane and the nodes on it. A character lane's character stays in the project. */

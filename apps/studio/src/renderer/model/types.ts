@@ -18,7 +18,8 @@ export type ObjectType =
   | 'puzzle'
   | 'trigger'
   | 'gate'
-  | 'state';
+  | 'state'
+  | 'arcEvent';
 
 export interface StoryObject {
   id: string;
@@ -32,7 +33,15 @@ export interface StoryObject {
    * Type-specific fields. `code` is the short stable label shown on the graph
    * (PP1, SC-01, C1, CIN-01, SP1); it never changes once assigned.
    */
-  data: { code?: string; summary?: string; [key: string]: unknown };
+  data: {
+    code?: string;
+    summary?: string;
+    /** A branch node that ends the game: an alternate ending, or game over. */
+    outcome?: 'ending' | 'gameOver';
+    /** An arc event: growth, setback, or a turning point. */
+    polarity?: 'up' | 'down' | 'turn';
+    [key: string]: unknown;
+  };
 }
 
 export type LaneKind = 'spine' | 'subplot' | 'character';
@@ -64,6 +73,8 @@ export interface Connection {
   sourceId: string;
   targetId: string;
   kind: ConnectionKind;
+  /** The option text shown on the connector's pill (a choice's options). */
+  label?: string;
   conditions?: unknown;
   routing?: unknown;
 }

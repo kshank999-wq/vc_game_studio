@@ -13,6 +13,8 @@ interface Props {
   onBible: () => void;
   onEngine: () => void;
   saveState: SaveState;
+  issueCount: number;
+  onIssues: () => void;
 }
 
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -63,6 +65,12 @@ export const TopBar = (props: Props) => {
           <span className="save-dot" />
           {SAVE_LABEL[props.saveState]}
         </div>
+      )}
+      {props.issueCount > 0 && (
+        <button className="tb-btn issues-btn" title="Show the next thing to look at" onClick={props.onIssues}>
+          <span className="issue-dot" />
+          {props.issueCount} to look at
+        </button>
       )}
       <button className="icon-btn" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!props.canUndo} onClick={props.onUndo}>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">

@@ -18,6 +18,7 @@ const FILL: Partial<Record<ObjectType, string>> = {
   trigger: 'var(--c-logic)',
   gate: 'var(--c-logic)',
   state: 'var(--c-logic)',
+  arcEvent: 'var(--c-character)',
   begin: 'var(--gold)',
   end: 'var(--gold)',
 };
@@ -74,6 +75,13 @@ export const Symbol = ({ type, size = 14, color }: { type: ObjectType; size?: nu
         <>
           <circle cx="8" cy="8" r="6" fill="none" stroke={fill} strokeWidth="1.5" />
           <path d="M8 5v6M5 8h6" stroke={fill} strokeWidth="1.5" />
+        </>,
+      );
+    case 'arcEvent':
+      return svg(
+        <>
+          <path d="M1 8h14" stroke={fill} strokeWidth="1.6" />
+          <circle cx="8" cy="8" r="3.4" fill={fill} />
         </>,
       );
     case 'begin':

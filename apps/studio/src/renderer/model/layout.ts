@@ -11,6 +11,14 @@ export const LANE_HEIGHT: Record<Lane['kind'], number> = { spine: SPINE_HEIGHT, 
 /** The gap packing keeps between neighbours on a track. */
 export const NODE_GAP = 20;
 
+/** Room a subplot band keeps between its ends and its first and last beat. */
+export const SPAN_PAD = 28;
+/** The shortest a subplot band gets, so an empty one can still be dropped into. */
+export const MIN_SPAN = 180;
+
+/** Branch nodes stay at least this far above the spine. */
+export const BRANCH_CLEARANCE = 24;
+
 export interface Size {
   w: number;
   h: number;
@@ -23,6 +31,8 @@ export const nodeSize = (type: ObjectType, laneKind: Lane['kind'] = 'spine'): Si
       return { w: 86, h: 36 };
     case 'choice':
       return { w: 32, h: 32 };
+    case 'arcEvent':
+      return { w: 100, h: 34 };
     case 'plotPoint':
       return laneKind === 'subplot' ? { w: 120, h: 56 } : { w: 100, h: 64 };
     default:

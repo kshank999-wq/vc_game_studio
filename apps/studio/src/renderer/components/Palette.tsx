@@ -12,7 +12,8 @@ const GROUPS: { title: string; items: { type: ObjectType; kind?: string }[] }[] 
       { type: 'scene', kind: 'MAJOR' },
       { type: 'cinematic', kind: 'MAJOR' },
       { type: 'choice', kind: 'BRANCH' },
-      { type: 'dialogue', kind: 'SCENE' },
+      { type: 'dialogue', kind: 'BRANCH' },
+      { type: 'arcEvent', kind: 'ARC' },
     ],
   },
   {
@@ -24,10 +25,11 @@ const GROUPS: { title: string; items: { type: ObjectType; kind?: string }[] }[] 
 
 const TIPS: Partial<Record<ObjectType, string>> = {
   plotPoint: 'A bone of the story. Goes on the spine or a subplot.',
-  scene: 'A playable scene. Goes on the spine or a subplot.',
+  scene: 'A playable scene. Goes on the spine, a subplot, or above the spine as a branch.',
   cinematic: 'A non-interactive sequence. Goes on the spine.',
-  choice: 'A decision point. Goes on the spine or a subplot.',
-  dialogue: 'Lines spoken inside a scene.',
+  choice: 'A decision point. Goes on the spine, a subplot or above the spine.',
+  dialogue: 'An exchange of lines. Floats above the spine as part of a branch.',
+  arcEvent: 'A change in a character: growth, setback or turning point. Goes on a character lane.',
   character: 'A person in a scene, from the Bible.',
   object: 'Something the player can use or change.',
   environment: 'Where a scene takes place.',
@@ -80,7 +82,9 @@ export const Palette = ({ active, onStart }: Props) => {
             ))}
         </section>
       ))}
-      <p className="palette-foot">Drag a node onto the spine or a lane, or click one and then click where it goes.</p>
+      <p className="palette-foot">
+        Drag a node onto the spine or a lane, or above the spine for a branch. Drag from a node's gold ring to connect it.
+      </p>
     </aside>
   );
 };

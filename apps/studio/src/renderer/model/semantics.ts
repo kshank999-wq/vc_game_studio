@@ -39,18 +39,21 @@ export const TYPE_LABEL: Record<ObjectType, string> = {
   trigger: 'Trigger',
   gate: 'Gate',
   state: 'State',
+  arcEvent: 'Arc event',
 };
 
 /** What each track accepts from the palette (spec §5, §6). Character arcs take arc events (build step 4). */
 export const LANE_ACCEPTS: Record<LaneKind, readonly ObjectType[]> = {
   spine: ['plotPoint', 'scene', 'cinematic', 'choice'],
   subplot: ['plotPoint', 'scene', 'choice'],
-  character: [],
+  character: ['arcEvent'],
 };
+
+/** What can float in the open canvas above the spine as a branch or alternate route. */
+export const BRANCH_ACCEPTS: readonly ObjectType[] = ['plotPoint', 'scene', 'cinematic', 'choice', 'dialogue'];
 
 /** Types that live inside a scene rather than on a track (build step 5). */
 export const SCENE_ONLY: readonly ObjectType[] = [
-  'dialogue',
   'character',
   'object',
   'environment',

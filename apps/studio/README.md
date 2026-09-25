@@ -23,7 +23,8 @@ npm test -w @vcgs/studio
 | Path | What it is |
 | --- | --- |
 | `src/renderer/model/` | The project model (HANDOFF §23) and every operation on it. Pure functions, unit tested. |
-| `src/renderer/components/StoryCanvas.tsx` | The story graph: the endless spine track, lane tracks, spans, nodes, minimap. |
+| `src/renderer/components/canvas/` | The story graph: the endless spine track, subplot bands, lanes, branches, connectors, minimap. |
+| `src/renderer/model/validate.ts` | What needs a look (dead ends, choices without options, untied arc events). |
 | `src/renderer/components/Palette.tsx` | The legend as node buttons. |
 | `src/renderer/components/BottomBar.tsx` | Add lanes, lane visibility, zoom. |
 | `src/renderer/tokens.css` | Colour and type tokens from HANDOFF. |
@@ -33,7 +34,7 @@ npm test -w @vcgs/studio
 1. ✅ Shell, and the legend as node buttons
 2. ✅ The infinite spine track
 3. ✅ The bottom menu, and adding subplot and character lanes
-4. Drag in a plot point, a choice and a scene; connect lanes (branches, lane ties, arc events)
+4. ✅ Drag in a plot point, a choice and a scene; connect lanes (branches, lane ties, arc events)
 5. Open or explode a scene, with ports per category
 6. Element detail on double-click
 7. The timeline with the linked exploded panel
