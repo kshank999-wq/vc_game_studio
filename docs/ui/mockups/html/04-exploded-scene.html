@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Exploded scene — SC-05 The Vault Door</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Courier+Prime:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0b0a07;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#f1e7cf}
+a{color:#e8c872;text-decoration:none}a:hover{color:#f4dc98}
+button{font:inherit;color:inherit;cursor:pointer}
+.tb-btn{height:32px;padding:0 12px;border:1px solid #332b17;border-radius:4px;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(0,0,0,.15)),#1a170e;color:#f1e7cf;font-size:13px;display:flex;align-items:center;gap:6px}
+.sq{position:absolute;width:130px;height:110px;box-sizing:border-box;background:#1a170e;border:1px solid #332b17;border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,.45);padding:9px 10px;display:flex;flex-direction:column;gap:4px}
+.sk{display:flex;align-items:center;gap:6px;font-family:'Josefin Sans',sans-serif;font-size:8.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#9c8f6d}
+.sn{font-size:13px;font-weight:600;line-height:1.25}
+.ss{font-size:10.5px;color:#9c8f6d;line-height:1.35}
+.dot{position:absolute;width:12px;height:12px;border-radius:50%;box-sizing:border-box;border:2px solid #0b0a07}
+.port{position:absolute;width:18px;height:18px;border-radius:50%;box-sizing:border-box;border:3px solid #16140f;box-shadow:0 0 0 1.5px rgba(255,255,255,.12)}
+.pl{position:absolute;font-family:'Josefin Sans',sans-serif;font-size:8.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap}
+.mono{font-family:'IBM Plex Mono',monospace}
+</style>
+
+</head>
+<body>
+
+
+<div style="width:1440px;height:900px;position:relative;overflow:hidden;background-color:#0b0a07;background-image:radial-gradient(#1c1910 1.2px,transparent 1.2px);background-size:24px 24px">
+
+<header style="position:absolute;left:0;top:0;width:1440px;height:52px;box-sizing:border-box;padding:0 12px 0 16px;display:flex;align-items:center;gap:10px;background:#12100b;border-bottom:1px solid #332b17;z-index:4">
+<div style="font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:13px;letter-spacing:.22em;color:#c9a45c;white-space:nowrap">VC GAME STUDIO</div>
+<nav aria-label="Breadcrumb" style="display:flex;align-items:center;gap:8px;font-size:13px;color:#9c8f6d;white-space:nowrap;margin-left:10px">
+<a href="02-story-graph-spine-and-lanes.html">Story Graph</a><span>/</span><a href="03-scene-workspace.html">SC-05 The Vault Door</a><span>/</span><span style="color:#f1e7cf">Exploded</span>
+</nav>
+<div style="flex-grow:1"></div>
+<a href="05-scene-timeline.html" class="tb-btn" style="color:#f1e7cf;border-color:#8a6f2f"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4h12M2 8h8M2 12h10"/></svg>Open timeline</a>
+<a href="03-scene-workspace.html" class="tb-btn" style="color:#f1e7cf">Collapse scene</a>
+<a href="06-game-bible.html" style="height:34px;padding:0 16px;border-radius:4px;background:linear-gradient(180deg,#e8c872,#c9a45c 55%,#8a6f2f);border:1px solid #8a6f2f;color:#0b0a07;font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:12.5px;letter-spacing:.16em;display:flex;align-items:center">GAME BIBLE</a>
+</header>
+
+<svg width="1440" height="900" style="position:absolute;left:0;top:0" aria-hidden="true">
+<!-- each element runs to its own category port -->
+<path d="M400 235 C 422 235, 420 290, 440 290" stroke="#d9607a" stroke-width="2" fill="none"/>
+<path d="M250 355 C 350 355, 380 290, 440 290" stroke="#d9607a" stroke-width="2" fill="none"/>
+<path d="M400 430 H440" stroke="#e08a5a" stroke-width="2"/>
+<path d="M400 570 H440" stroke="#6fae5e" stroke-width="2"/>
+<path d="M1040 235 C 1018 235, 1020 290, 1000 290" stroke="#4a86d8" stroke-width="2" fill="none"/>
+<path d="M1000 430 H1040" stroke="#f2c230" stroke-width="2"/>
+<path d="M1000 570 H1040" stroke="#e07bb0" stroke-width="2"/>
+<path d="M600 190 V230" stroke="#9a7fc0" stroke-width="2"/>
+<path d="M840 190 V230" stroke="#6cc4d6" stroke-width="2"/>
+<path d="M635 670 C 635 650, 720 650, 720 630" stroke="#c8bfae" stroke-width="2" fill="none"/>
+<path d="M805 670 C 805 650, 720 650, 720 630" stroke="#c8bfae" stroke-width="2" fill="none"/>
+<!-- drop in progress: ghost → Objects port -->
+<path d="M985 156 C 985 220, 1000 250, 1000 280" stroke="#4a86d8" stroke-width="2" stroke-dasharray="5 4" fill="none"/>
+</svg>
+
+<!-- CENTRAL SCENE BOX (bigger) -->
+<section aria-label="Scene SC-05" style="position:absolute;left:440px;top:230px;width:560px;height:400px;box-sizing:border-box;background:#132422;border:2px solid #4fa39a;border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.55)">
+<div style="position:absolute;left:100px;top:22px;width:360px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:8px"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="3" fill="#4fa39a"/></svg><span class="mono" style="font-size:11px;color:#9c8f6d">SC-05</span><span style="font-size:18px;font-weight:600">The Vault Door</span></div>
+<div class="mono" style="font-size:11.5px;color:#8fcfc6">INT. VAULT CHAMBER — NIGHT</div>
+<p style="margin:0;font-family:'Courier Prime',monospace;font-size:13px;line-height:1.5;color:#e6dcc3">Ankle-deep water. The vault door is a slab of green bronze, its seam weeping. Mara sweeps the lantern along the wall. An echo changes pitch near the floor.</p>
+<div style="display:flex;gap:6px;flex-wrap:wrap">
+<span style="height:22px;padding:0 9px;border-radius:11px;background:#1d3330;font-size:11px;display:flex;align-items:center">Purpose: open the vault</span>
+<span style="height:22px;padding:0 9px;border-radius:11px;background:#2e2712;color:#e8c872;font-size:11px;display:flex;align-items:center">In progress</span>
+</div>
+</div>
+<div style="position:absolute;left:100px;bottom:22px;width:360px;display:flex;align-items:center;gap:10px">
+<a href="05-scene-timeline.html" style="height:34px;padding:0 14px;border-radius:4px;background:linear-gradient(180deg,#e8c872,#c9a45c 55%,#8a6f2f);color:#0b0a07;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h12M2 8h8M2 12h10"/></svg>Timeline</a>
+<a href="03-scene-workspace.html" class="tb-btn" style="height:34px;color:#f1e7cf">Edit script</a>
+<span style="font-size:11px;color:#9c8f6d;margin-left:auto">double-click = timeline</span>
+</div>
+
+<!-- category ports on the scene edge, each its own color -->
+<span class="port" style="left:-10px;top:50px;background:#d9607a"></span><span class="pl" style="left:14px;top:55px;color:#d9607a">Characters</span>
+<span class="port" style="left:-10px;top:190px;background:#e08a5a"></span><span class="pl" style="left:14px;top:195px;color:#e08a5a">Dialogue</span>
+<span class="port" style="left:-10px;top:330px;background:#6fae5e"></span><span class="pl" style="left:14px;top:335px;color:#6fae5e">Environ.</span>
+<span class="port" style="right:-10px;top:50px;background:#4a86d8;box-shadow:0 0 0 5px rgba(74,134,216,.3),0 0 18px rgba(74,134,216,.6)"></span><span class="pl" style="right:14px;top:55px;color:#4a86d8">Objects</span>
+<span class="port" style="right:-10px;top:190px;background:#f2c230"></span><span class="pl" style="right:14px;top:195px;color:#f2c230">Choices</span>
+<span class="port" style="right:-10px;top:330px;background:#e07bb0"></span><span class="pl" style="right:14px;top:335px;color:#e07bb0">Puzzles</span>
+<span class="port" style="left:151px;top:-10px;background:#9a7fc0"></span><span class="pl" style="left:176px;top:10px;color:#9a7fc0">Cinematics</span>
+<span class="port" style="left:391px;top:-10px;background:#6cc4d6"></span><span class="pl" style="left:320px;top:10px;color:#6cc4d6">Inventory</span>
+<span class="port" style="left:271px;bottom:-10px;background:#c8bfae"></span><span class="pl" style="left:296px;bottom:10px;color:#c8bfae">Logic</span>
+</section>
+
+<!-- LEFT: characters, dialogue, environment -->
+<div class="sq" style="left:270px;top:180px;border-color:#6b3a45"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg>Character</span><span class="sn">Mara</span><span class="ss">Leads if trust ≥ 1<br>3 lines here</span><span class="dot" style="right:-7px;top:49px;background:#d9607a"></span></div>
+<div class="sq" style="left:120px;top:300px;border-color:#55524a"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#e8e0c8"/></svg>Player</span><span class="sn">The Explorer</span><span class="ss">Carries lantern,<br>vault key</span><span class="dot" style="right:-7px;top:49px;background:#d9607a"></span></div>
+<div class="sq" style="left:270px;top:375px;border-color:#6b4a33"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M2 3h12v8H7.5L4.5 14v-3H2z" fill="#e08a5a"/></svg>Dialogue · 6</span><span class="ss" style="color:#f1e7cf"><b style="color:#e08a5a">MARA</b> Water's holding it…</span><span class="ss" style="color:#f1e7cf"><b style="color:#e08a5a">EXPL.</b> Stand back…</span><span class="ss">+4 more</span><span class="dot" style="right:-7px;top:49px;background:#e08a5a"></span></div>
+<div class="sq" style="left:270px;top:515px;border-color:#3f5a38"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 1.5l5.6 3.2v6.6L8 14.5l-5.6-3.2V4.7z" fill="#6fae5e"/></svg>Environment</span><span class="sn">Vault Chamber</span><span class="ss">Water, ankle-deep<br>Echo cue</span><span class="dot" style="right:-7px;top:49px;background:#6fae5e"></span></div>
+
+<!-- TOP: cinematic, inventory, drag ghost -->
+<div class="sq" style="left:535px;top:80px;border-color:#4d3d66;background:#1d1828"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1.5" fill="#9a7fc0"/><path d="M4.5 3v10M11.5 3v10" stroke="#12100b" stroke-width="1.3"/></svg>Cinematic</span><span class="sn">CIN-01 Vault Opens</span><span class="ss">Scene exit · 10s</span><span class="dot" style="left:59px;bottom:-7px;background:#9a7fc0"></span></div>
+<div class="sq" style="left:775px;top:80px;border-color:#2f5a63"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 1.8l1.9 4 4.3.5-3.2 2.9.9 4.3L8 11.3l-3.9 2.2.9-4.3L1.8 6.3l4.3-.5z" fill="#6cc4d6"/></svg>Inventory</span><span class="sn">Vault Key</span><span class="ss">From SC-04<br>Consumed here</span><span class="dot" style="left:59px;bottom:-7px;background:#6cc4d6"></span></div>
+<div class="sq" style="left:930px;top:66px;height:90px;width:110px;border:1.5px dashed #4a86d8;background:rgba(74,134,216,.12);opacity:.9"><span class="sk" style="color:#8fb4ea"><svg width="11" height="11" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="#4a86d8"/></svg>Object</span><span class="sn">New object</span><span class="ss" style="color:#8fb4ea">Drop → Objects</span></div>
+
+<!-- RIGHT: objects, choices, puzzles -->
+<div class="sq" style="left:1040px;top:180px;border:2px solid #e8c872;box-shadow:0 0 0 4px rgba(232,200,114,.15),0 6px 16px rgba(0,0,0,.45)"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="#4a86d8"/></svg>Object</span><span class="sn">Rusted Lever</span><span class="ss">Pull · down → up<br>drains the seam</span><span class="dot" style="left:-7px;top:49px;background:#4a86d8"></span></div>
+<div class="sq" style="left:1040px;top:375px;border-color:#6b5a1f"><span class="sk"><span style="width:11px;height:11px;border-radius:50%;background:#f2c230"></span>Choice</span><span class="sn">Turn the key</span><span class="ss">Gate: key + lever up<br>→ CIN-01</span><span class="dot" style="left:-7px;top:49px;background:#f2c230"></span></div>
+<div class="sq" style="left:1040px;top:515px;border-color:#6b3a5a"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M3 3h3.6a1.7 1.7 0 113 0H13v3.6a1.7 1.7 0 110 3V13H3z" fill="#e07bb0"/></svg>Puzzle</span><span class="sn">The Vault Door</span><span class="ss">Drain, then key<br>Fail: floods</span><span class="dot" style="left:-7px;top:49px;background:#e07bb0"></span></div>
+
+<!-- BOTTOM: logic -->
+<div class="sq" style="left:570px;top:670px"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 1.5l6.5 6.5L8 14.5 1.5 8z" fill="none" stroke="#c8bfae" stroke-width="1.6"/><path d="M8.8 4.5L6.5 8.5h3l-2.3 3" fill="none" stroke="#c8bfae" stroke-width="1.3"/></svg>Trigger</span><span class="sn">Seam drains</span><span class="ss">When lever = up</span><span class="dot" style="left:59px;top:-7px;background:#c8bfae"></span></div>
+<div class="sq" style="left:740px;top:670px;border-color:#7a3336"><span class="sk"><svg width="11" height="11" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#c8bfae" stroke-width="1.5"/></svg>State</span><span class="sn">door_solved</span><span class="ss" style="color:#f19a9d">Nothing sets this</span><span style="position:absolute;right:8px;top:8px;width:16px;height:16px;border-radius:50%;background:#e5484d;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">!</span><span class="dot" style="left:59px;top:-7px;background:#c8bfae"></span></div>
+
+<!-- DETAIL (double-clicked Rusted Lever) -->
+<aside aria-label="Rusted Lever detail" style="position:absolute;left:1186px;top:120px;width:238px;box-sizing:border-box;padding:14px;background:#12100b;border:1px solid #8a6f2f;border-radius:8px;box-shadow:0 16px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:8px"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="#4a86d8"/></svg><span style="font-size:14px;font-weight:600">Rusted Lever</span><span class="mono" style="margin-left:auto;font-size:10.5px;color:#9c8f6d">OBJ-07</span></div>
+<div style="display:flex;flex-direction:column;gap:3px"><span class="sk">States</span><span style="display:flex;gap:6px"><span style="height:22px;padding:0 8px;border-radius:4px;background:#1a170e;border:1px solid #332b17;font-size:11.5px;display:flex;align-items:center">down</span><span style="color:#9c8f6d">→</span><span style="height:22px;padding:0 8px;border-radius:4px;background:#14233a;border:1px solid #4a86d8;font-size:11.5px;display:flex;align-items:center">up</span></span></div>
+<div style="display:flex;flex-direction:column;gap:3px"><span class="sk">Interaction</span><span style="font-size:12px">Pull · only when <b>down</b></span></div>
+<div style="display:flex;flex-direction:column;gap:3px"><span class="sk">Effects</span><span style="font-size:12px">Sets lever = up · fires <i>Seam drains</i></span></div>
+<div style="display:flex;flex-direction:column;gap:3px"><span class="sk">Asset notes</span><span style="font-size:12px;color:#cfc3a3">Half-buried by the door. Needs pull anim + grind SFX.</span></div>
+<div style="display:flex;gap:6px"><a href="06-game-bible.html" class="tb-btn" style="height:28px;font-size:12px;color:#f1e7cf">Open in Bible</a><a href="08-engine-handoff.html" class="tb-btn" style="height:28px;font-size:12px;color:#f1e7cf">&lt;/&gt; Code</a></div>
+</aside>
+
+<div style="position:absolute;left:24px;top:856px;font-size:12px;color:#9c8f6d">Drop an element on the scene and it snaps to its own colored port · double-click any box for detail · double-click the scene for its timeline</div>
+</div>
+
+
+</body>
+</html>

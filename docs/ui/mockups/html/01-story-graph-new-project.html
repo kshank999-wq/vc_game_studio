@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Story Graph — new project</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0b0a07;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#f1e7cf}
+a{color:#e8c872;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+.tb-btn{height:32px;padding:0 12px;border:1px solid #332b17;border-radius:4px;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(0,0,0,.15)),#1a170e;color:#f1e7cf;font-size:13px;display:flex;align-items:center;gap:6px}
+.grp{padding:12px 16px 6px;font-family:'Josefin Sans',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:#9c8f6d}
+.nb{position:relative;display:flex;align-items:center;gap:10px;width:216px;height:40px;margin:0 0 6px 16px;box-sizing:border-box;padding:0 12px;background:#1a170e;border:1px solid #332b17;border-radius:4px;box-shadow:0 3px 8px rgba(0,0,0,.4);font-size:13px;font-weight:600;text-align:left}
+.nb .pr{position:absolute;right:-7px;top:13px;width:12px;height:12px;border-radius:50%;background:#0b0a07;border:2px solid #c9a45c;box-sizing:border-box}
+.th{position:absolute;left:0;width:130px;box-sizing:border-box;padding:8px 10px;background:#12100b;border-right:1px solid #332b17;display:flex;flex-direction:column;gap:3px}
+.th b{font-family:'Josefin Sans',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.18em}
+.th span{font-size:10.5px;color:#9c8f6d}
+</style>
+
+</head>
+<body>
+
+
+<div style="width:1440px;height:900px;position:relative;overflow:hidden;background:#0b0a07">
+
+<header style="position:absolute;left:0;top:0;width:1440px;height:52px;box-sizing:border-box;padding:0 12px 0 16px;display:flex;align-items:center;gap:10px;background:#12100b;border-bottom:1px solid #332b17">
+<div style="font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:13px;letter-spacing:.22em;color:#c9a45c">VC GAME STUDIO</div>
+<div style="font-family:'Josefin Sans',sans-serif;font-size:12px;letter-spacing:.14em;color:#9c8f6d">STORY GRAPH</div>
+<div style="font-family:'Josefin Sans',sans-serif;font-size:13px;letter-spacing:.14em;color:#f1e7cf;margin-left:6px">UNTITLED GAME</div>
+<div style="flex-grow:1"></div>
+<button class="tb-btn">Fit</button>
+<a href="06-game-bible.html" style="height:34px;padding:0 16px;border-radius:4px;background:linear-gradient(180deg,#e8c872,#c9a45c 55%,#8a6f2f);border:1px solid #8a6f2f;color:#0b0a07;font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:12.5px;letter-spacing:.16em;display:flex;align-items:center">GAME BIBLE</a>
+</header>
+
+<aside style="position:absolute;left:0;top:52px;width:264px;height:848px;box-sizing:border-box;background:#12100b;border-right:1px solid #332b17">
+<div style="padding:14px 16px 2px;font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:11px;letter-spacing:.24em;color:#c9a45c">ADD</div>
+<div class="grp">Story</div>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="6.5" y="1.5" width="3" height="13" rx="1" fill="#c9a45c"/></svg>Plot Point<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="3" fill="#4fa39a"/></svg>Scene<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1.5" fill="#9a7fc0"/></svg>Cinematic<span class="pr"></span></button>
+<button class="nb" style="border:1px dashed #f2c230;background:#221d10;opacity:.6"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#f2c230"/></svg>Choice<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M2 3h12v8H7.5L4.5 14v-3H2z" fill="#e08a5a"/></svg>Dialogue<span class="pr"></span></button>
+<div class="grp">Scene elements</div>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg>Character / NPC<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="#4a86d8"/></svg>Interactive Object<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l5.6 3.2v6.6L8 14.5l-5.6-3.2V4.7z" fill="#6fae5e"/></svg>Environment<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.8l1.9 4 4.3.5-3.2 2.9.9 4.3L8 11.3l-3.9 2.2.9-4.3L1.8 6.3l4.3-.5z" fill="#6cc4d6"/></svg>Inventory / Pickup<span class="pr"></span></button>
+<div class="grp">Logic</div>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l6.5 6.5L8 14.5 1.5 8z" fill="none" stroke="#c8bfae" stroke-width="1.6"/></svg>Trigger<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l6.5 6.5L8 14.5 1.5 8z" fill="none" stroke="#c8bfae" stroke-width="1.6"/><path d="M5 8h6" stroke="#c8bfae" stroke-width="2"/></svg>Gate<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M3 3h3.6a1.7 1.7 0 113 0H13v3.6a1.7 1.7 0 110 3V13H3z" fill="#e07bb0"/></svg>Puzzle / Smart Object<span class="pr"></span></button>
+</aside>
+
+<main style="position:absolute;left:264px;top:52px;width:1176px;height:848px;overflow:hidden;background-color:#0b0a07;background-image:radial-gradient(#1c1910 1.2px,transparent 1.2px);background-size:24px 24px">
+<div style="position:absolute;left:0;top:300px;width:1176px;height:150px;box-sizing:border-box;border-top:2px solid #8a6f2f;border-bottom:2px solid #8a6f2f;background:linear-gradient(180deg,rgba(201,164,92,.08),rgba(201,164,92,.03))"></div>
+<!-- new lane being added -->
+<div style="position:absolute;left:0;top:466px;width:1176px;height:100px;box-sizing:border-box;border-top:1px dashed #8fa8c4;border-bottom:1px dashed #8fa8c4;background:rgba(143,168,196,.05)"></div>
+<div style="position:absolute;left:460px;top:504px;font-size:12.5px;color:#8fa8c4">New subplot lane — drag nodes in, then drag its ends to set where it starts and stops</div>
+
+<div class="th" style="top:302px;height:146px"><b style="color:#c9a45c">SPINE</b><span>Main plot · locked</span></div>
+<div class="th" style="top:467px;height:98px;border:1px solid #8fa8c4"><b style="color:#8fa8c4">SUBPLOT 1</b><span style="color:#b9c7d8">Name this lane…</span></div>
+
+<svg width="1176" height="848" style="position:absolute;left:0;top:0" aria-hidden="true">
+<path d="M306 375 H520 M640 375 H880" stroke="#c9a45c" stroke-width="2.5"/>
+</svg>
+<div style="position:absolute;left:220px;top:357px;width:86px;height:36px;border-radius:18px;background:linear-gradient(180deg,#e8c872,#c9a45c 55%,#8a6f2f);color:#0b0a07;display:flex;align-items:center;justify-content:center;font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:10px;letter-spacing:.14em">BEGIN</div>
+<div style="position:absolute;left:520px;top:343px;width:120px;height:64px;box-sizing:border-box;background:#1a170e;border:1px solid #8a6f2f;border-radius:4px;padding:6px 9px;display:flex;flex-direction:column;gap:2px"><span style="font-family:'Josefin Sans',sans-serif;font-size:8.5px;font-weight:600;letter-spacing:.18em;color:#c9a45c">PLOT POINT</span><span style="font-size:12.5px;font-weight:600">Plot Point 1</span><span style="font-size:10.5px;color:#9c8f6d">Name it…</span></div>
+<div style="position:absolute;left:880px;top:357px;width:86px;height:36px;border-radius:18px;background:linear-gradient(180deg,#e8c872,#c9a45c 55%,#8a6f2f);color:#0b0a07;display:flex;align-items:center;justify-content:center;font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:10px;letter-spacing:.14em">END</div>
+
+<!-- drop target on spine -->
+<div style="position:absolute;left:390px;top:355px;width:40px;height:40px;border-radius:50%;border:2px dashed #f2c230;box-sizing:border-box;background:rgba(242,194,48,.12)"></div>
+<div style="position:absolute;left:356px;top:404px;width:110px;text-align:center;font-size:11px;color:#f2c230">insert choice here</div>
+<div style="position:absolute;left:418px;top:380px;width:26px;height:26px;border-radius:50%;background:#f2c230;box-shadow:0 6px 16px rgba(0,0,0,.6)"></div>
+<div style="position:absolute;right:10px;top:364px;color:#8a6f2f;font-family:'Josefin Sans',sans-serif;font-size:9px;letter-spacing:.16em;text-align:right"><span style="font-size:18px">»</span><br>CONTINUES</div>
+
+<div style="position:absolute;left:0;top:796px;width:1176px;height:52px;box-sizing:border-box;padding:0 14px;display:flex;align-items:center;gap:8px;background:#12100b;border-top:1px solid #332b17">
+<button class="tb-btn" style="border-color:#8fa8c4;background:#141a22;box-shadow:0 0 0 3px rgba(143,168,196,.18)"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M1 8h14" stroke="#8fa8c4" stroke-width="3" stroke-dasharray="3 2"/></svg>+ Add subplot lane</button>
+<button class="tb-btn"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg>+ Add character lane</button>
+<div style="flex-grow:1"></div>
+<span style="font-size:12px;color:#9c8f6d">100%</span>
+</div>
+</main>
+</div>
+
+
+</body>
+</html>

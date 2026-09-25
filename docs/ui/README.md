@@ -7,21 +7,24 @@ Start with **[HANDOFF.md](HANDOFF.md)**. It has the design decisions, the colour
 | File | What it is |
 |---|---|
 | `HANDOFF.md` | Design decisions, tokens, data model, build order (authoritative) |
-| `VC_Game_Studio_UI_Spec.docx` | The original UI spec |
+| `VC_Game_Studio_UI_Spec.docx` | The original UI spec (HANDOFF calls it `spec/VC_Game_Studio_UI_Spec.docx`) |
 | `UI-SPEC.md` | Text copy of the spec, for search and diffs |
-| `mockups/` | The screens as images (static comps, not app code) |
+| `mockups/html/` | The 8 screens as static HTML. Open `02-story-graph-spine-and-lanes.html`; the links between screens work. Fonts load from Google Fonts. |
+| `mockups/png/` | The same screens rendered at 2880×1800 (the component library is taller) |
 
-## Mockups in the repo
+The mockups are static comps, not app code.
 
-| # | Screen | File |
-|---|---|---|
-| 01 | Story graph, new project | `mockups/01-story-graph-empty.webp` |
-| 02 | Story graph, populated ("The Sunken Vault") | `mockups/02-story-graph.webp` |
-| 03 | Scene Workspace | `mockups/03-scene-open.webp` |
-| 04 | Exploded scene | `mockups/04-scene-exploded.webp` |
-| 05 | Scene timeline | `mockups/05-scene-timeline.webp` |
-| 06 | Game Bible | *not yet in the repo* |
-| 07 | Component library | *not yet in the repo* |
-| 08 | Engine handoff | *not yet in the repo* |
+## Screens
 
-Still to add: screens 06–08 as files, and the full-size `mockups/png/` (2880×1800) and `mockups/html/` sets from the handoff package.
+| # | Screen |
+|---|---|
+| 01 | Story graph, new project |
+| 02 | Story graph, populated ("The Sunken Vault") |
+| 03 | Scene Workspace |
+| 04 | Exploded scene |
+| 05 | Scene timeline |
+| 06 | Game Bible |
+| 07 | Component library |
+| 08 | Engine handoff |
+
+To re-render the PNGs after editing the HTML, screenshot each page at a 1440×900 viewport with a device scale factor of 2 and a full-page capture.

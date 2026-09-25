@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Main Graph — The Sunken Vault</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0b0a07;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#f1e7cf}
+a{color:#e8c872;text-decoration:none}a:hover{color:#f4dc98}
+button{font:inherit;color:inherit;cursor:pointer}
+.tb-btn{height:32px;padding:0 12px;border:1px solid #332b17;border-radius:4px;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(0,0,0,.15)),#1a170e;color:#f1e7cf;font-size:13px;display:flex;align-items:center;gap:6px;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.icon-btn{width:32px;height:32px;border:1px solid #332b17;border-radius:4px;background:#1a170e;color:#cfc3a3;display:flex;align-items:center;justify-content:center;padding:0}
+.grp{padding:12px 16px 6px;font-family:'Josefin Sans',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:#9c8f6d}
+.nb{position:relative;display:flex;align-items:center;gap:10px;width:216px;height:40px;margin:0 0 6px 16px;box-sizing:border-box;padding:0 12px;background:#1a170e;border:1px solid #332b17;border-radius:4px;box-shadow:0 3px 8px rgba(0,0,0,.4);font-size:13px;font-weight:600;color:#f1e7cf;text-align:left;cursor:grab}
+.nb .kd{margin-left:auto;font-family:'Josefin Sans',sans-serif;font-size:9px;font-weight:600;letter-spacing:.16em;color:#9c8f6d}
+.nb .pr{position:absolute;right:-7px;top:13px;width:12px;height:12px;border-radius:50%;background:#0b0a07;border:2px solid #c9a45c;box-sizing:border-box}
+.nd{position:absolute;width:120px;height:64px;box-sizing:border-box;background:#1a170e;border:1px solid #332b17;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,.45)}
+.k{display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;padding:6px 9px 2px;font-family:'Josefin Sans',sans-serif;font-size:8.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#9c8f6d}
+.k i{width:7px;height:7px;border-radius:2px;display:block}
+.n{padding:0 9px;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t{padding:1px 9px 0;font-size:10.5px;color:#9c8f6d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr{position:absolute;right:-7px;top:25px;width:14px;height:14px;border-radius:50%;background:#0b0a07;border:2px solid #c9a45c;box-sizing:border-box}
+.pill{position:absolute;height:20px;padding:0 8px;box-sizing:border-box;border-radius:10px;background:#0b0a07;border:1px solid #332b17;font-size:10.5px;display:flex;align-items:center;white-space:nowrap;color:#f1e7cf}
+.th{position:absolute;left:0;width:130px;box-sizing:border-box;padding:8px 10px;background:#12100b;border-right:1px solid #332b17;display:flex;flex-direction:column;gap:3px;z-index:2}
+.th b{font-family:'Josefin Sans',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.12em;white-space:nowrap}
+.th span{font-size:10.5px;color:#9c8f6d}
+.th .ic{display:flex;gap:8px;margin-top:auto;color:#9c8f6d}
+.ev{position:absolute;height:34px;width:100px;box-sizing:border-box;border-radius:17px;background:#1a170e;display:flex;align-items:center;gap:6px;padding:0 10px;font-size:11px;font-weight:600}
+.mono{font-family:'IBM Plex Mono',monospace}
+</style>
+
+</head>
+<body>
+
+
+<div style="width:1440px;height:900px;position:relative;overflow:hidden;background:#0b0a07">
+
+<!-- TOP BAR -->
+<header style="position:absolute;left:0;top:0;width:1440px;height:52px;box-sizing:border-box;padding:0 12px 0 16px;display:flex;align-items:center;gap:10px;background:#12100b;border-bottom:1px solid #332b17;z-index:4">
+<div style="font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:13px;letter-spacing:.22em;color:#c9a45c;white-space:nowrap">VC GAME STUDIO</div>
+<div style="font-family:'Josefin Sans',sans-serif;font-size:12px;letter-spacing:.14em;color:#9c8f6d">STORY GRAPH</div>
+<div style="font-family:'Josefin Sans',sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#f1e7cf;margin-left:6px">The Sunken Vault</div>
+<div style="flex-grow:1"></div>
+<button class="icon-btn" aria-label="Undo"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 4L2 7l3 3"/><path d="M2 7h7a4 4 0 010 8H7"/></svg></button>
+<button class="icon-btn" aria-label="Redo"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 4l3 3-3 3"/><path d="M14 7H7a4 4 0 000 8h2"/></svg></button>
+<label style="display:flex;align-items:center;gap:8px;height:32px;width:220px;box-sizing:border-box;padding:0 10px;border:1px solid #332b17;border-radius:4px;background:#0b0a07;color:#9c8f6d;font-size:13px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg><input aria-label="Search project" placeholder="Search the project…" style="border:0;background:none;outline:none;color:#f1e7cf;font:inherit;width:160px"></label>
+<button class="tb-btn" aria-label="2 things to look at" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#e5484d"></span>2 to look at</button>
+<button class="tb-btn">Fit</button>
+<a href="06-game-bible.html" style="height:34px;padding:0 16px;border-radius:4px;background:linear-gradient(180deg,#e8c872,#c9a45c 55%,#8a6f2f);border:1px solid #8a6f2f;color:#0b0a07;font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:12.5px;letter-spacing:.16em;display:flex;align-items:center;gap:8px">GAME BIBLE</a>
+<a href="08-engine-handoff.html" class="tb-btn" style="color:#f1e7cf">Engine ▸</a>
+</header>
+
+<!-- LEGEND AS NODE BUTTONS -->
+<aside aria-label="Add — drag a node" style="position:absolute;left:0;top:52px;width:264px;height:848px;box-sizing:border-box;background:#12100b;border-right:1px solid #332b17;overflow:hidden">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 2px">
+<div style="font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:11px;letter-spacing:.24em;color:#c9a45c">ADD</div>
+<span style="font-size:11px;color:#9c8f6d">drag onto a lane</span>
+</div>
+<div class="grp">Story</div>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="6.5" y="1.5" width="3" height="13" rx="1" fill="#c9a45c"/></svg>Plot Point<span class="kd">SPINE</span><span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="3" fill="#4fa39a"/></svg>Scene<span class="kd">MAJOR</span><span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1.5" fill="#9a7fc0"/><path d="M4.5 3v10M11.5 3v10" stroke="#12100b" stroke-width="1.3"/></svg>Cinematic<span class="kd">MAJOR</span><span class="pr"></span></button>
+<button class="nb" style="border-color:#8a6f2f;background:#221d10"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#f2c230"/></svg>Choice<span class="kd">BRANCH</span><span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M2 3h12v8H7.5L4.5 14v-3H2z" fill="#e08a5a"/></svg>Dialogue<span class="kd">SCENE</span><span class="pr"></span></button>
+<div class="grp">Scene elements</div>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg>Character / NPC<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="#4a86d8"/></svg>Interactive Object<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l5.6 3.2v6.6L8 14.5l-5.6-3.2V4.7z" fill="#6fae5e"/></svg>Environment<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.8l1.9 4 4.3.5-3.2 2.9.9 4.3L8 11.3l-3.9 2.2.9-4.3L1.8 6.3l4.3-.5z" fill="#6cc4d6"/></svg>Inventory / Pickup<span class="pr"></span></button>
+<div class="grp">Logic</div>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l6.5 6.5L8 14.5 1.5 8z" fill="none" stroke="#c8bfae" stroke-width="1.6"/><path d="M8.8 4.5L6.5 8.5h3l-2.3 3" fill="none" stroke="#c8bfae" stroke-width="1.3"/></svg>Trigger<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l6.5 6.5L8 14.5 1.5 8z" fill="none" stroke="#c8bfae" stroke-width="1.6"/><path d="M5 8h6" stroke="#c8bfae" stroke-width="2"/></svg>Gate<span class="pr"></span></button>
+<button class="nb"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M3 3h3.6a1.7 1.7 0 113 0H13v3.6a1.7 1.7 0 110 3V13H3z" fill="#e07bb0"/></svg>Puzzle / Smart Object<span class="pr"></span></button>
+<div style="margin:10px 16px 0;font-size:11px;line-height:1.5;color:#9c8f6d">Drag a node onto the spine or a lane. Drag from its gold ring to another node to connect.</div>
+</aside>
+
+<!-- CANVAS -->
+<main aria-label="Story canvas" style="position:absolute;left:264px;top:52px;width:1176px;height:848px;overflow:hidden;background-color:#0b0a07;background-image:radial-gradient(#1c1910 1.2px,transparent 1.2px);background-size:24px 24px">
+
+<!-- TRACK BANDS: full width, never end -->
+<div style="position:absolute;left:0;top:300px;width:1176px;height:150px;box-sizing:border-box;border-top:2px solid #8a6f2f;border-bottom:2px solid #8a6f2f;background:linear-gradient(180deg,rgba(201,164,92,.08),rgba(201,164,92,.03))"></div>
+<div style="position:absolute;left:0;top:466px;width:1176px;height:100px;box-sizing:border-box;border-top:1px solid #3c4655;border-bottom:1px solid #3c4655;background:rgba(143,168,196,.025)"></div>
+<div style="position:absolute;left:552px;top:467px;width:440px;height:98px;background:rgba(143,168,196,.07)"></div>
+<div style="position:absolute;left:548px;top:476px;width:8px;height:80px;border-radius:3px;background:#8fa8c4"></div>
+<div style="position:absolute;left:988px;top:476px;width:8px;height:80px;border-radius:3px;background:#8fa8c4"></div>
+<div style="position:absolute;left:0;top:582px;width:1176px;height:80px;box-sizing:border-box;border-top:1px solid #4e2a33;border-bottom:1px solid #4e2a33;background:rgba(217,96,122,.03)"></div>
+<div style="position:absolute;left:0;top:678px;width:1176px;height:80px;box-sizing:border-box;border-top:1px solid #44413a;border-bottom:1px solid #44413a;background:rgba(232,224,200,.02)"></div>
+
+<!-- infinite edge fade -->
+<div style="position:absolute;right:0;top:300px;width:44px;height:458px;background:linear-gradient(90deg,rgba(11,10,7,0),#0b0a07);z-index:1"></div>
+<div style="position:absolute;right:10px;top:306px;z-index:2;display:flex;flex-direction:column;align-items:flex-end;gap:2px;color:#8a6f2f;font-family:'Josefin Sans',sans-serif;font-size:9px;letter-spacing:.16em"><span style="font-size:18px;line-height:1">»</span>CONTINUES</div>
+
+<svg width="1176" height="848" style="position:absolute;left:0;top:0" aria-hidden="true">
+<!-- spine flow -->
+<path d="M236 375 H256 M376 375 H396 M428 375 H452 M552 375 H572 M692 375 H712 M832 375 H852 M972 375 H984 M1016 375 H1030" stroke="#c9a45c" stroke-width="2.5"/>
+<!-- branch: C1 → The Squeeze -->
+<path d="M412 359 C 412 260, 400 182, 440 182" stroke="#5a4c2a" stroke-width="1.8" fill="none"/>
+<!-- Squeeze → Mara guides -->
+<path d="M560 182 H640" stroke="#5a4c2a" stroke-width="1.8" stroke-dasharray="5 4"/>
+<!-- Squeeze → Lost Below -->
+<path d="M560 182 C 600 182, 600 72, 640 72" stroke="#5a4c2a" stroke-width="1.8" fill="none"/>
+<!-- Mara guides → The Key (reconnect) -->
+<path d="M760 182 C 800 182, 632 270, 632 343" stroke="#5a4c2a" stroke-width="1.8" fill="none"/>
+<!-- C2 → Heavy Pockets -->
+<path d="M1000 359 C 1000 260, 990 182, 1030 182" stroke="#5a4c2a" stroke-width="1.8" fill="none"/>
+<!-- subplot ties -->
+<path d="M632 407 V488" stroke="#8fa8c4" stroke-width="1.5" stroke-dasharray="3 3"/>
+<path d="M912 407 V488" stroke="#8fa8c4" stroke-width="1.5" stroke-dasharray="3 3"/>
+<path d="M692 516 H852" stroke="#8fa8c4" stroke-width="2.5"/>
+<!-- Mara arc ties -->
+<path d="M316 407 V605" stroke="#d9607a" stroke-width="1.2" stroke-dasharray="2 3" opacity=".8"/>
+<path d="M412 391 V605" stroke="#d9607a" stroke-width="1.2" stroke-dasharray="2 3" opacity=".8"/>
+<path d="M740 407 V605" stroke="#d9607a" stroke-width="1.2" stroke-dasharray="2 3" opacity=".8"/>
+<path d="M1000 391 V605" stroke="#d9607a" stroke-width="1.2" stroke-dasharray="2 3" opacity=".8"/>
+<path d="M366 622 H386 M486 622 H690 M790 622 H950" stroke="#d9607a" stroke-width="2"/>
+<!-- Explorer ties -->
+<path d="M810 407 V701" stroke="#e8e0c8" stroke-width="1.2" stroke-dasharray="2 3" opacity=".7"/>
+<path d="M1073 393 V701" stroke="#e8e0c8" stroke-width="1.2" stroke-dasharray="2 3" opacity=".7"/>
+<path d="M880 718 H1040" stroke="#e8e0c8" stroke-width="2"/>
+</svg>
+
+<!-- TRACK HEADERS (sticky left) -->
+<div class="th" style="top:302px;height:146px"><b style="color:#c9a45c">SPINE</b><span>Main plot · locked lane</span><span class="ic"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 016 0v2"/></svg></span></div>
+<div class="th" style="top:467px;height:98px"><b style="color:#8fa8c4">SUBPLOT</b><span>The Lost Expedition</span><span class="ic"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg><span>⋯</span></span></div>
+<div class="th" style="top:583px;height:78px"><b style="color:#d9607a">ARC · MARA</b><span>Guarded → trusting</span></div>
+<div class="th" style="top:679px;height:78px"><b style="color:#e8e0c8">ARC · EXPLORER</b><span>Alone → shared</span></div>
+
+<!-- SPINE NODES -->
+<div style="position:absolute;left:150px;top:357px;width:86px;height:36px;border-radius:18px;background:linear-gradient(180deg,#e8c872,#c9a45c 55%,#8a6f2f);color:#0b0a07;display:flex;align-items:center;justify-content:center;gap:5px;font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:10px;letter-spacing:.14em"><svg width="9" height="9" viewBox="0 0 12 12"><rect x="2" y="5" width="8" height="6" rx="1" fill="#0b0a07"/><path d="M4 5V3.5a2 2 0 014 0V5" fill="none" stroke="#0b0a07" stroke-width="1.4"/></svg>BEGIN</div>
+<div style="position:absolute;left:156px;top:340px;padding:1px 6px;border-radius:8px;background:#c9a45c;color:#0b0a07;font-family:'Josefin Sans',sans-serif;font-size:8px;font-weight:700;letter-spacing:.14em">START</div>
+
+<div class="nd" style="left:256px;top:343px"><div class="k"><i style="background:#4fa39a"></i>Scene · SC-01</div><div class="n">The Cave Mouth</div><div class="t">Mara waits at the threshold</div><span class="pr"></span></div>
+<div title="C1" style="position:absolute;left:396px;top:359px;width:32px;height:32px;border-radius:50%;background:#f2c230;box-shadow:0 0 0 4px #1a170e;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;color:#0b0a07">C1</div>
+<div class="nd" style="left:452px;top:343px;width:100px;border-color:#8a6f2f"><div class="k" style="color:#c9a45c"><i style="background:#c9a45c"></i>Plot point</div><div class="n">Descent</div><div class="t">PP1</div><span class="pr"></span></div>
+<div class="nd" style="left:572px;top:343px"><div class="k"><i style="background:#4fa39a"></i>Scene · SC-04</div><div class="n">The Key</div><div class="t">Silt chamber · key ring</div><span class="pr"></span></div>
+
+<!-- selected: quick actions -->
+<div style="position:absolute;left:702px;top:308px;height:28px;display:flex;gap:2px;padding:2px;box-sizing:border-box;background:#221d10;border:1px solid #8a6f2f;border-radius:5px;z-index:3">
+<a href="03-scene-workspace.html" style="height:22px;padding:0 8px;border-radius:3px;background:#c9a45c;color:#0b0a07;font-size:11.5px;font-weight:600;display:flex;align-items:center">Open</a>
+<a href="04-exploded-scene.html" style="height:22px;padding:0 8px;font-size:11.5px;display:flex;align-items:center;color:#f1e7cf">Explode</a>
+<a href="05-scene-timeline.html" style="height:22px;padding:0 8px;font-size:11.5px;display:flex;align-items:center;color:#f1e7cf">Timeline</a>
+</div>
+<a href="04-exploded-scene.html" class="nd" style="left:712px;top:343px;border-color:#c9a45c;box-shadow:0 0 0 1px #c9a45c,0 8px 22px rgba(0,0,0,.55);color:#f1e7cf;display:block"><span class="k" style="display:flex"><i style="background:#4fa39a"></i>Scene · SC-05</span><span class="n" style="display:block">The Vault Door</span><span class="t" style="display:block">Puzzle · lever + key</span><span class="pr" style="background:#c9a45c"></span></a>
+
+<div class="nd" style="left:852px;top:343px"><div class="k"><i style="background:#9a7fc0"></i>Cinematic</div><div class="n">The Vault Opens</div><div class="t">10s · 2 shots</div><span class="pr"></span></div>
+<div title="C2" style="position:absolute;left:984px;top:359px;width:32px;height:32px;border-radius:50%;background:#f2c230;box-shadow:0 0 0 4px #1a170e;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;color:#0b0a07">C2</div>
+<div style="position:absolute;left:1030px;top:357px;width:86px;height:36px;border-radius:18px;background:linear-gradient(180deg,#e8c872,#c9a45c 55%,#8a6f2f);color:#0b0a07;display:flex;align-items:center;justify-content:center;gap:5px;font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:10px;letter-spacing:.14em"><svg width="9" height="9" viewBox="0 0 12 12"><rect x="2" y="5" width="8" height="6" rx="1" fill="#0b0a07"/><path d="M4 5V3.5a2 2 0 014 0V5" fill="none" stroke="#0b0a07" stroke-width="1.4"/></svg>END</div>
+<div style="position:absolute;left:1022px;top:338px;width:102px;text-align:center;font-size:10px;color:#9c8f6d">Shared Light</div>
+
+<!-- BRANCH NODES (free space above the spine) -->
+<div class="nd" style="left:440px;top:150px"><div class="k"><i style="background:#4fa39a"></i>Scene · alt</div><div class="n">The Squeeze</div><div class="t">Loose rock overhead</div><span class="pr"></span></div>
+<div class="nd" style="left:640px;top:150px"><div class="k"><i style="background:#e08a5a"></i>Dialogue</div><div class="n">Mara guides you</div><div class="t">"Follow my hands."</div><span class="pr"></span></div>
+<div class="nd" style="left:640px;top:40px;border-style:dashed"><div class="k"><i style="background:#f1e7cf"></i>Game over</div><div class="n">Lost Below</div><div class="t">The roof comes down</div></div>
+<div class="nd" style="left:1030px;top:150px;border-style:dashed"><div class="k"><i style="background:#f1e7cf"></i>Ending · alt</div><div class="n">Heavy Pockets</div><div class="t">Keeps the ring</div><span style="position:absolute;right:6px;top:-8px;width:16px;height:16px;border-radius:50%;background:#e5484d;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">!</span></div>
+
+<div class="pill" style="left:372px;top:254px">⚿ Crawl through</div>
+<div class="pill" style="left:570px;top:192px">Trust Mara</div>
+<div class="pill" style="left:570px;top:100px">Force it</div>
+<div class="pill" style="left:726px;top:262px">Out the far side</div>
+<div class="pill" style="left:958px;top:254px">Pocket it</div>
+
+<!-- SUBPLOT NODES -->
+<div class="nd" style="left:572px;top:488px;height:56px;border-color:#3c4655"><div class="k" style="color:#8fa8c4"><i style="background:#8fa8c4"></i>Subplot · SP1</div><div class="n">Brother's journal</div><span class="pr" style="top:21px;border-color:#8fa8c4"></span></div>
+<div class="nd" style="left:852px;top:488px;height:56px;border-color:#3c4655"><div class="k" style="color:#8fa8c4"><i style="background:#8fa8c4"></i>Subplot · SP2</div><div class="n">Camp found</div><span class="pr" style="top:21px;border-color:#8fa8c4"></span></div>
+
+<!-- ARC EVENTS -->
+<div class="ev" style="left:266px;top:605px;border:1.5px solid #d9607a;color:#f1e7cf"><span style="color:#d9607a;font-size:14px">−</span>Wary</div>
+<div class="ev" style="left:386px;top:605px;border:1.5px solid #d9607a;background:#2a171c"><span style="color:#d9607a;font-size:14px">+</span>Lantern</div>
+<div class="ev" style="left:690px;top:605px;border:1.5px solid #d9607a;background:#2a171c"><span style="color:#d9607a;font-size:14px">+</span>Opens up</div>
+<div class="ev" style="left:950px;top:605px;border:1.5px solid #d9607a"><span style="width:8px;height:8px;transform:rotate(45deg);background:#d9607a"></span>Split</div>
+<div class="ev" style="left:780px;top:701px;border:1.5px solid #e8e0c8"><span style="font-size:14px">+</span>Takes lead</div>
+<div class="ev" style="left:1040px;top:701px;border:1.5px solid #e8e0c8"><span style="font-size:14px">+</span>Shares</div>
+
+<!-- MINIMAP -->
+<div aria-hidden="true" style="position:absolute;left:1000px;top:14px;width:160px;height:100px;box-sizing:border-box;background:#12100b;border:1px solid #332b17;border-radius:6px;overflow:hidden">
+<div style="position:absolute;left:0;top:40px;width:160px;height:18px;background:rgba(201,164,92,.18);border-top:1px solid #8a6f2f;border-bottom:1px solid #8a6f2f"></div>
+<div style="position:absolute;left:0;top:62px;width:160px;height:10px;background:rgba(143,168,196,.12)"></div>
+<div style="position:absolute;left:0;top:76px;width:160px;height:8px;background:rgba(217,96,122,.15)"></div>
+<div style="position:absolute;left:0;top:87px;width:160px;height:8px;background:rgba(232,224,200,.1)"></div>
+<div style="position:absolute;left:40px;top:22px;width:12px;height:7px;background:#8a6f2f"></div>
+<div style="position:absolute;left:58px;top:12px;width:12px;height:7px;background:#e9e2cf"></div>
+<div style="position:absolute;left:30px;top:45px;width:100px;height:7px;background:repeating-linear-gradient(90deg,#c9a45c 0 12px,transparent 12px 16px)"></div>
+<div style="position:absolute;left:24px;top:6px;width:110px;height:90px;border:1.5px solid #e8c872;border-radius:2px"></div>
+</div>
+
+<!-- BOTTOM LANE MENU -->
+<div style="position:absolute;left:0;top:796px;width:1176px;height:52px;box-sizing:border-box;padding:0 14px;display:flex;align-items:center;gap:8px;background:#12100b;border-top:1px solid #332b17;z-index:3">
+<button class="tb-btn" style="border-color:#3c4655"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M1 8h14" stroke="#8fa8c4" stroke-width="3" stroke-dasharray="3 2"/></svg>+ Add subplot lane</button>
+<button class="tb-btn" style="border-color:#4e2a33"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg>+ Add character lane</button>
+<div style="width:1px;height:26px;background:#332b17;margin:0 6px"></div>
+<span style="font-size:12px;color:#9c8f6d">Lanes</span>
+<button style="height:24px;padding:0 9px;border-radius:12px;border:1px solid #8fa8c4;background:#141a22;font-size:11.5px">Lost Expedition</button>
+<button style="height:24px;padding:0 9px;border-radius:12px;border:1px solid #d9607a;background:#24141a;font-size:11.5px">Mara</button>
+<button style="height:24px;padding:0 9px;border-radius:12px;border:1px solid #e8e0c8;background:#1e1c17;font-size:11.5px">Explorer</button>
+<button style="height:24px;padding:0 9px;border-radius:12px;border:1px dashed #5d5540;background:none;color:#9c8f6d;font-size:11.5px">Tomas · hidden</button>
+<div style="flex-grow:1"></div>
+<button class="tb-btn" style="font-size:12px">Zoom to spine</button>
+<button class="icon-btn" aria-label="Zoom out">−</button>
+<span class="mono" style="font-size:12px;color:#9c8f6d;width:38px;text-align:center">72%</span>
+<button class="icon-btn" aria-label="Zoom in">+</button>
+</div>
+</main>
+</div>
+
+
+</body>
+</html>

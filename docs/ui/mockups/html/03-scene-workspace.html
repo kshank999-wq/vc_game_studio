@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scene Workspace — SC-05 The Vault Door</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Courier+Prime:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0d0c09;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#efe6cf}
+a{color:#e8c872;text-decoration:none}a:hover{color:#f4dc98}
+button{font:inherit;color:inherit;cursor:pointer}
+.tb-btn{height:32px;padding:0 12px;border:1px solid #34301f;border-radius:6px;background:#1d1a13;color:#efe6cf;font-size:13px;display:flex;align-items:center;gap:6px}
+.rail-i{width:36px;height:36px;border:0;border-radius:6px;background:none;display:flex;align-items:center;justify-content:center;padding:0}
+.pn{position:absolute;width:150px;height:38px;box-sizing:border-box;border-radius:19px;background:#1d1a13;border:1px solid #3d3824;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;font-size:13px;color:#efe6cf}
+.cnt{margin-left:auto;min-width:22px;height:20px;padding:0 6px;box-sizing:border-box;border-radius:10px;background:#2c281c;font-family:'IBM Plex Mono',monospace;font-size:11px;display:flex;align-items:center;justify-content:center;color:#cfc3a3}
+.sp{font-family:'Courier Prime','Courier New',monospace;font-size:14px;line-height:1.5;color:#efe6cf;margin:0}
+.chip{height:26px;padding:0 10px;border:1px solid #3d3824;border-radius:6px;background:#1d1a13;font-size:12px;display:flex;align-items:center;gap:6px;color:#efe6cf}
+</style>
+
+</head>
+<body>
+
+
+<div style="width:1440px;height:900px;position:relative;overflow:hidden;background:#100f0b">
+
+<header style="position:absolute;left:0;top:0;width:1440px;height:52px;box-sizing:border-box;padding:0 12px 0 16px;display:flex;align-items:center;gap:10px;background:#16140f;border-bottom:1px solid #34301f;z-index:3">
+<div style="font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:13px;letter-spacing:.22em;color:#c9a45c;white-space:nowrap">VC GAME STUDIO</div>
+<div style="width:1px;height:24px;background:#34301f"></div>
+<nav aria-label="Breadcrumb" style="display:flex;align-items:center;gap:8px;font-size:13px;color:#a39673;white-space:nowrap">
+<span style="color:#efe6cf;font-weight:600">The Sunken Vault</span><span>/</span><a href="02-story-graph-spine-and-lanes.html">Main Graph</a><span>/</span>
+<span style="color:#efe6cf;display:flex;align-items:center;gap:6px"><svg width="12" height="12" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="3" fill="#4fa39a"/></svg>SC-05 The Vault Door</span>
+</nav>
+<div style="flex-grow:1"></div>
+<div role="group" aria-label="Scene view" style="display:flex;border:1px solid #34301f;border-radius:6px;overflow:hidden">
+<span style="height:30px;padding:0 12px;background:#2a2517;color:#e8c872;font-size:12.5px;display:flex;align-items:center">Scene</span>
+<a href="04-exploded-scene.html" style="height:30px;padding:0 12px;border-left:1px solid #34301f;background:#1d1a13;color:#a39673;font-size:12.5px;display:flex;align-items:center">Mind map</a>
+<a href="05-scene-timeline.html" style="height:30px;padding:0 12px;border-left:1px solid #34301f;background:#1d1a13;color:#a39673;font-size:12.5px;display:flex;align-items:center">Timeline</a>
+</div>
+<a href="04-exploded-scene.html" class="tb-btn" style="color:#efe6cf"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3"/></svg>Expand All</a>
+<button class="tb-btn" style="opacity:.55">Collapse</button>
+<div style="font-size:12px;color:#a39673;display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:#c9a45c"></span>Saving…</div>
+<a href="06-game-bible.html" style="height:34px;padding:0 16px;border-radius:6px;background:#c9a45c;color:#16140f;font-family:'Josefin Sans',sans-serif;font-weight:700;font-size:12.5px;letter-spacing:.16em;display:flex;align-items:center">GAME BIBLE</a>
+</header>
+
+<!-- Legend: collapsed rail state -->
+<aside aria-label="Legend (collapsed)" style="position:absolute;left:0;top:52px;width:48px;height:848px;box-sizing:border-box;background:#16140f;border-right:1px solid #34301f;display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:8px">
+<button class="rail-i" aria-label="Expand legend"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#cfc3a3" stroke-width="1.6"><path d="M6 3l5 5-5 5"/></svg></button>
+<div style="width:24px;height:1px;background:#34301f;margin:4px 0"></div>
+<button class="rail-i" aria-label="Character"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg></button>
+<button class="rail-i" aria-label="Dialogue"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 3h12v8H7.5L4.5 14v-3H2z" fill="#e08a5a"/></svg></button>
+<button class="rail-i" aria-label="Interactive object"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="#4a86d8"/></svg></button>
+<button class="rail-i" aria-label="Environment"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1.5l5.6 3.2v6.6L8 14.5l-5.6-3.2V4.7z" fill="#6fae5e"/></svg></button>
+<button class="rail-i" aria-label="Choice"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#f2c230"/></svg></button>
+<button class="rail-i" aria-label="Cinematic"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1.5" fill="#9a7fc0"/><path d="M4.5 3v10M11.5 3v10" stroke="#16140f" stroke-width="1.3"/></svg></button>
+<button class="rail-i" aria-label="Inventory"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1.8l1.9 4 4.3.5-3.2 2.9.9 4.3L8 11.3l-3.9 2.2.9-4.3L1.8 6.3l4.3-.5z" fill="#6cc4d6"/></svg></button>
+<button class="rail-i" aria-label="Trigger"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1.5l6.5 6.5L8 14.5 1.5 8z" fill="none" stroke="#c8bfae" stroke-width="1.6"/><path d="M8.8 4.5L6.5 8.5h3l-2.3 3" fill="none" stroke="#c8bfae" stroke-width="1.3"/></svg></button>
+<button class="rail-i" aria-label="Gate"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1.5l6.5 6.5L8 14.5 1.5 8z" fill="none" stroke="#c8bfae" stroke-width="1.6"/><path d="M5 8h6" stroke="#c8bfae" stroke-width="2"/></svg></button>
+<button class="rail-i" aria-label="Puzzle"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 3h3.6a1.7 1.7 0 113 0H13v3.6a1.7 1.7 0 110 3V13H3z" fill="#e07bb0"/></svg></button>
+</aside>
+
+<!-- connectors -->
+<svg width="1440" height="900" style="position:absolute;left:0;top:0" aria-hidden="true">
+<path d="M400 249 H440" stroke="#d9607a" stroke-width="2"/>
+<path d="M400 439 H440" stroke="#4d4630" stroke-width="1.5"/>
+<path d="M400 629 H440" stroke="#4d4630" stroke-width="1.5"/>
+<path d="M1060 249 H1100" stroke="#4d4630" stroke-width="1.5"/>
+<path d="M1060 439 H1100" stroke="#4d4630" stroke-width="1.5"/>
+<path d="M1060 629 H1100" stroke="#4d4630" stroke-width="1.5"/>
+<path d="M595 150 V176" stroke="#4d4630" stroke-width="1.5"/>
+<path d="M905 150 V176" stroke="#4d4630" stroke-width="1.5"/>
+<path d="M595 736 V768" stroke="#4d4630" stroke-width="1.5"/>
+<path d="M905 736 V768" stroke="#4d4630" stroke-width="1.5"/>
+<!-- characters expanded -->
+<path d="M250 249 C 232 249, 232 215, 214 215" stroke="#d9607a" stroke-width="1.5" fill="none"/>
+<path d="M250 249 C 232 249, 232 283, 214 283" stroke="#d9607a" stroke-width="1.5" fill="none"/>
+</svg>
+
+<!-- Perimeter category nodes -->
+<button class="pn" style="left:250px;top:230px;border:1.5px solid #d9607a;background:#2a1a1e" aria-expanded="true"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg>Characters<span class="cnt" style="background:#d9607a;color:#16140f">2</span></button>
+<button class="pn" style="left:250px;top:420px"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M2 3h12v8H7.5L4.5 14v-3H2z" fill="#e08a5a"/></svg>Dialogue<span class="cnt">6</span></button>
+<button class="pn" style="left:250px;top:610px"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="#4a86d8"/></svg>Objects<span class="cnt">2</span></button>
+<button class="pn" style="left:1100px;top:230px"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1" fill="none" stroke="#4a86d8" stroke-width="1.6"/><path d="M6 8h4" stroke="#4a86d8" stroke-width="1.6"/></svg>Interactions<span class="cnt">3</span></button>
+<button class="pn" style="left:1100px;top:420px;border-color:#7a3336"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l6.5 6.5L8 14.5 1.5 8z" fill="none" stroke="#c8bfae" stroke-width="1.6"/><path d="M8.8 4.5L6.5 8.5h3l-2.3 3" fill="none" stroke="#c8bfae" stroke-width="1.3"/></svg>Triggers / Logic<span class="cnt" style="background:#3a1c1c;color:#f19a9d">3 !</span></button>
+<button class="pn" style="left:1100px;top:610px"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.8l1.9 4 4.3.5-3.2 2.9.9 4.3L8 11.3l-3.9 2.2.9-4.3L1.8 6.3l4.3-.5z" fill="#6cc4d6"/></svg>Inventory<span class="cnt">1</span></button>
+<button class="pn" style="left:520px;top:112px"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 1.5l5.6 3.2v6.6L8 14.5l-5.6-3.2V4.7z" fill="#6fae5e"/></svg>Environment<span class="cnt">1</span></button>
+<button class="pn" style="left:830px;top:112px"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1.5" fill="#9a7fc0"/><path d="M4.5 3v10M11.5 3v10" stroke="#16140f" stroke-width="1.3"/></svg>Cinematics<span class="cnt">1</span></button>
+<button class="pn" style="left:520px;top:768px"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#f2c230"/></svg>Choices<span class="cnt">1</span></button>
+<button class="pn" style="left:830px;top:768px"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M3 3h3.6a1.7 1.7 0 113 0H13v3.6a1.7 1.7 0 110 3V13H3z" fill="#e07bb0"/></svg>Puzzles<span class="cnt">1</span></button>
+
+<!-- Expanded characters -->
+<div style="position:absolute;left:64px;top:196px;width:150px;height:38px;box-sizing:border-box;border-radius:8px;background:#1d1a13;border:1px solid #d9607a;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg>Mara<span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#a39673">CH-01</span></div>
+<div style="position:absolute;left:64px;top:264px;width:150px;height:38px;box-sizing:border-box;border-radius:8px;background:#1d1a13;border:1px solid #e8e0c8;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#e8e0c8"/></svg>The Explorer<span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#a39673">PC</span></div>
+<button style="position:absolute;left:64px;top:316px;width:150px;height:30px;border:1px dashed #5d5540;border-radius:8px;background:none;color:#a39673;font-size:12px">+ Add character</button>
+
+<!-- CENTRAL SCENE BOX -->
+<section aria-label="Scene authoring" style="position:absolute;left:440px;top:176px;width:620px;height:560px;box-sizing:border-box;background:#16140f;border:1.5px solid #4fa39a;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.55);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:14px 18px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid #2c281c">
+<div style="display:flex;align-items:center;gap:10px">
+<svg width="16" height="16" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="3" fill="#4fa39a"/></svg>
+<span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#a39673">SC-05</span>
+<span style="font-size:18px;font-weight:600">The Vault Door</span>
+<span style="margin-left:auto;height:22px;padding:0 9px;border-radius:11px;background:#2e2712;color:#e8c872;font-size:11.5px;display:flex;align-items:center">In progress</span>
+</div>
+<div style="display:flex;gap:6px">
+<button class="chip">INT.<svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3" fill="none" stroke="#a39673" stroke-width="1.4"/></svg></button>
+<button class="chip"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 1.5l5.6 3.2v6.6L8 14.5l-5.6-3.2V4.7z" fill="#6fae5e"/></svg>Vault Chamber</button>
+<button class="chip">NIGHT<svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3" fill="none" stroke="#a39673" stroke-width="1.4"/></svg></button>
+<div style="flex-grow:1"></div>
+<div role="tablist" style="display:flex;gap:2px;font-size:12.5px">
+<span role="tab" aria-selected="true" style="padding:4px 10px;border-bottom:2px solid #4fa39a;color:#efe6cf">Script</span>
+<span role="tab" style="padding:4px 10px;color:#a39673">Summary</span>
+<span role="tab" style="padding:4px 10px;color:#a39673">Purpose</span>
+<span role="tab" style="padding:4px 10px;color:#a39673">Notes</span>
+</div>
+</div>
+</div>
+
+<div style="flex-grow:1;padding:18px 40px 10px 40px;display:flex;flex-direction:column;gap:14px;position:relative">
+<p class="sp">Ankle-deep water. The vault door is a slab of green bronze, its seam weeping. MARA sweeps the lantern along the wall.</p>
+
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+<span style="font-family:'Courier Prime',monospace;font-size:14px;display:flex;align-items:center;gap:6px"><svg width="10" height="10" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg>MARA</span>
+<span style="font-family:'Courier Prime',monospace;font-size:13px;color:#b5a985">(listening)</span>
+<p class="sp" style="width:340px">Water's holding it shut. There's a lever somewhere.</p>
+</div>
+
+<p class="sp">An echo changes pitch near the floor.</p>
+
+<!-- active dialogue block with speaker selector open -->
+<div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0;border-radius:8px;background:#1f1b12;outline:1px solid #6b4a33">
+<button style="height:26px;padding:0 10px;border:1px solid #e08a5a;border-radius:6px;background:#2a1d15;font-family:'Courier Prime',monospace;font-size:14px;display:flex;align-items:center;gap:6px"><svg width="10" height="10" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#e8e0c8"/></svg>THE EXPLORER<svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3" fill="none" stroke="#e08a5a" stroke-width="1.4"/></svg></button>
+<p class="sp" style="width:340px">Stand back. I'll find it<span style="display:inline-block;width:2px;height:16px;background:#e8c872;vertical-align:-3px;margin-left:1px"></span></p>
+<div style="position:absolute;right:10px;top:8px;display:flex;gap:4px;font-size:11px;color:#a39673"><span style="padding:1px 6px;border:1px solid #3d3824;border-radius:4px">VO: todo</span><span style="padding:1px 6px;border:1px solid #3d3824;border-radius:4px">#4</span></div>
+<!-- dropdown -->
+<div role="listbox" aria-label="Speaker" style="position:absolute;left:150px;top:40px;width:220px;box-sizing:border-box;padding:6px;background:#26221a;border:1px solid #5d5540;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:2px;z-index:2">
+<div style="font-size:10.5px;letter-spacing:.14em;color:#a39673;padding:4px 8px">FROM THE BIBLE</div>
+<div role="option" style="height:30px;padding:0 8px;border-radius:5px;display:flex;align-items:center;gap:8px;font-size:13px"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#d9607a"/></svg>Mara</div>
+<div role="option" aria-selected="true" style="height:30px;padding:0 8px;border-radius:5px;display:flex;align-items:center;gap:8px;font-size:13px;background:#3a3222"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#e8e0c8"/></svg>The Explorer</div>
+<div role="option" style="height:30px;padding:0 8px;border-radius:5px;display:flex;align-items:center;gap:8px;font-size:13px;color:#a39673"><svg width="11" height="11" viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z" fill="#8fb0a0"/></svg>Tomas <span style="font-size:11px">· not in scene</span></div>
+<div style="height:1px;background:#3d3824;margin:3px 0"></div>
+<div role="option" style="height:30px;padding:0 8px;border-radius:5px;display:flex;align-items:center;gap:8px;font-size:13px;color:#e8c872">+ New character…</div>
+</div>
+</div>
+
+<!-- choice marker inline -->
+<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #5a4a1a;border-radius:8px;background:#1f1c10">
+<span style="width:18px;height:18px;border-radius:50%;background:#f2c230"></span>
+<span style="font-size:13px"><b>C · Turn the key</b> <span style="color:#a39673">— needs Vault Key + lever up → CIN-01</span></span>
+</div>
+</div>
+
+<div style="height:40px;box-sizing:border-box;padding:0 14px;display:flex;align-items:center;gap:6px;border-top:1px solid #2c281c;font-size:12px;color:#a39673">
+<span>Next line:</span>
+<span style="padding:2px 8px;border-radius:4px;background:#2c281c;color:#efe6cf">Dialogue</span>
+<span style="padding:2px 8px">Direction</span>
+<span style="padding:2px 8px">Action</span>
+<span style="padding:2px 8px">Character</span>
+<span style="padding:2px 8px">Choice</span>
+<span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px">Tab cycles · Enter next speaker</span>
+</div>
+</section>
+
+<!-- Timeline collapsed strip -->
+<div style="position:absolute;left:48px;top:848px;width:1392px;height:52px;box-sizing:border-box;background:#16140f;border-top:1px solid #34301f;display:flex;align-items:center;gap:14px;padding:0 16px">
+<a href="05-scene-timeline.html" style="font-family:'Josefin Sans',sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.16em;display:flex;align-items:center;gap:6px"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 6.5l3-3 3 3" fill="none" stroke="#e8c872" stroke-width="1.5"/></svg>SCENE TIMELINE</a>
+<span style="font-size:12px;color:#a39673">9 events · 1 branch · 1 free-play</span>
+<div style="display:flex;align-items:center;gap:3px">
+<span style="width:26px;height:10px;border-radius:2px;background:#9a7fc0"></span>
+<span style="width:12px;height:10px;border-radius:2px;background:#e08a5a"></span>
+<span style="width:12px;height:10px;border-radius:2px;background:#e08a5a"></span>
+<span style="width:16px;height:10px;border-radius:2px;background:#4a86d8"></span>
+<span style="width:60px;height:10px;border-radius:2px;background:repeating-linear-gradient(135deg,#4fa39a 0 4px,#1d3330 4px 8px)"></span>
+<span style="width:10px;height:10px;border-radius:50%;background:#f2c230"></span>
+<span style="width:26px;height:10px;border-radius:2px;background:#9a7fc0"></span>
+</div>
+</div>
+</div>
+
+
+</body>
+</html>
