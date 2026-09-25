@@ -7,3 +7,4 @@ export * from "./simulate.js";
 export * from "./validate.js";
 export * from "./format.js";
 export * from "./handoff.js";
+export * from "./editions.js";

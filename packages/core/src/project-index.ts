@@ -16,7 +16,7 @@ import type {
 
 export type NodeKind =
   | "project" | "character" | "faction" | "relationship" | "location" | "item"
-  | "ability" | "object" | "verb" | "puzzle" | "quest" | "lore" | "variable"
+  | "ability" | "object" | "verb" | "puzzle" | "quest" | "lore" | "research" | "variable"
   | "milestone" | "level" | "scene" | "beat" | "choice" | "objective"
   | "trigger" | "element" | "behavior" | "cinematic" | "shot" | "ending";
 
@@ -71,6 +71,7 @@ export function indexProject(project: GameProject): ProjectIndex {
   b.puzzles.forEach((n) => add("puzzle", n));
   b.quests.forEach((n) => add("quest", n));
   b.lore.forEach((n) => add("lore", n));
+  (b.research ?? []).forEach((n) => add("research", n));
   project.variables.forEach((n) => add("variable", n));
   project.spine.forEach((n) => add("milestone", n));
   project.levels.forEach((n) => add("level", n));

@@ -138,6 +138,8 @@ export interface Bible {
   puzzles: Puzzle[];
   quests: Quest[];
   lore: LoreEntry[];
+  /** Research notes, links and references gathered while writing. */
+  research?: ResearchEntry[];
 }
 
 export type CharacterRole = "player" | "npc" | "companion" | "antagonist";
@@ -260,6 +262,12 @@ export interface Quest extends Entity {}
 
 export interface LoreEntry extends Entity {
   body?: string;
+}
+
+export interface ResearchEntry extends Entity {
+  kind: "note" | "link" | "image" | "reference";
+  body?: string;
+  url?: string;
 }
 
 // ---------------------------------------------------------------------------
