@@ -18,7 +18,7 @@ jobs:
       - run: npm test
       - name: Validate example projects
         run: |
-          for f in examples/*.vcw.json; do
+          for f in examples/*.game.json; do
             node packages/cli/dist/cli.js validate "$f"
             node packages/cli/dist/cli.js explore "$f"
           done

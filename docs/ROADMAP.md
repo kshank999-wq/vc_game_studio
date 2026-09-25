@@ -1,5 +1,11 @@
 # Roadmap
 
+> **Superseded, 25 September 2026.** Ken's decision: game writing is part of
+> VC Writer (one tool, VC Writer plans everything), and VC Game Studio is the
+> implementation upgrade. The plan is now
+> [VC Writer addendum 25](https://github.com/kshank999-wq/VCWriter/blob/claude/game-writing/docs/spec/addendum-25-game-writing.md).
+> What follows is the original prototype plan, kept for reference.
+
 VC Writer ships first as a standalone product. VC Game Studio embeds all of
 it and adds implementation: levels, gameplay systems, engine adapters and
 code generation. Both run on the same `@vc/core` project model, so a VC

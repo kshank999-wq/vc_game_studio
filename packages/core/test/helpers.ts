@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseProjectFile, type GameProject } from "../src/index.js";
 
-const EXAMPLE = fileURLToPath(new URL("../../../examples/sunken-vault.vcw.json", import.meta.url));
+const EXAMPLE = fileURLToPath(new URL("../../../examples/sunken-vault.game.json", import.meta.url));
 
 /** A fresh, mutable copy of the Sunken Vault example project. */
 export function example(): GameProject {
