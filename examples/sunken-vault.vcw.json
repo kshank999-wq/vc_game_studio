@@ -1,0 +1,292 @@
+{
+  "format": "vc-writer-project",
+  "schemaVersion": 1,
+  "project": {
+    "id": "prj_sunken_vault",
+    "name": "The Sunken Vault",
+    "gameType": "action-adventure",
+    "progression": "chapters",
+    "premise": {
+      "premise": "An explorer and a wary guide descend into flooded caves to find a vault that swallowed the last expedition.",
+      "playerFantasy": "Careful, clever survival in the dark",
+      "playerRole": "The Explorer",
+      "world": "Limestone caves beneath a drowned mining town",
+      "tone": "Tense, intimate, hopeful",
+      "themes": ["trust", "what we carry"],
+      "endingStructure": "Two success endings shaped by trust, one failure ending",
+      "coreLoop": "Explore, manage light, decide whom to rely on"
+    },
+    "bible": {
+      "characters": [
+        { "id": "chr_player", "name": "The Explorer", "role": "player", "voice": "Dry, curious" },
+        {
+          "id": "chr_mara", "name": "Mara", "role": "companion",
+          "traits": ["cautious", "loyal once earned"],
+          "goals": ["Find out what happened to her brother's expedition"],
+          "secrets": ["She has been to the vault door before"],
+          "voice": "Short sentences. Never wastes words underground.",
+          "arc": "From guarded guide to partner"
+        }
+      ],
+      "factions": [],
+      "relationships": [
+        { "id": "rel_mara", "name": "Mara's trust", "from": "chr_mara", "to": "chr_player", "initial": 0, "min": -5, "max": 5 }
+      ],
+      "locations": [
+        { "id": "loc_caves", "name": "The Sunken Caves", "kind": "region" },
+        {
+          "id": "loc_entrance", "name": "Cave Mouth", "kind": "room", "parent": "loc_caves",
+          "mechanics": [{ "kind": "darkness", "params": { "visibility": 0.4 }, "notes": "Daylight fades within 20m" }]
+        },
+        {
+          "id": "loc_tunnel", "name": "The Fork", "kind": "zone", "parent": "loc_caves",
+          "mechanics": [
+            { "kind": "traversal", "variant": "crawl", "notes": "Narrow squeeze on the left branch" },
+            { "kind": "hazard", "variant": "collapse", "params": { "trigger": "forced-passage" } },
+            { "kind": "resource-drain", "variant": "lantern-oil" }
+          ]
+        },
+        {
+          "id": "loc_vault", "name": "Vault Chamber", "kind": "room", "parent": "loc_caves",
+          "mechanics": [{ "kind": "water", "variant": "ankle-deep", "notes": "Echoes reveal the lever's position" }]
+        }
+      ],
+      "items": [
+        { "id": "itm_lantern", "name": "Old Lantern", "category": "resource", "equippable": true, "persistent": true },
+        { "id": "itm_vault_key", "name": "Vault Key", "category": "key" }
+      ],
+      "abilities": [],
+      "objects": [
+        {
+          "id": "obj_lever", "name": "Rusted Lever", "states": ["down", "up"], "initial": "down",
+          "verbs": [
+            {
+              "id": "vrb_pull_lever", "name": "Pull",
+              "availableWhen": "state(obj_lever) == \"down\"",
+              "effects": [{ "op": "object", "object": "obj_lever", "state": "up" }],
+              "feedback": "Grinding stone, water drains from the door seam"
+            }
+          ]
+        }
+      ],
+      "puzzles": [
+        {
+          "id": "pzl_vault_door", "name": "Vault Door",
+          "objective": "Drain the door seam, then use the key",
+          "components": [{ "id": "pzc_lever", "name": "Lever" }, { "id": "pzc_lock", "name": "Keyhole" }],
+          "solution": "state(obj_lever) == \"up\" and has(itm_vault_key)",
+          "hints": ["The water is holding the door shut.", "Listen for where the echo changes."],
+          "onSolve": [{ "op": "objective", "objective": "objv_open_vault", "status": "done" }]
+        }
+      ],
+      "quests": [],
+      "lore": [{ "id": "lor_expedition", "name": "The Lost Expedition", "body": "Six went down in the spring. None came back." }]
+    },
+    "variables": [
+      { "id": "var_lantern_oil", "name": "Lantern oil", "type": "int", "scope": "global", "initial": 3, "min": 0, "max": 5 },
+      { "id": "var_approach", "name": "Approach", "type": "enum", "scope": "global", "initial": "none", "values": ["none", "stealth", "bold"] }
+    ],
+    "spine": [
+      { "id": "mil_descent", "name": "Descend into the caves", "anchor": "scn_entrance", "required": true },
+      { "id": "mil_vault", "name": "Reach the vault", "anchor": "scn_vault", "required": true }
+    ],
+    "levels": [
+      { "id": "lvl_descent", "name": "Chapter 1: The Descent", "kind": "chapter", "scenes": ["scn_entrance", "scn_tunnel", "scn_vault"] }
+    ],
+    "endings": [
+      { "id": "end_shared", "name": "Shared Light", "kind": "good" },
+      { "id": "end_alone", "name": "Heavy Pockets", "kind": "neutral" },
+      { "id": "end_lost", "name": "Lost Below", "kind": "bad", "failure": true }
+    ],
+    "cinematics": [
+      {
+        "id": "cin_vault_reveal", "name": "The Vault Opens", "skippable": true,
+        "participants": ["chr_player", "chr_mara"],
+        "staging": "Door grinds open; lantern light spills over the expedition's camp, perfectly preserved.",
+        "shots": [
+          { "id": "sht_door", "camera": "Low wide on the door", "action": "Door swings inward", "audio": "Deep stone rumble", "durationSeconds": 4 },
+          {
+            "id": "sht_camp", "camera": "Slow push past the player's shoulder", "action": "Reveal the camp",
+            "lines": [{ "speaker": "chr_mara", "text": "They were here. All this time.", "direction": "barely a whisper" }],
+            "durationSeconds": 6
+          }
+        ]
+      }
+    ],
+    "start": { "scene": "scn_entrance" },
+    "scenes": [
+      {
+        "id": "scn_entrance", "name": "The Cave Mouth", "level": "lvl_descent", "location": "loc_entrance",
+        "entry": "bt_arrive",
+        "narrative": {
+          "purpose": "Establish Mara's caution and the value of light",
+          "time": "Late afternoon",
+          "participants": ["chr_player", "chr_mara"],
+          "expectedOutcome": "The player enters the caves, with or without the lantern"
+        },
+        "behavioral": {
+          "notes": [{ "id": "bhv_mara_wait", "actor": "chr_mara", "kind": "idle", "description": "Waits at the threshold, checking her rope" }]
+        },
+        "systemic": {
+          "onEnter": [{ "op": "objective", "objective": "objv_enter", "status": "active" }],
+          "objectives": [{ "id": "objv_enter", "name": "Enter the caves", "mandatory": true }],
+          "triggers": [],
+          "completion": "objective(objv_enter) == \"done\""
+        },
+        "presentation": { "ambience": "Wind across the cave mouth", "camera": "Wide establishing shot, then over-the-shoulder" },
+        "elements": [
+          { "id": "el_ent_player", "kind": "player", "ref": "chr_player" },
+          { "id": "el_ent_mara", "kind": "companion", "ref": "chr_mara" },
+          { "id": "el_ent_lantern", "kind": "item", "ref": "itm_lantern", "notes": "Hanging from a rusted hook" }
+        ],
+        "beats": [
+          {
+            "id": "bt_arrive", "name": "Arrival", "kind": "choice", "lane": "player",
+            "lines": [{ "speaker": "chr_mara", "text": "That lantern's older than both of us. Your call." }],
+            "choices": [
+              {
+                "id": "cho_take_lantern", "text": "Take the old lantern", "exclusiveGroup": "lantern",
+                "effects": [{ "op": "give", "item": "itm_lantern" }, { "op": "relationship", "relationship": "rel_mara", "delta": 1 }],
+                "to": { "beat": "bt_descend" }
+              },
+              {
+                "id": "cho_leave_lantern", "text": "Leave it. We travel light.", "exclusiveGroup": "lantern",
+                "effects": [{ "op": "relationship", "relationship": "rel_mara", "delta": -1 }],
+                "to": { "beat": "bt_descend" }
+              }
+            ]
+          },
+          {
+            "id": "bt_descend", "name": "Descent", "kind": "discovery", "lane": "spine",
+            "onEnter": [{ "op": "objective", "objective": "objv_enter", "status": "done" }],
+            "next": [{ "to": { "scene": "scn_tunnel" } }]
+          }
+        ]
+      },
+      {
+        "id": "scn_tunnel", "name": "The Fork", "level": "lvl_descent", "location": "loc_tunnel",
+        "entry": "bt_fork",
+        "narrative": { "purpose": "Force a choice between light and trust", "participants": ["chr_player", "chr_mara"] },
+        "behavioral": {
+          "notes": [
+            { "id": "bhv_mara_follow", "actor": "chr_mara", "kind": "follow", "description": "Follows at 3m; moves ahead if trusted", "when": "rel(rel_mara) >= 1" }
+          ]
+        },
+        "systemic": {
+          "objectives": [],
+          "triggers": [
+            {
+              "id": "trg_oil_low", "name": "Lantern flickers", "kind": "state-change", "once": true,
+              "when": "has(itm_lantern) and var_lantern_oil <= 2",
+              "effects": [{ "op": "event", "name": "lantern_flicker" }]
+            }
+          ]
+        },
+        "presentation": { "ambience": "Dripping water, distant rumble", "atmosphere": "Claustrophobic" },
+        "elements": [
+          { "id": "el_tun_squeeze", "kind": "environment", "ref": "loc_tunnel", "notes": "Left branch: crawlspace" },
+          { "id": "el_tun_oil", "kind": "trigger", "ref": "trg_oil_low" }
+        ],
+        "beats": [
+          {
+            "id": "bt_fork", "name": "The Fork", "kind": "choice", "lane": "player",
+            "lines": [{ "speaker": "chr_mara", "text": "Right's wider. Left's shorter, if you don't mind tight spaces." }],
+            "choices": [
+              {
+                "id": "cho_lit_path", "text": "Take the wide passage by lantern light",
+                "availableWhen": "has(itm_lantern) and var_lantern_oil > 0", "whenUnavailable": "disable",
+                "effects": [{ "op": "add", "var": "var_lantern_oil", "amount": -1 }, { "op": "set", "var": "var_approach", "value": "\"bold\"" }],
+                "to": { "beat": "bt_find_key" }
+              },
+              {
+                "id": "cho_crawl", "text": "Crawl through the squeeze",
+                "effects": [{ "op": "set", "var": "var_approach", "value": "\"stealth\"" }],
+                "to": { "beat": "bt_squeeze" }
+              }
+            ]
+          },
+          {
+            "id": "bt_squeeze", "name": "The Squeeze", "kind": "interaction", "lane": "player",
+            "lines": [{ "speaker": "chr_mara", "text": "Stop. Rock's loose here." }],
+            "choices": [
+              {
+                "id": "cho_trust_mara", "text": "Let Mara guide you through",
+                "availableWhen": "rel(rel_mara) >= 1", "whenUnavailable": "disable",
+                "to": { "beat": "bt_find_key" }
+              },
+              {
+                "id": "cho_force", "text": "Force your way through",
+                "effects": [{ "op": "relationship", "relationship": "rel_mara", "delta": -1 }, { "op": "event", "name": "rockfall" }],
+                "to": { "beat": "bt_collapse" }
+              }
+            ]
+          },
+          {
+            "id": "bt_collapse", "name": "Collapse", "kind": "combat", "lane": "spine",
+            "notes": "Scripted collapse sequence; player is trapped",
+            "next": [{ "to": { "end": "end_lost" } }]
+          },
+          {
+            "id": "bt_find_key", "name": "The Key", "kind": "acquisition", "lane": "player",
+            "lines": [{ "speaker": "chr_mara", "text": "That's my brother's key ring." }],
+            "onEnter": [{ "op": "give", "item": "itm_vault_key" }],
+            "choices": [
+              {
+                "id": "cho_show_key", "text": "Hand Mara the ring",
+                "effects": [{ "op": "relationship", "relationship": "rel_mara", "delta": 1 }],
+                "to": { "scene": "scn_vault" }
+              },
+              {
+                "id": "cho_pocket_key", "text": "Pocket it without a word",
+                "effects": [{ "op": "relationship", "relationship": "rel_mara", "delta": -2 }],
+                "to": { "scene": "scn_vault" }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "scn_vault", "name": "The Vault Door", "level": "lvl_descent", "location": "loc_vault",
+        "entry": "bt_door",
+        "narrative": {
+          "purpose": "Solve the door and pay off the trust thread",
+          "participants": ["chr_player", "chr_mara"],
+          "prerequisites": "has(itm_vault_key)"
+        },
+        "behavioral": { "notes": [] },
+        "systemic": {
+          "onEnter": [{ "op": "objective", "objective": "objv_open_vault", "status": "active" }],
+          "objectives": [{ "id": "objv_open_vault", "name": "Open the vault", "mandatory": true }],
+          "triggers": [],
+          "completion": "solved(pzl_vault_door)"
+        },
+        "presentation": { "music": "Low strings enter as the door opens", "camera": "Door framed center" },
+        "elements": [
+          { "id": "el_vlt_lever", "kind": "object", "ref": "obj_lever" },
+          { "id": "el_vlt_door", "kind": "puzzle", "ref": "pzl_vault_door" }
+        ],
+        "beats": [
+          {
+            "id": "bt_door", "name": "The Door", "kind": "puzzle", "lane": "player", "puzzle": "pzl_vault_door",
+            "lines": [{ "speaker": "chr_mara", "text": "Water's holding it shut. There's a lever somewhere." }],
+            "choices": [
+              {
+                "id": "cho_use_key", "text": "Turn the key",
+                "availableWhen": "state(obj_lever) == \"up\" and has(itm_vault_key)", "whenUnavailable": "disable",
+                "effects": [{ "op": "take", "item": "itm_vault_key" }, { "op": "puzzle", "puzzle": "pzl_vault_door", "status": "solved" }],
+                "to": { "beat": "bt_reveal" }
+              }
+            ]
+          },
+          {
+            "id": "bt_reveal", "name": "Reveal", "kind": "cinematic", "lane": "spine", "cinematic": "cin_vault_reveal",
+            "next": [
+              { "when": "rel(rel_mara) >= 1", "to": { "end": "end_shared" } },
+              { "to": { "end": "end_alone" } }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

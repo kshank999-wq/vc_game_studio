@@ -1,0 +1,10 @@
+{
+  "name": "@vc/writer-cli",
+  "version": "0.1.0",
+  "description": "Command-line validator, path explorer and text simulator for VC Writer projects",
+  "type": "module",
+  "bin": { "vcw": "dist/cli.js" },
+  "dependencies": {
+    "@vc/core": "0.1.0"
+  }
+}
