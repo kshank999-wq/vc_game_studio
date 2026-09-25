@@ -1,16 +1,17 @@
 {
   "name": "vc-game-studio",
   "private": true,
-  "description": "VC Writer and VC Game Studio",
+  "description": "VC Game Studio",
   "type": "module",
   "workspaces": [
     "packages/core",
-    "packages/cli"
+    "packages/cli",
+    "apps/studio"
   ],
   "scripts": {
     "build": "tsc -b packages/core packages/cli",
-    "typecheck": "tsc -b packages/core packages/cli",
-    "test": "vitest run",
+    "typecheck": "tsc -b packages/core packages/cli && npm run typecheck -w @vcgs/studio",
+    "test": "vitest run && npm test -w @vcgs/studio",
     "vcw": "npm run build --silent && node packages/cli/dist/cli.js"
   },
   "devDependencies": {

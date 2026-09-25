@@ -1,0 +1,43 @@
+/* Tokens from docs/ui/HANDOFF.md. Components use these, never literal colours. */
+:root {
+  --ground: #0b0a07;
+  --grid-dot: #1c1910;
+  --panel: #12100b;
+  --node: #1a170e;
+  --node-raised: #221d10;
+  --border: #332b17;
+  --border-strong: #5d5540;
+  --gold: #c9a45c;
+  --gold-hi: #e8c872;
+  --gold-lo: #8a6f2f;
+  --gold-gradient: linear-gradient(180deg, #e8c872, #c9a45c 55%, #8a6f2f);
+  --text: #f1e7cf;
+  --text-soft: #cfc3a3;
+  --muted: #9c8f6d;
+  --connector: #5a4c2a;
+
+  --c-scene: #4fa39a;
+  --c-cinematic: #9a7fc0;
+  --c-dialogue: #e08a5a;
+  --c-choice: #f2c230;
+  --c-object: #4a86d8;
+  --c-environment: #6fae5e;
+  --c-inventory: #6cc4d6;
+  --c-puzzle: #e07bb0;
+  --c-logic: #c8bfae;
+  --c-character: #d9607a;
+  --c-subplot: #8fa8c4;
+  --c-subplot-line: #3c4655;
+  --c-subplot-panel: #141a22;
+  --c-error: #e5484d;
+
+  --font-label: 'Josefin Sans', sans-serif;
+  --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-script: 'Courier Prime', 'Courier New', monospace;
+
+  --topbar-h: 52px;
+  --palette-w: 264px;
+  --bottombar-h: 52px;
+  --track-header-w: 130px;
+}

@@ -22,6 +22,7 @@ handoff that generates engine code for Unity, Unreal, Godot or a custom engine.
 
 | Package | What it is |
 | --- | --- |
+| [`apps/studio`](apps/studio) (`@vcgs/studio`) | **The VC Game Studio app** (Electron + React). Build order steps 1–3 are in: shell, palette, the infinite spine track, subplot and character lanes. |
 | [`packages/core`](packages/core) (`@vc/core`) | Engine-neutral project model shared by both products: schema, expression language, runtime state, validator, simulator/path explorer, file format, Game Studio handoff contract. |
 | [`packages/cli`](packages/cli) (`vcw`) | Command line for validating, exploring and playing VC Writer projects. |
 
