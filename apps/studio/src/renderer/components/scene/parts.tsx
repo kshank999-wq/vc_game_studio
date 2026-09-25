@@ -1,6 +1,6 @@
 import { TYPE_LABEL } from '../../model/semantics';
 import { CATEGORIES, addElement, categoryFor, inScene, useInScene, type Category } from '../../model/scene';
-import type { ObjectType, Project, StoryObject } from '../../model/types';
+import type { EventKind, ObjectType, Project, StoryObject } from '../../model/types';
 import { Symbol } from '../Symbol';
 
 /** Why a palette item can't go into a scene, or null when it can. */
@@ -81,3 +81,14 @@ export const dropCategory = (type: ObjectType | null | undefined): Category | un
   type ? categoryFor(type) : undefined;
 
 export const categoryByKey = (key: string): Category => CATEGORIES.find((c) => c.key === key)!;
+
+/** The symbol for each kind of timeline event. */
+export const KIND_SYMBOL: Record<EventKind, ObjectType> = {
+  cinematic: 'cinematic',
+  dialogue: 'dialogue',
+  action: 'object',
+  interaction: 'object',
+  trigger: 'trigger',
+  choice: 'choice',
+  freePlay: 'scene',
+};

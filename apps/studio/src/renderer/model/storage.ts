@@ -29,7 +29,9 @@ export const loadProject = (): Project | null => {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     // Projects saved before scenes had scripts have no lines yet.
-    return isProject(parsed) ? { ...parsed, lines: Array.isArray(parsed.lines) ? parsed.lines : [] } : null;
+    if (!isProject(parsed)) return null;
+    const list = <T,>(value: T[] | undefined): T[] => (Array.isArray(value) ? value : []);
+    return { ...parsed, lines: list(parsed.lines), events: list(parsed.events), branches: list(parsed.branches) };
   } catch {
     return null;
   }

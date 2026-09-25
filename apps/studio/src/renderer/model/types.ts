@@ -110,6 +110,42 @@ export interface DialogueLine {
   notes: string;
 }
 
+export type EventKind = 'cinematic' | 'dialogue' | 'action' | 'interaction' | 'trigger' | 'choice' | 'freePlay';
+
+/**
+ * One beat of a scene as it plays (spec §13). Events that stand for an
+ * element or a script line point at it with `refId`; the timeline never
+ * copies what they say.
+ */
+export interface TimelineEvent {
+  id: string;
+  sceneId: string;
+  kind: EventKind;
+  /** 'main', or the id of a branch. */
+  track: string;
+  order: number;
+  refId?: string;
+  label: string;
+  detail: string;
+  /** Cinematics: running time and shots. Free play has no duration, only an end condition. */
+  seconds?: number;
+  shots?: number;
+  endsWhen?: string;
+  condition?: string;
+  /** A choice's option that carries on along the main track. */
+  mainLabel?: string;
+}
+
+/** A choice's other option: its own track, which may reconnect to the main one. */
+export interface TimelineBranch {
+  id: string;
+  sceneId: string;
+  choiceEventId: string;
+  label: string;
+  /** The main-track event it reconnects to, or null when it leaves the scene. */
+  rejoinEventId: string | null;
+}
+
 export interface Project {
   format: 'vcgs';
   version: 1;
@@ -121,4 +157,7 @@ export interface Project {
   placements: Record<string, Placement>;
   /** Every scene's script, one record per block. */
   lines: DialogueLine[];
+  /** Every scene's timeline. Dialogue lines appear on it without being stored here until moved. */
+  events: TimelineEvent[];
+  branches: TimelineBranch[];
 }

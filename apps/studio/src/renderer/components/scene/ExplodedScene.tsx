@@ -4,7 +4,7 @@ import { TYPE_LABEL } from '../../model/semantics';
 import { CATEGORIES, addElement, categoryCounts, elementsIn, removeFromScene, sceneLines, type Category } from '../../model/scene';
 import type { Project, StoryObject } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
-import { clampZoom, type View } from '../../view';
+import { clampZoom, zoomAt, type View } from '../../view';
 import type { PaletteDrag } from '../canvas/StoryCanvas';
 import { Symbol } from '../Symbol';
 import { NameEdit, dropCategory, sceneRefusal, symbolColor } from './parts';
@@ -20,6 +20,12 @@ interface Props {
   onSay: (message: string) => void;
   /** Back to the writing box (the script). */
   onOpen: () => void;
+  /** Open the scene's timeline (double-click the scene, or its Timeline button). */
+  onTimeline?: () => void;
+  /** Shown as the timeline's linked panel: a header with zoom, Fit and Full view. */
+  panel?: { onFullView: () => void };
+  /** Elements lit because the selected timeline event stands for them. */
+  highlight?: ReadonlySet<string>;
 }
 
 // World units (HANDOFF iteration 2: scene 560×400, element boxes 130×110).
@@ -163,20 +169,25 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
       minY = Math.min(minY, p.at.y);
       maxY = Math.max(maxY, p.at.y + BOX_H);
     }
-    const margin = 40;
-    const zoom = clampZoom(Math.min(1, (root.clientWidth - margin * 2) / (maxX - minX), (root.clientHeight - margin * 2) / (maxY - minY)));
+    const margin = props.panel ? 24 : 40;
+    // The panel's header covers its top edge.
+    const top = props.panel ? 44 : 0;
+    const height = root.clientHeight - top;
+    const zoom = clampZoom(Math.min(1, (root.clientWidth - margin * 2) / (maxX - minX), (height - margin * 2) / (maxY - minY)));
     setViewState({
       zoom,
       panX: (root.clientWidth - (maxX - minX) * zoom) / 2 - minX * zoom,
-      panY: (root.clientHeight - (maxY - minY) * zoom) / 2 - minY * zoom,
+      panY: top + (height - (maxY - minY) * zoom) / 2 - minY * zoom,
     });
-  }, [project, sceneId]);
+  }, [project, sceneId, props.panel]);
 
-  // Open fitted to the scene and everything around it.
+  // Open fitted to the scene and everything around it. The small linked panel
+  // refits as elements arrive, so nothing new lands out of sight.
+  const elementCount = layout(project, sceneId).length;
   useLayoutEffect(() => {
     fit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sceneId]);
+  }, [sceneId, props.panel ? elementCount : 0]);
 
   useImperativeHandle(ref, () => ({
     drop: (drag) => {
@@ -199,6 +210,11 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
     fit,
   }));
 
+  const zoomCentre = (factor: number) => {
+    const root = rootRef.current;
+    if (root) setViewState((v) => zoomAt(v, factor, root.clientWidth / 2, root.clientHeight / 2));
+  };
+
   const location = scene.data.locationId ? project.objects[scene.data.locationId as string] : undefined;
   const slug = [scene.data.intExt ?? 'INT.', location?.name.toUpperCase() ?? 'SOMEWHERE', '—', scene.data.time ?? 'DAY'].join(' ');
   const firstAction = sceneLines(project, sceneId).find((l) => l.kind === 'action' && l.text)?.text;
@@ -208,7 +224,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
   return (
     <div
       ref={rootRef}
-      className={`exploded${props.paletteDrag ? ' dropping' : ''}`}
+      className={`exploded${props.paletteDrag ? ' dropping' : ''}${props.panel ? ' as-panel' : ''}`}
       style={{
         backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px`,
         backgroundPosition: `${view.panX}px ${view.panY}px`,
@@ -230,7 +246,17 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
           </g>
         </svg>
 
-        <section className="exploded-scene" aria-label={`Scene ${scene.data.code ?? ''}`} style={{ width: SCENE_W, height: SCENE_H }}>
+        <section
+          className="exploded-scene"
+          aria-label={`Scene ${scene.data.code ?? ''}`}
+          style={{ width: SCENE_W, height: SCENE_H }}
+          onDoubleClick={(e) => {
+            if (!props.onTimeline) return;
+            e.stopPropagation();
+            props.onTimeline();
+          }}
+          title={props.onTimeline ? 'Double-click for the timeline' : undefined}
+        >
           <div className="exploded-scene-body">
             <div className="scene-title">
               <Symbol type="scene" size={14} />
@@ -247,10 +273,18 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
             </div>
           </div>
           <div className="exploded-scene-foot">
+            {props.onTimeline && (
+              <button className="gold-btn" onPointerDown={(e) => e.stopPropagation()} onClick={props.onTimeline}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M2 4h12M2 8h8M2 12h10" />
+                </svg>
+                Timeline
+              </button>
+            )}
             <button className="tb-btn" onPointerDown={(e) => e.stopPropagation()} onClick={props.onOpen}>
               Edit script
             </button>
-            <span className="hint">Drop an element anywhere · it snaps to its port</span>
+            <span className="hint">{props.onTimeline ? 'double-click = timeline' : 'Drop an element anywhere · it snaps to its port'}</span>
           </div>
 
           {CATEGORIES.map((c) => {
@@ -279,9 +313,13 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
             return (
               <div
                 key={p.id}
-                className={`element-box element-dialogue${p.id === ghostId ? ' ghost' : ''}`}
+                className={`element-box element-dialogue${p.id === ghostId ? ' ghost' : ''}${props.highlight?.has(p.id) ? ' lit' : ''}${props.selection === p.id ? ' selected' : ''}`}
                 style={style}
-                onPointerDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.stopPropagation();
+                  props.onSelect(p.id);
+                }}
                 onDoubleClick={props.onOpen}
                 title="Double-click to edit the script"
               >
@@ -306,7 +344,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
             <div
               key={p.id}
               data-element={object.id}
-              className={`element-box${props.selection === object.id ? ' selected' : ''}${p.id === ghostId ? ' ghost' : ''}`}
+              className={`element-box${props.selection === object.id ? ' selected' : ''}${p.id === ghostId ? ' ghost' : ''}${props.highlight?.has(object.id) ? ' lit' : ''}`}
               style={style}
               onPointerDown={(e) => {
                 if (e.button !== 0) return;
@@ -362,7 +400,28 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
           {refusal}
         </div>
       )}
-      <div className="exploded-legend">Double-click a box to rename it · Delete removes it from the scene · wheel to zoom, drag to pan</div>
+      {props.panel ? (
+        <div className="panel-head" onPointerDown={(e) => e.stopPropagation()}>
+          <span className="panel-title">Scene · exploded</span>
+          <span className="panel-hint">linked to the timeline · select any element to edit</span>
+          <div className="grow" />
+          <button className="icon-btn small" aria-label="Zoom out" onClick={() => zoomCentre(1 / 1.2)}>
+            −
+          </button>
+          <span className="zoom-readout">{Math.round(view.zoom * 100)}%</span>
+          <button className="icon-btn small" aria-label="Zoom in" onClick={() => zoomCentre(1.2)}>
+            +
+          </button>
+          <button className="tb-btn small" onClick={fit}>
+            Fit
+          </button>
+          <button className="tb-btn small" onClick={props.panel.onFullView}>
+            Full view ⤢
+          </button>
+        </div>
+      ) : (
+        <div className="exploded-legend">Double-click a box to rename it · Delete removes it from the scene · wheel to zoom, drag to pan</div>
+      )}
     </div>
   );
 });

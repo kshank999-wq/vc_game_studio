@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { spineLane } from '../model/layout';
 import { createProject, placeNew } from '../model/project';
-import { addElement } from '../model/scene';
+import { addElement, addLine, updateLine } from '../model/scene';
 
 beforeAll(() => {
   // jsdom has no PointerEvent; a MouseEvent carries the button the handlers read.
@@ -129,5 +129,37 @@ describe('a scene', () => {
     expect(container.querySelector('.canvas')).toBeTruthy();
     // The scene is still selected on the way back.
     expect(container.querySelector('[data-type="scene"].selected')).toBeTruthy();
+  });
+});
+
+describe('the scene timeline', () => {
+  it('shows the script’s dialogue, adds events, and edits a line from the inspector', () => {
+    let project = createProject('The Sunken Vault');
+    const placed = placeNew(project, 'scene', spineLane(project).id, 400)!;
+    const mara = addElement(placed.project, placed.id, 'character', 'Mara')!;
+    const line = addLine(mara.project, placed.id, 'dialogue', undefined, mara.id);
+    project = updateLine(line.project, line.id, { text: 'There’s a lever somewhere.' });
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
+
+    const { container } = render(<App />);
+    fireEvent.doubleClick(container.querySelector('[data-type="scene"]')!);
+    expect(container.querySelector('.strip-summary')!.textContent).toBe('1 event · 0 branches · 0 free-play');
+    fireEvent.click(screen.getByRole('button', { name: /SCENE TIMELINE/ }));
+
+    const events = () => [...container.querySelectorAll('.ev .ek')].map((e) => e.textContent);
+    expect(events()).toEqual(['DLG #1']);
+    fireEvent.click(screen.getByRole('button', { name: '+ Event' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Free play/ }));
+    expect(events()).toEqual(['DLG #1', 'FREE PLAY · OPEN-ENDED']);
+
+    // Select the line: the panel lights Mara, and the inspector edits the script itself.
+    fireEvent.pointerDown(container.querySelector('.ev-dialogue')!, { button: 0 });
+    fireEvent.pointerUp(window);
+    expect(container.querySelectorAll('.element-box.lit').length).toBeGreaterThan(0);
+    const text = screen.getByDisplayValue('There’s a lever somewhere.');
+    fireEvent.change(text, { target: { value: 'Water’s holding it shut.' } });
+    fireEvent.blur(text);
+    fireEvent.click(screen.getByRole('button', { name: 'Scene' }));
+    expect(screen.getByDisplayValue('Water’s holding it shut.')).toBeTruthy();
   });
 });

@@ -67,7 +67,7 @@ interface Props {
   onConfirm: (request: ConfirmRequest) => void;
   onSay: (message: string) => void;
   /** Open a scene to write it, or explode it into its mind map. */
-  onOpenScene: (sceneId: string, mode: 'open' | 'exploded') => void;
+  onOpenScene: (sceneId: string, mode: 'open' | 'exploded' | 'timeline') => void;
 }
 
 type Target = { ok: true; laneId: string | null; x: number; y: number } | { ok: false; reason: string };
@@ -489,6 +489,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
                 Open
               </button>
               <button onClick={() => props.onOpenScene(id, 'exploded')}>Explode</button>
+              <button onClick={() => props.onOpenScene(id, 'timeline')}>Timeline</button>
             </div>
           );
         })()}
@@ -712,7 +713,7 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onO
   onCommit: (project: Project) => void;
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
-  onOpenScene: (id: string, mode: 'open' | 'exploded') => void;
+  onOpenScene: (id: string, mode: 'open' | 'exploded' | 'timeline') => void;
 }) => {
   const item = (label: string, action: () => void, className?: string, checked?: boolean) => (
     <button
@@ -742,6 +743,7 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onO
     if (object.type === 'scene') {
       items.push(item('Open scene', () => onOpenScene(object.id, 'open')));
       items.push(item('Explode scene', () => onOpenScene(object.id, 'exploded')));
+      items.push(item('Scene timeline', () => onOpenScene(object.id, 'timeline')));
       items.push(<div key="sep0" className="menu-sep" />);
     }
     items.push(item('Rename', () => onRename(object.id)));

@@ -26,6 +26,7 @@ npm test -w @vcgs/studio
 | `src/renderer/components/canvas/` | The story graph: the endless spine track, subplot bands, lanes, branches, connectors, minimap. |
 | `src/renderer/model/scene.ts` | What a scene holds (by category), and its script. |
 | `src/renderer/components/scene/` | The scene workspace (writing box and perimeter) and the exploded scene (ports and element boxes). |
+| `src/renderer/model/timeline.ts` | A scene's timeline: events on the main track and on a choice's branches. |
 | `src/renderer/model/validate.ts` | What needs a look (dead ends, choices without options, untied arc events). |
 | `src/renderer/components/Palette.tsx` | The legend as node buttons. |
 | `src/renderer/components/BottomBar.tsx` | Add lanes, lane visibility, zoom. |
@@ -38,7 +39,7 @@ npm test -w @vcgs/studio
 3. ✅ The bottom menu, and adding subplot and character lanes
 4. ✅ Drag in a plot point, a choice and a scene; connect lanes (branches, lane ties, arc events)
 5. ✅ Open or explode a scene, with ports per category
-6. Element detail on double-click
-7. The timeline with the linked exploded panel
+6. Element detail on double-click (next: the timeline's inspector already edits events)
+7. ✅ The timeline with the linked exploded panel
 8. The Bible
 9. Engine handoff with generated code

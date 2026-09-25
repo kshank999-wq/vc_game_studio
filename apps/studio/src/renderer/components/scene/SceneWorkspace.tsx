@@ -16,6 +16,10 @@ import type { PaletteDrag } from '../canvas/StoryCanvas';
 import { Symbol } from '../Symbol';
 import { AddMenu, NameEdit, dropCategory, sceneRefusal, symbolColor } from './parts';
 import { ScriptEditor, ScriptFooter } from './ScriptEditor';
+import { timelineSummary } from '../../model/timeline';
+
+/** The collapsed timeline under the writing box. */
+const STRIP_H = 52;
 
 export interface SceneSurface {
   /** Drop a palette element into the scene. False when it can't go there. */
@@ -23,6 +27,8 @@ export interface SceneSurface {
   rename: (id: string) => void;
   /** Fit the view to the scene, where the view can pan and zoom. */
   fit?: () => void;
+  /** Delete what is selected (the timeline's selected event). */
+  remove?: () => void;
 }
 
 interface Props {
@@ -33,6 +39,7 @@ interface Props {
   onSelect: (id: string | null) => void;
   paletteDrag: PaletteDrag | null;
   onSay: (message: string) => void;
+  onTimeline: () => void;
 }
 
 // The scene box and the perimeter around it, in stage units (mockup 03).
@@ -141,9 +148,11 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
     }
   }
   const margin = 28;
-  const k = Math.min(1, (size.w - margin * 2) / (maxX - minX), (size.h - margin * 2) / (maxY - minY));
+  const usableH = size.h - STRIP_H;
+  const k = Math.min(1, (size.w - margin * 2) / (maxX - minX), (usableH - margin * 2) / (maxY - minY));
   const ox = (size.w - (maxX - minX) * k) / 2 - minX * k;
-  const oy = (size.h - (maxY - minY) * k) / 2 - minY * k;
+  const oy = (usableH - (maxY - minY) * k) / 2 - minY * k;
+  const summary = timelineSummary(project, sceneId);
 
   const openCategory = (key: string) => setExpanded((e) => ({ ...e, [key]: true }));
 
@@ -387,6 +396,23 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
           </div>
           {tab === 'Script' && <ScriptFooter project={project} sceneId={sceneId} onCommit={props.onCommit} />}
         </section>
+      </div>
+
+      <div className="timeline-strip" onPointerDown={(e) => e.stopPropagation()}>
+        <button className="strip-open" onClick={props.onTimeline}>
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+            <path d="M2 6.5l3-3 3 3" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+          SCENE TIMELINE
+        </button>
+        <span className="strip-summary">
+          {summary.events} event{summary.events === 1 ? '' : 's'} · {summary.branches} branch{summary.branches === 1 ? '' : 'es'} · {summary.freePlay} free-play
+        </span>
+        <div className="strip-blocks" aria-hidden="true">
+          {summary.kinds.map((kind, i) => (
+            <span key={i} className={`strip-block strip-${kind}`} />
+          ))}
+        </div>
       </div>
 
       {props.paletteDrag && refusal && rect && (

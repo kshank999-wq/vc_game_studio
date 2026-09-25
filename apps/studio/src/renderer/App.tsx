@@ -6,6 +6,7 @@ import { Symbol } from './components/Symbol';
 import { TopBar, type Crumb } from './components/TopBar';
 import { ExplodedScene } from './components/scene/ExplodedScene';
 import { SceneWorkspace, type SceneSurface } from './components/scene/SceneWorkspace';
+import { SceneTimeline } from './components/scene/SceneTimeline';
 import { inScene, removeFromScene } from './model/scene';
 import { laneRows, nodeBox } from './model/layout';
 import { addLane, isProtected, removeConnection, removeObject, renameProject, spanDependents, updateLane } from './model/project';
@@ -18,7 +19,8 @@ import { fitView, spineView, zoomAt, type View } from './view';
 const BOTTOM_BAR = 52;
 
 /** Where the user is: the story graph, or inside one scene (written, or exploded). */
-export type Route = { view: 'graph' } | { view: 'scene'; sceneId: string; mode: 'open' | 'exploded' };
+export type SceneMode = 'open' | 'exploded' | 'timeline';
+export type Route = { view: 'graph' } | { view: 'scene'; sceneId: string; mode: SceneMode };
 
 const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -69,7 +71,7 @@ export const App = () => {
   }, [project, selection, route]);
 
   /** Open a scene; the graph keeps its zoom, pan and selection for the way back (spec §24). */
-  const openScene = (sceneId: string, mode: 'open' | 'exploded') => {
+  const openScene = (sceneId: string, mode: SceneMode) => {
     setRoute({ view: 'scene', sceneId, mode });
     setSceneSelection(null);
   };
@@ -213,6 +215,9 @@ export const App = () => {
         } else if (mod && key === '0') {
           e.preventDefault();
           surface.current?.fit?.();
+        } else if ((e.key === 'Delete' || e.key === 'Backspace') && route.mode === 'timeline') {
+          e.preventDefault();
+          surface.current?.remove?.();
         } else if ((e.key === 'Delete' || e.key === 'Backspace') && sceneSelection && inScene(project, route.sceneId, sceneSelection)) {
           e.preventDefault();
           commit(removeFromScene(project, route.sceneId, sceneSelection));
@@ -255,10 +260,10 @@ export const App = () => {
     route.view === 'scene' && scene
       ? [
           { label: 'Story Graph', onClick: backToGraph },
-          ...(route.mode === 'exploded'
+          ...(route.mode !== 'open'
             ? [
                 { label: `${scene.data.code ?? ''} ${scene.name}`.trim(), symbol: 'scene' as const, onClick: () => openScene(route.sceneId, 'open') },
-                { label: 'Exploded' },
+                { label: route.mode === 'timeline' ? 'Timeline' : 'Exploded' },
               ]
             : [{ label: `${scene.data.code ?? ''} ${scene.name}`.trim(), symbol: 'scene' as const }]),
         ]
@@ -273,8 +278,15 @@ export const App = () => {
           <button className={route.mode === 'exploded' ? 'on' : ''} aria-pressed={route.mode === 'exploded'} onClick={() => openScene(route.sceneId, 'exploded')}>
             Mind map
           </button>
+          <button className={route.mode === 'timeline' ? 'on' : ''} aria-pressed={route.mode === 'timeline'} onClick={() => openScene(route.sceneId, 'timeline')}>
+            Timeline
+          </button>
         </div>
-        {route.mode === 'open' ? (
+        {route.mode === 'timeline' ? (
+          <button className="tb-btn" onClick={() => openScene(route.sceneId, 'exploded')}>
+            Close timeline
+          </button>
+        ) : route.mode === 'open' ? (
           <button className="tb-btn" title="Explode the scene into a full mind map" onClick={() => openScene(route.sceneId, 'exploded')}>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
               <circle cx="8" cy="8" r="2.2" />
@@ -302,7 +314,7 @@ export const App = () => {
         canRedo={studio.canRedo}
         onUndo={studio.undo}
         onRedo={studio.redo}
-        onFit={route.view === 'graph' ? fit : route.mode === 'exploded' ? () => surface.current?.fit?.() : undefined}
+        onFit={route.view === 'graph' ? fit : route.mode !== 'open' ? () => surface.current?.fit?.() : undefined}
         onBible={() => say('The Game Bible is not built yet.')}
         onEngine={() => say('Engine handoff is not built yet.')}
         saveState={studio.saveState}
@@ -356,6 +368,20 @@ export const App = () => {
             onSelect={setSceneSelection}
             paletteDrag={showGhost ? drag : null}
             onSay={say}
+            onTimeline={() => openScene(route.sceneId, 'timeline')}
+          />
+        )}
+        {route.view === 'scene' && scene && route.mode === 'timeline' && (
+          <SceneTimeline
+            key={route.sceneId}
+            ref={surface}
+            project={project}
+            sceneId={route.sceneId}
+            onCommit={commit}
+            paletteDrag={showGhost ? drag : null}
+            onSay={say}
+            onOpen={() => openScene(route.sceneId, 'open')}
+            onFullView={() => openScene(route.sceneId, 'exploded')}
           />
         )}
         {route.view === 'scene' && scene && route.mode === 'exploded' && (
@@ -370,6 +396,7 @@ export const App = () => {
             paletteDrag={showGhost ? drag : null}
             onSay={say}
             onOpen={() => openScene(route.sceneId, 'open')}
+            onTimeline={() => openScene(route.sceneId, 'timeline')}
           />
         )}
       </main>

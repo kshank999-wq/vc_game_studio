@@ -68,6 +68,8 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
       [end.id]: { laneId: spine.id, x: START_X + START_SPACING * 2, y: 0 },
     },
     lines: [],
+    events: [],
+    branches: [],
   };
 };
 
@@ -389,6 +391,9 @@ export const removeObject = (project: Project, id: string): Project => {
     lines: project.lines
       .filter((l) => l.sceneId !== id)
       .map((l) => (l.speakerId === id ? { ...l, speakerId: null } : l)),
+    // Its timeline goes with a scene; an event standing for the element goes with the element.
+    events: project.events.filter((e) => e.sceneId !== id && e.refId !== id),
+    branches: project.branches.filter((b) => b.sceneId !== id),
   });
 };
 
