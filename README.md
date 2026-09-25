@@ -1,22 +1,19 @@
 # VC Game Studio
 
-Home of **VC Writer**, an interactive game-writing and narrative-authoring
-tool, and **VC Game Studio**, the full game-creation platform that embeds VC
-Writer and turns authored stories into engine code for Godot, Unity and
-Unreal Engine, with placeholders standing in for art, environments and
-characters.
+A standalone desktop app for building game narratives visually: an infinite
+story spine track, subplot and character lanes, scenes that open, explode into
+a node map and play as a timeline, a Game Bible behind every view, and a
+handoff that generates engine code for Unity, Unreal, Godot or a custom engine.
 
-> **Where the work is now.** Game *writing* (planning the story, the Bible,
-> choices, state, objectives, puzzles, the Story Map) is being built inside
-> **VC Writer**, in the [VCWriter repo](https://github.com/kshank999-wq/VCWriter)
-> on branch `claude/game-writing`. The plan is
-> [addendum 25](https://github.com/kshank999-wq/VCWriter/blob/claude/game-writing/docs/spec/addendum-25-game-writing.md).
-> VC Writer plans everything; **this repo becomes VC Game Studio**, which
-> implements: engine code for Godot, Unity and Unreal, asset import, and
-> placeholders for art. The `@vc/core` package here was the first prototype of
-> the shared model; its ideas are being ported into VC Writer's domain package
-> stage by stage, and Game Studio will read VC Writer's `.vcw` files directly.
+> **Direction, 25 September 2026.** VC Game Studio is its own program, not a
+> mode inside VC Writer. VC Writer carries only a teaser link that opens the
+> full app in a mode that cannot save; from there the user reaches the home
+> page to buy or subscribe. The UI is defined by
+> [`docs/ui/HANDOFF.md`](docs/ui/HANDOFF.md), the UI spec and the mockups in
+> [`docs/ui/`](docs/ui/README.md). The `@vc/core` package below is the earlier
+> engine prototype.
 
+- UI design package: [`docs/ui/`](docs/ui/README.md)
 - Specs: [`docs/specs/vc-writer-spec.md`](docs/specs/vc-writer-spec.md),
   [`docs/specs/vc-game-studio-spec.md`](docs/specs/vc-game-studio-spec.md)
 - Plan and status: [`docs/ROADMAP.md`](docs/ROADMAP.md)
