@@ -22,6 +22,8 @@ export interface NodeProps {
   ghost: boolean;
   editing: boolean;
   issue?: string;
+  /** A line about what the node holds, in place of its default subtitle. */
+  detail?: string;
   /** Lit while a connector is dragged over the node. */
   target: PortState;
   onPointerDown: (e: React.PointerEvent) => void;
@@ -140,6 +142,7 @@ export const NodeView = (props: NodeProps) => {
           : KICKER[object.type] ?? '';
   const renamed = object.type === 'plotPoint' && object.name !== `Plot Point ${object.data.code?.replace(/\D/g, '')}`;
   const sub =
+    props.detail ??
     object.data.summary ??
     (object.type === 'plotPoint' && !subplot ? (renamed ? object.data.code : 'Name it…') : object.type === 'cinematic' || object.type === 'dialogue' ? object.data.code : '');
   return (

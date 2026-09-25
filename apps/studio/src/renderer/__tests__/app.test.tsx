@@ -2,6 +2,9 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
+import { spineLane } from '../model/layout';
+import { createProject, placeNew } from '../model/project';
+import { addElement } from '../model/scene';
 
 beforeAll(() => {
   // jsdom has no PointerEvent; a MouseEvent carries the button the handlers read.
@@ -96,5 +99,35 @@ describe('the wheel', () => {
     });
     expect(readout()).toBe(zoomed);
     expect(world()).not.toBe(before);
+  });
+});
+
+describe('a scene', () => {
+  it('opens from the story graph, explodes into ports, and comes back', () => {
+    // A saved project with one scene holding a character.
+    let project = createProject('The Sunken Vault');
+    const placed = placeNew(project, 'scene', spineLane(project).id, 400)!;
+    project = addElement(placed.project, placed.id, 'character', 'Mara')!.project;
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
+
+    const { container } = render(<App />);
+    const card = container.querySelector('[data-type="scene"]')!;
+    expect(card.textContent).toContain('1 character');
+    fireEvent.pointerDown(card, { button: 0 });
+    fireEvent.pointerUp(window);
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+    expect(container.querySelector('.scene-box')).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toContain('SC-01 New scene');
+    expect(screen.getByRole('button', { name: /Characters/ }).textContent).toContain('1');
+
+    fireEvent.click(screen.getByRole('button', { name: /Expand all/ }));
+    expect(container.querySelectorAll('.exploded-scene .port')).toHaveLength(9);
+    expect([...container.querySelectorAll('.element-box')].map((b) => b.textContent)).toEqual([expect.stringContaining('Mara')]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Story Graph' }));
+    expect(container.querySelector('.canvas')).toBeTruthy();
+    // The scene is still selected on the way back.
+    expect(container.querySelector('[data-type="scene"].selected')).toBeTruthy();
   });
 });

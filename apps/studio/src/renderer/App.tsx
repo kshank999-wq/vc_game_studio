@@ -3,7 +3,10 @@ import { BottomBar } from './components/BottomBar';
 import { Palette } from './components/Palette';
 import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } from './components/canvas/StoryCanvas';
 import { Symbol } from './components/Symbol';
-import { TopBar } from './components/TopBar';
+import { TopBar, type Crumb } from './components/TopBar';
+import { ExplodedScene } from './components/scene/ExplodedScene';
+import { SceneWorkspace, type SceneSurface } from './components/scene/SceneWorkspace';
+import { inScene, removeFromScene } from './model/scene';
 import { laneRows, nodeBox } from './model/layout';
 import { addLane, isProtected, removeConnection, removeObject, renameProject, spanDependents, updateLane } from './model/project';
 import { findIssues } from './model/validate';
@@ -14,6 +17,9 @@ import { fitView, spineView, zoomAt, type View } from './view';
 
 const BOTTOM_BAR = 52;
 
+/** Where the user is: the story graph, or inside one scene (written, or exploded). */
+export type Route = { view: 'graph' } | { view: 'scene'; sceneId: string; mode: 'open' | 'exploded' };
+
 const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
@@ -21,6 +27,11 @@ export const App = () => {
   const studio = useStudio();
   const { project, commit } = studio;
   const canvas = useRef<CanvasApi>(null);
+  const surface = useRef<SceneSurface>(null);
+  const [route, setRoute] = useState<Route>({ view: 'graph' });
+  // The legend is a full palette on the graph and a rail inside a scene, until the user says otherwise.
+  const [rail, setRail] = useState({ graph: false, scene: true });
+  const inSceneView = route.view === 'scene';
   const [view, setViewState] = useState<View>({ zoom: 1, panX: 180, panY: 300 });
   const setView = useCallback((update: (view: View) => View) => setViewState(update), []);
   const [selection, setSelection] = useState<string | null>(null);
@@ -28,9 +39,11 @@ export const App = () => {
   const dragStart = useRef({ x: 0, y: 0 });
   const dragRef = useRef<PaletteDrag | null>(null);
   dragRef.current = drag;
+  const routeRef = useRef<Route>({ view: 'graph' });
   const [toast, setToast] = useState<string | null>(null);
   const [ask, setAsk] = useState<ConfirmRequest | null>(null);
 
+  routeRef.current = route;
   const say = useCallback((message: string) => setToast(message), []);
   useEffect(() => {
     if (!toast) return;
@@ -49,10 +62,23 @@ export const App = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // A selection that no longer exists (after undo, say) is dropped.
+  // A selection that no longer exists (after undo, say) is dropped; so is a scene view whose scene went.
   useEffect(() => {
     if (selection && !project.objects[selection] && !project.connections.some((c) => c.id === selection)) setSelection(null);
-  }, [project, selection]);
+    if (route.view === 'scene' && project.objects[route.sceneId]?.type !== 'scene') setRoute({ view: 'graph' });
+  }, [project, selection, route]);
+
+  /** Open a scene; the graph keeps its zoom, pan and selection for the way back (spec §24). */
+  const openScene = (sceneId: string, mode: 'open' | 'exploded') => {
+    setRoute({ view: 'scene', sceneId, mode });
+    setSceneSelection(null);
+  };
+  const [sceneSelection, setSceneSelection] = useState<string | null>(null);
+  const backToGraph = () => {
+    const from = route.view === 'scene' ? route.sceneId : null;
+    setRoute({ view: 'graph' });
+    if (from) setSelection(from);
+  };
 
   const issues = useMemo(() => findIssues(project), [project]);
   const issueMap = useMemo(() => new Map(issues.map((i) => [i.id, i.message])), [issues]);
@@ -97,7 +123,8 @@ export const App = () => {
         setDrag({ ...at, placing: true });
         return;
       }
-      canvas.current?.drop(at);
+      if (routeRef.current.view === 'graph') canvas.current?.drop(at);
+      else surface.current?.drop(at);
       setDrag(null);
     };
     window.addEventListener('pointermove', move);
@@ -166,12 +193,36 @@ export const App = () => {
       }
       if (e.key === 'Escape') {
         setDrag(null);
-        if (!isTyping(e.target)) setSelection(null);
+        if (!isTyping(e.target)) {
+          setSelection(null);
+          setSceneSelection(null);
+        }
         return;
       }
       if (isTyping(e.target)) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      if (route.view === 'scene') {
+        if (mod && key === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) studio.redo();
+          else studio.undo();
+        } else if (mod && key === 'y') {
+          e.preventDefault();
+          studio.redo();
+        } else if (mod && key === '0') {
+          e.preventDefault();
+          surface.current?.fit?.();
+        } else if ((e.key === 'Delete' || e.key === 'Backspace') && sceneSelection && inScene(project, route.sceneId, sceneSelection)) {
+          e.preventDefault();
+          commit(removeFromScene(project, route.sceneId, sceneSelection));
+          setSceneSelection(null);
+        } else if ((e.key === 'F2' || e.key === 'Enter') && sceneSelection) {
+          e.preventDefault();
+          surface.current?.rename(sceneSelection);
+        }
+        return;
+      }
       if (mod && key === 'z' && !e.shiftKey) {
         e.preventDefault();
         studio.undo();
@@ -199,47 +250,128 @@ export const App = () => {
 
   const showGhost = drag && (drag.moved || drag.placing);
 
+  const scene = route.view === 'scene' ? project.objects[route.sceneId] : undefined;
+  const crumbs: Crumb[] | undefined =
+    route.view === 'scene' && scene
+      ? [
+          { label: 'Story Graph', onClick: backToGraph },
+          ...(route.mode === 'exploded'
+            ? [
+                { label: `${scene.data.code ?? ''} ${scene.name}`.trim(), symbol: 'scene' as const, onClick: () => openScene(route.sceneId, 'open') },
+                { label: 'Exploded' },
+              ]
+            : [{ label: `${scene.data.code ?? ''} ${scene.name}`.trim(), symbol: 'scene' as const }]),
+        ]
+      : undefined;
+  const sceneControls =
+    route.view === 'scene' ? (
+      <>
+        <div role="group" aria-label="Scene view" className="view-toggle">
+          <button className={route.mode === 'open' ? 'on' : ''} aria-pressed={route.mode === 'open'} onClick={() => openScene(route.sceneId, 'open')}>
+            Scene
+          </button>
+          <button className={route.mode === 'exploded' ? 'on' : ''} aria-pressed={route.mode === 'exploded'} onClick={() => openScene(route.sceneId, 'exploded')}>
+            Mind map
+          </button>
+        </div>
+        {route.mode === 'open' ? (
+          <button className="tb-btn" title="Explode the scene into a full mind map" onClick={() => openScene(route.sceneId, 'exploded')}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+              <circle cx="8" cy="8" r="2.2" />
+              <path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" />
+            </svg>
+            Expand all
+          </button>
+        ) : (
+          <button className="tb-btn" title="Collapse back to the writing box" onClick={() => openScene(route.sceneId, 'open')}>
+            Collapse scene
+          </button>
+        )}
+      </>
+    ) : null;
+  const railOn = inSceneView ? rail.scene : rail.graph;
+
   return (
-    <div className={`app${drag ? ' is-dragging' : ''}`}>
+    <div className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}`}>
       <TopBar
         projectName={project.name}
+        crumbs={crumbs}
+        viewControls={sceneControls}
         onRename={(name) => commit(renameProject(project, name))}
         canUndo={studio.canUndo}
         canRedo={studio.canRedo}
         onUndo={studio.undo}
         onRedo={studio.redo}
-        onFit={fit}
+        onFit={route.view === 'graph' ? fit : route.mode === 'exploded' ? () => surface.current?.fit?.() : undefined}
         onBible={() => say('The Game Bible is not built yet.')}
         onEngine={() => say('Engine handoff is not built yet.')}
         saveState={studio.saveState}
-        issueCount={issues.length}
+        issueCount={route.view === 'graph' ? issues.length : 0}
         onIssues={showNextIssue}
       />
-      <Palette active={drag?.placing ? drag.type : null} onStart={startPaletteDrag} />
+      <Palette
+        active={drag?.placing ? drag.type : null}
+        onStart={startPaletteDrag}
+        mode={inSceneView ? 'scene' : 'graph'}
+        rail={railOn}
+        onToggleRail={() => setRail((r) => (inSceneView ? { ...r, scene: !r.scene } : { ...r, graph: !r.graph }))}
+      />
       <main className="main">
-        <StoryCanvas
-          ref={canvas}
-          project={project}
-          onCommit={commit}
-          view={view}
-          setView={setView}
-          selection={selection}
-          onSelect={setSelection}
-          paletteDrag={showGhost ? drag : null}
-          bottomInset={BOTTOM_BAR}
-          onConfirm={setAsk}
-          onDelete={deleteItem}
-          issues={issueMap}
-          onSay={say}
-        />
-        <BottomBar
-          lanes={project.lanes}
-          zoom={view.zoom}
-          onAddLane={onAddLane}
-          onToggleLane={onToggleLane}
-          onZoomToSpine={toSpine}
-          onZoom={zoomBy}
-        />
+        {route.view === 'graph' && (
+          <>
+            <StoryCanvas
+              ref={canvas}
+              project={project}
+              onCommit={commit}
+              view={view}
+              setView={setView}
+              selection={selection}
+              onSelect={setSelection}
+              paletteDrag={showGhost ? drag : null}
+              bottomInset={BOTTOM_BAR}
+              onConfirm={setAsk}
+              onDelete={deleteItem}
+              issues={issueMap}
+              onSay={say}
+              onOpenScene={openScene}
+            />
+            <BottomBar
+              lanes={project.lanes}
+              zoom={view.zoom}
+              onAddLane={onAddLane}
+              onToggleLane={onToggleLane}
+              onZoomToSpine={toSpine}
+              onZoom={zoomBy}
+            />
+          </>
+        )}
+        {route.view === 'scene' && scene && route.mode === 'open' && (
+          <SceneWorkspace
+            key={route.sceneId}
+            ref={surface}
+            project={project}
+            sceneId={route.sceneId}
+            onCommit={commit}
+            selection={sceneSelection}
+            onSelect={setSceneSelection}
+            paletteDrag={showGhost ? drag : null}
+            onSay={say}
+          />
+        )}
+        {route.view === 'scene' && scene && route.mode === 'exploded' && (
+          <ExplodedScene
+            key={route.sceneId}
+            ref={surface}
+            project={project}
+            sceneId={route.sceneId}
+            onCommit={commit}
+            selection={sceneSelection}
+            onSelect={setSceneSelection}
+            paletteDrag={showGhost ? drag : null}
+            onSay={say}
+            onOpen={() => openScene(route.sceneId, 'open')}
+          />
+        )}
       </main>
       {showGhost && (
         <div className="drag-ghost" style={{ left: drag.clientX + 12, top: drag.clientY + 12 }} aria-hidden="true">

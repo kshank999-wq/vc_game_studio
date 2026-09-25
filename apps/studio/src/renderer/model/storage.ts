@@ -28,7 +28,8 @@ export const loadProject = (): Project | null => {
     const raw = globalThis.localStorage?.getItem(KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    return isProject(parsed) ? parsed : null;
+    // Projects saved before scenes had scripts have no lines yet.
+    return isProject(parsed) ? { ...parsed, lines: Array.isArray(parsed.lines) ? parsed.lines : [] } : null;
   } catch {
     return null;
   }

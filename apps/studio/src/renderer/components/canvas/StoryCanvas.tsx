@@ -17,8 +17,10 @@ import {
   updateLane,
 } from '../../model/project';
 import { SCENE_ONLY, TYPE_LABEL } from '../../model/semantics';
+import { categoryCounts } from '../../model/scene';
 import type { Connection, Lane, ObjectType, Project } from '../../model/types';
-import { HEADER_W, zoomAt, type View } from '../../view';
+import { useWheelPanZoom } from '../../use-pan-zoom';
+import { HEADER_W, type View } from '../../view';
 import { connectionCurve, draftCurve, subplotPath, type Point } from './geometry';
 import { Minimap } from './Minimap';
 import { NodeView, type PortState } from './NodeView';
@@ -64,6 +66,8 @@ interface Props {
   /** Ask before a change that removes more than the user pointed at. */
   onConfirm: (request: ConfirmRequest) => void;
   onSay: (message: string) => void;
+  /** Open a scene to write it, or explode it into its mind map. */
+  onOpenScene: (sceneId: string, mode: 'open' | 'exploded') => void;
 }
 
 type Target = { ok: true; laneId: string | null; x: number; y: number } | { ok: false; reason: string };
@@ -112,16 +116,6 @@ const nodeAt = (project: Project, rows: LaneRow[], p: Point, except?: string): s
   }
   return null;
 };
-
-/**
- * Is this wheel event a mouse wheel (zoom) or a trackpad scroll (pan)? A mouse
- * wheel moves in whole notches on one axis; a trackpad sends small, often
- * fractional deltas on both.
- */
-const isMouseWheel = (e: WheelEvent): boolean =>
-  e.deltaMode !== 0 || (e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 40);
-
-const wheelPixels = (e: WheelEvent, delta: number): number => (e.deltaMode === 1 ? delta * 33 : e.deltaMode === 2 ? delta * 800 : delta);
 
 export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(props, ref) {
   const { project, view, paletteDrag } = props;
@@ -201,36 +195,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
     rename: (id) => setEditing(id),
   }));
 
-  // ------------------------------------------------------------ wheel
-
-  // A mouse wheel zooms around the pointer; a trackpad pans with two fingers
-  // and zooms with a pinch (which arrives as Ctrl + wheel). Shift + wheel pans
-  // sideways.
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const rect = root.getBoundingClientRect();
-      const sx = e.clientX - rect.left;
-      const sy = e.clientY - rect.top;
-      const dy = wheelPixels(e, e.deltaY);
-      const dx = wheelPixels(e, e.deltaX);
-      if (e.ctrlKey || e.metaKey) {
-        // Pinch deltas are small; a Ctrl + mouse wheel notch is ~100.
-        const factor = Math.exp(-dy * (Math.abs(dy) < 40 ? 0.01 : 0.0018));
-        props.setView((v) => zoomAt(v, factor, sx, sy));
-      } else if (e.shiftKey) {
-        props.setView((v) => ({ ...v, panX: v.panX - (dx || dy) }));
-      } else if (isMouseWheel(e)) {
-        props.setView((v) => zoomAt(v, Math.exp(-dy * 0.0018), sx, sy));
-      } else {
-        props.setView((v) => ({ ...v, panX: v.panX - dx, panY: v.panY - dy }));
-      }
-    };
-    root.addEventListener('wheel', onWheel, { passive: false });
-    return () => root.removeEventListener('wheel', onWheel);
-  }, [props.setView]);
+  useWheelPanZoom(rootRef, props.setView);
 
   const shown = preview ?? dropPreview?.project ?? project;
   const ghostId = !preview && dropPreview ? dropPreview.id : null;
@@ -502,8 +467,9 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
               target={portState(id)}
               onPointerDown={(e) => onNodeDown(e, id)}
               onPortDown={(e) => onPortDown(e, id)}
-              onDoubleClick={() => setEditing(id)}
+              onDoubleClick={() => (object.type === 'scene' ? props.onOpenScene(id, 'open') : setEditing(id))}
               onContextMenu={(e) => openMenu(e, 'node', id)}
+              detail={object.type === 'scene' ? sceneDetail(shown, id) : undefined}
               onRename={(name) => {
                 setEditing(null);
                 props.onCommit(renameObject(project, id, name));
@@ -512,6 +478,20 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
             />
           );
         })}
+
+        {props.selection && shown.objects[props.selection]?.type === 'scene' && !preview && (() => {
+          const box = nodeBox(shown, props.selection, rows);
+          if (!box) return null;
+          const id = props.selection;
+          return (
+            <div className="quick-actions" style={{ left: box.x - 10, top: box.y - 36 }} onPointerDown={(e) => e.stopPropagation()}>
+              <button className="on" onClick={() => props.onOpenScene(id, 'open')}>
+                Open
+              </button>
+              <button onClick={() => props.onOpenScene(id, 'exploded')}>Explode</button>
+            </div>
+          );
+        })()}
 
         <Pills
           project={shown}
@@ -563,6 +543,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
           onCommit={props.onCommit}
           onRename={(id) => setEditing(id)}
           onDelete={props.onDelete}
+          onOpenScene={props.onOpenScene}
         />
       )}
 
@@ -724,13 +705,14 @@ const Pills = ({ project, rows, selection, editing, onSelect, onEdit, onMenu, on
 
 // ---------------------------------------------------------------- context menu
 
-const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete }: {
+const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onOpenScene }: {
   menu: Menu;
   project: Project;
   onClose: () => void;
   onCommit: (project: Project) => void;
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
+  onOpenScene: (id: string, mode: 'open' | 'exploded') => void;
 }) => {
   const item = (label: string, action: () => void, className?: string, checked?: boolean) => (
     <button
@@ -757,6 +739,11 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete }: {
     const object = project.objects[menu.id];
     const placement = project.placements[menu.id];
     if (!object || !placement) return null;
+    if (object.type === 'scene') {
+      items.push(item('Open scene', () => onOpenScene(object.id, 'open')));
+      items.push(item('Explode scene', () => onOpenScene(object.id, 'exploded')));
+      items.push(<div key="sep0" className="menu-sep" />);
+    }
     items.push(item('Rename', () => onRename(object.id)));
     if (placement.laneId === null && object.type !== 'choice') {
       const outcome = object.data.outcome ?? null;
@@ -782,4 +769,17 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete }: {
       {items}
     </div>
   );
+};
+
+/** What a collapsed scene card says about what is inside it (spec §9: minimal status). */
+const sceneDetail = (project: Project, id: string): string | undefined => {
+  const summary = project.objects[id]?.data.summary;
+  if (typeof summary === 'string' && summary) return summary;
+  const counts = categoryCounts(project, id);
+  const parts = [
+    counts.characters && `${counts.characters} character${counts.characters === 1 ? '' : 's'}`,
+    counts.dialogue && `${counts.dialogue} line${counts.dialogue === 1 ? '' : 's'}`,
+    counts.objects && `${counts.objects} object${counts.objects === 1 ? '' : 's'}`,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : undefined;
 };

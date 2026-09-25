@@ -1,15 +1,27 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import type { ObjectType } from '../model/types';
+import { Symbol } from './Symbol';
 import type { SaveState } from '../use-studio';
 import { PURCHASE_URL } from '../edition';
 
+export interface Crumb {
+  label: string;
+  onClick?: () => void;
+  symbol?: ObjectType;
+}
+
 interface Props {
   projectName: string;
+  /** Inside a scene: where you are, each step back a link. On the story graph: none. */
+  crumbs?: Crumb[];
+  /** Controls for the current view (Scene / Mind map, Expand all). */
+  viewControls?: ReactNode;
   onRename: (name: string) => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
-  onFit: () => void;
+  onFit?: () => void;
   onBible: () => void;
   onEngine: () => void;
   saveState: SaveState;
@@ -29,8 +41,30 @@ export const TopBar = (props: Props) => {
   return (
     <header className="topbar">
       <div className="brand">VC GAME STUDIO</div>
-      <div className="view-name">STORY GRAPH</div>
-      {editing ? (
+      {props.crumbs ? (
+        <nav className="crumbs" aria-label="Breadcrumb">
+          <span className="crumb-project">{props.projectName}</span>
+          {props.crumbs.map((c, i) => (
+            <span key={i} className="crumb">
+              <span className="crumb-sep">/</span>
+              {c.onClick ? (
+                <button className="crumb-link" onClick={c.onClick}>
+                  {c.symbol && <Symbol type={c.symbol} size={12} />}
+                  {c.label}
+                </button>
+              ) : (
+                <span className="crumb-here">
+                  {c.symbol && <Symbol type={c.symbol} size={12} />}
+                  {c.label}
+                </span>
+              )}
+            </span>
+          ))}
+        </nav>
+      ) : (
+        <div className="view-name">STORY GRAPH</div>
+      )}
+      {props.crumbs ? null : editing ? (
         <input
           className="project-name-input"
           aria-label="Project name"
@@ -52,6 +86,7 @@ export const TopBar = (props: Props) => {
         </button>
       )}
       <div className="grow" />
+      {props.viewControls}
       {props.saveState === 'off' ? (
         <div className="preview-badge">
           <span className="preview-tag">PREVIEW</span>
@@ -84,9 +119,11 @@ export const TopBar = (props: Props) => {
           <path d="M14 7H7a4 4 0 000 8h2" />
         </svg>
       </button>
-      <button className="tb-btn" title="Zoom to fit (Ctrl+0)" onClick={props.onFit}>
-        Fit
-      </button>
+      {props.onFit && (
+        <button className="tb-btn" title="Zoom to fit (Ctrl+0)" onClick={props.onFit}>
+          Fit
+        </button>
+      )}
       <button className="bible-btn" onClick={props.onBible}>
         GAME BIBLE
       </button>

@@ -90,6 +90,26 @@ export interface Placement {
   y: number;
 }
 
+/**
+ * One block of a scene's script (HANDOFF: DialogueLine). A dialogue line has
+ * a speaker, a canonical character; an action line is stage direction for the
+ * scene and has none.
+ */
+export interface DialogueLine {
+  id: string;
+  sceneId: string;
+  kind: 'dialogue' | 'action';
+  speakerId: string | null;
+  text: string;
+  /** A parenthetical: (listening), (wading forward). */
+  direction: string;
+  order: number;
+  conditions?: unknown;
+  choiceId?: string;
+  vo: 'none' | 'todo' | 'recorded';
+  notes: string;
+}
+
 export interface Project {
   format: 'vcgs';
   version: 1;
@@ -99,4 +119,6 @@ export interface Project {
   lanes: Lane[];
   connections: Connection[];
   placements: Record<string, Placement>;
+  /** Every scene's script, one record per block. */
+  lines: DialogueLine[];
 }

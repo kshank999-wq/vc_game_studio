@@ -25,7 +25,7 @@ export const newId = (prefix: string): string => {
   return `${prefix}_${Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 12)}`;
 };
 
-const makeObject = (type: ObjectType, name: string, now: string, data: StoryObject['data'] = {}): StoryObject => ({
+export const makeObject = (type: ObjectType, name: string, now: string, data: StoryObject['data'] = {}): StoryObject => ({
   id: newId(type === 'begin' || type === 'end' ? type : 'obj'),
   type,
   name,
@@ -67,6 +67,7 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
       [plotPoint.id]: { laneId: spine.id, x: START_X + START_SPACING, y: 0 },
       [end.id]: { laneId: spine.id, x: START_X + START_SPACING * 2, y: 0 },
     },
+    lines: [],
   };
 };
 
@@ -81,7 +82,7 @@ const CODE_FORMAT: Partial<Record<ObjectType, { prefix: string; pad: number }>> 
 };
 const SUBPLOT_POINT = { prefix: 'SP', pad: 0 };
 
-const nextCode = (project: Project, format: { prefix: string; pad: number }): string => {
+export const nextCode = (project: Project, format: { prefix: string; pad: number }): string => {
   const pattern = new RegExp(`^${format.prefix}(\\d+)$`);
   let highest = 0;
   for (const object of Object.values(project.objects)) {
@@ -384,6 +385,10 @@ export const removeObject = (project: Project, id: string): Project => {
     placements,
     lanes,
     connections: project.connections.filter((c) => c.sourceId !== id && c.targetId !== id),
+    // A scene's script goes with it; a deleted speaker leaves the line to be reassigned.
+    lines: project.lines
+      .filter((l) => l.sceneId !== id)
+      .map((l) => (l.speakerId === id ? { ...l, speakerId: null } : l)),
   });
 };
 
