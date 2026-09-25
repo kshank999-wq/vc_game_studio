@@ -52,6 +52,15 @@ interface Props {
   onSelect: (id: string | null) => void;
   paletteDrag: PaletteDrag | null;
   bottomInset: number;
+  /** Ask before a change that removes more than the user pointed at. */
+  onConfirm: (request: ConfirmRequest) => void;
+}
+
+export interface ConfirmRequest {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
 }
 
 type Target = { ok: true; laneId: string; x: number } | { ok: false; reason: string };
@@ -256,11 +265,17 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
   const deleteLane = (lane: Lane) => {
     setLaneMenu(null);
     const count = laneNodeCount(project, lane.id);
-    const message =
-      count > 0
-        ? `Delete the lane “${lane.name}” and the ${count} node${count === 1 ? '' : 's'} on it?`
-        : `Delete the lane “${lane.name}”?`;
-    if (count === 0 || window.confirm(message)) props.onCommit(removeLane(project, lane.id));
+    const remove = () => props.onCommit(removeLane(project, lane.id));
+    if (count === 0) {
+      remove();
+      return;
+    }
+    props.onConfirm({
+      title: `Delete “${lane.name}”?`,
+      message: `The ${count} node${count === 1 ? '' : 's'} on this lane will be deleted with it. Undo brings them back.`,
+      confirmLabel: 'Delete lane',
+      onConfirm: remove,
+    });
   };
 
   const screenY = (worldY: number) => worldY * view.zoom + view.panY;

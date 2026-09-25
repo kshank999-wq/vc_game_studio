@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BottomBar } from './components/BottomBar';
 import { Palette } from './components/Palette';
-import { StoryCanvas, type CanvasApi, type PaletteDrag } from './components/StoryCanvas';
+import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } from './components/StoryCanvas';
 import { Symbol } from './components/Symbol';
 import { TopBar } from './components/TopBar';
 import { laneRows } from './model/layout';
@@ -28,6 +28,7 @@ export const App = () => {
   const dragRef = useRef<PaletteDrag | null>(null);
   dragRef.current = drag;
   const [toast, setToast] = useState<string | null>(null);
+  const [ask, setAsk] = useState<ConfirmRequest | null>(null);
 
   const say = useCallback((message: string) => setToast(message), []);
   useEffect(() => {
@@ -98,17 +99,23 @@ export const App = () => {
       say('Beginning and Ending are protected. You can rename them but not remove them.');
       return;
     }
-    const dependents = spanDependents(project, selection);
-    if (dependents.length > 0) {
-      const names = dependents.map((l) => `“${l.name}”`).join(', ');
-      const ok = window.confirm(
-        `${names} ${dependents.length === 1 ? 'starts or stops' : 'start or stop'} at “${project.objects[selection]!.name}”. ` +
-          'Delete it and move the subplot to the neighbouring spine node?',
-      );
-      if (!ok) return;
+    const id = selection;
+    const remove = () => {
+      commit(removeObject(project, id));
+      setSelection(null);
+    };
+    const dependents = spanDependents(project, id);
+    if (dependents.length === 0) {
+      remove();
+      return;
     }
-    commit(removeObject(project, selection));
-    setSelection(null);
+    const names = dependents.map((l) => `“${l.name}”`).join(', ');
+    setAsk({
+      title: `Delete “${project.objects[id]!.name}”?`,
+      message: `${names} ${dependents.length === 1 ? 'starts or stops' : 'start or stop'} here. The span will move to the neighbouring spine node.`,
+      confirmLabel: 'Delete',
+      onConfirm: remove,
+    });
   };
 
   const onAddLane = (kind: 'subplot' | 'character') => {
@@ -131,6 +138,10 @@ export const App = () => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (ask) {
+        if (e.key === 'Escape') setAsk(null);
+        return;
+      }
       if (e.key === 'Escape') {
         setDrag(null);
         if (!isTyping(e.target)) setSelection(null);
@@ -188,6 +199,7 @@ export const App = () => {
           onSelect={setSelection}
           paletteDrag={showGhost ? drag : null}
           bottomInset={BOTTOM_BAR}
+          onConfirm={setAsk}
         />
         <BottomBar
           lanes={project.lanes}
@@ -203,6 +215,36 @@ export const App = () => {
           <Symbol type={drag.type} />
           {TYPE_LABEL[drag.type]}
           {drag.placing && !drag.moved && <span className="drag-ghost-hint">click to place · Esc to cancel</span>}
+        </div>
+      )}
+      {ask && (
+        <div className="dialog-backdrop" onPointerDown={() => setAsk(null)}>
+          <div
+            className="dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
+            aria-describedby="confirm-message"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="confirm-title">{ask.title}</h2>
+            <p id="confirm-message">{ask.message}</p>
+            <div className="dialog-actions">
+              <button className="tb-btn" onClick={() => setAsk(null)}>
+                Cancel
+              </button>
+              <button
+                className="tb-btn danger-btn"
+                autoFocus
+                onClick={() => {
+                  ask.onConfirm();
+                  setAsk(null);
+                }}
+              >
+                {ask.confirmLabel}
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {toast && (
