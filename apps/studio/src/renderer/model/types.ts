@@ -75,6 +75,11 @@ export interface Connection {
   kind: ConnectionKind;
   /** The option text shown on the connector's pill (a choice's options). */
   label?: string;
+  /**
+   * On a 'contains' connection: what this element is in this one scene
+   * (HANDOFF: SceneUse), kept here so the canonical object is never copied.
+   */
+  use?: Record<string, string>;
   conditions?: unknown;
   routing?: unknown;
 }

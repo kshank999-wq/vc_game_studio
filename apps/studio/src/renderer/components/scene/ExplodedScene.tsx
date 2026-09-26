@@ -9,6 +9,9 @@ import type { PaletteDrag } from '../canvas/StoryCanvas';
 import { Symbol } from '../Symbol';
 import { NameEdit, dropCategory, sceneRefusal, symbolColor } from './parts';
 import type { SceneSurface } from './SceneWorkspace';
+import { ElementDetail } from '../detail/ElementDetail';
+import type { Destination } from '../../model/details';
+import { findIssues } from '../../model/validate';
 
 interface Props {
   project: Project;
@@ -26,6 +29,9 @@ interface Props {
   panel?: { onFullView: () => void };
   /** Elements lit because the selected timeline event stands for them. */
   highlight?: ReadonlySet<string>;
+  /** Go to the Bible entry for an element, or to where it's used. */
+  onOpenBible?: (id: string) => void;
+  onNavigate?: (to: Destination) => void;
 }
 
 // World units (HANDOFF iteration 2: scene 560×400, element boxes 130×110).
@@ -134,6 +140,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
   const [view, setViewState] = useState<View>({ zoom: 1, panX: 0, panY: 0 });
   const setView = useCallback((update: (v: View) => View) => setViewState(update), []);
   const [editing, setEditing] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
   useWheelPanZoom(rootRef, setView);
   const onPanDown = useDragPan(view, setView, () => props.onSelect(null));
 
@@ -209,6 +216,8 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
     rename: (id) => setEditing(id),
     fit,
   }));
+
+  const issues = useMemo(() => new Map(findIssues(project).map((i) => [i.id, i.message])), [project]);
 
   const zoomCentre = (factor: number) => {
     const root = rootRef.current;
@@ -351,8 +360,12 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
                 e.stopPropagation();
                 props.onSelect(object.id);
               }}
-              onDoubleClick={() => setEditing(object.id)}
-              title="Double-click to rename"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (props.panel) setEditing(object.id);
+                else setDetail(object.id);
+              }}
+              title={props.panel ? 'Double-click to rename' : 'Double-click for detail · F2 renames'}
             >
               <span className="box-kicker">
                 <Symbol type={object.type} size={11} color={symbolColor(object)} />
@@ -389,11 +402,29 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
                   ×
                 </button>
               )}
+              {issues.get(object.id) && (
+                <span className="issue-badge" title={issues.get(object.id)} aria-label={issues.get(object.id)}>
+                  !
+                </span>
+              )}
               <span className="box-dot" style={dotStyle} />
             </div>
           );
         })}
       </div>
+
+      {detail && project.objects[detail] && !props.panel && (
+        <ElementDetail
+          project={project}
+          id={detail}
+          sceneId={sceneId}
+          onCommit={props.onCommit}
+          onClose={() => setDetail(null)}
+          onOpenBible={props.onOpenBible}
+          onNavigate={props.onNavigate}
+          variant="panel"
+        />
+      )}
 
       {dragging && refusal && rect && (
         <div className="drop-refusal" style={{ left: dragging.clientX - rect.left + 12, top: dragging.clientY - rect.top + 50 }}>
@@ -420,7 +451,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
           </button>
         </div>
       ) : (
-        <div className="exploded-legend">Double-click a box to rename it · Delete removes it from the scene · wheel to zoom, drag to pan</div>
+        <div className="exploded-legend">Double-click a box for its detail · F2 renames · Delete removes it from the scene · wheel to zoom, drag to pan</div>
       )}
     </div>
   );

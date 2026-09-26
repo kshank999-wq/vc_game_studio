@@ -163,3 +163,33 @@ describe('the scene timeline', () => {
     expect(screen.getByDisplayValue('Water’s holding it shut.')).toBeTruthy();
   });
 });
+
+describe('the Game Bible', () => {
+  it('opens on the selected element, edits it for every view, and goes back', () => {
+    let project = createProject('The Sunken Vault');
+    const placed = placeNew(project, 'scene', spineLane(project).id, 400)!;
+    project = addElement(placed.project, placed.id, 'character', 'Mara')!.project;
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
+
+    const { container } = render(<App />);
+    const card = container.querySelector('[data-type="scene"]')!;
+    fireEvent.pointerDown(card, { button: 0 });
+    fireEvent.pointerUp(window);
+    fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+
+    // Opened on the selected scene, in the Scenes view.
+    expect(container.querySelector('.bible-view.on')!.textContent).toContain('Scenes');
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('New scene');
+
+    fireEvent.click(screen.getByRole('button', { name: /Characters \/ NPCs/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Mara/ }));
+    const name = screen.getByLabelText('Name');
+    fireEvent.change(name, { target: { value: 'Mara Vell' } });
+    fireEvent.blur(name);
+
+    fireEvent.click(screen.getByRole('button', { name: /Back to Story Graph/ }));
+    fireEvent.doubleClick(container.querySelector('[data-type="scene"]')!);
+    fireEvent.click(screen.getByRole('button', { name: /Characters/ }));
+    expect(container.querySelector('.chip-item')!.textContent).toContain('Mara Vell');
+  });
+});

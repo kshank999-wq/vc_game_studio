@@ -7,6 +7,8 @@ import { TopBar, type Crumb } from './components/TopBar';
 import { ExplodedScene } from './components/scene/ExplodedScene';
 import { SceneWorkspace, type SceneSurface } from './components/scene/SceneWorkspace';
 import { SceneTimeline } from './components/scene/SceneTimeline';
+import { GameBible } from './components/bible/GameBible';
+import type { Destination } from './model/details';
 import { inScene, removeFromScene } from './model/scene';
 import { laneRows, nodeBox } from './model/layout';
 import { addLane, isProtected, removeConnection, removeObject, renameProject, spanDependents, updateLane } from './model/project';
@@ -20,7 +22,9 @@ const BOTTOM_BAR = 52;
 
 /** Where the user is: the story graph, or inside one scene (written, or exploded). */
 export type SceneMode = 'open' | 'exploded' | 'timeline';
-export type Route = { view: 'graph' } | { view: 'scene'; sceneId: string; mode: SceneMode };
+type PlaceRoute = { view: 'graph' } | { view: 'scene'; sceneId: string; mode: SceneMode };
+/** The Bible remembers where it was opened from, to go back there (spec §24). */
+export type Route = PlaceRoute | { view: 'bible'; focus?: string; back: PlaceRoute };
 
 const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -76,6 +80,23 @@ export const App = () => {
     setSceneSelection(null);
   };
   const [sceneSelection, setSceneSelection] = useState<string | null>(null);
+  const openBible = (focus?: string) =>
+    setRoute((r) => ({ view: 'bible', focus, back: r.view === 'bible' ? r.back : r }));
+
+  /** Go to a place a where-used link names: a scene view, or a node on the graph brought into view. */
+  const navigate = (to: Destination) => {
+    if (to.kind === 'scene') {
+      openScene(to.sceneId, to.mode);
+      return;
+    }
+    setRoute({ view: 'graph' });
+    setSelection(to.id);
+    const box = nodeBox(project, to.id);
+    if (!box) return;
+    const { w, h } = canvasSize();
+    setViewState((v) => ({ ...v, panX: (w + 130) / 2 - (box.x + box.w / 2) * v.zoom, panY: h / 2 - (box.y + box.h / 2) * v.zoom }));
+  };
+
   const backToGraph = () => {
     const from = route.view === 'scene' ? route.sceneId : null;
     setRoute({ view: 'graph' });
@@ -93,7 +114,15 @@ export const App = () => {
     setSelection(issue.id);
     say(issue.message);
     const box = nodeBox(project, issue.id);
-    if (!box) return;
+    if (!box) {
+      // Not on the graph: it lives inside a scene, so open that scene's mind map.
+      const holder = project.connections.find((c) => c.kind === 'contains' && c.targetId === issue.id);
+      if (holder) {
+        openScene(holder.sourceId, 'exploded');
+        setSceneSelection(issue.id);
+      }
+      return;
+    }
     const { w, h } = canvasSize();
     setViewState((v) => ({ ...v, panX: (w + 130) / 2 - (box.x + box.w / 2) * v.zoom, panY: h / 2 - (box.y + box.h / 2) * v.zoom }));
   };
@@ -204,6 +233,18 @@ export const App = () => {
       if (isTyping(e.target)) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      if (route.view === 'bible') {
+        // The Bible edits in its own fields; only undo and redo reach the app.
+        if (mod && key === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) studio.redo();
+          else studio.undo();
+        } else if (mod && key === 'y') {
+          e.preventDefault();
+          studio.redo();
+        }
+        return;
+      }
       if (route.view === 'scene') {
         if (mod && key === 'z') {
           e.preventDefault();
@@ -302,32 +343,47 @@ export const App = () => {
       </>
     ) : null;
   const railOn = inSceneView ? rail.scene : rail.graph;
+  const backLabel = (r: PlaceRoute): string => {
+    if (r.view === 'graph') return 'Story Graph';
+    const o = project.objects[r.sceneId];
+    return `${o?.data.code ?? ''} ${o?.name ?? ''}${r.mode === 'timeline' ? ' · Timeline' : r.mode === 'exploded' ? ' · Mind map' : ''}`.trim();
+  };
+  const bibleCrumbs: Crumb[] | undefined = route.view === 'bible' ? [{ label: 'GAME BIBLE' }] : undefined;
+  const bibleControls =
+    route.view === 'bible' ? (
+      <button className="tb-btn back-btn" onClick={() => setRoute(route.back)}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+          <path d="M10 3L5 8l5 5" />
+        </svg>
+        Back to {backLabel(route.back)}
+      </button>
+    ) : null;
 
   return (
-    <div className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}`}>
+    <div className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${route.view === 'bible' ? ' no-palette' : ''}`}>
       <TopBar
         projectName={project.name}
-        crumbs={crumbs}
-        viewControls={sceneControls}
+        crumbs={crumbs ?? bibleCrumbs}
+        viewControls={sceneControls ?? bibleControls}
         onRename={(name) => commit(renameProject(project, name))}
         canUndo={studio.canUndo}
         canRedo={studio.canRedo}
         onUndo={studio.undo}
         onRedo={studio.redo}
-        onFit={route.view === 'graph' ? fit : route.mode !== 'open' ? () => surface.current?.fit?.() : undefined}
-        onBible={() => say('The Game Bible is not built yet.')}
+        onFit={route.view === 'graph' ? fit : route.view === 'scene' && route.mode !== 'open' ? () => surface.current?.fit?.() : undefined}
+        onBible={() => (route.view === 'bible' ? setRoute(route.back) : openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : (selection ?? undefined)))}
         onEngine={() => say('Engine handoff is not built yet.')}
         saveState={studio.saveState}
         issueCount={route.view === 'graph' ? issues.length : 0}
         onIssues={showNextIssue}
       />
-      <Palette
+      {route.view !== 'bible' && <Palette
         active={drag?.placing ? drag.type : null}
         onStart={startPaletteDrag}
         mode={inSceneView ? 'scene' : 'graph'}
         rail={railOn}
         onToggleRail={() => setRail((r) => (inSceneView ? { ...r, scene: !r.scene } : { ...r, graph: !r.graph }))}
-      />
+      />}
       <main className="main">
         {route.view === 'graph' && (
           <>
@@ -369,6 +425,8 @@ export const App = () => {
             paletteDrag={showGhost ? drag : null}
             onSay={say}
             onTimeline={() => openScene(route.sceneId, 'timeline')}
+            onOpenBible={openBible}
+            onNavigate={navigate}
           />
         )}
         {route.view === 'scene' && scene && route.mode === 'timeline' && (
@@ -397,8 +455,11 @@ export const App = () => {
             onSay={say}
             onOpen={() => openScene(route.sceneId, 'open')}
             onTimeline={() => openScene(route.sceneId, 'timeline')}
+            onOpenBible={openBible}
+            onNavigate={navigate}
           />
         )}
+        {route.view === 'bible' && <GameBible project={project} onCommit={commit} focus={route.focus} onNavigate={navigate} />}
       </main>
       {showGhost && (
         <div className="drag-ghost" style={{ left: drag.clientX + 12, top: drag.clientY + 12 }} aria-hidden="true">

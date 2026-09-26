@@ -17,6 +17,8 @@ import { Symbol } from '../Symbol';
 import { AddMenu, NameEdit, dropCategory, sceneRefusal, symbolColor } from './parts';
 import { ScriptEditor, ScriptFooter } from './ScriptEditor';
 import { timelineSummary } from '../../model/timeline';
+import { ElementDetail } from '../detail/ElementDetail';
+import type { Destination } from '../../model/details';
 
 /** The collapsed timeline under the writing box. */
 const STRIP_H = 52;
@@ -40,6 +42,8 @@ interface Props {
   paletteDrag: PaletteDrag | null;
   onSay: (message: string) => void;
   onTimeline: () => void;
+  onOpenBible?: (id: string) => void;
+  onNavigate?: (to: Destination) => void;
 }
 
 // The scene box and the perimeter around it, in stage units (mockup 03).
@@ -105,6 +109,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   const [tab, setTab] = useState<(typeof TABS)[number]>('Script');
   const [focusLine, setFocusLine] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
+  const [detail, setDetail] = useState<string | null>(null);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -266,8 +271,8 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                         setFocusLine(item.id);
                       } else props.onSelect(item.id);
                     }}
-                    onDoubleClick={() => c.key !== 'dialogue' && setEditing(item.id)}
-                    title={c.key === 'dialogue' ? 'Go to this line' : 'Double-click to rename'}
+                    onDoubleClick={() => c.key !== 'dialogue' && setDetail(item.id)}
+                    title={c.key === 'dialogue' ? 'Go to this line' : 'Double-click for detail · F2 renames'}
                   >
                     <Symbol type={item.symbol} size={13} color={item.color} />
                     {editing === item.id ? (
@@ -397,6 +402,19 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
           {tab === 'Script' && <ScriptFooter project={project} sceneId={sceneId} onCommit={props.onCommit} />}
         </section>
       </div>
+
+      {detail && project.objects[detail] && (
+        <ElementDetail
+          project={project}
+          id={detail}
+          sceneId={sceneId}
+          onCommit={props.onCommit}
+          onClose={() => setDetail(null)}
+          onOpenBible={props.onOpenBible}
+          onNavigate={props.onNavigate}
+          variant="panel"
+        />
+      )}
 
       <div className="timeline-strip" onPointerDown={(e) => e.stopPropagation()}>
         <button className="strip-open" onClick={props.onTimeline}>

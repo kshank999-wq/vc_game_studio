@@ -1,4 +1,5 @@
 import { laneSequence, spineSequence } from './layout';
+import { settersOf } from './details';
 import type { Project } from './types';
 
 /**
@@ -44,6 +45,14 @@ export const findIssues = (project: Project): Issue[] => {
     // On a track the next node is implicit, so a choice needs at least one branch off it.
     if (object.type === 'choice' && (spine.has(id) || onSubplot.has(id)) && !outgoing.get(id)) {
       issues.push({ id, message: 'This choice has one way forward. Drag from its ring to add a branch.' });
+    }
+  }
+  // A state the game remembers but nothing ever changes (mockup 04: door_solved).
+  for (const object of Object.values(project.objects)) {
+    if (object.type !== 'state') continue;
+    const used = project.connections.some((c) => c.kind === 'contains' && c.targetId === object.id);
+    if (used && settersOf(project, object.id).length === 0) {
+      issues.push({ id: object.id, message: 'Nothing sets this state. Give an interaction or trigger “sets” it.' });
     }
   }
   return issues;
