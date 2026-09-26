@@ -38,6 +38,8 @@ interface Props {
   onCommit: (project: Project) => void;
   onClose?: () => void;
   onOpenBible?: (id: string) => void;
+  /** Show what this element generates for the engine. */
+  onOpenCode?: (id: string) => void;
   onNavigate?: (to: Destination) => void;
   /** 'panel' floats beside a scene; 'bible' fills the Bible's detail pane. */
   variant: 'panel' | 'bible';
@@ -200,7 +202,7 @@ const Interactions = ({ object, project, onCommit }: { object: StoryObject; proj
  * production tags, and where else it is used. Edits change the one object,
  * so every view that shows it changes too.
  */
-export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenBible, onNavigate, variant }: Props) => {
+export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenBible, onOpenCode, onNavigate, variant }: Props) => {
   const object = project.objects[id];
   if (!object) return null;
   const allUses = variant === 'bible';
@@ -329,11 +331,18 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
         {!allUses && uses.length > shownUses.length && <span className="detail-text muted">+ {uses.length - shownUses.length} more in the Bible</span>}
       </section>
 
-      {onOpenBible && (
+      {(onOpenBible || onOpenCode) && (
         <div className="detail-actions">
-          <button className="tb-btn small" onClick={() => onOpenBible(id)}>
-            Open in Bible
-          </button>
+          {onOpenBible && (
+            <button className="tb-btn small" onClick={() => onOpenBible(id)}>
+              Open in Bible
+            </button>
+          )}
+          {onOpenCode && (
+            <button className="tb-btn small" onClick={() => onOpenCode(id)}>
+              &lt;/&gt; Code
+            </button>
+          )}
         </div>
       )}
     </aside>

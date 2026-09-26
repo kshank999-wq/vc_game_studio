@@ -4,16 +4,25 @@ import { createProject } from './model/project';
 import { canSave, loadProject, saveProject } from './model/storage';
 import type { Project } from './model/types';
 
-type Action = { type: 'commit'; project: Project } | { type: 'undo' } | { type: 'redo' };
+type Action = { type: 'commit'; project: Project } | { type: 'replace'; project: Project } | { type: 'undo' } | { type: 'redo' };
+
+/**
+ * The engine handoff's settings and export record are not story edits: undo
+ * and redo leave them as they are, and changing them is not an undo step.
+ */
+const keepHandoff = (next: History, from: History): History =>
+  next === from ? next : { ...next, present: { ...next.present, handoff: from.present.handoff } };
 
 const reduce = (history: History, action: Action): History => {
   switch (action.type) {
     case 'commit':
       return commit(history, action.project);
+    case 'replace':
+      return action.project === history.present ? history : { ...history, present: action.project };
     case 'undo':
-      return undo(history);
+      return keepHandoff(undo(history), history);
     case 'redo':
-      return redo(history);
+      return keepHandoff(redo(history), history);
   }
 };
 
@@ -44,5 +53,7 @@ export const useStudio = () => {
     commit: useCallback((project: Project) => dispatch({ type: 'commit', project }), []),
     undo: useCallback(() => dispatch({ type: 'undo' }), []),
     redo: useCallback(() => dispatch({ type: 'redo' }), []),
+    /** Change the project without an undo step (the engine handoff's settings and record). */
+    replace: useCallback((project: Project) => dispatch({ type: 'replace', project }), []),
   };
 };

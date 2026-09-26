@@ -31,6 +31,7 @@ interface Props {
   highlight?: ReadonlySet<string>;
   /** Go to the Bible entry for an element, or to where it's used. */
   onOpenBible?: (id: string) => void;
+  onOpenCode?: (id: string) => void;
   onNavigate?: (to: Destination) => void;
 }
 
@@ -421,6 +422,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
           onCommit={props.onCommit}
           onClose={() => setDetail(null)}
           onOpenBible={props.onOpenBible}
+          onOpenCode={props.onOpenCode}
           onNavigate={props.onNavigate}
           variant="panel"
         />

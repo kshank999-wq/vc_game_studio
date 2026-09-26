@@ -151,6 +151,27 @@ export interface TimelineBranch {
   rejoinEventId: string | null;
 }
 
+export type EngineId = 'godot' | 'unity' | 'unreal' | 'custom';
+
+/** Where generated code goes (HANDOFF: EngineTarget). */
+export interface EngineTarget {
+  engine: EngineId;
+  /** The engine project's folder on this computer (desktop only). */
+  projectFolder: string;
+  /** Inside that project, where generated files are written. */
+  outputPath: string;
+  exportOnSave: boolean;
+}
+
+/** What was sent last time, so the handoff can say what changed since. */
+export interface ExportRecord {
+  at: string;
+  engine: EngineId;
+  /** Element id → fingerprint of what it generated (HANDOFF: Generated.hash). */
+  fingerprints: Record<string, string>;
+  files: number;
+}
+
 export interface Project {
   format: 'vcgs';
   version: 1;
@@ -165,4 +186,6 @@ export interface Project {
   /** Every scene's timeline. Dialogue lines appear on it without being stored here until moved. */
   events: TimelineEvent[];
   branches: TimelineBranch[];
+  /** The engine handoff: the target and the last export. Absent until first set. */
+  handoff?: { target: EngineTarget; last?: ExportRecord };
 }

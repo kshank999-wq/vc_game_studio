@@ -30,6 +30,9 @@ npm test -w @vcgs/studio
 | `src/renderer/model/details.ts` | Element detail: fields per type, states and interactions, scene use, where used. |
 | `src/renderer/model/bible.ts`, `reports.ts` | The Game Bible's views and the production reports. |
 | `src/renderer/components/detail/`, `components/bible/` | The detail editor (scene panel and Bible pane), the Bible, report preview. |
+| `src/renderer/model/handoff/` | The engine handoff: the neutral model, adapters (Godot 4), statuses, zip. |
+| `src/renderer/model/sample.ts` | “The Sunken Vault”, the mockups’ sample, built with the app’s own operations. |
+| `scripts/check-godot.sh` | Runs the sample’s generated Godot code in a real Godot 4. |
 | `src/renderer/model/validate.ts` | What needs a look (dead ends, choices without options, untied arc events). |
 | `src/renderer/components/Palette.tsx` | The legend as node buttons. |
 | `src/renderer/components/BottomBar.tsx` | Add lanes, lane visibility, zoom. |
@@ -45,4 +48,4 @@ npm test -w @vcgs/studio
 6. ✅ Element detail on double-click
 7. ✅ The timeline with the linked exploded panel
 8. ✅ The Bible
-9. Engine handoff with generated code
+9. ✅ Engine handoff with generated code (Godot 4 now; Unity, Unreal and custom JSON set up for later — see docs/ENGINE-ADAPTERS.md)

@@ -43,6 +43,7 @@ interface Props {
   onSay: (message: string) => void;
   onTimeline: () => void;
   onOpenBible?: (id: string) => void;
+  onOpenCode?: (id: string) => void;
   onNavigate?: (to: Destination) => void;
 }
 
@@ -411,6 +412,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
           onCommit={props.onCommit}
           onClose={() => setDetail(null)}
           onOpenBible={props.onOpenBible}
+          onOpenCode={props.onOpenCode}
           onNavigate={props.onNavigate}
           variant="panel"
         />

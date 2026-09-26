@@ -8,6 +8,10 @@ import { ExplodedScene } from './components/scene/ExplodedScene';
 import { SceneWorkspace, type SceneSurface } from './components/scene/SceneWorkspace';
 import { SceneTimeline } from './components/scene/SceneTimeline';
 import { GameBible } from './components/bible/GameBible';
+import { EngineHandoff } from './components/engine/EngineHandoff';
+import { planHandoff, recordExport, targetOf } from './model/handoff';
+import { sunkenVault } from './model/sample';
+import { desktop } from './desktop';
 import type { Destination } from './model/details';
 import { inScene, removeFromScene } from './model/scene';
 import { laneRows, nodeBox } from './model/layout';
@@ -24,7 +28,10 @@ const BOTTOM_BAR = 52;
 export type SceneMode = 'open' | 'exploded' | 'timeline';
 type PlaceRoute = { view: 'graph' } | { view: 'scene'; sceneId: string; mode: SceneMode };
 /** The Bible remembers where it was opened from, to go back there (spec §24). */
-export type Route = PlaceRoute | { view: 'bible'; focus?: string; back: PlaceRoute };
+export type Route =
+  | PlaceRoute
+  | { view: 'bible'; focus?: string; back: PlaceRoute }
+  | { view: 'engine'; focus?: string; back: PlaceRoute };
 
 const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -80,8 +87,26 @@ export const App = () => {
     setSceneSelection(null);
   };
   const [sceneSelection, setSceneSelection] = useState<string | null>(null);
-  const openBible = (focus?: string) =>
-    setRoute((r) => ({ view: 'bible', focus, back: r.view === 'bible' ? r.back : r }));
+  const placeOf = (r: Route): PlaceRoute => (r.view === 'bible' || r.view === 'engine' ? r.back : r);
+  const openBible = (focus?: string) => setRoute((r) => ({ view: 'bible', focus, back: placeOf(r) }));
+  const openEngine = (focus?: string) => setRoute((r) => ({ view: 'engine', focus, back: placeOf(r) }));
+
+  // Export on save (desktop): once edits settle, send what changed to the engine project.
+  useEffect(() => {
+    const bridge = desktop();
+    const target = targetOf(project);
+    if (!bridge || !target.exportOnSave || !target.projectFolder || __EDITION__ !== 'full') return;
+    const timer = setTimeout(() => {
+      const plan = planHandoff(project);
+      if (!plan.output || plan.changed === 0 || plan.blocking.length) return;
+      void bridge
+        .writeFiles(target.projectFolder, plan.output.files)
+        .then(() => studio.replace(recordExport(project, plan)))
+        .catch((error: unknown) => say(error instanceof Error ? error.message : 'Export on save failed.'));
+    }, 1200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project]);
 
   /** Go to a place a where-used link names: a scene view, or a node on the graph brought into view. */
   const navigate = (to: Destination) => {
@@ -233,7 +258,7 @@ export const App = () => {
       if (isTyping(e.target)) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
-      if (route.view === 'bible') {
+      if (route.view === 'bible' || route.view === 'engine') {
         // The Bible edits in its own fields; only undo and redo reach the app.
         if (mod && key === 'z') {
           e.preventDefault();
@@ -348,9 +373,10 @@ export const App = () => {
     const o = project.objects[r.sceneId];
     return `${o?.data.code ?? ''} ${o?.name ?? ''}${r.mode === 'timeline' ? ' · Timeline' : r.mode === 'exploded' ? ' · Mind map' : ''}`.trim();
   };
-  const bibleCrumbs: Crumb[] | undefined = route.view === 'bible' ? [{ label: 'GAME BIBLE' }] : undefined;
+  const bibleCrumbs: Crumb[] | undefined =
+    route.view === 'bible' ? [{ label: 'GAME BIBLE' }] : route.view === 'engine' ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Engine Handoff' }] : undefined;
   const bibleControls =
-    route.view === 'bible' ? (
+    route.view === 'bible' || route.view === 'engine' ? (
       <button className="tb-btn back-btn" onClick={() => setRoute(route.back)}>
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
           <path d="M10 3L5 8l5 5" />
@@ -360,7 +386,7 @@ export const App = () => {
     ) : null;
 
   return (
-    <div className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${route.view === 'bible' ? ' no-palette' : ''}`}>
+    <div className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${route.view === 'bible' || route.view === 'engine' ? ' no-palette' : ''}`}>
       <TopBar
         projectName={project.name}
         crumbs={crumbs ?? bibleCrumbs}
@@ -371,13 +397,13 @@ export const App = () => {
         onUndo={studio.undo}
         onRedo={studio.redo}
         onFit={route.view === 'graph' ? fit : route.view === 'scene' && route.mode !== 'open' ? () => surface.current?.fit?.() : undefined}
-        onBible={() => (route.view === 'bible' ? setRoute(route.back) : openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : (selection ?? undefined)))}
-        onEngine={() => say('Engine handoff is not built yet.')}
+        onBible={() => (route.view === 'bible' ? setRoute(route.back) : openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : route.view === 'graph' ? (selection ?? undefined) : undefined))}
+        onEngine={() => (route.view === 'engine' ? setRoute(route.back) : openEngine())}
         saveState={studio.saveState}
         issueCount={route.view === 'graph' ? issues.length : 0}
         onIssues={showNextIssue}
       />
-      {route.view !== 'bible' && <Palette
+      {route.view !== 'bible' && route.view !== 'engine' && <Palette
         active={drag?.placing ? drag.type : null}
         onStart={startPaletteDrag}
         mode={inSceneView ? 'scene' : 'graph'}
@@ -426,6 +452,7 @@ export const App = () => {
             onSay={say}
             onTimeline={() => openScene(route.sceneId, 'timeline')}
             onOpenBible={openBible}
+            onOpenCode={openEngine}
             onNavigate={navigate}
           />
         )}
@@ -456,10 +483,20 @@ export const App = () => {
             onOpen={() => openScene(route.sceneId, 'open')}
             onTimeline={() => openScene(route.sceneId, 'timeline')}
             onOpenBible={openBible}
+            onOpenCode={openEngine}
             onNavigate={navigate}
           />
         )}
-        {route.view === 'bible' && <GameBible project={project} onCommit={commit} focus={route.focus} onNavigate={navigate} />}
+        {route.view === 'bible' && <GameBible project={project} onCommit={commit} focus={route.focus} onNavigate={navigate} onOpenCode={openEngine} />}
+        {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} />}
+        {route.view === 'graph' && Object.keys(project.objects).length <= 3 && (
+          <div className="sample-card">
+            <span>New here? Open the sample from the mockups to see every part working.</span>
+            <button className="tb-btn small" onClick={() => commit({ ...sunkenVault(), id: project.id })}>
+              Open “The Sunken Vault”
+            </button>
+          </div>
+        )}
       </main>
       {showGhost && (
         <div className="drag-ghost" style={{ left: drag.clientX + 12, top: drag.clientY + 12 }} aria-hidden="true">

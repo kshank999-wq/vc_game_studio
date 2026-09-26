@@ -1,5 +1,6 @@
 import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'node:path';
+import { registerHandoff } from './handoff';
 
 /**
  * Electron main process for VC Game Studio.
@@ -9,6 +10,8 @@ import { join } from 'node:path';
  */
 
 const isDevelopment = !app.isPackaged;
+let mainWindow: BrowserWindow | null = null;
+registerHandoff(() => mainWindow);
 
 const createWindow = (): void => {
   const window = new BrowserWindow({
@@ -28,7 +31,11 @@ const createWindow = (): void => {
     },
   });
 
+  mainWindow = window;
   window.on('ready-to-show', () => window.show());
+  window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null;
+  });
 
   // External links (the store page, docs) open in the browser, never in the app.
   window.webContents.setWindowOpenHandler(({ url }) => {

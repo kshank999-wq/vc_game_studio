@@ -1,0 +1,7 @@
+config_version=5
+
+[application]
+config/name="VCGS handoff check"
+
+[autoload]
+GameState="*res://addons/vcgs_runtime/game_state.gd"

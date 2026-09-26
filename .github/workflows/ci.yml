@@ -30,3 +30,23 @@ jobs:
             node packages/cli/dist/cli.js validate "$f"
             node packages/cli/dist/cli.js explore "$f"
           done
+
+  godot:
+    # The generated Godot code, run in a real Godot 4: every script and
+    # resource loads, the lever works, the Vault Door scene plays through.
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Get Godot 4.3
+        run: |
+          curl -sSL -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          echo "GODOT=$PWD/Godot_v4.3-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - run: apps/studio/scripts/check-godot.sh

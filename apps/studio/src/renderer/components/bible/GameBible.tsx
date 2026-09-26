@@ -17,6 +17,7 @@ interface Props {
   /** The element to open on, when the Bible was opened from one. */
   focus?: string;
   onNavigate: (to: Destination) => void;
+  onOpenCode?: (id: string) => void;
 }
 
 /** Views whose list can add a new canonical element straight from the Bible. */
@@ -47,7 +48,7 @@ const viewFor = (project: Project, id: string | undefined): ViewKey => {
  * Every view reads the same objects the graph and scenes use, so an edit
  * here is an edit everywhere; where-used links go back to each place.
  */
-export const GameBible = ({ project, onCommit, focus, onNavigate }: Props) => {
+export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode }: Props) => {
   const [view, setView] = useState<ViewKey>(() => viewFor(project, focus));
   const [selected, setSelected] = useState<string | null>(focus ?? null);
   const [query, setQuery] = useState('');
@@ -219,7 +220,7 @@ export const GameBible = ({ project, onCommit, focus, onNavigate }: Props) => {
             <LineDetail project={project} lineId={line.id} onCommit={onCommit} onNavigate={onNavigate} />
           ) : selection && project.objects[selection] ? (
             <>
-              <ElementDetail project={project} id={selection} onCommit={onCommit} onNavigate={onNavigate} variant="bible" />
+              <ElementDetail project={project} id={selection} onCommit={onCommit} onNavigate={onNavigate} onOpenCode={onOpenCode} variant="bible" />
               {project.objects[selection]!.type === 'character' && <VoMeter project={project} id={selection} />}
               {project.objects[selection]!.type === 'scene' && (
                 <div className="detail-actions">
