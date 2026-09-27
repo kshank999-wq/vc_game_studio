@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Keeps the web builds split: what the page loads up front stays under a
- * budget, and none of it is engine handoff code, which loads only when the
- * handoff is opened (or exported on save). Run after `npm run build:web`:
+ * budget, and none of it is engine handoff code (loaded when the handoff is
+ * opened, or exported on save) or three.js (loaded when a level's 3D graybox
+ * is opened). Run after `npm run build:web`:
  * `node scripts/check-bundle.mjs [out/web out/preview]`.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -10,8 +11,8 @@ import { join, resolve } from 'node:path';
 
 /** Up front: the entry and React. They come to about 365 kB minified today. */
 const BUDGET = 420 * 1024;
-/** Only engine runtime source says these; none of it belongs in the first load. */
-const HANDOFF_MARKERS = ['VcgsCore', 'VCGSStory', 'StoryWalker'];
+/** Only engine runtime source, or three.js, says these; none of it belongs in the first load. */
+const LAZY_MARKERS = ['VcgsCore', 'VCGSStory', 'StoryWalker', 'WebGLRenderer'];
 
 const here = resolve(import.meta.dirname, '..');
 const dirs = process.argv.length > 2 ? process.argv.slice(2) : ['out/web', 'out/preview'];
@@ -32,7 +33,7 @@ for (const dir of dirs.map((d) => resolve(here, d))) {
   for (const file of upFront) {
     const text = readFileSync(join(dir, file), 'utf8');
     total += statSync(join(dir, file)).size;
-    for (const marker of HANDOFF_MARKERS) if (text.includes(marker)) fail(`${file} loads up front but carries handoff code (${marker}).`);
+    for (const marker of LAZY_MARKERS) if (text.includes(marker)) fail(`${file} loads up front but carries code meant to load on demand (${marker}).`);
   }
   const chunks = readdirSync(join(dir, 'assets')).filter((f) => f.endsWith('.js'));
   if (!chunks.some((f) => f.startsWith('handoff-'))) fail(`${dir} has no handoff chunk: the handoff is no longer loaded on demand.`);

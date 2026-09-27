@@ -7,7 +7,6 @@ import { TopBar, type Crumb } from './components/TopBar';
 import { ExplodedScene } from './components/scene/ExplodedScene';
 import { SceneWorkspace, type SceneSurface } from './components/scene/SceneWorkspace';
 import { SceneTimeline } from './components/scene/SceneTimeline';
-import { sunkenVault } from './model/sample';
 import { desktop } from './desktop';
 import type { Destination } from './model/details';
 import { inScene, removeFromScene } from './model/scene';
@@ -26,7 +25,8 @@ import { REPORTS, type ReportKey } from './model/reports';
 import { isPreview, PURCHASE_URL } from './edition';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
-import { EngineHandoff, GameBible, loadHandoff, PlayView, preloadViews, ShotList } from './views';
+import { EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, PlayView, preloadViews, ShotList } from './views';
+import type { LevelMode } from './components/level/LevelDesigner';
 import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
 import { isMainClosed, isPanel, listen, openWindow, parseView, post, role, subscribeShared, type Command, type PanelView } from './windows';
@@ -43,7 +43,8 @@ export type Route =
   | { view: 'bible'; focus?: string; report?: ReportKey; back: PlaceRoute }
   | { view: 'engine'; focus?: string; back: PlaceRoute }
   | { view: 'play'; from?: string; back: PlaceRoute }
-  | { view: 'cinematic'; id: string; back: PlaceRoute };
+  | { view: 'cinematic'; id: string; back: PlaceRoute }
+  | { view: 'level'; focus?: string; mode?: LevelMode; back: PlaceRoute };
 
 /** Views that stand aside from the graph and scenes, with a way back to where they were opened. */
 const isAside = (r: Route): r is Extract<Route, { back: PlaceRoute }> => 'back' in r;
@@ -53,14 +54,15 @@ const routeFor = (view: PanelView): Route => {
   if (view.view === 'bible') return { view: 'bible', focus: view.focus, back: { view: 'graph' } };
   if (view.view === 'engine') return { view: 'engine', back: { view: 'graph' } };
   if (view.view === 'play') return { view: 'play', back: { view: 'graph' } };
+  if (view.view === 'level') return { view: 'level', focus: view.focus, back: { view: 'graph' } };
   if (view.view === 'scene') return view;
   return { view: 'graph' };
 };
 
 const viewOf = (route: Route): PanelView =>
-  route.view === 'bible' ? { view: 'bible', focus: route.focus } : route.view === 'engine' ? { view: 'engine' } : route.view === 'play' ? { view: 'play' } : route.view === 'scene' ? { view: 'scene', sceneId: route.sceneId, mode: route.mode } : { view: 'graph' };
+  route.view === 'bible' ? { view: 'bible', focus: route.focus } : route.view === 'engine' ? { view: 'engine' } : route.view === 'play' ? { view: 'play' } : route.view === 'level' ? { view: 'level', focus: route.focus } : route.view === 'scene' ? { view: 'scene', sceneId: route.sceneId, mode: route.mode } : { view: 'graph' };
 
-const WINDOW_LABEL: Record<PanelView['view'], string> = { graph: 'Graph window', bible: 'Bible window', engine: 'Handoff window', scene: 'Scene window', play: 'Play window' };
+const WINDOW_LABEL: Record<PanelView['view'], string> = { graph: 'Graph window', bible: 'Bible window', engine: 'Handoff window', scene: 'Scene window', play: 'Play window', level: 'Levels window' };
 
 const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -128,7 +130,8 @@ export const App = () => {
   const [sceneSelection, setSceneSelection] = useState<string | null>(null);
   const placeOf = (r: Route): PlaceRoute => (isAside(r) ? r.back : r);
   const openShots = (id: string) => setRoute((r) => ({ view: 'cinematic', id, back: placeOf(r) }));
-  const nav = useMemo(() => ({ openShots }), []);
+  const openLevels = (focus?: string, mode?: LevelMode) => setRoute((r) => ({ view: 'level', focus, mode, back: placeOf(r) }));
+  const nav = useMemo(() => ({ openShots, openLevels }), []);
   const openPlay = (from?: string) => setRoute((r) => ({ view: 'play', from, back: placeOf(r) }));
   const openBible = (focus?: string, report?: ReportKey) => setRoute((r) => ({ view: 'bible', focus, report, back: placeOf(r) }));
   const openEngine = (focus?: string) => setRoute((r) => ({ view: 'engine', focus, back: placeOf(r) }));
@@ -412,8 +415,13 @@ export const App = () => {
     if ('error' in result) say(result.error);
     else showProject(result.project, result.file);
   };
+  /** The sample, with its level, loads on demand (it is most of a project's worth of code to build). */
+  const openSample = () =>
+    void loadSample()
+      .then(({ sunkenVault }) => showProject(sunkenVault(), null))
+      .catch(() => say('The sample could not be loaded. Check the connection and try again.'));
   const newProject = (sample = false) =>
-    studio.isPanel ? toMain(sample ? 'newSample' : 'new') : leaveProject(() => showProject(sample ? sunkenVault() : createProject(), null));
+    studio.isPanel ? toMain(sample ? 'newSample' : 'new') : leaveProject(() => (sample ? openSample() : showProject(createProject(), null)));
   const open = () =>
     studio.isPanel ? toMain('open') : leaveProject(() => {
       openProjectFile()
@@ -497,6 +505,10 @@ export const App = () => {
         e.preventDefault();
         if (route.view === 'bible') setRoute(route.back);
         else openBible();
+      } else if (mod && key === 'l' && !isTyping(e.target)) {
+        e.preventDefault();
+        if (route.view === 'level') setRoute(route.back);
+        else openLevels(route.view === 'graph' ? (selection ?? undefined) : route.view === 'scene' ? route.sceneId : undefined);
       } else if (mod && key === 'e' && !isTyping(e.target)) {
         e.preventDefault();
         if (route.view === 'engine') setRoute(route.back);
@@ -672,6 +684,7 @@ export const App = () => {
       items: [
         { label: 'Story graph', checked: onGraph, onClick: () => setRoute({ view: 'graph' }) },
         { label: 'Game Bible', shortcut: 'Mod+B', checked: route.view === 'bible', onClick: () => openBible() },
+        { label: 'Levels', shortcut: 'Mod+L', checked: route.view === 'level', onClick: () => openLevels() },
         { label: 'Engine handoff', shortcut: 'Mod+E', checked: route.view === 'engine', onClick: () => openEngine() },
         { label: 'Play-through', shortcut: 'F5', checked: route.view === 'play', onClick: () => openPlay() },
         {
@@ -728,6 +741,7 @@ export const App = () => {
           label: 'Open in a new window',
           submenu: [
             { label: 'Game Bible', onClick: () => popOut({ view: 'bible' }) },
+            { label: 'Levels', onClick: () => popOut({ view: 'level' }) },
             { label: 'Engine handoff', onClick: () => popOut({ view: 'engine' }) },
             { label: 'Play-through', onClick: () => popOut({ view: 'play' }) },
             { label: 'Story graph', onClick: () => popOut({ view: 'graph' }) },
@@ -819,6 +833,8 @@ export const App = () => {
         ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Engine Handoff' }]
         : route.view === 'play'
           ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Play-through' }]
+        : route.view === 'level'
+          ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Levels' }]
           : route.view === 'cinematic'
             ? [
                 { label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) },
@@ -858,6 +874,8 @@ export const App = () => {
           onFit={route.view === 'graph' ? fit : route.view === 'scene' && route.mode !== 'open' ? () => surface.current?.fit?.() : undefined}
           onBible={() => (route.view === 'bible' ? setRoute(route.back) : openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : route.view === 'graph' ? (selection ?? undefined) : undefined))}
           onEngine={() => (route.view === 'engine' ? setRoute(route.back) : openEngine())}
+          onLevels={() => (route.view === 'level' ? setRoute(route.back) : openLevels(route.view === 'scene' ? route.sceneId : route.view === 'graph' ? (selection ?? undefined) : undefined))}
+          levelsOn={route.view === 'level'}
           saveState={studio.saveState}
           issueCount={route.view === 'graph' ? issues.length : 0}
           onIssues={showNextIssue}
@@ -960,12 +978,26 @@ export const App = () => {
               <ShotList key={route.id} project={project} id={route.id} onCommit={commit} onNavigate={navigate} onOpenBible={openBible} onOpenCode={openEngine} />
             )}
             {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} />}
+            {route.view === 'level' && (
+              <LevelDesigner
+                key={route.focus ?? 'levels'}
+                project={project}
+                onCommit={commit}
+                onNavigate={navigate}
+                onOpenBible={openBible}
+                onSay={say}
+                onConfirm={setAsk}
+                focus={route.focus}
+                mode={route.mode}
+                onMode={(mode) => setRoute((r) => (r.view === 'level' ? { ...r, mode } : r))}
+              />
+            )}
             {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} />}
           </Suspense>
           {route.view === 'graph' && Object.keys(project.objects).length <= 3 && (
             <div className="sample-card">
               <span>New here? Open the sample from the mockups to see every part working.</span>
-              <button className="tb-btn small" onClick={() => showProject(sunkenVault(), null)}>
+              <button className="tb-btn small" onClick={openSample}>
                 Open “The Sunken Vault”
               </button>
             </div>

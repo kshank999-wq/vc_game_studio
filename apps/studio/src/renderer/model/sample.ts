@@ -1,6 +1,7 @@
 import { addInteraction, interactionsOf, setField, setNotes, setSceneUse, setStates, setValue, toggleTag, updateInteraction } from './details';
 import { spineLane } from './layout';
 import { addLane, connect, createProject, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
+import { sampleLevel } from './level/sample-level';
 import { addElement, addLine, setSceneData, updateLine, useInScene } from './scene';
 import { addBranch, addEvent, moveEvent, sceneTimeline, updateBranch, updateEvent } from './timeline';
 import type { Condition } from './rules';
@@ -46,7 +47,6 @@ export const sunkenVault = (): Project => {
   const vaultOpens = onSpine('cinematic', 'The Vault Opens', 740);
   const c2 = onSpine('choice', 'Pocket the ring', 880);
   p = renameObject(p, byName('Ending'), 'Shared Light');
-  void descent;
 
   // Branches above it.
   const squeeze = branch('scene', 'The Squeeze', 300, -220);
@@ -185,5 +185,8 @@ export const sunkenVault = (): Project => {
   p = useInScene(p, theKey, key);
   const found = addEvent(p, theKey, 'action', { label: 'Find the key in the silt' })!;
   p = updateEvent(found.project, theKey, found.id, { effects: [{ kind: 'give', ref: key }] });
+
+  // Where it all happens: one level, tied to the scenes and the Bible.
+  p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent });
   return p;
 };

@@ -22,5 +22,8 @@ export default defineConfig({
     outDir: resolve(__dirname, edition === 'preview' ? 'out/preview' : 'out/web'),
     emptyOutDir: true,
     rollupOptions: { output: { manualChunks: vendorChunks, chunkFileNames } },
+    // The graybox chunk is three.js (about 560 kB), fetched only when a level is opened in 3D.
+    // What loads up front is held to its own budget by scripts/check-bundle.mjs.
+    chunkSizeWarningLimit: 600,
   },
 });

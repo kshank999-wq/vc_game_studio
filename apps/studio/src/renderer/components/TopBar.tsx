@@ -32,6 +32,8 @@ interface Props {
   onFit?: () => void;
   onBible: () => void;
   onEngine: () => void;
+  onLevels: () => void;
+  levelsOn?: boolean;
   saveState: SaveState;
   issueCount: number;
   onIssues: () => void;
@@ -161,6 +163,9 @@ export const TopBar = (props: Props) => {
       )}
       <button className="bible-btn" onClick={props.onBible}>
         GAME BIBLE
+      </button>
+      <button className={`tb-btn levels-btn${props.levelsOn ? ' on' : ''}`} title="Lay out levels: rooms, doors, pickups, triggers (Ctrl+L)" onClick={props.onLevels}>
+        LEVELS
       </button>
       <button className="tb-btn" aria-label="Play" title="Play the story through (F5)" onClick={props.onPlay}>
         ▶<span className="tb-label"> Play</span>

@@ -170,9 +170,24 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
     ],
   },
   {
+    group: 'Levels',
+    keys: [
+      ['2', '2D map'],
+      ['3', '3D graybox'],
+      ['V', 'Select and move'],
+      ['D', 'Draw a space'],
+      ['R', 'Rotate 90° (Shift+R: back)'],
+      ['Mod+D', 'Duplicate'],
+      ['Mod+G', 'Group (Mod+Shift+G: ungroup)'],
+      ['F', 'Frame the selection'],
+      ['Arrows', 'Nudge by the grid (Shift: four steps)'],
+    ],
+  },
+  {
     group: 'Views',
     keys: [
       ['Mod+B', 'Game Bible'],
+      ['Mod+L', 'Levels'],
       ['Mod+E', 'Engine handoff'],
       ['F5', 'Play-through (Shift+F5: from the selected scene)'],
       ['Mod+K', 'Search the project (also Mod+F)'],

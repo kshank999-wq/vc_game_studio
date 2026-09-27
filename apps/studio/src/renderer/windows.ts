@@ -18,6 +18,7 @@ export type PanelView =
   | { view: 'bible'; focus?: string }
   | { view: 'engine' }
   | { view: 'play' }
+  | { view: 'level'; focus?: string }
   | { view: 'scene'; sceneId: string; mode: 'open' | 'exploded' | 'timeline' };
 
 export type Role = { kind: 'main'; session: string } | { kind: 'panel'; session: string; start: PanelView };
@@ -48,7 +49,7 @@ const newSession = () => Math.random().toString(36).slice(2, 10);
 
 export const parseView = (params: URLSearchParams): PanelView => {
   const view = params.get('view');
-  if (view === 'bible') return { view, ...(params.get('focus') ? { focus: params.get('focus')! } : {}) };
+  if (view === 'bible' || view === 'level') return { view, ...(params.get('focus') ? { focus: params.get('focus')! } : {}) };
   if (view === 'engine' || view === 'play') return { view };
   if (view === 'scene' && params.get('scene')) {
     const mode = params.get('mode');
@@ -59,7 +60,7 @@ export const parseView = (params: URLSearchParams): PanelView => {
 
 export const viewQuery = (view: PanelView, session: string): string => {
   const q = new URLSearchParams({ window: 'panel', session, view: view.view });
-  if (view.view === 'bible' && view.focus) q.set('focus', view.focus);
+  if ((view.view === 'bible' || view.view === 'level') && view.focus) q.set('focus', view.focus);
   if (view.view === 'scene') {
     q.set('scene', view.sceneId);
     q.set('mode', view.mode);

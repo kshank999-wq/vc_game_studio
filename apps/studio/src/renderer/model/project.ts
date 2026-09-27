@@ -10,6 +10,7 @@ import {
   spineLane,
   spineSequence,
 } from './layout';
+import { dropStoryLinks } from './level/links';
 import type { Connection, ConnectionKind, Lane, LaneKind, ObjectType, Project, StoryObject } from './types';
 
 /**
@@ -408,6 +409,8 @@ export const removeObject = (project: Project, id: string): Project => {
     // Its timeline goes with a scene; an event standing for the element goes with the element.
     events: project.events.filter((e) => e.sceneId !== id && e.refId !== id),
     branches: project.branches.filter((b) => b.sceneId !== id),
+    // Level items stop linking to it; a level without levels stays without.
+    ...(project.levels ? { levels: dropStoryLinks(project.levels, id) } : {}),
   });
 };
 

@@ -31,6 +31,7 @@ node apps/studio/scripts/check-bundle.mjs   # after the web builds: the first lo
 | `src/renderer/model/details.ts` | Element detail: fields per type, states and interactions, scene use, where used. |
 | `src/renderer/model/bible.ts`, `reports.ts` | The Game Bible's views and the production reports. |
 | `src/renderer/components/detail/`, `components/bible/` | The detail editor (scene panel and Bible pane), the Bible, report preview. |
+| `src/renderer/model/level/`, `components/level/` | The Level Designer (docs/LEVEL-DESIGNER.md): levels, the asset library, the 2D map, the 3D graybox (three.js, loaded on demand), the inspector, preflight. |
 | `src/renderer/model/handoff/` | The engine handoff: the neutral model, adapters (Godot, Unity, Unreal, JSON), statuses, zip. |
 | `src/renderer/views.ts`, `chunks.ts` | How the bundle splits: the Bible, shot list, play-through and handoff (with every engine's runtime source) load on first use and are fetched once the graph is idle; React sits in its own chunk. |
 | `src/renderer/model/sample.ts` | “The Sunken Vault”, the mockups’ sample, built with the app’s own operations. |

@@ -1,3 +1,4 @@
+import type { LevelSet } from './level/types';
 import type { Effect, Rule } from './rules';
 
 /**
@@ -218,4 +219,6 @@ export interface Project {
   branches: TimelineBranch[];
   /** The engine handoff: the target and the last export. Absent until first set. */
   handoff?: { target: EngineTarget; last?: ExportRecord };
+  /** The Level Designer's levels, items and project assets. Absent until the first level. */
+  levels?: LevelSet;
 }

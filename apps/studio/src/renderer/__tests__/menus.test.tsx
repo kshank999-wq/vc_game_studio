@@ -9,6 +9,12 @@ import { getPreferences, resetPreferences, setPreferences } from '../preferences
 /** The Bible, play-through, shot list and handoff load on first use; wait for the one just opened. */
 const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull());
 
+/** File › New from the sample, which loads the sample on demand. */
+const openSample = async () => {
+  fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
+  await waitFor(() => expect(document.querySelectorAll('[data-node]').length).toBeGreaterThan(10));
+};
+
 beforeAll(() => {
   globalThis.PointerEvent ??= class extends MouseEvent {} as unknown as typeof PointerEvent;
   globalThis.ResizeObserver ??= class {
@@ -55,10 +61,10 @@ describe('the menu bar', () => {
     expect(screen.queryByRole('menu', { name: 'Project' })).toBeNull();
   });
 
-  it('starts from the sample, then asks before a new project throws it away', () => {
+  it('starts from the sample, then asks before a new project throws it away', async () => {
     const { container } = render(<App />);
     openMenu('File');
-    fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
+    await openSample();
     expect(container.querySelectorAll('[data-node]').length).toBeGreaterThan(10);
     act(() => {
       fireEvent.keyDown(window, { key: 'n', ctrlKey: true });
@@ -87,10 +93,10 @@ describe('the menu bar', () => {
 });
 
 describe('search', () => {
-  it('opens with Ctrl+K and goes to a node on the graph', () => {
+  it('opens with Ctrl+K and goes to a node on the graph', async () => {
     const { container } = render(<App />);
     openMenu('File');
-    fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
+    await openSample();
     act(() => {
       fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     });
@@ -129,7 +135,7 @@ describe('deleting from the Bible', () => {
   it('says what goes with a character before deleting her', async () => {
     render(<App />);
     openMenu('File');
-    fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
+    await openSample();
     fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
     await opened();
     fireEvent.click(screen.getAllByText('Mara')[0]!);
@@ -147,7 +153,7 @@ describe('play-through', () => {
   it('opens with F5, plays to a choice, and takes it', async () => {
     const { container } = render(<App />);
     openMenu('File');
-    fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
+    await openSample();
     act(() => {
       fireEvent.keyDown(window, { key: 'F5' });
     });
@@ -166,7 +172,7 @@ describe('the shot list', () => {
   it('opens from a cinematic in the Bible, adds a shot and edits it', async () => {
     const { container } = render(<App />);
     openMenu('File');
-    fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
+    await openSample();
     fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
     await opened();
     fireEvent.click(screen.getAllByText('Door in the dark')[0]!);

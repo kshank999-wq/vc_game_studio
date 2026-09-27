@@ -76,6 +76,9 @@ export const deletionImpact = (project: Project, id: string): string[] => {
   const spans = spanDependents(project, id);
   if (spans.length) out.push(`${list(spans.map((l) => `“${l.name}”`))} will branch off or rejoin at the neighbouring spine node.`);
 
+  const placed = (project.levels?.items ?? []).filter((i) => i.links?.includes(id) || Object.values(i.params ?? {}).includes(id));
+  if (placed.length) out.push(`${plural(placed.length, 'level item')} ${placed.length === 1 ? 'stays' : 'stay'} but ${placed.length === 1 ? 'is' : 'are'} no longer linked: ${list(placed.map((i) => i.name))}.`);
+
   const rules = rulesNaming(project, id);
   if (rules.length) out.push(`${plural(rules.length, 'condition or effect', 'conditions or effects')} will point at nothing: ${list(rules)}.`);
 

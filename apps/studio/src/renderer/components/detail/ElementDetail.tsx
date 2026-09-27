@@ -29,10 +29,13 @@ import {
 import { renameObject } from '../../model/project';
 import { inScene } from '../../model/scene';
 import { TYPE_LABEL } from '../../model/semantics';
-import type { Project, StoryObject } from '../../model/types';
+import type { ObjectType, Project, StoryObject } from '../../model/types';
 import { Symbol } from '../Symbol';
 import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
 import type { Effect, Rule } from '../../model/rules';
+
+/** What can stand somewhere in a level (spec §7): shown with where it is. */
+const LEVEL_TYPES = new Set<ObjectType>(['plotPoint', 'scene', 'environment', 'character', 'object', 'inventory', 'puzzle', 'cinematic', 'choice', 'dialogue', 'trigger', 'gate']);
 import { setValue } from '../../model/details';
 
 /** Which elements hold a rule, and what it and its effects are called. */
@@ -319,6 +322,46 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
                 {shotsOf(object).length ? 'Open the shot list' : 'Break it into shots…'}
               </button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {nav.openLevels && LEVEL_TYPES.has(object.type) && (
+        <section className="detail-section">
+          <div className="dfld">
+            <span>In the levels</span>
+            {(() => {
+              // Read straight from the project, so the Level Designer's code loads only when it is opened.
+              const set = project.levels;
+              const items = set?.items.filter((i) => i.links?.includes(id) || Object.values(i.params ?? {}).includes(id)) ?? [];
+              const levels = set?.levels.filter((l) => l.links?.includes(id)) ?? [];
+              if (!items.length && !levels.length) {
+                return (
+                  <div className="shot-summary">
+                    <span className="detail-text muted">Not placed in a level yet</span>
+                    <button className="tb-btn small" onClick={() => nav.openLevels!()}>
+                      Open the levels
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <div className="level-uses">
+                  {levels.map((l) => (
+                    <button key={l.id} className="use" onClick={() => nav.openLevels!()}>
+                      <span className="use-label">{l.name}</span>
+                      <span className="use-detail">the whole level</span>
+                    </button>
+                  ))}
+                  {items.map((i) => (
+                    <button key={i.id} className="use" onClick={() => nav.openLevels!(i.id)}>
+                      <span className="use-label">{i.name}</span>
+                      <span className="use-detail">{set!.levels.find((l) => l.id === i.levelId)?.name ?? ''}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </section>
       )}
