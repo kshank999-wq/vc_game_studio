@@ -239,7 +239,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
     const lit = new Set<string>();
     if (!event) return lit;
     if (event.kind === 'dialogue') {
-      lit.add(`dialogue:${sceneId}`);
+      // A line lights whoever speaks it.
       const speaker = eventLine(project, event)?.speakerId;
       if (speaker) lit.add(speaker);
     } else if (event.refId) lit.add(event.refId);
@@ -249,7 +249,8 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
   const pickElement = (id: string | null) => {
     setElement(id);
     if (!id) return;
-    const match = id.startsWith('dialogue:') ? all.find((e) => e.kind === 'dialogue') : all.find((e) => e.refId === id);
+    // An element picks its event; a character, the first line it speaks.
+    const match = all.find((e) => e.refId === id) ?? all.find((e) => e.kind === 'dialogue' && eventLine(project, e)?.speakerId === id);
     setSelected(match?.id ?? null);
   };
 
@@ -505,7 +506,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
           project={project}
           sceneId={sceneId}
           event={event}
-          element={!event && element && !element.startsWith('dialogue:') ? element : null}
+          element={!event && element ? element : null}
           numbers={numbers}
           onCommit={props.onCommit}
           onSelect={setSelected}

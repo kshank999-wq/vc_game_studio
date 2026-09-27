@@ -77,8 +77,9 @@ export const AddMenu = ({ project, sceneId, category, onAdd, onClose }: {
 };
 
 /** The category a palette drag would land in, for lighting its port or perimeter node. */
+/** Where a dropped element lands; dialogue goes to the characters, who speak it. */
 export const dropCategory = (type: ObjectType | null | undefined): Category | undefined =>
-  type ? categoryFor(type) : undefined;
+  type === 'dialogue' ? CATEGORIES.find((c) => c.key === 'characters') : type ? categoryFor(type) : undefined;
 
 export const categoryByKey = (key: string): Category => CATEGORIES.find((c) => c.key === key)!;
 

@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { renameObject } from '../../model/project';
 import { TYPE_LABEL } from '../../model/semantics';
-import { CATEGORIES, addElement, categoryCounts, elementsIn, removeFromScene, sceneLines, type Category } from '../../model/scene';
+import { PERIMETER, addElement, categoryCounts, elementsIn, linesOf, removeFromScene, sceneLines, type Category } from '../../model/scene';
 import type { Project, StoryObject } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
 import { clampZoom, zoomAt, type View } from '../../view';
@@ -130,18 +130,20 @@ const stack = (n: number) => n * LEAF_H + Math.max(0, n - 1) * LEAF_GAP;
 const opened = new Map<string, Set<string>>();
 const openIn = (sceneId: string) => opened.get(sceneId) ?? new Set<string>();
 
+// A character's dialogue: a box under it, a row per line (the first two).
+const DLG_ROWS = 2;
+const DLG_ROW = 18;
+const DLG_GAP = 14;
+const dialogueHeight = (n: number) => 22 + Math.min(n, DLG_ROWS) * DLG_ROW + (n > DLG_ROWS ? DLG_ROW : 0) + 6;
+
 /**
- * Everything the scene holds, placed around its ports; dialogue is one box
- * for the whole script. An opened element's facets sit beyond it, and the
+ * Everything the scene holds, placed around its ports; a character's
+ * dialogue hangs under it. An opened element's facets sit beyond it, and the
  * boxes further out on that side move out to make room.
  */
 const layout = (project: Project, sceneId: string, open: ReadonlySet<string> = new Set()): Placed[] => {
   const placed: Placed[] = [];
-  for (const c of CATEGORIES) {
-    if (c.key === 'dialogue') {
-      if (sceneLines(project, sceneId).some((l) => l.kind === 'dialogue')) placed.push({ id: `dialogue:${sceneId}`, category: c, at: boxAt(c, 0, 1) });
-      continue;
-    }
+  for (const c of PERIMETER) {
     const items = elementsIn(project, sceneId, c.key);
     const facets = items.map((o) => (open.has(o.id) ? facetsOf(project, sceneId, o) : null));
     if (c.side === 'bottom') {
@@ -240,7 +242,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
     [project, sceneId, dragging?.type, !!target],
   );
   const shown = preview?.project ?? project;
-  const ghostId = preview ? (dragging?.type === 'dialogue' ? `dialogue:${sceneId}` : preview.id) : null;
+  const ghostId = preview && dragging?.type !== 'dialogue' ? preview.id : null;
   const placed = layout(shown, sceneId, open);
   const openable = placed.filter((p) => p.object).map((p) => p.id);
   const counts = categoryCounts(shown, sceneId);
@@ -254,10 +256,11 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
     let minY = -REACH - BOX_H;
     let maxY = SCENE_H + REACH + BOX_H;
     for (const p of all) {
+      const said = p.object?.type === 'character' ? linesOf(project, sceneId, p.object.id).length : 0;
       minX = Math.min(minX, p.at.x);
       maxX = Math.max(maxX, p.at.x + BOX_W);
       minY = Math.min(minY, p.at.y);
-      maxY = Math.max(maxY, p.at.y + BOX_H);
+      maxY = Math.max(maxY, p.at.y + BOX_H + (said ? DLG_GAP + dialogueHeight(said) : 0));
       for (const f of p.facets ?? []) {
         minX = Math.min(minX, f.at.x);
         maxX = Math.max(maxX, f.at.x + LEAF_W);
@@ -341,6 +344,11 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
                 d={wire(p.category, dotAt(p.category, p.at), portAt(p.category))}
               />
             ))}
+            {placed.map((p) =>
+              p.object?.type === 'character' && lines.some((l) => l.speakerId === p.object!.id) ? (
+                <path key={`${p.id}:dialogue`} className="wire" style={{ stroke: 'var(--c-dialogue)' }} d={`M${p.at.x + BOX_W / 2} ${p.at.y + BOX_H} V${p.at.y + BOX_H + DLG_GAP}`} />
+              ) : null,
+            )}
             {placed.flatMap((p) =>
               (p.facets ?? []).map((f, j) => <path key={`${p.id}:${j}`} className="wire facet-wire" style={{ stroke: p.category.color }} d={facetWire(p.category, p.at, f.at)} />),
             )}
@@ -388,7 +396,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
             <span className="hint">{props.onTimeline ? 'double-click = timeline' : 'Drop an element anywhere · it snaps to its port'}</span>
           </div>
 
-          {CATEGORIES.map((c) => {
+          {PERIMETER.map((c) => {
             const p = portAt(c);
             const lit = target?.key === c.key;
             return (
@@ -410,34 +418,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
           const style = { left: p.at.x, top: p.at.y, width: BOX_W, height: BOX_H, '--cat': p.category.color } as React.CSSProperties;
           const dot = dotAt(p.category, p.at);
           const dotStyle = { left: dot.x - p.at.x - 6, top: dot.y - p.at.y - 6, background: p.category.color };
-          if (!p.object) {
-            return (
-              <div
-                key={p.id}
-                className={`element-box element-dialogue${p.id === ghostId ? ' ghost' : ''}${props.highlight?.has(p.id) ? ' lit' : ''}${props.selection === p.id ? ' selected' : ''}`}
-                style={style}
-                onPointerDown={(e) => {
-                  if (e.button !== 0) return;
-                  e.stopPropagation();
-                  props.onSelect(p.id);
-                }}
-                onDoubleClick={props.onOpen}
-                title="Double-click to edit the script"
-              >
-                <span className="box-kicker">
-                  <Symbol type="dialogue" size={11} />
-                  Dialogue · {lines.length}
-                </span>
-                {lines.slice(0, 2).map((l) => (
-                  <span key={l.id} className="box-line">
-                    <b>{l.speakerId ? project.objects[l.speakerId]?.name.toUpperCase() : '?'}</b> {l.text || '…'}
-                  </span>
-                ))}
-                {lines.length > 2 && <span className="box-sub">+{lines.length - 2} more</span>}
-                <span className="box-dot" style={dotStyle} />
-              </div>
-            );
-          }
+          if (!p.object) return null;
           const object = p.object;
           const spoken = object.type === 'character' ? lines.filter((l) => l.speakerId === object.id).length : 0;
           const isLocation = scene.data.locationId === object.id;
@@ -512,6 +493,36 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
                 {open.has(object.id) ? '−' : '+'}
               </button>
               <span className="box-dot" style={dotStyle} />
+            </div>
+          );
+        })}
+
+        {placed.map((p) => {
+          if (p.object?.type !== 'character') return null;
+          const said = linesOf(shown, sceneId, p.object.id);
+          if (!said.length) return null;
+          return (
+            <div
+              key={`${p.id}:dialogue`}
+              className="dlg-box"
+              role="group"
+              aria-label={`${p.object.name}’s dialogue`}
+              style={{ left: p.at.x, top: p.at.y + BOX_H + DLG_GAP, width: BOX_W }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onDoubleClick={props.onOpen}
+              title="Double-click to edit the script"
+            >
+              <span className="dlg-head">
+                <Symbol type="dialogue" size={11} />
+                Dialogue · {said.length}
+              </span>
+              {said.slice(0, DLG_ROWS).map((l) => (
+                <span key={l.id} className="dlg-row">
+                  <span className="mono">#{l.order}</span>
+                  <span className="dlg-text">{l.text || '…'}</span>
+                </span>
+              ))}
+              {said.length > DLG_ROWS && <span className="dlg-more">+ {said.length - DLG_ROWS} more</span>}
             </div>
           );
         })}

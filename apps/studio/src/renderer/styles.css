@@ -2018,6 +2018,8 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* Room to scroll past the last line, as script editors give, so a cue's suggestions always show. */
+  padding-bottom: 200px;
 }
 
 .script textarea,
@@ -2083,49 +2085,50 @@ a:hover {
   display: flex;
 }
 
-.speaker-wrap {
+.cue-wrap {
   position: relative;
-}
-
-.speaker {
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: none;
-  font-family: var(--font-script);
-  font-size: var(--script-size, 14px);
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--text);
 }
 
-.speaker:hover,
-.line-dialogue:focus-within .speaker {
+/* The character cue: a name, in capitals, as screenplays set it. */
+.script input.line-cue {
+  width: 220px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  text-align: center;
+  text-transform: uppercase;
+  font-size: var(--script-size, 14px);
+  letter-spacing: 0.02em;
+}
+
+.line-cue::placeholder {
+  color: #5d5540;
+  text-transform: none;
+}
+
+.line-dialogue:focus-within .line-cue,
+.line-cue:focus {
   border-color: var(--c-dialogue);
   background: #2a1d15;
 }
 
-.speaker.missing {
-  color: #f19a9d;
+.line-cue.missing:not(:focus):placeholder-shown {
   border-color: #7a3336;
 }
 
-.line-direction {
-  width: 240px;
-  text-align: center;
-  font-size: calc(var(--script-size, 14px) - 1px);
-  color: #b5a985 !important;
-}
-
-.speaker-menu {
+.cue-suggest {
   position: absolute;
   left: 50%;
   top: 28px;
   transform: translateX(-50%);
-  width: 230px;
+  width: 240px;
+  margin: 0;
   padding: 6px;
+  list-style: none;
   background: #26221a;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -2134,25 +2137,37 @@ a:hover {
   flex-direction: column;
   gap: 2px;
   z-index: 10;
-  font-family: var(--font-ui);
+  font-family: var(--font-script);
 }
 
-.speaker-menu button {
-  height: 30px;
+.cue-suggest li {
+  height: 28px;
   padding: 0 8px;
-  border: 0;
   border-radius: 5px;
-  background: none;
-  text-align: left;
-  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
 }
 
-.speaker-menu button:hover,
-.speaker-menu button.on {
+.cue-suggest li.on,
+.cue-suggest li:hover {
   background: #3a3222;
+}
+
+.cue-suggest .menu-note {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.line-direction {
+  width: 240px;
+  text-align: center;
+  font-size: calc(var(--script-size, 14px) - 1px);
+  color: #b5a985 !important;
 }
 
 .script-empty {
@@ -7224,4 +7239,73 @@ kbd {
 .card-name.placeholder {
   color: var(--muted);
   font-weight: 400;
+}
+
+/* ------------------------------------------------------------ a character's dialogue in the scene */
+
+.dlg-box {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px 6px;
+  border-radius: 8px;
+  background: var(--node);
+  border: 1px solid var(--c-dialogue);
+  font-size: 12px;
+}
+
+.dlg-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 18px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-dialogue);
+}
+
+.dlg-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 18px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-soft);
+  text-align: left;
+  font-family: var(--font-script);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dlg-row:hover {
+  background: #2a1d15;
+  color: var(--text);
+}
+
+.dlg-row .mono {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.dlg-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dlg-more {
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.stage-fan.dialogue-fan {
+  stroke: var(--c-dialogue);
 }

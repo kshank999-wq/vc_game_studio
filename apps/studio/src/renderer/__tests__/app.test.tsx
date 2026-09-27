@@ -126,7 +126,8 @@ describe('a scene', () => {
     expect(screen.getByRole('button', { name: /Characters/ }).textContent).toContain('1');
 
     fireEvent.click(screen.getByRole('button', { name: /Expand all/ }));
-    expect(container.querySelectorAll('.exploded-scene .port')).toHaveLength(9);
+    // A port per category; dialogue hangs off the characters who speak it.
+    expect(container.querySelectorAll('.exploded-scene .port')).toHaveLength(8);
     expect([...container.querySelectorAll('.element-box')].map((b) => b.textContent)).toEqual([expect.stringContaining('Mara')]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Story Graph' }));
@@ -194,7 +195,7 @@ describe('the Game Bible', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Back to Story Graph/ }));
     fireEvent.doubleClick(container.querySelector('[data-type="scene"]')!);
-    fireEvent.click(screen.getByRole('button', { name: /Characters/ }));
+    // The cast shows by itself once the scene has one.
     expect(container.querySelector('.chip-item')!.textContent).toContain('Mara Vell');
   });
 });

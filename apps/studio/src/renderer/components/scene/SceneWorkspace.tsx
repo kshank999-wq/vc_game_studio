@@ -1,10 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { renameObject } from '../../model/project';
 import {
-  CATEGORIES,
+  PERIMETER,
   addElement,
   categoryCounts,
   elementsIn,
+  linesOf,
   sceneLines,
   setSceneData,
   setSceneNotes,
@@ -88,6 +89,29 @@ const chipPosition = (c: Category, index: number, count: number): { x: number; y
   }
 };
 
+// A character's dialogue box: beside the character, a row per line (the first few).
+const DLG_W = 230;
+const DLG_ROWS = 3;
+const DLG_ROW = 18;
+const dialogueHeight = (n: number) => (n ? 22 + Math.min(n, DLG_ROWS) * DLG_ROW + (n > DLG_ROWS ? DLG_ROW : 0) + 6 : 0);
+
+/**
+ * The cast down the left: each character, and its dialogue box beside it when
+ * it has lines, one slot each, stacked around the Characters node.
+ */
+const castPositions = (c: Category, heights: readonly number[]): { chip: { x: number; y: number }; dialogue: { x: number; y: number } }[] => {
+  const pill = pillPosition(c);
+  const slots = heights.map((h) => Math.max(CHIP_H, h));
+  const total = slots.reduce((a, b) => a + b, 0) + Math.max(0, slots.length - 1) * 10;
+  let y = pill.y + PILL_H / 2 - total / 2;
+  return slots.map((slot, i) => {
+    const chip = { x: pill.x - 36 - CHIP_W, y: y + slot / 2 - CHIP_H / 2 };
+    const dialogue = { x: chip.x - 28 - DLG_W, y: y + slot / 2 - heights[i]! / 2 };
+    y += slot + 10;
+    return { chip, dialogue };
+  });
+};
+
 const STATUS: { key: NonNullable<SceneData['status']>; label: string }[] = [
   { key: 'outline', label: 'Outline' },
   { key: 'inProgress', label: 'In progress' },
@@ -134,31 +158,29 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   const dragCategory = props.paletteDrag ? dropCategory(props.paletteDrag.type) : undefined;
 
   const itemsOf = (c: Category): { id: string; label: string; code?: string; color?: string; symbol: Category['symbol'] }[] =>
-    c.key === 'dialogue'
-      ? lines
-          .filter((l) => l.kind === 'dialogue')
-          .slice(0, 5)
-          .map((l) => ({
-            id: l.id,
-            label: `${l.speakerId ? project.objects[l.speakerId]?.name.toUpperCase() : '?'}  ${l.text || '…'}`,
-            symbol: 'dialogue' as const,
-          }))
-      : elementsIn(project, sceneId, c.key).map((o) => ({ id: o.id, label: o.name, code: o.data.code, color: symbolColor(o), symbol: o.type }));
+    elementsIn(project, sceneId, c.key).map((o) => ({ id: o.id, label: o.name, code: o.data.code, color: symbolColor(o), symbol: o.type }));
+  // Characters open by themselves once the scene has any, so the cast shows as it's written.
+  const isOpen = (c: Category) => expanded[c.key] ?? (c.key === 'characters' && counts.characters > 0);
+  /** Where each item of an open category goes (and the add button after them); the cast leaves room for dialogue. */
+  const slotsOf = (c: Category, n: number) => {
+    if (c.key !== 'characters') return Array.from({ length: n }, (_, i) => ({ chip: chipPosition(c, i, n), dialogue: null as { x: number; y: number } | null }));
+    const cast = itemsOf(c);
+    const heights = Array.from({ length: n }, (_, i) => (cast[i] ? dialogueHeight(linesOf(project, sceneId, cast[i]!.id).length) : 0));
+    return castPositions(c, heights).map((p, i) => ({ chip: p.chip, dialogue: heights[i] ? p.dialogue : null }));
+  };
 
   // Fit the stage (box, perimeter and whatever is open) into the view.
   let minX = -GAP - PILL_W;
   let maxX = BOX_W + GAP + PILL_W;
   let minY = -GAP - PILL_H;
   let maxY = BOX_H + GAP + PILL_H;
-  for (const c of CATEGORIES) {
-    if (!expanded[c.key]) continue;
-    const n = itemsOf(c).length + 1;
-    for (let i = 0; i < n; i++) {
-      const p = chipPosition(c, i, n);
-      minX = Math.min(minX, p.x);
+  for (const c of PERIMETER) {
+    if (!isOpen(c)) continue;
+    for (const { chip: p, dialogue } of slotsOf(c, itemsOf(c).length + 1)) {
+      minX = Math.min(minX, p.x, dialogue?.x ?? Infinity);
       maxX = Math.max(maxX, p.x + CHIP_W);
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y + CHIP_H);
+      minY = Math.min(minY, p.y, dialogue?.y ?? Infinity);
+      maxY = Math.max(maxY, p.y + CHIP_H, dialogue ? dialogue.y + 120 : -Infinity);
     }
   }
   const margin = 28;
@@ -194,7 +216,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
         props.onCommit(result.project);
         setTab('Script');
         setFocusLine(result.id);
-        openCategory('dialogue');
+        openCategory('characters');
         return true;
       }
       added(result.project, result.id, true, category.key);
@@ -218,7 +240,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
       <div className="stage" style={{ transform: `translate(${ox}px, ${oy}px) scale(${k})` }}>
         <svg className="stage-lines" style={{ left: -2000, top: -2000 }} width={4000 + BOX_W} height={4000 + BOX_H} aria-hidden="true">
           <g transform="translate(2000 2000)">
-            {CATEGORIES.map((c) => {
+            {PERIMETER.map((c) => {
               const p = pillPosition(c);
               const inner =
                 c.side === 'left'
@@ -228,9 +250,9 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                     : c.side === 'top'
                       ? `M${p.x + PILL_W / 2} ${p.y + PILL_H} V0`
                       : `M${p.x + PILL_W / 2} ${BOX_H} V${p.y}`;
-              const items = expanded[c.key] ? itemsOf(c).length + 1 : 0;
-              const fan = Array.from({ length: items }, (_, i) => {
-                const q = chipPosition(c, i, items);
+              const items = isOpen(c) ? itemsOf(c).length + 1 : 0;
+              const slots = slotsOf(c, items);
+              const fan = slots.map(({ chip: q }) => {
                 if (c.side === 'left') return `M${p.x} ${p.y + PILL_H / 2} C${p.x - 18} ${p.y + PILL_H / 2} ${q.x + CHIP_W + 18} ${q.y + CHIP_H / 2} ${q.x + CHIP_W} ${q.y + CHIP_H / 2}`;
                 if (c.side === 'right') return `M${p.x + PILL_W} ${p.y + PILL_H / 2} C${p.x + PILL_W + 18} ${p.y + PILL_H / 2} ${q.x - 18} ${q.y + CHIP_H / 2} ${q.x} ${q.y + CHIP_H / 2}`;
                 if (c.side === 'top') return `M${p.x + PILL_W / 2} ${p.y} V${q.y + CHIP_H}`;
@@ -238,21 +260,26 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
               });
               return (
                 <g key={c.key} style={{ stroke: c.color }}>
-                  <path className={`stage-link${counts[c.key] || expanded[c.key] ? ' live' : ''}`} d={inner} />
+                  <path className={`stage-link${counts[c.key] || isOpen(c) ? ' live' : ''}`} d={inner} />
                   {fan.map((d, i) => (
                     <path key={i} className="stage-fan" d={d} />
                   ))}
+                  {/* A character's dialogue hangs off it. */}
+                  {slots.map(({ chip, dialogue }, i) =>
+                    dialogue ? <path key={`d${i}`} className="stage-fan dialogue-fan" d={`M${chip.x} ${chip.y + CHIP_H / 2} H${dialogue.x + DLG_W}`} /> : null,
+                  )}
                 </g>
               );
             })}
           </g>
         </svg>
 
-        {CATEGORIES.map((c) => {
+        {PERIMETER.map((c) => {
           const p = pillPosition(c);
-          const open = !!expanded[c.key];
+          const open = isOpen(c);
           const items = open ? itemsOf(c) : [];
-          const addAt = chipPosition(c, items.length, items.length + 1);
+          const slots = slotsOf(c, items.length + 1);
+          const addAt = slots[items.length]!.chip;
           return (
             <div key={c.key}>
               <button
@@ -267,21 +294,49 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                 <span className="cnt">{counts[c.key] || '+'}</span>
               </button>
               {items.map((item, i) => {
-                const q = chipPosition(c, i, items.length + 1);
+                const q = slots[i]!.chip;
+                const said = c.key === 'characters' ? linesOf(project, sceneId, item.id) : [];
+                const box = slots[i]!.dialogue;
                 return (
+                  <div key={item.id}>
+                  {box && said.length > 0 && (
+                    <div
+                      className="dlg-box"
+                      role="group"
+                      aria-label={`${item.label}’s dialogue`}
+                      style={{ left: box.x, top: box.y, width: DLG_W, '--cat': 'var(--c-dialogue)' } as React.CSSProperties}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <span className="dlg-head">
+                        <Symbol type="dialogue" size={11} />
+                        Dialogue · {said.length}
+                      </span>
+                      {said.slice(0, DLG_ROWS).map((l) => (
+                        <button
+                          key={l.id}
+                          className="dlg-row"
+                          title="Go to this line in the script"
+                          onClick={() => {
+                            setTab('Script');
+                            setFocusLine(l.id);
+                          }}
+                        >
+                          <span className="mono">#{l.order}</span>
+                          <span className="dlg-text">{l.text || '…'}</span>
+                        </button>
+                      ))}
+                      {said.length > DLG_ROWS && <span className="dlg-more">+ {said.length - DLG_ROWS} more</span>}
+                    </div>
+                  )}
                   <div
-                    key={item.id}
-                    className={`chip-item${props.selection === item.id ? ' selected' : ''}${c.key === 'dialogue' ? ' chip-line' : ''}`}
+                    className={`chip-item${props.selection === item.id ? ' selected' : ''}`}
                     style={{ left: q.x, top: q.y, '--cat': c.color } as React.CSSProperties}
                     onPointerDown={(e) => {
                       e.stopPropagation();
-                      if (c.key === 'dialogue') {
-                        setTab('Script');
-                        setFocusLine(item.id);
-                      } else props.onSelect(item.id);
+                      props.onSelect(item.id);
                     }}
-                    onDoubleClick={() => c.key !== 'dialogue' && setDetail(item.id)}
-                    title={c.key === 'dialogue' ? 'Go to this line' : 'Double-click for detail · F2 renames'}
+                    onDoubleClick={() => setDetail(item.id)}
+                    title="Double-click for detail · F2 renames"
                   >
                     <Symbol type={item.symbol} size={13} color={item.color} />
                     {editing === item.id ? (
@@ -297,6 +352,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                     )}
                     {item.code && editing !== item.id && <span className="chip-code mono">{item.code}</span>}
                   </div>
+                  </div>
                 );
               })}
               {open && (
@@ -304,17 +360,9 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                   <button
                     className="chip-add"
                     onPointerDown={(e) => e.stopPropagation()}
-                    onClick={() => {
-                      if (c.key === 'dialogue') {
-                        const result = addElement(project, sceneId, 'dialogue');
-                        if (!result) return;
-                        props.onCommit(result.project);
-                        setTab('Script');
-                        setFocusLine(result.id);
-                      } else setAdding(adding === c.key ? null : c.key);
-                    }}
+                    onClick={() => setAdding(adding === c.key ? null : c.key)}
                   >
-                    + Add {c.key === 'dialogue' ? 'line' : c.key === 'logic' ? 'logic' : c.label.toLowerCase().replace(/s$/, '')}
+                    + Add {c.key === 'logic' ? 'logic' : c.label.toLowerCase().replace(/s$/, '')}
                   </button>
                   {adding === c.key && (
                     <AddMenu

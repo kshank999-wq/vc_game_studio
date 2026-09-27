@@ -37,7 +37,8 @@ export interface Category {
 }
 
 export const CATEGORIES: readonly Category[] = [
-  { key: 'characters', label: 'Characters', port: 'Characters', types: ['character'], symbol: 'character', side: 'left', at: 0.15, color: 'var(--c-character)' },
+  { key: 'characters', label: 'Characters', port: 'Characters', types: ['character'], symbol: 'character', side: 'left', at: 0.3, color: 'var(--c-character)' },
+  // Dialogue belongs to whoever speaks it: the views show it on its character, not as a category of its own.
   { key: 'dialogue', label: 'Dialogue', port: 'Dialogue', types: [], symbol: 'dialogue', side: 'left', at: 0.5, color: 'var(--c-dialogue)' },
   { key: 'environment', label: 'Environment', port: 'Environ.', types: ['environment'], symbol: 'environment', side: 'left', at: 0.85, color: 'var(--c-environment)' },
   { key: 'objects', label: 'Objects', port: 'Objects', types: ['object'], symbol: 'object', side: 'right', at: 0.15, color: 'var(--c-object)' },
@@ -51,6 +52,9 @@ export const CATEGORIES: readonly Category[] = [
 /** The category an element type belongs to inside a scene, if any. */
 export const categoryFor = (type: ObjectType): Category | undefined =>
   type === 'dialogue' ? CATEGORIES.find((c) => c.key === 'dialogue') : CATEGORIES.find((c) => c.types.includes(type));
+
+/** The categories drawn around a scene: everything but dialogue, which hangs off its speakers. */
+export const PERIMETER: readonly Category[] = CATEGORIES.filter((c) => c.key !== 'dialogue');
 
 /** Only scenes open into a workspace. */
 export const isScene = (project: Project, id: string): boolean => project.objects[id]?.type === 'scene';
@@ -299,3 +303,56 @@ export const nextSpeaker = (project: Project, sceneId: string, afterId: string):
 /** A new character straight from the speaker menu: created, and put in the scene. */
 export const newCharacter = (project: Project, sceneId: string, name: string): { project: Project; id: string } | null =>
   addElement(project, sceneId, 'character', name);
+
+// ---------------------------------------------------------------- speakers, as a script writer types them
+
+/** A character's dialogue in this scene, in script order. */
+export const linesOf = (project: Project, sceneId: string, characterId: string): DialogueLine[] =>
+  sceneLines(project, sceneId).filter((l) => l.kind === 'dialogue' && l.speakerId === characterId);
+
+/** The project's character with this name, whatever its case. */
+export const characterNamed = (project: Project, name: string): StoryObject | undefined => {
+  const want = name.trim().toLowerCase();
+  return want ? Object.values(project.objects).find((o) => o.type === 'character' && o.name.trim().toLowerCase() === want) : undefined;
+};
+
+/**
+ * Characters for a cue being typed (spec §12: script software's character
+ * completion): names starting with what is typed first, then names with a
+ * word starting with it; the scene's own cast before the rest of the project.
+ */
+export const speakerSuggestions = (project: Project, sceneId: string, typed: string): StoryObject[] => {
+  const q = typed.trim().toLowerCase();
+  if (!q) return [];
+  const score = (o: StoryObject) => {
+    const n = o.name.toLowerCase();
+    const rank = n.startsWith(q) ? 0 : n.split(/\s+/).some((w) => w.startsWith(q)) ? 1 : -1;
+    return rank < 0 ? -1 : rank + (inScene(project, sceneId, o.id) ? 0 : 2);
+  };
+  return Object.values(project.objects)
+    .filter((o) => o.type === 'character')
+    .map((o) => ({ o, s: score(o) }))
+    .filter((x) => x.s >= 0)
+    .sort((a, b) => a.s - b.s || a.o.name.localeCompare(b.o.name))
+    .map((x) => x.o);
+};
+
+/** A typed cue as a name: "OLD MAN" or "old man" becomes "Old Man"; mixed case stays as written. */
+const asName = (typed: string): string => {
+  const t = typed.trim().replace(/\s+/g, ' ');
+  return t === t.toUpperCase() || t === t.toLowerCase() ? t.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase()) : t;
+};
+
+/**
+ * Give a line the speaker typed in its cue: the character of that name, or a
+ * new one, who joins the scene's cast. An empty cue leaves it unchanged.
+ */
+export const setSpeakerByName = (project: Project, lineId: string, typed: string): { project: Project; speakerId: string | null; created: boolean } => {
+  const line = project.lines.find((l) => l.id === lineId);
+  if (!line || !typed.trim()) return { project, speakerId: line?.speakerId ?? null, created: false };
+  const existing = characterNamed(project, typed);
+  if (existing) return { project: updateLine(project, lineId, { speakerId: existing.id, kind: 'dialogue' }), speakerId: existing.id, created: false };
+  const made = newCharacter(project, line.sceneId, asName(typed));
+  if (!made) return { project, speakerId: line.speakerId, created: false };
+  return { project: updateLine(made.project, lineId, { speakerId: made.id, kind: 'dialogue' }), speakerId: made.id, created: true };
+};
