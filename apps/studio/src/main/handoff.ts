@@ -31,8 +31,13 @@ export const registerHandoff = (getWindow: () => BrowserWindow | null): void => 
   });
 
   ipcMain.handle('vcgs:check-folder', (_e, folder: unknown) => {
-    if (typeof folder !== 'string' || !folder) return { exists: false, engineProject: false };
-    return { exists: existsSync(folder), engineProject: existsSync(join(folder, 'project.godot')) };
+    if (typeof folder !== 'string' || !folder) return { exists: false, engineProject: false, unity: false };
+    return {
+      exists: existsSync(folder),
+      // A Godot project has project.godot; a Unity project has Assets and ProjectSettings.
+      engineProject: existsSync(join(folder, 'project.godot')),
+      unity: existsSync(join(folder, 'Assets')) && existsSync(join(folder, 'ProjectSettings')),
+    };
   });
 
   ipcMain.handle('vcgs:write-files', async (_e, folder: unknown, files: unknown) => {

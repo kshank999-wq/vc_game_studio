@@ -37,7 +37,7 @@ const saveZip = (name: string, files: { path: string; content: string }[]) => {
  * The engine handoff (HANDOFF iteration 2, mockup 08): pick the engine you
  * work in, see what every element becomes there, read the code if you like
  * (it's generated, read-only, and hideable), and send it once the checks are
- * clear. Godot 4 and plain JSON are ready; the others are set up and marked as coming.
+ * clear. Godot 4, Unity 6 and plain JSON are ready; Unreal is set up and marked as coming.
  */
 export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: Props) => {
   const plan = useMemo(() => planHandoff(project), [project]);
@@ -45,7 +45,7 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
   const [selected, setSelected] = useState<string | null>(focus ?? null);
   const [fileIndex, setFileIndex] = useState(0);
   const [codeHidden, setCodeHidden] = useState(false);
-  const [folderState, setFolderState] = useState<{ exists: boolean; engineProject: boolean } | null>(null);
+  const [folderState, setFolderState] = useState<{ exists: boolean; engineProject: boolean; unity?: boolean } | null>(null);
   const [sending, setSending] = useState(false);
   const { adapter, target, output } = plan;
 
@@ -150,7 +150,10 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
             <span className="kv-value muted">Downloads as a .zip in the browser</span>
           )}
         </div>
-        {folderState && !folderState.exists && adapter.id !== 'godot' && <p className="handoff-note warn">That folder isn’t there any more.</p>}
+        {folderState && !folderState.exists && adapter.id === 'custom' && <p className="handoff-note warn">That folder isn’t there any more.</p>}
+        {folderState && adapter.id === 'unity' && !folderState.unity && (
+          <p className="handoff-note warn">{folderState.exists ? 'That folder isn’t a Unity project (it has no Assets and ProjectSettings). Choose your Unity project’s folder.' : 'That folder isn’t there any more.'}</p>
+        )}
         {folderState && !folderState.engineProject && adapter.id === 'godot' && (
           <p className="handoff-note warn">{folderState.exists ? `There’s no project.godot in that folder. Choose your ${engineName} project’s folder.` : 'That folder isn’t there any more.'}</p>
         )}
@@ -292,7 +295,7 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           <div className="handoff-later">
             <h2>{adapter.name} is coming</h2>
             <p>{adapter.plan}</p>
-            <p>Everything it needs is already in the project. Pick Godot 4, or Any engine (JSON), to hand off today.</p>
+            <p>Everything it needs is already in the project. Pick Godot 4, Unity 6 or Any engine (JSON) to hand off today.</p>
           </div>
         )}
       </section>

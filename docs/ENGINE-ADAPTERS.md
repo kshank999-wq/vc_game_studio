@@ -96,3 +96,30 @@ Pick **Any engine (JSON)** on the handoff screen. It writes, under `vcgs/`:
 - `README.md`: how to play it: where the story starts, how nodes, scenes,
   choices and options move on, how triggers and puzzles settle, and every
   condition and effect kind.
+
+## The Unity adapter
+
+Pick **Unity 6**. The runtime goes to `Assets/VCGS/Runtime` (an assembly
+definition, `VCGS.Runtime`), the story to `Assets/VCGS/Generated`:
+
+- **Runtime, plain C#** (so it runs and is tested outside Unity too): `Story`
+  (reads `story.json`), `GameState` (flags, items, arcs, choices, puzzles,
+  visits, picks; triggers and puzzles settle after each change), `Rules`
+  (conditions, effects, gates, option offers), `ScenePlayer` (a scene's
+  timeline, with the same events as the Godot scene flow), `Interactions`
+  and `StoryWalker` (routes and choices on the graph).
+- **Runtime, Unity wrappers**: `VcgsGame` (the one playthrough; give it
+  `story.json`), `VcgsSceneFlow` (a scene key and a `ScenePlayer`),
+  `VcgsInteractable` (an object key), and ScriptableObject classes
+  `VcgsCharacter`, `VcgsItem`, `VcgsLocation`, `VcgsCinematic` (with its shot
+  list), one class per file as Unity requires.
+- **Generated**: `story.json` (the same handoff model as the JSON adapter),
+  `StoryKeys.cs` (`VCGS.Keys.Scenes.Sc03TheVaultDoor` and every other key, for
+  game code), and a ScriptableObject `.asset` per character, item, location
+  and cinematic.
+- **Every file has a `.meta`** whose GUID comes from its path, so assets keep
+  their script references and your references to them survive re-exports.
+- **Checked with .NET**: `apps/studio/scripts/check-unity.sh` exports the
+  sample, compiles the runtime and keys as C# 9 with warnings as errors against
+  stubs of UnityEngine, and plays the Vault Door scene and the graph to the
+  ending. CI runs it. It has not been opened in the Unity editor here.

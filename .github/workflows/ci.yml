@@ -50,3 +50,24 @@ jobs:
           unzip -q godot.zip
           echo "GODOT=$PWD/Godot_v4.3-stable_linux.x86_64" >> "$GITHUB_ENV"
       - run: apps/studio/scripts/check-godot.sh
+
+  unity:
+    # The generated Unity runtime and keys compiled as C# 9 (warnings as
+    # errors) against stubs of UnityEngine, then the sample story played with
+    # it: the same walk as the Godot check.
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: npm ci
+      - run: apps/studio/scripts/check-unity.sh

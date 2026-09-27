@@ -89,16 +89,18 @@ describe('export status', () => {
     expect(edited.rows.find((r) => r.label === 'Mara')!.status).toBe('ready');
   });
 
-  it('lists the engines to come, with Godot and JSON ready now', () => {
+  it('lists the engines, with Godot, Unity and JSON ready now', () => {
     expect(ENGINES.map((e) => [e.id, e.available])).toEqual([
       ['godot', true],
-      ['unity', false],
+      ['unity', true],
       ['unreal', false],
       ['custom', true],
     ]);
     const p = setTarget(sunkenVault(), { engine: 'unity' });
     expect(targetOf(p).outputPath).toBe('Assets/VCGS/Generated');
-    expect(planHandoff(p).output).toBeNull();
+    expect(planHandoff(p).output).not.toBeNull();
+    // An engine still to come plans nothing yet.
+    expect(planHandoff(setTarget(sunkenVault(), { engine: 'unreal' })).output).toBeNull();
   });
 });
 
@@ -147,5 +149,25 @@ describe('the JSON adapter', () => {
     // Every top-level key the schema requires is there.
     for (const key of storySchema().required) expect(story).toHaveProperty(key);
     expect(out.elements.find((e) => e.label === 'Rusted Lever')!.files).toEqual(['vcgs/story.json']);
+  });
+});
+
+describe('the Unity adapter', () => {
+  it('writes the runtime, story.json, keys and an asset per element, each with a stable .meta', async () => {
+    const { generateUnity, guidFor } = await import('../handoff/unity');
+    const out = generateUnity(buildIR(sunkenVault()), 'Assets/VCGS/Generated');
+    const paths = out.files.map((f) => f.path);
+    for (const f of paths.filter((x) => !x.endsWith('.meta'))) expect(paths).toContain(`${f}.meta`);
+    expect(paths).toContain('Assets/VCGS.meta');
+    const keys = out.files.find((f) => f.path.endsWith('StoryKeys.cs'))!.content;
+    expect(keys).toContain('public const string Sc03TheVaultDoor = "sc_03_the_vault_door";');
+    const mara = out.files.find((f) => f.path === 'Assets/VCGS/Generated/Characters/mara.asset')!.content;
+    expect(mara).toContain(`m_Script: {fileID: 11500000, guid: ${guidFor('Assets/VCGS/Runtime/VcgsCharacter.cs')}, type: 3}`);
+    expect(out.files.find((f) => f.path === 'Assets/VCGS/Runtime/VcgsCharacter.cs.meta')!.content).toContain(`guid: ${guidFor('Assets/VCGS/Runtime/VcgsCharacter.cs')}`);
+    expect(guidFor('a')).toMatch(/^[0-9a-f]{32}$/);
+    expect(guidFor('a')).toBe(guidFor('a'));
+    const cin = out.files.find((f) => f.path.endsWith('Cinematics/door_in_the_dark.asset'))!.content;
+    expect(cin).toContain('- framing: "Close-up"');
+    expect(cin).toContain('seconds: 7.5');
   });
 });

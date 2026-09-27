@@ -1,15 +1,17 @@
 /**
  * Write the sample project's Godot handoff into a folder, for checking the
- * generated code with a real Godot: `npx vite-node scripts/export-sample.ts <dir>`.
+ * generated code with a real engine: `npx vite-node scripts/export-sample.ts <dir> [godot|unity|custom]`.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { planHandoff } from '../src/renderer/model/handoff';
+import { planHandoff, setTarget } from '../src/renderer/model/handoff';
+import type { EngineId } from '../src/renderer/model/types';
 import { sunkenVault } from '../src/renderer/model/sample';
 
 const dir = process.argv[2];
 if (!dir) throw new Error('Usage: export-sample.ts <godot project folder>');
-const plan = planHandoff(sunkenVault());
+const engine = (process.argv[3] ?? 'godot') as EngineId;
+const plan = planHandoff(setTarget(sunkenVault(), { engine }));
 for (const file of plan.output!.files) {
   const path = join(dir, file.path);
   mkdirSync(dirname(path), { recursive: true });
