@@ -168,6 +168,8 @@ namespace VCGS
 
         public static double Num(Dictionary<string, object> d, string key, double fallback = 0) => Get(d, key) is double n ? n : fallback;
 
+        public static double Num(object o, double fallback) => o is double n ? n : fallback;
+
         public static bool Bool(Dictionary<string, object> d, string key) => Get(d, key) is bool b && b;
 
         public static Dictionary<string, object> Map(Dictionary<string, object> d, string key) => Map(Get(d, key));

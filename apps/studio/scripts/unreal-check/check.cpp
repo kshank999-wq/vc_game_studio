@@ -1,6 +1,7 @@
 // Plays the sample project's generated story with the VCGS Runtime for
 // Unreal's core: the same walk as the Godot and Unity checks.
 #include "VcgsCore.h"
+#include "VcgsLevel.h"
 #include "Generated/VcgsStoryKeys.h"
 #include <cstdio>
 #include <fstream>
@@ -19,6 +20,40 @@ static std::string Join(const std::vector<std::string>& list, const char* sep)
     std::string out;
     for (size_t i = 0; i < list.size(); i++) out += (i ? sep : "") + list[i];
     return out;
+}
+
+// The level: its rules on the story's state, the same walk as Godot and Unity.
+static void CheckLevel(const vcgs::Story& story)
+{
+    std::ifstream in("Content/VCGS/Generated/Levels/sunken_vault.json");
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    std::string error;
+    vcgs::Value data = vcgs::JsonReader::Parse(buffer.str(), &error);
+    if (!data.IsObject()) { Fail("sunken_vault.json did not parse: " + error); return; }
+    vcgs::GameState game(story);
+    vcgs::LevelLogic level(std::move(data), game);
+    std::printf("level: %s · %zu items\n", level.ExportName.c_str(), level.Order.size());
+    const std::string door = level.GuidOf("INT_VaultChamber_BronzeDoor_004");
+    const std::string key = level.GuidOf("INV_SiltCamp_VaultKey_001");
+    const std::string lever = level.GuidOf("INT_VaultChamber_RustedLever_005");
+    const std::string seam = level.GuidOf("TRG_VaultChamber_FloodedSeam_001");
+    const std::string trigger = level.GuidOf("TRG_VaultChamber_DoorInTheDarkTrigger_002");
+    if (level.Offer(door).Blocked != "Locked. Needs Vault Key.") Fail("the bronze door should be locked until the key is held, got " + level.Offer(door).Blocked);
+    level.Interact(key);
+    if (!game.HasItem(VcgsKeys::Items::VaultKey) || level.IsPresent(key)) Fail("taking the key should give the story's key and take it out of the level");
+    level.Interact(door);
+    if (!level.IsOpen(door)) Fail("with the key, the bronze door should open");
+    std::vector<std::string> cinematics;
+    level.OnCinematic = [&](const std::string& c) { cinematics.push_back(c); };
+    level.Enter(trigger);
+    level.Exit(trigger);
+    level.Enter(trigger);
+    if (Join(cinematics, ",") != VcgsKeys::Cinematics::DoorInTheDark) Fail("the chamber should play Door in the dark once, got " + Join(cinematics, ","));
+    if (!level.IsPresent(seam)) Fail("the seam should be flooded before the lever");
+    level.Interact(lever);
+    if (game.GetObjectState(VcgsKeys::Objects::RustedLever) != "up" || !game.Solved.count(VcgsKeys::Puzzles::TheVaultDoor)) Fail("the lever should go up and, through the story, solve the door");
+    if (level.IsPresent(seam) || level.IsPresent(door)) Fail("once solved, the seam drains and the bronze door gives way");
 }
 
 int main()
@@ -79,6 +114,8 @@ int main()
     const std::string end = offered.empty() ? "" : vcgs::StoryWalker::Choose(game, ring, offered[0]);
     if (vcgs::StoryWalker::KindOf(game, end) != "end") Fail("carrying on should reach the end");
     if (vcgs::StoryWalker::GetLine(game, "sc_03_line_02").Speaker != "Mara") Fail("line 2 should be Mara's");
+
+    CheckLevel(story);
 
     std::printf("%s\n", failures == 0 ? "OK" : (std::to_string(failures) + " FAILED").c_str());
     return failures == 0 ? 0 : 1;

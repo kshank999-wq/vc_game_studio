@@ -3,7 +3,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ENGINES, planHandoff, recordExport, setTarget, targetOf } from '../handoff';
+import { engineEdits, ENGINES, planHandoff, recordExport, setTarget, targetOf } from '../handoff';
+import { moveItems } from '../level/level';
 import { gd } from '../handoff/godot';
 import { buildIR, identifiers, toKey, toType } from '../handoff/ir';
 import { zip } from '../handoff/zip';
@@ -85,7 +86,7 @@ describe('export status', () => {
     p = renameObject(p, lever.id, 'Old Lever');
     const edited = planHandoff(p);
     // The lever, the scene that lists it, and the trigger whose rule watches it.
-    expect(edited.rows.filter((r) => r.status !== 'ready').map((r) => r.label).sort()).toEqual(['Old Lever', 'SC-03 The Vault Door', 'Seam drains']);
+    expect(edited.rows.filter((r) => r.status !== 'ready').map((r) => r.label).sort()).toEqual(['Old Lever', 'SC-03 The Vault Door', 'Seam drains', 'Sunken Vault']);
     expect(edited.rows.find((r) => r.label === 'Mara')!.status).toBe('ready');
   });
 
@@ -132,7 +133,8 @@ describe('Godot placeholder scenes', () => {
     expect(out.files.some((f) => f.path === 'vcgs/generated/play_story.tscn')).toBe(true);
     expect(out.files.find((f) => f.path.endsWith('story_graph.gd'))!.content).toContain(`const START := "${ir.graph.find((n) => n.kind === 'begin')!.key}"`);
     const off = generateGodot(ir, 'res://vcgs/generated', { placeholderScenes: false });
-    expect(off.files.some((f) => f.path.endsWith('.tscn'))).toBe(false);
+    // Levels are scenes in their own right, not placeholders: they stay.
+    expect(off.files.some((f) => f.path.endsWith('.tscn') && !f.path.includes('/levels/'))).toBe(false);
   });
 });
 
@@ -186,5 +188,85 @@ describe('the Unreal adapter', () => {
     expect(file('Content/VCGS/Generated/DataTables/Shots.csv').trim().split('\n')).toHaveLength(4);
     expect(file('Content/VCGS/Generated/import_datatables.py')).toContain('"Characters": "/Script/VCGS.VcgsCharacterRow",');
     expect(JSON.parse(file('Plugins/VCGS/VCGS.uplugin')).Modules[0]).toEqual({ Name: 'VCGS', Type: 'Runtime', LoadingPhase: 'Default' });
+  });
+});
+
+describe('level export', () => {
+  const engines = ['godot', 'unity', 'unreal', 'custom'] as const;
+
+  it('gives every engine a row for the level and its items with GUIDs, placed the same way', () => {
+    for (const engine of engines) {
+      const plan = planHandoff(setTarget(sunkenVault(), { engine }));
+      const level = plan.levels[0]!;
+      expect(plan.rows.find((r) => r.id === level.guid)).toMatchObject({ label: 'Sunken Vault', symbol: 'environment' });
+      expect(level.key).toBe('sunken_vault');
+      expect(level.items.length).toBeGreaterThan(10);
+      for (const item of level.items) {
+        expect(item.guid).toMatch(/^[0-9a-f-]{36}$/);
+        expect(item.export_name).toMatch(/^[A-Z]+_[A-Za-z0-9]+_[A-Za-z0-9]+_\d{3}$/);
+      }
+      expect(level.start).not.toBeNull();
+    }
+  });
+
+  it('writes each engine its level files', () => {
+    const paths = (engine: (typeof engines)[number]) => planHandoff(setTarget(sunkenVault(), { engine })).output!.files.map((f) => f.path);
+    expect(paths('godot')).toEqual(expect.arrayContaining(['addons/vcgs_runtime/level.gd', 'vcgs/generated/levels/sunken_vault.tscn', 'vcgs/generated/levels/play_sunken_vault.tscn']));
+    expect(paths('unity')).toEqual(expect.arrayContaining(['Assets/VCGS/Runtime/Levels/VcgsLevel.cs', 'Assets/VCGS/Editor/VcgsLevelBuilder.cs', 'Assets/VCGS/Generated/Levels/sunken_vault.json']));
+    expect(paths('unreal')).toEqual(expect.arrayContaining(['Plugins/VCGS/Source/VCGS/Public/VcgsLevelDirector.h', 'Content/VCGS/Generated/Levels/build_level.py', 'Content/VCGS/Generated/Levels/sunken_vault.json']));
+    const godot = planHandoff(sunkenVault());
+    const tscn = godot.output!.files.find((f) => f.path.endsWith('levels/sunken_vault.tscn'))!.content;
+    for (const item of godot.levels[0]!.items) expect(tscn).toContain(`metadata/vcgs_guid = "${item.guid}"`);
+  });
+
+  it('puts the levels in the JSON story and its schema', () => {
+    const plan = planHandoff(setTarget(sunkenVault(), { engine: 'custom' }));
+    const file = (end: string) => JSON.parse(plan.output!.files.find((f) => f.path.endsWith(end))!.content);
+    expect(file('story.json').levels[0]).toMatchObject({ key: 'sunken_vault', name: 'Sunken Vault' });
+    const schema = file('story.schema.json');
+    expect(schema.properties.levels).toBeDefined();
+    expect(schema.$defs.levelItem.required).toEqual(expect.arrayContaining(['guid', 'export_name', 'position', 'pieces']));
+  });
+
+  it('says which items are new, changed or removed since the last export', () => {
+    let p = sunkenVault();
+    const first = planHandoff(p);
+    expect(first.levelChanges.added).toHaveLength(first.levels[0]!.items.length);
+    p = recordExport(p, first);
+    expect(planHandoff(p).levelChanges).toMatchObject({ added: [], changed: [], removed: [] });
+    const items = first.levels[0]!.items;
+    // Something standing on its own: not a door in a wall, and nothing hung on it.
+    const moved = items.find((i) => !i.host && !items.some((o) => o.host?.guid === i.guid) && i.kind !== 'volume')!;
+    p = moveItems(p, [moved.guid], 1, 0);
+    const after = planHandoff(p);
+    expect(after.levelChanges.changed).toEqual([moved.guid]);
+    expect(after.rows.find((r) => r.id === after.levels[0]!.guid)!.status).toBe('changed');
+  });
+
+  it('points out generated files changed in the engine, and keeps pointing them out when kept', () => {
+    let p = sunkenVault();
+    const plan = planHandoff(p);
+    p = recordExport(p, plan);
+    const last = p.handoff!.last!;
+    const tscn = plan.output!.files.find((f) => f.path.endsWith('levels/sunken_vault.tscn'))!;
+    const onDisk = Object.fromEntries(plan.output!.files.map((f) => [f.path, f.content]));
+    const again = planHandoff(p);
+    expect(engineEdits(again, last, onDisk)).toEqual([]);
+    // Missing files are not edits: they are simply written again.
+    expect(engineEdits(again, last, { ...onDisk, [tscn.path]: null })).toEqual([]);
+    const edited = { ...onDisk, [tscn.path]: tscn.content + '\n[node name="Mine" type="Node3D" parent="."]\n' };
+    expect(engineEdits(again, last, edited)).toEqual([tscn.path]);
+    // Keeping the engine's version keeps the old hash, so it is still an edit next time.
+    const kept = recordExport(p, again, undefined, [tscn.path]);
+    expect(engineEdits(planHandoff(kept), kept.handoff!.last, edited)).toEqual([tscn.path]);
+    // Overwriting forgets it.
+    const overwritten = recordExport(p, again);
+    expect(engineEdits(planHandoff(overwritten), overwritten.handoff!.last, onDisk)).toEqual([]);
+  });
+
+  it('flags engine-specific preflight on the level row', () => {
+    const unreal = planHandoff(setTarget(sunkenVault(), { engine: 'unreal' }));
+    const godot = planHandoff(sunkenVault());
+    expect(unreal.issues.length).toBeGreaterThanOrEqual(godot.issues.length);
   });
 });

@@ -3,6 +3,7 @@ import { fingerprint } from './engines';
 import type { HandoffIR, Ident } from './ir';
 import { JSON_FORMAT } from './json';
 import { VCGS_CORE_H } from './unreal-core';
+import { buildLevelScript, LEVEL_PLUGIN_FILES, levelJsonUnreal } from './unreal-levels';
 
 /**
  * The Unreal adapter: a plugin (Plugins/VCGS) and the story's data.
@@ -708,6 +709,7 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
     return path;
   };
   for (const [name, content] of Object.entries(PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
+  if (ir.levels.length) for (const [name, content] of Object.entries(LEVEL_PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
 
   const storyPath = put(`${root}/story.json`, JSON.stringify({ ...JSON_FORMAT, generator: 'VC Game Studio', ...ir }, null, 2), 'generated');
   const keysPath = put(`${SOURCE}/Public/Generated/VcgsStoryKeys.h`, storyKeysHeader(ir), 'generated');
@@ -730,6 +732,40 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
   for (const t of ir.locations) row({ id: t.id, label: t.name, symbol: 'environment', group: 'World', generates: 'DT_Locations row', files: [tablePaths.Locations!] }, t);
   for (const f of ir.flags) row({ id: f.id, label: f.name, symbol: 'state', group: 'Logic', generates: `Game state flag · ${f.values.join(' / ')}`, files: [storyPath] }, f);
   for (const t of ir.triggers) row({ id: t.id, label: t.name, symbol: t.kind, group: 'Logic', generates: t.kind === 'gate' ? 'GateOpen' : 'Trigger · fires by rule', files: [storyPath] }, t);
+
+  // Levels: their data, and the editor script that places and updates their actors.
+  if (ir.levels.length) {
+    const names: Record<string, string> = Object.fromEntries(
+      [...ir.characters, ...ir.objects, ...ir.items, ...ir.locations, ...ir.cinematics, ...ir.flags, ...ir.triggers, ...ir.choices, ...ir.scenes].map((x) => [x.ident.key, x.name]),
+    );
+    const builder = put(`${root}/Levels/build_level.py`, buildLevelScript(root), 'generated');
+    for (const level of ir.levels) {
+      const path = put(`${root}/Levels/${level.key}.json`, levelJsonUnreal(level, names), 'generated');
+      row({ id: level.guid, label: level.name, symbol: 'environment', group: 'World', generates: `Level data · ${level.items.length} items → build_level.py places AVcgsLevelItem actors (${level.export_name})`, files: [path, builder] }, level);
+    }
+  }
+  put(
+    `${root}/vcgs_manifest.json`,
+    JSON.stringify(
+      {
+        generator: 'VC Game Studio',
+        adapter: VERSION,
+        engine: 'unreal',
+        project: ir.project,
+        elements: elements.map((e) => ({ id: e.id, label: e.label, files: e.files, fingerprint: e.fingerprint })),
+        levels: ir.levels.map((l) => ({
+          guid: l.guid,
+          name: l.name,
+          data: `${root}/Levels/${l.key}.json`,
+          revision: l.revision,
+          items: l.items.map((i) => ({ guid: i.guid, export_name: i.export_name, source: `${l.name} / ${i.name}`, engine_ref: `AVcgsLevelItem ${i.export_name} (tag vcgs:${i.guid})`, revision: i.revision, replacement_locked: i.replacement_locked })),
+        })),
+      },
+      null,
+      2,
+    ),
+    'generated',
+  );
   return { files, elements };
 };
 
@@ -743,6 +779,7 @@ export const unreal: EngineAdapter = {
   setup: [
     'Enable the VCGS plugin, and add Content/VCGS/Generated to Additional Non-Asset Directories to Package.',
     'Add a UVcgsSceneFlowComponent (with its scene key) to each story level; run import_datatables.py for the DataTables.',
+    'For a level, open the map it belongs in and run Levels/build_level.py (Tools > Execute Python Script); run it again after each export.',
   ],
   generate: generateUnreal,
 };

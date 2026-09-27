@@ -182,5 +182,67 @@ func _initialize() -> void:
 	if story_player.labels() != ["Play The Cave Mouth"]:
 		fail("the story should start at SC-01, got " + str(story_player.labels()))
 
+	check_level(game)
+
 	print("OK" if failures == 0 else str(failures) + " FAILED")
 	quit(0 if failures == 0 else 1)
+
+
+# The level: its items as nodes with their GUIDs, and its rules running on GameState.
+func check_level(game: Node) -> void:
+	load("res://vcgs/generated/logic/rules.gd").reset(game)
+	var packed: PackedScene = load("res://vcgs/generated/levels/sunken_vault.tscn")
+	var level: Node = packed.instantiate()
+	root.add_child(level)
+	# In a game _ready does this with the GameState autoload; here the tree isn't running yet.
+	level.setup(game)
+	var items: Dictionary = level.level_data()
+	print("level: ", level.name, " · ", level.nodes.size(), " of ", items.size(), " items as nodes")
+	if level.name != "LVL_SunkenVault_01" or level.nodes.size() != items.size() or items.size() < 15:
+		fail("every level item should be a node tagged with its GUID")
+	var chamber: Node = level.get_node_or_null("RM_SunkenVault_VaultChamber_004")
+	if chamber == null or chamber.get_node("Collision").get_child_count() < 4 or chamber.get_node("Proxy").get_child_count() < 5:
+		fail("the vault chamber should have its floor and walls, as meshes and collision")
+	var crane: Node3D = level.get_node_or_null("CAM_VaultChamber_ChamberCrane_001")
+	if crane == null or not (crane is Camera3D) or absf(wrapf(crane.rotation.y, -PI, PI) - deg_to_rad(45.0)) > 0.01:
+		fail("the camera marker should be a Camera3D turned to face north-west, got " + str(crane.rotation if crane else null))
+	var camp: Node3D = level.get_node("RM_SunkenVault_SiltCamp_003")
+	if camp.position.distance_to(Vector3(10, 0, -9)) > 0.001:
+		fail("the silt camp should stand at (10, 0, -9), got " + str(camp.position))
+
+	var door: String = level.guid_of("INT_VaultChamber_BronzeDoor_004")
+	var key: String = level.guid_of("INV_SiltCamp_VaultKey_001")
+	var lever: String = level.guid_of("INT_VaultChamber_RustedLever_005")
+	var seam: String = level.guid_of("TRG_VaultChamber_FloodedSeam_001")
+	var trigger: String = level.guid_of("TRG_VaultChamber_DoorInTheDarkTrigger_002")
+	if level.offer(door).get("blocked", "") != "Locked. Needs Vault Key.":
+		fail("the bronze door should be locked until the key is held, got " + str(level.offer(door)))
+	level.interact(key)
+	if not game.has_item("vault_key") or level.nodes[key].visible:
+		fail("taking the key should give the story's key and take it out of the level")
+	level.interact(door)
+	if not level.is_open(door) or level.nodes[door].get_node("Proxy").visible:
+		fail("with the key, the bronze door should open")
+	var cinematics: Array = []
+	level.cinematic_requested.connect(func(k: String) -> void: cinematics.append(k))
+	level.enter(trigger)
+	level.exit(trigger)
+	level.enter(trigger)
+	if cinematics != ["door_in_the_dark"]:
+		fail("entering the chamber should play Door in the dark once, got " + str(cinematics))
+	if not level.is_present(seam):
+		fail("the seam should be flooded before the lever")
+	level.interact(lever)
+	print("after the lever: lever ", game.object_states.get("rusted_lever"), ", puzzle solved ", game.is_solved("the_vault_door"))
+	if game.object_states.get("rusted_lever") != "up" or not game.is_solved("the_vault_door"):
+		fail("pulling the lever should set it up and, through the story's trigger, solve the door")
+	if level.is_present(seam) or level.nodes[seam].visible or level.nodes[door].visible:
+		fail("once solved, the seam drains and the bronze door gives way")
+	level.queue_free()
+
+	var play: Node = load("res://vcgs/generated/levels/play_sunken_vault.tscn").instantiate()
+	root.add_child(play)
+	var player: Node = play.get_node("Player")
+	if not (player.get_node(player.level_path) is VCGSLevel):
+		fail("play_sunken_vault.tscn should have a player wired to the level")
+	play.queue_free()

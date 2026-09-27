@@ -70,7 +70,94 @@ static class Check
         var line = StoryWalker.Line(game, "sc_03_line_02");
         if (line.speaker != "Mara") Fail("line 2 should be Mara's, got " + line.speaker);
 
+        CheckLevel(story);
+
         Console.WriteLine(failures == 0 ? "OK" : failures + " FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    // The level: its rules on the story's state, then the editor builder, twice.
+    static void CheckLevel(Story story)
+    {
+        var json = File.ReadAllText("Assets/VCGS/Generated/Levels/sunken_vault.json");
+        var game = new GameState(story);
+        var level = LevelLogic.FromJson(json, game);
+        Console.WriteLine("level: " + level.ExportName + " · " + level.Items.Count + " items");
+        var door = level.GuidOf("INT_VaultChamber_BronzeDoor_004");
+        var key = level.GuidOf("INV_SiltCamp_VaultKey_001");
+        var lever = level.GuidOf("INT_VaultChamber_RustedLever_005");
+        var seam = level.GuidOf("TRG_VaultChamber_FloodedSeam_001");
+        var trigger = level.GuidOf("TRG_VaultChamber_DoorInTheDarkTrigger_002");
+        if (level.Offer(door)?.Blocked != "Locked. Needs Vault Key.") Fail("the bronze door should be locked until the key is held, got " + level.Offer(door)?.Blocked);
+        level.Interact(key);
+        if (!game.HasItem(Items.VaultKey) || level.IsPresent(key)) Fail("taking the key should give the story's key and take it out of the level");
+        level.Interact(door);
+        if (!level.IsOpen(door)) Fail("with the key, the bronze door should open");
+        var cinematics = new List<string>();
+        level.CinematicRequested += c => cinematics.Add(c);
+        level.Enter(trigger);
+        level.Exit(trigger);
+        level.Enter(trigger);
+        if (string.Join(",", cinematics) != Cinematics.DoorInTheDark) Fail("the chamber should play Door in the dark once, got " + string.Join(",", cinematics));
+        if (!level.IsPresent(seam)) Fail("the seam should be flooded before the lever");
+        level.Interact(lever);
+        if (game.GetObjectState(Objects.RustedLever) != "up" || !game.Solved.Contains(Puzzles.TheVaultDoor)) Fail("the lever should go up and, through the story, solve the door");
+        if (level.IsPresent(seam) || level.IsPresent(door)) Fail("once solved, the seam drains and the bronze door gives way");
+
+        // The editor builder, in the stubs' little scene.
+        var path = "Assets/VCGS/Generated/Levels/sunken_vault.json";
+        var report = VCGS.EditorTools.VcgsLevelBuilder.Build(json, path, false);
+        var root = UnityEngine.GameObject.Find("LVL_SunkenVault_01");
+        var items = root == null ? new VcgsLevelItem[0] : root.transform.GetComponentsInChildren<VcgsLevelItem>(true);
+        Console.WriteLine("built: " + items.Length + " items · " + report[report.Count - 1]);
+        if (items.Length != level.Items.Count) Fail("the builder should make a GameObject per item");
+        var camp = root.transform.Find("RM_SunkenVault_SiltCamp_003");
+        if (camp == null || camp.localPosition != new UnityEngine.Vector3(10, 0, 9)) Fail("the silt camp should be at (10, 0, 9) in Unity (north is +Z)");
+        var chamber = root.transform.Find("RM_SunkenVault_VaultChamber_004");
+        if (chamber == null || chamber.Find("Proxy").childCount < 5 || chamber.Find("Collision").childCount < 4) Fail("the chamber should have its proxy and collision");
+        var crane = root.transform.Find("CAM_VaultChamber_ChamberCrane_001");
+        if (crane == null || Math.Abs(crane.localEulerAngles.y - 315) > 0.01) Fail("the camera marker should turn 315° in Unity, got " + crane?.localEulerAngles.y);
+        var trig = root.transform.Find("TRG_VaultChamber_DoorInTheDarkTrigger_002").GetComponent<UnityEngine.BoxCollider>();
+        if (trig == null || !trig.isTrigger) Fail("a volume should be a trigger collider");
+
+        // Moved in Unity, then changed in VC Game Studio: the move is kept and said, unless VC Game Studio wins.
+        camp.localPosition = new UnityEngine.Vector3(11, 0, 9);
+        var changed = json.Replace(camp.GetComponent<VcgsLevelItem>().revision, "changed");
+        var again = VCGS.EditorTools.VcgsLevelBuilder.Build(changed, path, false);
+        if (!again.Exists(l => l.Contains("RM_SunkenVault_SiltCamp_003 was moved in Unity")) || camp.localPosition.x != 11) Fail("a move made in Unity should be kept and reported, got " + string.Join(" / ", again));
+        if (again.Exists(l => l.StartsWith("Added"))) Fail("a second build should add nothing");
+        VCGS.EditorTools.VcgsLevelBuilder.Build(changed, path, true);
+        if (camp.localPosition.x != 10) Fail("with VC Game Studio winning, the camp goes back");
+        // An item gone from the level is reported, not deleted.
+        var data = (Dictionary<string, object>)Json.Parse(json);
+        var list = (List<object>)data["items"];
+        list.RemoveAll(o => D.Str(D.Map(o), "export_name") == "PRP_SiltCamp_Crate_001" || D.Str(D.Map(o), "export_name") == "LGT_SiltCamp_CampEmbers_002");
+        var fewer = VCGS.EditorTools.VcgsLevelBuilder.Build(Serialize(data), path, false);
+        if (!fewer.Exists(l => l.Contains("LGT_SiltCamp_CampEmbers_002 is no longer in the level")) || root.transform.Find("LGT_SiltCamp_CampEmbers_002") == null) Fail("a removed item should be reported and left in place");
+
+        // VcgsLevel in the scene: items come and go with the story.
+        var levelComponent = root.GetComponent<VcgsLevel>();
+        levelComponent.level = new UnityEngine.TextAsset { text = json };
+        var fresh = new GameState(story);
+        levelComponent.Setup(fresh);
+        levelComponent.Interact(levelComponent.Logic.GuidOf("INT_VaultChamber_RustedLever_005"));
+        if (root.transform.Find("TRG_VaultChamber_FloodedSeam_001").gameObject.activeSelf) Fail("VcgsLevel should switch the drained seam off");
+    }
+
+    static string Serialize(object o)
+    {
+        switch (o)
+        {
+            case null: return "null";
+            case string s: return "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+            case bool b: return b ? "true" : "false";
+            case double d: return d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            case Dictionary<string, object> m:
+                var parts = new List<string>();
+                foreach (var kv in m) parts.Add(Serialize(kv.Key) + ":" + Serialize(kv.Value));
+                return "{" + string.Join(",", parts) + "}";
+            case List<object> l: return "[" + string.Join(",", l.ConvertAll(Serialize)) + "]";
+        }
+        return "null";
     }
 }

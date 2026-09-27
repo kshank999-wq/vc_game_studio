@@ -201,6 +201,10 @@ export interface ExportRecord {
   /** Element id → fingerprint of what it generated (HANDOFF: Generated.hash). */
   fingerprints: Record<string, string>;
   files: number;
+  /** Level item GUID → revision sent (spec §11.4: what changed since). */
+  levelItems?: Record<string, string>;
+  /** Generated file → a hash of what was written, to notice edits made in the engine. */
+  fileHashes?: Record<string, string>;
 }
 
 export interface Project {

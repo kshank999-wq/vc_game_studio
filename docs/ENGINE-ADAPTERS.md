@@ -150,3 +150,31 @@ Pick **Unreal Engine 5**. It writes a plugin and the story's data:
   compiles every plugin source against stubs of Unreal's headers, byte-compiles
   the import script and compiles `VCGS.Build.cs`. CI runs it. Unreal Header
   Tool and the editor have not run on it.
+
+## Levels
+
+`buildIR` carries the Level Designer's levels as `levels`
+(`model/handoff/levels.ts`), in metres with y up (x east, z south). Each item
+has:
+- its GUID, export name, position, turn (degrees counter-clockwise from above),
+  size and effective parameters
+- its story links and rules, with story keys
+- its final asset and whether that is locked
+- its graybox pieces in its own frame (from `meshesFor`)
+- a revision
+
+Each adapter maps the axes:
+
+| Engine | Position | Turn |
+| --- | --- | --- |
+| Godot | (x, y, z) | turn about +Y |
+| Unity | (x, y, −z) | yaw −turn |
+| Unreal | (−z, x, y) × 100 cm | yaw −turn |
+
+The export record keeps each item's revision (`levelItems`), so the handoff
+can say what changed. It also keeps a hash of each generated file
+(`fileHashes`); `engineEdits` uses these to find files changed in the engine
+since, and the handoff asks before replacing them. The checks in
+`scripts/godot-check`, `scripts/unity-check` and `scripts/unreal-check` build
+the sample's level and play its key, door and lever.
+

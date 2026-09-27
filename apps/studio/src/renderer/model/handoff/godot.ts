@@ -1,6 +1,7 @@
 import type { EngineAdapter, ElementOutput, EngineOutput, GenerateOptions, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
 import type { HandoffIR, IrEvent, IrThing } from './ir';
+import { levelRuntime, levelScript, levelTscn, playTscn } from './godot-levels';
 import { sceneRuntime, sceneTscn, storyNodes, storyTscn } from './godot-scenes';
 
 /**
@@ -565,7 +566,7 @@ const thingFields = (t: IrThing): Record<string, string> => ({
 export const generateGodot = (ir: HandoffIR, outputPath: string, options: GenerateOptions = {}): EngineOutput => {
   const placeholders = options.placeholderScenes !== false;
   const root = outputPath.replace(/^res:\/\//, '').replace(/\/+$/, '') || 'vcgs/generated';
-  const files: GeneratedFile[] = [...runtime(), ...sceneRuntime()];
+  const files: GeneratedFile[] = [...runtime(), ...sceneRuntime(), ...(ir.levels.length ? levelRuntime() : [])];
   const elements: ElementOutput[] = [];
   const add = (path: string, content: string) => {
     files.push({ path: `${root}/${path}`, content: content.endsWith('\n') ? content : `${content}\n`, kind: 'generated' });
@@ -918,6 +919,17 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
     row({ id: t.id, label: t.name, symbol: t.kind, group: 'Logic', generates: t.kind === 'gate' ? (t.rule ? 'Gate check' : 'Gate check (condition in words)') : t.rule ? 'Event trigger · fires by rule' : 'Event trigger', files: [rulesPath] }, t);
   }
 
+  // Levels: a scene per level, its data, and a scene to walk it.
+  const names: Record<string, string> = Object.fromEntries(
+    [...ir.characters, ...ir.objects, ...ir.items, ...ir.locations, ...ir.cinematics, ...ir.flags, ...ir.triggers, ...ir.choices, ...ir.scenes].map((x) => [x.ident.key, x.name]),
+  );
+  for (const level of ir.levels) {
+    const scene = add(`levels/${level.key}.tscn`, levelTscn(level, root));
+    const script = add(`levels/${level.key}.gd`, levelScript(level, names, gd, HEADER));
+    const play = add(`levels/play_${level.key}.tscn`, playTscn(level, root));
+    row({ id: level.guid, label: level.name, symbol: 'environment', group: 'World', generates: `Level scene · ${level.items.length} items (${level.export_name})`, files: [scene, script, play] }, level);
+  }
+
   const readme = add(
     'README.md',
     [
@@ -943,6 +955,25 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
       'These scenes are rewritten on every export. To build the real thing, make an',
       'inherited scene from one (Scene > New Inherited Scene), save it outside this',
       'folder and add art there: it keeps the generated nodes and your changes both.',
+      ...(ir.levels.length
+        ? [
+            '',
+            '## Levels',
+            '',
+            'Each level is `levels/<level>.tscn`: its items as nodes named by their export',
+            'names, each tagged with `metadata/vcgs_guid` (the GUID never changes), with',
+            'graybox meshes under `Proxy`, collision under `Collision`, and volumes as',
+            '`Area3D`. The level\'s script (a `VCGSLevel`) runs its doors, pickups,',
+            'volumes and rules on GameState. `levels/play_<level>.tscn` walks it at once',
+            'with a plain first-person player (F6).',
+            '',
+            'Final art: set an item\'s *Final asset* in VC Game Studio to a scene or model',
+            'here and it is placed as `Art` in place of the proxy. With *Final art locked*',
+            'the proxy is never written, so re-export changes the item\'s place, collision',
+            'and logic but never covers the art. To dress a level by hand, make an',
+            'inherited scene from it outside this folder.',
+          ]
+        : []),
     ].join('\n'),
   );
   add(
@@ -954,6 +985,14 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
         engine: 'godot',
         project: ir.project,
         elements: elements.map((e) => ({ id: e.id, label: e.label, files: e.files, fingerprint: e.fingerprint })),
+        // Spec §11.3: each level item's GUID, where it went in Godot, and what was sent.
+        levels: ir.levels.map((l) => ({
+          guid: l.guid,
+          name: l.name,
+          scene: `res://${root}/levels/${l.key}.tscn`,
+          revision: l.revision,
+          items: l.items.map((i) => ({ guid: i.guid, export_name: i.export_name, source: `${l.name} / ${i.name}`, engine_ref: `${l.export_name}/${i.export_name}`, revision: i.revision, replacement_locked: i.replacement_locked })),
+        })),
       },
       null,
       2,
@@ -974,6 +1013,7 @@ export const godot: EngineAdapter = {
     'Add res://addons/vcgs_runtime/game_state.gd as an autoload named GameState.',
     'Call VCGSRules.reset(GameState) when a new game begins.',
     'To try the story at once, run play_story.tscn (or any scene’s .tscn) in the generated folder.',
+    'To walk a level, run levels/play_<level>.tscn; in your game, instance levels/<level>.tscn and put your player in the “player” group.',
   ],
   generate: generateGodot,
 };

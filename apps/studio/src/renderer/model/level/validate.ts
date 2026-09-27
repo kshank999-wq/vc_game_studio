@@ -17,11 +17,23 @@ export interface LevelIssue {
   message: string;
   /** What this means for the export (spec §15: messages explain the handoff). */
   export: string;
+  /** Only true for the engine being exported to (spec §12: unsupported properties). */
+  engine?: boolean;
 }
+
+/** Roles whose behaviour the generated runtimes don't build: they go over as placed markers for the game to script. */
+const UNSCRIPTED: Record<string, string> = {
+  elevator: 'an elevator',
+  ladder: 'a ladder',
+  traversal: 'a traversal link',
+  patrolNode: 'a patrol stop',
+  waypoint: 'a waypoint',
+  cover: 'a cover point',
+};
 
 const ENGINES = ['godot', 'unity', 'unreal'] as const;
 
-export const levelIssues = (project: Project, global?: readonly AssetDefinition[]): LevelIssue[] => {
+export const levelIssues = (project: Project, global?: readonly AssetDefinition[], engine?: 'godot' | 'unity' | 'unreal' | 'custom'): LevelIssue[] => {
   const set = project.levels;
   if (!set) return [];
   const out: LevelIssue[] = [];
@@ -103,6 +115,24 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
     }
     if (def.kind === 'volume' && def.role === 'trigger' && !(item.rules ?? []).length) {
       add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} has no rules, so it does nothing.`, export: 'An empty trigger is exported. Add a rule under Logic.' });
+    }
+  }
+
+  // What the engine being exported to will make of it.
+  if (engine) {
+    const engineName = { godot: 'Godot', unity: 'Unity', unreal: 'Unreal', custom: 'the JSON export' }[engine];
+    for (const item of set.items) {
+      if (item.hidden || paramOf(set, item, 'export', global) === false) continue;
+      const def = assetOf(set, item, global);
+      if (UNSCRIPTED[def.role]) {
+        add({ id: item.id, levelId: item.levelId, severity: 'warning', engine: true, message: `${item.name} goes to ${engineName} as ${UNSCRIPTED[def.role]} marker.`, export: 'It is placed with its settings, but what it does is left to the game’s own code.' });
+      }
+      if (engine === 'unreal' && def.proxy === 'wedge') {
+        add({ id: item.id, levelId: item.levelId, severity: 'warning', engine: true, message: `${item.name} goes to Unreal as a sloped box.`, export: 'Unreal’s basic shapes have no wedge; the ramp is a box tilted to the same slope.' });
+      }
+      if (paramOf(set, item, 'replacementLocked', global) === true && !String(paramOf(set, item, 'finalAsset', global) ?? '')) {
+        add({ id: item.id, levelId: item.levelId, severity: 'warning', engine: true, message: `${item.name} has its final art locked but no final asset named.`, export: 'Its proxy is left out so re-export can’t cover the art; name the asset so the engine can place it.' });
+      }
     }
   }
 

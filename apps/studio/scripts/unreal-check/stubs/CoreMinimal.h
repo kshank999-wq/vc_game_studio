@@ -24,6 +24,7 @@ public:
     FString(const TCHAR* s) : data(s ? s : "") {}
     const TCHAR* operator*() const { return data.c_str(); }
     bool IsEmpty() const { return data.empty(); }
+    bool operator==(const FString& o) const { return data == o.data; }
     friend FString operator/(const FString& a, const FString& b) { return FString((a.data + "/" + b.data).c_str()); }
 private:
     std::string data;
@@ -69,3 +70,45 @@ static FLogCategory LogTemp;
 #define DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(Name, T1, P1) VCGS_DECLARE_DELEGATE(Name)
 #define DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(Name, T1, P1, T2, P2) VCGS_DECLARE_DELEGATE(Name)
 #define DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(Name, T1, P1, T2, P2, T3, P3, T4, P4) VCGS_DECLARE_DELEGATE(Name)
+
+#define DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(Name, T1, P1, T2, P2, T3, P3) VCGS_DECLARE_DELEGATE(Name)
+
+template <typename K, typename V>
+struct TPair
+{
+    K Key;
+    V Value;
+};
+
+template <typename K, typename V>
+class TMap
+{
+public:
+    void Add(const K& key, const V& value)
+    {
+        for (auto& p : pairs) if (p.Key == key) { p.Value = value; return; }
+        pairs.push_back(TPair<K, V>{key, value});
+    }
+    V* Find(const K& key) { for (auto& p : pairs) if (p.Key == key) return &p.Value; return nullptr; }
+    const V* Find(const K& key) const { for (const auto& p : pairs) if (p.Key == key) return &p.Value; return nullptr; }
+    typename std::vector<TPair<K, V>>::iterator begin() { return pairs.begin(); }
+    typename std::vector<TPair<K, V>>::iterator end() { return pairs.end(); }
+    typename std::vector<TPair<K, V>>::const_iterator begin() const { return pairs.begin(); }
+    typename std::vector<TPair<K, V>>::const_iterator end() const { return pairs.end(); }
+private:
+    std::vector<TPair<K, V>> pairs;
+};
+
+struct FVector
+{
+    double X = 0, Y = 0, Z = 0;
+    FVector() {}
+    FVector(double x, double y, double z) : X(x), Y(y), Z(z) {}
+    FVector operator-(const FVector& o) const { return FVector(X - o.X, Y - o.Y, Z - o.Z); }
+    double Size() const { return X * X + Y * Y + Z * Z; }
+    bool IsNearlyZero() const { return Size() < 1e-8; }
+    FVector GetSafeNormal() const { return *this; }
+    static double DotProduct(const FVector& a, const FVector& b) { return a.X * b.X + a.Y * b.Y + a.Z * b.Z; }
+};
+
+struct FHitResult {};

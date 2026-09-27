@@ -1,12 +1,13 @@
 import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron';
 import { existsSync, readdirSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 /**
  * The only things the renderer may do to the disk for the engine handoff:
- * pick an engine project folder, look at it, and write generated files
- * inside it. A path that would land outside the folder is refused.
+ * pick an engine project folder, look at it, read back files it wrote there
+ * (to notice edits made in the engine), and write generated files inside it.
+ * A path that would land outside the folder is refused.
  */
 
 interface File {
@@ -40,6 +41,27 @@ export const registerHandoff = (getWindow: () => BrowserWindow | null): void => 
       // An Unreal project has a .uproject file.
       unreal: existsSync(folder) && readdirSync(folder).some((f) => f.endsWith('.uproject')),
     };
+  });
+
+  // What is on disk now at the paths the last export wrote: null where there is nothing (or nothing readable).
+  ipcMain.handle('vcgs:read-files', async (_e, folder: unknown, paths: unknown) => {
+    if (typeof folder !== 'string' || !folder || !existsSync(folder) || !Array.isArray(paths)) return {};
+    const root = resolve(folder);
+    const out: Record<string, string | null> = {};
+    for (const path of paths.slice(0, 5000)) {
+      if (typeof path !== 'string') continue;
+      const target = inside(root, path);
+      if (!target || !existsSync(target)) {
+        out[path] = null;
+        continue;
+      }
+      try {
+        out[path] = (await stat(target)).size > 8 * 1024 * 1024 ? null : await readFile(target, 'utf8');
+      } catch {
+        out[path] = null;
+      }
+    }
+    return out;
   });
 
   ipcMain.handle('vcgs:write-files', async (_e, folder: unknown, files: unknown) => {

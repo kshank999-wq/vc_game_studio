@@ -144,6 +144,43 @@ the same effects, with triggers and puzzles settling after every change:
 - **Debug overlay** (F3): every item's name, export name and story links over it; volumes and markers drawn; the player's position and the volumes they're in; the last few log entries.
 - **Game over** offers the last checkpoint, or starting again.
 
+## Sending a level to an engine (spec §11)
+
+Levels go with the story when you send to an engine from **Engine handoff**.
+The handoff shows each level as a row, and says which items are new, changed
+or removed since the last export. Every item keeps its GUID, so an engine
+finds what it placed last time and updates it.
+
+- **Godot 4:** `levels/<level>.tscn` has a node per item, with its graybox, its
+  collision, its volumes (`Area3D`), lights and markers, and
+  `metadata/vcgs_guid`. Its script, a `VCGSLevel`, runs the doors, pickups,
+  volumes and rules against the story. Run `levels/play_<level>.tscn` to walk
+  it; in your game, instance the level and put your player in the "player"
+  group.
+- **Unity 6:** `Levels/<level>.json`, the level runtime (`VcgsLevel`,
+  `VcgsLevelItem`) and an editor builder. Open the scene the level belongs in
+  and run **VCGS › Update level from data…**.
+- **Unreal Engine 5:** `Levels/<level>.json`, the plugin's `AVcgsLevelItem` and
+  `AVcgsLevelDirector`, and `build_level.py`. Open the map and run the script
+  (**Tools › Execute Python Script**). Positions are in centimetres, X forward.
+- **JSON:** `story.json` gains `levels`, described in `story.schema.json`.
+
+**Who owns what.** VC Game Studio owns each item's place, name, collision,
+graybox and data. The Unity and Unreal builders never touch final art, or
+anything else you added in the engine:
+- An item's **final asset** replaces its graybox.
+- With **replacement locked**, re-export leaves the art alone.
+- An item **moved in the engine** keeps its place, and the update lists it.
+  Choose "VC Game Studio wins" (Unity) or set `VCGS_WINS` (Unreal) to put it
+  back.
+- **Removed items** are listed and left in place, for you to delete.
+- Items whose revision hasn't changed are skipped.
+
+**Files changed in the engine.** Before sending to a folder, the desktop app
+checks the files it wrote last time. If one was changed since, it asks
+whether to overwrite it or keep the engine's version; nothing is replaced
+silently. If you keep a file, it is pointed out again next time.
+
 ## The sample
 
 *The Sunken Vault* (**File › New from the sample**) includes a level:
@@ -167,6 +204,8 @@ Its preflight is clean.
 | `model/level/geometry.ts` | Frames, walls, openings, nearest wall, and `meshesFor`, which turns a level into engine-neutral graybox pieces. The map, the graybox and (next) the exporters all draw from it. |
 | `model/level/play.ts`, `controller.ts` | Play Mode's rules (doors, pickups, volumes, spawns, hazards, rules and actions, presets, notes) and the character controller. Pure functions, tested without a screen. |
 | `model/level/naming.ts`, `validate.ts`, `links.ts` | Export names, preflight, and story links (including clean-up when story elements are deleted). |
+| `model/handoff/levels.ts` | The levels in the handoff model: every item with its GUID, export name, position, turn, size, effective parameters, story links, rules, final art and graybox pieces, and a revision for each. `levelChanges` compares them with the last export. |
+| `model/handoff/{godot,unity,unreal}-levels.ts` | Each engine's level files: runtime, scene or data, and the builder that places them. |
 | `components/level/` | `LevelDesigner`, `LevelMap` (SVG), `Graybox` and `PlayMode` (three.js, loaded on demand), `PlayInspect`, `PlayControls`, `input.ts`, `LevelLibrary`, `LevelInspector`. |
 
 Coordinates are metres. A plan position (x, y) is the item's centre seen from
@@ -186,7 +225,7 @@ clockwise seen from above.
 | §8 Logic, spawns | Done: rules, conditions, story effects and level actions run in Play Mode; spawners spawn after their delay, conditionally. Spawned actors stand where they spawn (no AI or pathing). |
 | §9 Play Mode | Done: first person, third person and top-down; keyboard, mouse and controller through rebindable actions; collision, gravity, jumping, stairs; pause and inspect with editable state; test presets; start from the level start, the selection or the 3D camera; debug overlay; event log; notes linked to items. Scenes linked to characters show as cards rather than playing their script in the level. |
 | §10 Identity and names | Done. |
-| §11 Engine handoff | **Next.** Levels go through the Godot, Unity, Unreal and JSON adapters using `meshesFor` and the GUID manifest; "final art locked" is already a per-item setting. |
-| §12 Preflight | Done for everything the studio can know today. Engine-specific checks (unsupported properties, externally modified assets) arrive with the exporters. |
+| §11 Engine handoff | Done: Godot, Unity, Unreal and JSON (see *Sending a level to an engine*). Checked in Godot 4.3, and against Unity and Unreal stand-ins (C#, C++ with g++ and clang, and the Python builder). |
+| §12 Preflight | Done, including engine-specific checks (roles an engine gets as data only, wedges in Unreal, locked art with no final asset) and files changed in the engine since the last export. |
 | §14 Undo, persistence | Done: every edit is one undo step, GUIDs survive save, load, duplicate (which gives new ones), rename and re-export, and the data is plain JSON in the project file. |
 | §19 Future | Not started, as the spec says. |

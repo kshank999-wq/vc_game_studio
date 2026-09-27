@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Destination } from '../../model/details';
-import { ENGINES, planHandoff, recordExport, setTarget, type Row } from '../../model/handoff';
+import { engineEdits, ENGINES, planHandoff, recordExport, setTarget, type Row } from '../../model/handoff';
+import { levelsOf } from '../../model/level/level';
 import type { OutputGroup } from '../../model/handoff/engines';
 import { zip } from '../../model/handoff/zip';
 import type { Project } from '../../model/types';
 import { desktop } from '../../desktop';
 import { isPreview, PURCHASE_URL } from '../../edition';
+import { useNav } from '../../nav';
 import { Symbol } from '../Symbol';
 
 interface Props {
@@ -47,6 +49,8 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
   const [codeHidden, setCodeHidden] = useState(false);
   const [folderState, setFolderState] = useState<{ exists: boolean; engineProject: boolean; unity?: boolean; unreal?: boolean } | null>(null);
   const [sending, setSending] = useState(false);
+  const [conflict, setConflict] = useState<{ folder: string; paths: string[] } | null>(null);
+  const nav = useNav();
   const { adapter, target, output } = plan;
 
   useEffect(() => {
@@ -67,11 +71,23 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
   const issueCount = plan.rows.filter((r) => r.status === 'issue').length;
   const last = project.handoff?.last?.engine === target.engine ? project.handoff.last : undefined;
   const engineName = adapter.name.split(' ')[0]!;
+  const levelSet = levelsOf(project);
+  const levelName = (id: string) => levelSet.levels.find((l) => l.id === id)?.name ?? levelSet.items.find((i) => i.id === id)?.name;
+  const { added, changed: changedItems, removed } = plan.levelChanges;
+  const itemName = (guid: string) => plan.levels.flatMap((l) => l.items).find((i) => i.guid === guid)?.name ?? 'An item';
 
   const pickFolder = async () => {
     if (!bridge) return;
     const folder = await bridge.pickFolder();
     if (folder) onReplace(setTarget(project, { projectFolder: folder }));
+  };
+
+  /** Write to the folder; files the engine changed and the person chose to keep are left out. */
+  const write = async (folder: string, kept: string[]) => {
+    const files = output!.files.filter((f) => !kept.includes(f.path));
+    const result = await bridge!.writeFiles(folder, files);
+    onReplace(recordExport(setTarget(project, { projectFolder: folder }), plan, undefined, kept));
+    onSay(`Sent ${result.written} files to ${folder}.${kept.length ? ` Left ${kept.length} as ${engineName} had ${kept.length === 1 ? 'it' : 'them'}.` : ''}`);
   };
 
   const send = async () => {
@@ -84,14 +100,35 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           folder = (await bridge.pickFolder()) ?? '';
           if (!folder) return;
         }
-        const result = await bridge.writeFiles(folder, output.files);
-        onReplace(recordExport(setTarget(project, { projectFolder: folder }), plan));
-        onSay(`Sent ${result.written} files to ${folder}.`);
+        // Generated files edited in the engine since the last export are never overwritten silently (spec §11.4).
+        if (bridge.readFiles && last?.fileHashes && folder === target.projectFolder) {
+          const onDisk = await bridge.readFiles(folder, Object.keys(last.fileHashes));
+          const edited = engineEdits(plan, last, onDisk);
+          if (edited.length) {
+            setConflict({ folder, paths: edited });
+            return;
+          }
+        }
+        await write(folder, []);
       } else {
         saveZip(`${plan.adapter.id}-${project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, output.files);
         onReplace(recordExport(project, plan));
         onSay(`Downloaded ${output.files.length} files. Unzip them into your ${engineName} project folder.`);
       }
+    } catch (error) {
+      onSay(error instanceof Error ? error.message : 'Sending failed.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const resolve = async (keep: boolean) => {
+    if (!conflict) return;
+    const { folder, paths } = conflict;
+    setConflict(null);
+    setSending(true);
+    try {
+      await write(folder, keep ? paths : []);
     } catch (error) {
       onSay(error instanceof Error ? error.message : 'Sending failed.');
     } finally {
@@ -204,6 +241,26 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           </div>
         )}
 
+        {plan.levels.length > 0 && (
+          <div className="kv level-changes" aria-label="Level changes">
+            <span>Levels</span>
+            <span className="kv-value">
+              {!last
+                ? `${plan.levels.length} ${plan.levels.length === 1 ? 'level' : 'levels'} · ${added.length} items, none sent yet`
+                : added.length + changedItems.length + removed.length === 0
+                  ? 'Nothing changed since the last export'
+                  : [added.length && `${added.length} new`, changedItems.length && `${changedItems.length} changed`, removed.length && `${removed.length} removed`].filter(Boolean).join(' · ')}
+            </span>
+          </div>
+        )}
+        {last && changedItems.length > 0 && (
+          <p className="handoff-note" title={changedItems.map(itemName).join(', ')}>
+            Changed: {changedItems.slice(0, 4).map(itemName).join(', ')}
+            {changedItems.length > 4 ? ` and ${changedItems.length - 4} more` : ''}.
+          </p>
+        )}
+        {last && removed.length > 0 && <p className="handoff-note">Removed items stay in {engineName} until you delete them there; the update lists them.</p>}
+
         <div className="grow" />
 
         {plan.blocking.map((b) => (
@@ -213,18 +270,27 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           </div>
         ))}
         {plan.issues.slice(0, 3).map((i) => {
-          const name = project.objects[i.id]?.name ?? 'Something';
+          const level = !project.objects[i.id] ? levelName(i.id) : undefined;
+          const name = project.objects[i.id]?.name ?? level ?? 'Something';
           return (
             <div key={i.id} className="handoff-issue">
               <span className="issue-badge static">!</span>
               <span>
                 <b>{name}</b>: {i.message} It will export, but check it before you play.{' '}
-                <button
-                  className="link-btn"
-                  onClick={() => onNavigate(i.sceneId ? { kind: 'scene', sceneId: i.sceneId, mode: 'exploded' } : { kind: 'graph', id: i.id })}
-                >
-                  Fix {i.sceneId ? `in ${project.objects[i.sceneId]?.data.code ?? 'the scene'}` : 'on the graph'}
-                </button>
+                {level !== undefined ? (
+                  nav.openLevels && (
+                    <button className="link-btn" onClick={() => nav.openLevels!()}>
+                      Fix in the Level Designer
+                    </button>
+                  )
+                ) : (
+                  <button
+                    className="link-btn"
+                    onClick={() => onNavigate(i.sceneId ? { kind: 'scene', sceneId: i.sceneId, mode: 'exploded' } : { kind: 'graph', id: i.id })}
+                  >
+                    Fix {i.sceneId ? `in ${project.objects[i.sceneId]?.data.code ?? 'the scene'}` : 'on the graph'}
+                  </button>
+                )}
               </span>
             </div>
           );
@@ -335,6 +401,40 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
         <button className="tb-btn show-code" onClick={() => setCodeHidden(false)}>
           &lt;/&gt; Code
         </button>
+      )}
+      {conflict && (
+        <div className="dialog-backdrop" onPointerDown={() => setConflict(null)}>
+          <div className="dialog" role="alertdialog" aria-modal="true" aria-label={`Changed in ${engineName}`} onPointerDown={(e) => e.stopPropagation()}>
+            <div className="dialog-head">
+              <h2>Changed in {engineName}</h2>
+              <button className="icon-btn small" aria-label="Close" onClick={() => setConflict(null)}>
+                ×
+              </button>
+            </div>
+            <p className="dialog-text">
+              {conflict.paths.length === 1 ? 'This file was' : `These ${conflict.paths.length} files were`} changed in {engineName} since the last export. VC Game Studio
+              makes {conflict.paths.length === 1 ? 'it' : 'them'}, so sending would replace the changes.
+            </p>
+            <ul className="dialog-list mono">
+              {conflict.paths.slice(0, 8).map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+              {conflict.paths.length > 8 && <li>and {conflict.paths.length - 8} more</li>}
+            </ul>
+            <div className="dialog-actions">
+              <button className="tb-btn" onClick={() => setConflict(null)}>
+                Cancel
+              </button>
+              <div className="grow" />
+              <button className="tb-btn" onClick={() => void resolve(true)}>
+                Keep {engineName}’s version
+              </button>
+              <button className="tb-btn primary" onClick={() => void resolve(false)}>
+                Overwrite them
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

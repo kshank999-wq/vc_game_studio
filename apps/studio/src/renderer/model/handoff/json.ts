@@ -48,8 +48,81 @@ export const storySchema = () => ({
     choices: { type: 'array', items: ref('choice') },
     scenes: { type: 'array', items: ref('scene') },
     lines: { type: 'array', items: obj({ id: str, scene: str, speaker: { type: ['string', 'null'] }, text: str, direction: str, vo: { enum: ['none', 'todo', 'recorded'] }, order: num }) },
+    levels: { type: 'array', items: ref('level'), description: 'The Level Designer\'s levels: items with GUIDs, transforms, settings, story links and rules, and their graybox pieces.' },
   },
   $defs: {
+    vec3: { type: 'array', items: num, minItems: 3, maxItems: 3, description: 'Metres, y up: x east, y up, z south.' },
+    level: {
+      ...obj(
+        {
+          guid: str,
+          key: str,
+          export_name: str,
+          name: str,
+          floors: { type: 'array', items: obj({ key: str, name: str, elevation: num, height: num }) },
+          links: strings,
+          start: { anyOf: [{ type: 'null' }, obj({ position: ref('vec3'), turn: num })] },
+          items: { type: 'array', items: ref('levelItem') },
+          revision: str,
+        },
+        ['guid', 'key', 'export_name', 'name', 'floors', 'links', 'start', 'items', 'revision'],
+      ),
+      description: 'A level. `revision` changes whenever anything in it does.',
+    },
+    levelItem: {
+      ...obj(
+        {
+          guid: { description: 'Never changes: find the item again by it on the next export.', ...str },
+          export_name: str,
+          name: str,
+          asset: str,
+          kind: { enum: ['space', 'hosted', 'solid', 'light', 'volume', 'marker', 'assembly'] },
+          role: str,
+          category: str,
+          floor: str,
+          position: ref('vec3'),
+          turn: { description: 'Degrees about y, counter-clockwise seen from above.', ...num },
+          size: { ...ref('vec3'), description: 'Width (x), height (y), depth (z), in metres.' },
+          params: { type: 'object', additionalProperties: { type: ['string', 'number', 'boolean'] } },
+          links: strings,
+          scenes: strings,
+          host: obj({ guid: str, wall: num }),
+          active_when: ref('rule'),
+          rules: { type: 'array', items: ref('levelRule') },
+          engine: obj({ godot: str, unity: str, unreal: str, template: str }),
+          final_asset: str,
+          replacement_locked: { type: 'boolean' },
+          pieces: { type: 'array', items: ref('piece') },
+          revision: str,
+        },
+        ['guid', 'export_name', 'name', 'asset', 'kind', 'role', 'category', 'floor', 'position', 'turn', 'size', 'params', 'links', 'scenes', 'rules', 'engine', 'final_asset', 'replacement_locked', 'pieces', 'revision'],
+      ),
+      description: 'One placed item. It is in the level only while `active_when` holds.',
+    },
+    piece: obj(
+      {
+        part: str,
+        shape: { enum: ['box', 'cylinder', 'sphere', 'wedge', 'cone'] },
+        at: { ...ref('vec3'), description: 'Centre, relative to the item (turned with it).' },
+        size: ref('vec3'),
+        turn: num,
+        color: str,
+        opacity: num,
+        collide: { type: 'boolean' },
+        light: obj({ kind: { enum: ['point', 'spot', 'area'] }, color: str, intensity: num, range: num, angle: num }, ['kind', 'color', 'intensity', 'range']),
+      },
+      ['part', 'shape', 'at', 'size', 'turn', 'color', 'opacity', 'collide'],
+    ),
+    levelRule: obj(
+      {
+        on: { enum: ['enter', 'exit', 'interact', 'pickup', 'use', 'destroy', 'timer', 'stateChange', 'custom'] },
+        detail: str,
+        when: ref('rule'),
+        effects: ref('effects'),
+        actions: { type: 'array', items: obj({ kind: { enum: ['open', 'close', 'enable', 'disable', 'spawn', 'despawn', 'startScene', 'playCinematic', 'playAudio', 'objective', 'goToLevel'] }, target: str }) },
+      },
+      ['on'],
+    ),
     condition: {
       type: 'object',
       required: ['kind', 'ref', 'op'],
@@ -171,6 +244,32 @@ rules; an empty rule holds. A condition is \`{ kind, ref, op, value? }\`:
 
 An effect is \`{ kind, ref, value?, amount? }\`: \`setFlag\` (value), \`give\`,
 \`take\`, \`setObject\` (value), \`arc\` (amount), \`solve\`, \`fire\`.
+${ir.levels.length ? LEVELS_README : ''}`;
+
+const LEVELS_README = `
+## Levels
+
+\`levels\` holds each level: its \`items\`, each with a \`guid\` that never
+changes (find what you placed last time by it), an \`export_name\`, a
+\`position\` and \`turn\` (metres, y up, z south; degrees counter-clockwise from
+above), a \`size\`, its settings in \`params\` (story references as story keys)
+and its graybox \`pieces\` relative to it. Build the pieces as you like; those
+with \`collide\` are in the player's way.
+
+1. An item is in the level only while \`active_when\` holds.
+2. **Interact**: a \`door\` opens and shuts; a locked one (\`params.locked\`) needs
+   \`params.keyItem\` held and then stays unlocked. A pickup (\`pickup\`,
+   \`inventory\`, …) leaves the level and gives \`params.item\`. A character
+   starts its first linked scene (\`scenes\`).
+3. **Volumes** notice the player: \`enter\` and \`exit\` rules run;
+   \`params.once\` makes it once only; a \`cinematic\` volume plays
+   \`params.cinematic\`; a \`checkpoint\` is where the player comes back; a
+   \`portal\` leads to the level \`params.to\`.
+4. **Rules** (\`rules\`) run on their \`on\` event when \`when\` holds: do their
+   story \`effects\` (as above), then their \`actions\` on the level (\`target\` is
+   an item's guid, a scene or cinematic key, or a level key).
+5. After every change to the story, run each present item's \`stateChange\` rules
+   and look again at what is present.
 `;
 
 const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
@@ -196,6 +295,7 @@ const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
   for (const t of ir.locations) row({ id: t.id, label: t.name, symbol: 'environment', group: 'World', generates: 'locations[]' }, t);
   for (const f of ir.flags) row({ id: f.id, label: f.name, symbol: 'state', group: 'Logic', generates: `flags[] · ${f.values.join(' / ')}` }, f);
   for (const t of ir.triggers) row({ id: t.id, label: t.name, symbol: t.kind, group: 'Logic', generates: t.rule ? 'triggers[] · by rule' : 'triggers[]' }, t);
+  for (const l of ir.levels) row({ id: l.guid, label: l.name, symbol: 'environment', group: 'World', generates: `levels[] · ${l.items.length} items (${l.export_name})` }, l);
   return { files, elements };
 };
 

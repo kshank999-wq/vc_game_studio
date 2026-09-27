@@ -5,6 +5,8 @@ export interface DesktopBridge {
   pickFolder: () => Promise<string | null>;
   checkFolder: (folder: string) => Promise<{ exists: boolean; engineProject: boolean; unity?: boolean; unreal?: boolean }>;
   writeFiles: (folder: string, files: { path: string; content: string }[]) => Promise<{ written: number }>;
+  /** What is on disk now at these paths inside the folder (null for nothing), to notice edits made in the engine. */
+  readFiles?: (folder: string, paths: string[]) => Promise<Record<string, string | null>>;
   openProject?: () => Promise<{ path: string; content: string } | null>;
   readProject?: (path: string) => Promise<{ path: string; content: string } | null>;
   saveProject?: (path: string | null, content: string, suggestedName: string) => Promise<string | null>;

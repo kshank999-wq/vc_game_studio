@@ -5,6 +5,7 @@ import { eventTitle, sceneTimeline } from '../timeline';
 import { isEmpty, isRule, type Effect, type Rule } from '../rules';
 import { cinematicTiming, shotsOf } from '../shots';
 import type { ObjectType, Project, StoryObject } from '../types';
+import { buildLevels, type IrLevel } from './levels';
 
 /**
  * The engine-neutral handoff model. The project is flattened once into plain
@@ -258,6 +259,8 @@ export interface HandoffIR {
   choices: IrChoice[];
   scenes: IrScene[];
   lines: IrLine[];
+  /** The Level Designer's levels (docs/LEVEL-DESIGNER.md). */
+  levels: IrLevel[];
 }
 
 const fieldsOf = (o: StoryObject): Record<string, string> =>
@@ -507,6 +510,7 @@ export const buildIR = (project: Project): HandoffIR => {
         order: l.order,
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
+    levels: buildLevels(project, { key, rule, effects, toKey }),
   };
 };
 

@@ -4,7 +4,8 @@
 #     (C++17, warnings as errors, no exceptions or RTTI, as Unreal builds);
 #  2. compile every source file of the plugin against stubs of Unreal's
 #     headers (syntax and types; Unreal Header Tool does not run here);
-#  3. byte-compile the DataTable import script.
+#  3. byte-compile the DataTable import script, and run the level builder
+#     against a stand-in for Unreal's Python API.
 # Needs a C++17 compiler (CXX, default g++) and python3; with the .NET SDK
 # it also compiles VCGS.Build.cs.
 set -euo pipefail
@@ -29,6 +30,8 @@ echo "plugin sources compile against the stubs"
 
 python3 -m py_compile "$work/Content/VCGS/Generated/import_datatables.py"
 echo "import_datatables.py compiles"
+# The level builder runs against a stand-in for Unreal's Python API.
+python3 "$here/unreal-check/check_build_level.py" "$work"
 
 if command -v dotnet > /dev/null; then
   mkdir -p "$work/build-rules"
