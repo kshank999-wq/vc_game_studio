@@ -114,3 +114,23 @@ describe('the zip download', () => {
     expect(listing).toContain('vcgs/generated/characters/mara.tres');
   });
 });
+
+describe('Godot placeholder scenes', () => {
+  it('writes a .tscn per scene with its elements, and one to play the story, unless turned off', async () => {
+    const { generateGodot } = await import('../handoff/godot');
+    const ir = buildIR(sunkenVault());
+    const out = generateGodot(ir, 'res://vcgs/generated');
+    const vault = out.files.find((f) => f.path === 'vcgs/generated/scenes/sc_03_the_vault_door.tscn')!.content;
+    expect(vault).toContain('[gd_scene load_steps=');
+    expect(vault).toContain('[node name="RustedLever" type="Node2D" parent="Objects"]');
+    expect(vault).toContain('[node name="Interactable" type="Node" parent="Objects/RustedLever" groups=["vcgs_interactable"]]');
+    expect(vault).toContain('path="res://vcgs/generated/objects/rusted_lever.gd"');
+    expect(vault).toContain('flow_path = NodePath("../Flow")');
+    // load_steps counts every external resource, plus one.
+    expect(Number(/load_steps=(\d+)/.exec(vault)![1])).toBe((vault.match(/\[ext_resource /g) ?? []).length + 1);
+    expect(out.files.some((f) => f.path === 'vcgs/generated/play_story.tscn')).toBe(true);
+    expect(out.files.find((f) => f.path.endsWith('story_graph.gd'))!.content).toContain(`const START := "${ir.graph.find((n) => n.kind === 'begin')!.key}"`);
+    const off = generateGodot(ir, 'res://vcgs/generated', { placeholderScenes: false });
+    expect(off.files.some((f) => f.path.endsWith('.tscn'))).toBe(false);
+  });
+});

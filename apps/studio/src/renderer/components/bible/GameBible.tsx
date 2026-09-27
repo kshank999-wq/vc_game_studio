@@ -1,3 +1,5 @@
+import { applyFilters, regroup, type Filter, type GroupBy } from '../../model/bible-filters';
+import { BibleChips } from './BibleChips';
 import { useEffect, useMemo, useState } from 'react';
 import { VIEWS, viewCount, viewGroups, voProgress, type Entry, type ViewKey } from '../../model/bible';
 import type { Destination } from '../../model/details';
@@ -22,6 +24,23 @@ interface Props {
   /** A production report to open straight away (File › Export). */
   report?: ReportKey;
 }
+
+/** What each view's own grouping is, for the Group chip. */
+const VIEW_GROUP: Record<ViewKey, string> = {
+  all: 'Type',
+  characters: 'Role',
+  scenes: 'Where it sits',
+  plot: 'Spine and subplots',
+  arcs: 'Arc',
+  choices: 'Where it sits',
+  dialogue: 'Speaker',
+  locations: 'Type',
+  objects: 'Type',
+  cinematics: 'Where it sits',
+  puzzles: 'Type',
+  logic: 'Type',
+  production: 'Production tag',
+};
 
 /** Views whose list can add a new canonical element straight from the Bible. */
 const CREATES: Partial<Record<ViewKey, ObjectType>> = {
@@ -58,6 +77,9 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
   const [layout, setLayout] = useState<'grouped' | 'list'>('grouped');
   const [exportOpen, setExportOpen] = useState(false);
   const [report, setReport] = useState<ReportKey | null>(initialReport ?? null);
+  // Each view keeps its own filters and grouping while the Bible is open.
+  const [filtersBy, setFiltersBy] = useState<Partial<Record<ViewKey, Filter[]>>>({});
+  const [groupsBy, setGroupsBy] = useState<Partial<Record<ViewKey, GroupBy>>>({});
 
   useEffect(() => {
     if (focus) {
@@ -67,9 +89,13 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
 
-  const groups = viewGroups(project, view, query);
-  const entries = groups.flatMap((g) => g.entries);
   const issues = useMemo(() => new Map(findIssues(project).map((i) => [i.id, i.message])), [project]);
+  const filters = filtersBy[view] ?? [];
+  const groupBy = groupsBy[view] ?? 'view';
+  const searched = viewGroups(project, view, query);
+  const unfiltered = searched.flatMap((g) => g.entries);
+  const groups = regroup(project, applyFilters(project, searched, filters, issues), groupBy, issues);
+  const entries = [...new Map(groups.flatMap((g) => g.entries).map((e) => [e.id, e])).values()];
   const current = VIEWS.find((v) => v.key === view)!;
   const creates = CREATES[view];
 
@@ -168,8 +194,36 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
           </svg>
           <input aria-label="Search the Bible" placeholder={`Search ${current.label.toLowerCase()}…`} value={query} onChange={(e) => setQuery(e.currentTarget.value)} />
         </label>
+        <BibleChips
+          project={project}
+          entries={unfiltered}
+          filters={filters}
+          onFilters={(next) => setFiltersBy((f) => ({ ...f, [view]: next }))}
+          groupBy={groupBy}
+          onGroupBy={(by) => {
+            setGroupsBy((g) => ({ ...g, [view]: by }));
+            setLayout(by === 'none' ? 'list' : 'grouped');
+          }}
+          issues={issues}
+          viewGroupLabel={VIEW_GROUP[view]}
+        />
         <div className="bible-rows">
-          {entries.length === 0 && <p className="bible-empty">{query ? `Nothing matches “${query}”.` : 'Nothing here yet.'}</p>}
+          {entries.length === 0 && (
+            <p className="bible-empty">
+              {filters.length && unfiltered.length ? (
+                <>
+                  Nothing here with these filters.{' '}
+                  <button className="chip-clear" onClick={() => setFiltersBy((f) => ({ ...f, [view]: [] }))}>
+                    Clear them
+                  </button>
+                </>
+              ) : query ? (
+                `Nothing matches “${query}”.`
+              ) : (
+                'Nothing here yet.'
+              )}
+            </p>
+          )}
           {layout === 'grouped'
             ? groups.map((g) => (
                 <div key={g.label}>

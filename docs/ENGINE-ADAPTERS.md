@@ -67,7 +67,19 @@ Nothing in the story model, the Bible or the handoff screen changes.
   events whose `when` fails are skipped; a free play ends when its `ends`
   rule holds; choices and scene exits offer only what their conditions allow.
   The words a writer typed beside a rule travel too, as documentation.
+- **Placeholder scenes** (on by default; *Placeholder scenes* on the handoff
+  screen): a `scenes/<scene>.tscn` per story scene holding its flow
+  controller, a labelled stand-in for the location, characters, objects
+  (each wired to its interactable script), items, cinematics, puzzles and
+  logic, and a plain on-screen player (`debug_player.gd`). Open one and press
+  F6 to play it; `play_story.tscn` plays the story from its Beginning, scene
+  after scene, choices on the graph included. They are rewritten on each
+  export: build the real scene as an inherited scene saved elsewhere.
+
+  ![The Vault Door's placeholder scene, playing in Godot 4.3](godot-placeholder-scene.png)
 - **Checked against Godot 4.3**: `GODOT=/path/to/godot apps/studio/scripts/check-godot.sh`
   exports the sample project and has Godot load every script and resource,
   pull the lever (which fires the trigger, which solves the door, which ends
-  the free play) and play the Vault Door scene through its branch. CI runs it.
+  the free play) and play the Vault Door scene through its branch; it loads
+  every generated .tscn and plays the Vault Door's through its on-screen
+  player to the ending. CI runs it.

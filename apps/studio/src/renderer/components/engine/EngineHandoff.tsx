@@ -168,6 +168,18 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           <span>Runtime</span>
           <span className="kv-value">{adapter.runtimeName} · included</span>
         </div>
+        {adapter.id === 'godot' && (
+          <label className="kv toggle-row" title="A .tscn per scene with placeholders for its elements and an on-screen player, plus play_story.tscn">
+            <span>Placeholder scenes</span>
+            <input
+              type="checkbox"
+              className="toggle"
+              aria-label="Placeholder scenes"
+              checked={target.placeholderScenes !== false}
+              onChange={(e) => onReplace(setTarget(project, { placeholderScenes: e.currentTarget.checked }))}
+            />
+          </label>
+        )}
         {bridge && (
           <label className="kv toggle-row">
             <span>Export on save</span>

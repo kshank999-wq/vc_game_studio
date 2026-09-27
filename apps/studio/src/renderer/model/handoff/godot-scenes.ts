@@ -1,0 +1,520 @@
+import type { GeneratedFile } from './engines';
+import type { HandoffIR, IrScene } from './ir';
+
+/**
+ * Placeholder Godot scenes (.tscn): one per story scene, ready to run. Each
+ * holds the scene's flow controller, a labelled placeholder for everything
+ * in it (the location, characters, objects wired to their interactable
+ * scripts, items, cinematics, puzzles and logic), and a plain on-screen
+ * player, so pressing Play in Godot plays the scene before any art or UI
+ * exists. play_story.tscn plays the whole story from the Beginning.
+ *
+ * They are rewritten on each export: real art goes in a scene inherited from
+ * one (Scene › New Inherited Scene), which keeps working as long as the
+ * story's element names do.
+ */
+
+export const RUNTIME = 'addons/vcgs_runtime';
+
+const COLORS: Record<string, string> = {
+  scene: '#4fa39a',
+  cinematic: '#9a7fc0',
+  choice: '#f2c230',
+  object: '#4a86d8',
+  environment: '#6fae5e',
+  inventory: '#6cc4d6',
+  puzzle: '#e07bb0',
+  trigger: '#c8bfae',
+  gate: '#c8bfae',
+  state: '#c8bfae',
+  character: '#d9607a',
+};
+
+const str = (v: string) => JSON.stringify(v);
+const color = (hex: string): string => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  const n = m ? parseInt(m[1]!, 16) : 0xc8bfae;
+  const c = (shift: number) => (((n >> shift) & 255) / 255).toFixed(3).replace(/\.?0+$/, '') || '0';
+  return `Color(${c(16)}, ${c(8)}, ${c(0)}, 1)`;
+};
+
+// ---------------------------------------------------------------- the runtime pieces
+
+export const sceneRuntime = (): GeneratedFile[] => {
+  const file = (name: string, lines: string[]): GeneratedFile => ({ path: `${RUNTIME}/${name}`, content: `${lines.join('\n')}\n`, kind: 'runtime' });
+  return [
+    file('placeholder.gd', [
+      '@tool',
+      '# VCGS Runtime for Godot 4.',
+      'class_name VCGSPlaceholder',
+      'extends Node2D',
+      '## Stands in for an element\'s art until the real thing arrives: a shape in',
+      '## its type\'s colour with its name. Replace it in an inherited scene.',
+      '',
+      '@export var kind := "object":',
+      '\tset(value):',
+      '\t\tkind = value',
+      '\t\tqueue_redraw()',
+      '@export var label := "":',
+      '\tset(value):',
+      '\t\tlabel = value',
+      '\t\tqueue_redraw()',
+      '@export var color := Color.WHITE:',
+      '\tset(value):',
+      '\t\tcolor = value',
+      '\t\tqueue_redraw()',
+      '@export var size := Vector2(96, 72):',
+      '\tset(value):',
+      '\t\tsize = value',
+      '\t\tqueue_redraw()',
+      '',
+      'func _draw() -> void:',
+      '\tvar font := ThemeDB.fallback_font',
+      '\tvar h := size * 0.5',
+      '\tif kind == "environment":',
+      '\t\tdraw_rect(Rect2(Vector2.ZERO, size), Color(color, 0.08), true)',
+      '\t\tdraw_rect(Rect2(Vector2.ZERO, size), Color(color, 0.6), false, 2.0)',
+      '\t\tdraw_string(font, Vector2(14, 26), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)',
+      '\t\treturn',
+      '\tif kind == "character":',
+      '\t\tdraw_colored_polygon(PackedVector2Array([Vector2(0, -h.y), Vector2(h.x * 0.6, h.y), Vector2(-h.x * 0.6, h.y)]), color)',
+      '\telif kind == "trigger" or kind == "gate" or kind == "state":',
+      '\t\tvar r := h.y * 0.6',
+      '\t\tdraw_colored_polygon(PackedVector2Array([Vector2(0, -r), Vector2(r, 0), Vector2(0, r), Vector2(-r, 0)]), color)',
+      '\telif kind == "inventory":',
+      '\t\tdraw_circle(Vector2.ZERO, h.y * 0.5, color)',
+      '\telif kind == "cinematic":',
+      '\t\tdraw_rect(Rect2(-h, size), Color(color, 0.25), true)',
+      '\t\tdraw_rect(Rect2(-h, size), color, false, 2.0)',
+      '\telif kind == "choice":',
+      '\t\tdraw_circle(Vector2.ZERO, h.y * 0.55, color)',
+      '\telse:',
+      '\t\tdraw_rect(Rect2(-h * 0.7, size * 0.7), color, true)',
+      '\tdraw_string(font, Vector2(-h.x - 20, h.y + 18), label, HORIZONTAL_ALIGNMENT_CENTER, size.x + 40, 13, Color(0.95, 0.9, 0.8))',
+    ]),
+    file('debug_player.gd', [
+      '# VCGS Runtime for Godot 4.',
+      'class_name VCGSDebugPlayer',
+      'extends CanvasLayer',
+      '## A plain on-screen player: shows each line, action and cinematic, the',
+      '## options of a choice, and the objects to use in free play, so a scene',
+      '## plays before the game has its own UI. Enter presses the first button,',
+      '## 1-9 the others. Take it out (or keep it for testing) when the game has',
+      '## its own dialogue box and choice menu.',
+      '',
+      '@export var flow_path: NodePath',
+      '@export var scene_title := ""',
+      '@export var generated_root := "res://vcgs/generated"',
+      '@export var autostart := true',
+      '## With no flow: play the whole story from its Beginning, scene after scene.',
+      '@export var whole_story := false',
+      '',
+      'var flow: VCGSSceneFlow',
+      '## What the player is doing: "wait", "choice", "free", "story" or "end".',
+      'var mode := ""',
+      'var _title: Label',
+      'var _text: Label',
+      'var _buttons: HFlowContainer',
+      'var _labels: Array[String] = []',
+      'var _actions: Array[Callable] = []',
+      'var _ends := ""',
+      'var _set_up := false',
+      '',
+      'func _game() -> VCGSGameState:',
+      '\tvar tree := get_tree() if is_inside_tree() else Engine.get_main_loop() as SceneTree',
+      '\treturn tree.root.get_node_or_null("GameState") as VCGSGameState if tree else null',
+      '',
+      'func _ready() -> void:',
+      '\t_setup()',
+      '\tif autostart:',
+      '\t\tstart_now.call_deferred()',
+      '',
+      '## Build the panel and listen to the flow, once, whenever it is first needed.',
+      'func _setup() -> void:',
+      '\tif _set_up:',
+      '\t\treturn',
+      '\t_set_up = true',
+      '\t_build()',
+      '\t_title.text = scene_title',
+      '\tif not flow_path.is_empty():',
+      '\t\tflow = get_node_or_null(flow_path) as VCGSSceneFlow',
+      '\tvar game := _game()',
+      '\tif game == null:',
+      '\t\t_show("Add res://addons/vcgs_runtime/game_state.gd as an autoload named GameState, then run this scene again.", [])',
+      '\t\treturn',
+      '\tgame.changed.connect(_on_game_changed)',
+      '\tif flow:',
+      '\t\tflow.event_started.connect(_on_event)',
+      '\t\tflow.choice_requested.connect(_on_choice)',
+      '\t\tflow.free_play_started.connect(_on_free_play)',
+      '\t\tflow.scene_finished.connect(_on_finished)',
+      '',
+      '## Begin: this scene\'s timeline, or the story from its Beginning.',
+      'func start_now() -> void:',
+      '\t_setup()',
+      '\tvar game := _game()',
+      '\tif game == null:',
+      '\t\treturn',
+      '\tif flow:',
+      '\t\tif game.flags.is_empty() and game.object_states.is_empty():',
+      '\t\t\tVCGSRules.reset(game)',
+      '\t\tflow.start()',
+      '\telif whole_story:',
+      '\t\tVCGSRules.reset(game)',
+      '\t\tgo_to(VCGSStory.START)',
+      '',
+      '## What the buttons say now, and what the text says (for tests and tools).',
+      'func labels() -> Array[String]:',
+      '\treturn _labels',
+      '',
+      'func text() -> String:',
+      '\t_setup()',
+      '\treturn _text.text',
+      '',
+      '## Press the i-th button.',
+      'func press(i: int) -> void:',
+      '\tif i >= 0 and i < _actions.size():',
+      '\t\t_actions[i].call()',
+      '',
+      'func _unhandled_input(event: InputEvent) -> void:',
+      '\tvar key := event as InputEventKey',
+      '\tif key == null or not key.pressed or key.echo:',
+      '\t\treturn',
+      '\tif key.keycode == KEY_ENTER or key.keycode == KEY_KP_ENTER or key.keycode == KEY_SPACE:',
+      '\t\tpress(0)',
+      '\telif key.keycode >= KEY_1 and key.keycode <= KEY_9:',
+      '\t\tpress(key.keycode - KEY_1)',
+      '',
+      'func _build() -> void:',
+      '\tvar panel := PanelContainer.new()',
+      '\tpanel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)',
+      '\tpanel.offset_top = -230',
+      '\tadd_child(panel)',
+      '\tvar box := VBoxContainer.new()',
+      '\tpanel.add_child(box)',
+      '\t_title = Label.new()',
+      '\t_title.modulate = Color(0.91, 0.78, 0.45)',
+      '\tbox.add_child(_title)',
+      '\t_text = Label.new()',
+      '\t_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART',
+      '\t_text.custom_minimum_size = Vector2(0, 120)',
+      '\tbox.add_child(_text)',
+      '\t_buttons = HFlowContainer.new()',
+      '\tbox.add_child(_buttons)',
+      '',
+      '## Show some text and the buttons that go with it: each action is [label, Callable].',
+      'func _show(words: String, actions: Array) -> void:',
+      '\t_setup()',
+      '\t_text.text = words',
+      '\tfor child in _buttons.get_children():',
+      '\t\t_buttons.remove_child(child)',
+      '\t\tchild.queue_free()',
+      '\t_labels = []',
+      '\t_actions = []',
+      '\tfor a in actions:',
+      '\t\tvar button := Button.new()',
+      '\t\tbutton.text = str(a[0])',
+      '\t\tbutton.pressed.connect(a[1])',
+      '\t\t_buttons.add_child(button)',
+      '\t\t_labels.append(str(a[0]))',
+      '\t\t_actions.append(a[1])',
+      '',
+      'func _on_event(event: Dictionary) -> void:',
+      '\tvar kind := str(event.get("kind", ""))',
+      '\tif kind == "freePlay" or kind == "choice" or kind == "trigger":',
+      '\t\treturn',
+      '\tmode = "wait"',
+      '\tif kind == "dialogue":',
+      '\t\tvar line: Dictionary = VCGSDialogue.line(str(event.get("line", "")))',
+      '\t\tvar who := str(VCGSDialogue.SPEAKERS.get(line.get("speaker", ""), "NO SPEAKER")).to_upper()',
+      '\t\tvar how := str(line.get("direction", ""))',
+      '\t\t_show("%s%s\\n%s" % [who, ("  (" + how + ")") if how != "" else "", str(line.get("text", ""))], [["Continue", flow.advance]])',
+      '\telif kind == "cinematic":',
+      '\t\t_show(_cinematic(str(event.get("ref", "")), str(event.get("label", ""))), [["Continue", flow.advance]])',
+      '\telse:',
+      '\t\t_show(str(event.get("label", "")), [["Continue", flow.advance]])',
+      '',
+      'func _cinematic(ref: String, fallback: String) -> String:',
+      '\tvar path := "%s/cinematics/%s.tres" % [generated_root, ref]',
+      '\tif not ResourceLoader.exists(path):',
+      '\t\treturn "[Cinematic] " + fallback',
+      '\tvar c: Resource = load(path)',
+      '\tvar out := "[Cinematic] %s · %ss" % [c.get("display_name"), str(c.get("seconds"))]',
+      '\tvar n := 0',
+      '\tfor s in c.get("shot_list"):',
+      '\t\tn += 1',
+      '\t\tout += "\\n  %d. %s · %s: %s (%ss)" % [n, s.get("framing", ""), s.get("move", ""), s.get("action", ""), str(s.get("seconds", 0))]',
+      '\treturn out',
+      '',
+      'func _on_choice(_key: String, options: Array) -> void:',
+      '\tmode = "choice"',
+      '\tvar actions: Array = []',
+      '\tfor i in options.size():',
+      '\t\tvar pick: int = i',
+      '\t\tactions.append([str(options[i]), func() -> void: flow.choose(pick)])',
+      '\t_show("Choose:", actions)',
+      '',
+      'func _on_free_play(ends_when: String) -> void:',
+      '\tmode = "free"',
+      '\t_ends = ends_when',
+      '\t_refresh_free()',
+      '',
+      'func _on_game_changed() -> void:',
+      '\tif mode == "free":',
+      '\t\t_refresh_free.call_deferred()',
+      '',
+      '## The objects in this scene the player can use right now.',
+      'func _refresh_free() -> void:',
+      '\tif mode != "free":',
+      '\t\treturn',
+      '\tvar actions: Array = []',
+      '\tfor node in _interactables(get_parent()):',
+      '\t\tvar thing: String = str(node.get_parent().get("label")) if node.get_parent().get("label") != null else str(node.get_parent().name)',
+      '\t\tfor verb in node.available_verbs():',
+      '\t\t\tvar target: Node = node',
+      '\t\t\tvar v: String = verb',
+      '\t\t\tactions.append(["%s %s" % [v, thing], func() -> void: target.interact(v)])',
+      '\tactions.append(["Move on", flow.advance])',
+      '\t_show(("Free play: ends when " + _ends) if _ends != "" else "Free play", actions)',
+      '',
+      '## Everything in this scene the player can use (the generated objects\' scripts).',
+      'func _interactables(from: Node) -> Array[Node]:',
+      '\tvar out: Array[Node] = []',
+      '\tif from == null:',
+      '\t\treturn out',
+      '\tfor child in from.get_children():',
+      '\t\tif child.has_method("available_verbs") and child.has_method("interact"):',
+      '\t\t\tout.append(child)',
+      '\t\tout.append_array(_interactables(child))',
+      '\treturn out',
+      '',
+      'func _on_finished(next: String) -> void:',
+      '\tvar here: Dictionary = VCGSStory.NODES.get(flow.scene_key(), {})',
+      '\tif here.has("outcome"):',
+      '\t\t_end(here)',
+      '\t\treturn',
+      '\tgo_to(next)',
+      '',
+      'func _end(node: Dictionary) -> void:',
+      '\tmode = "end"',
+      '\tvar how := "Game over" if str(node.get("outcome", "")) == "gameOver" else "The end"',
+      '\t_show("%s: %s" % [how, node.get("name", "")], [])',
+      '',
+      '## Where a node goes: its first route whose conditions hold, else on along the spine.',
+      'func _onward(node: Dictionary, game: VCGSGameState) -> String:',
+      '\tfor route in node.get("routes", []):',
+      '\t\tif VCGSRuleEngine.check(route.get("when", {}), game):',
+      '\t\t\tVCGSRuleEngine.apply(route.get("effects", []), game)',
+      '\t\t\treturn str(route.get("to", ""))',
+      '\treturn str(node.get("onward", ""))',
+      '',
+      '## Follow the story graph from a node to the next thing to play.',
+      'func go_to(key: String) -> void:',
+      '\tmode = "story"',
+      '\tvar game := _game()',
+      '\tfor _step in 100:',
+      '\t\tif key == "":',
+      '\t\t\tmode = "end"',
+      '\t\t\t_show("The end.", [])',
+      '\t\t\treturn',
+      '\t\tvar node: Dictionary = VCGSStory.NODES.get(key, {})',
+      '\t\tif node.is_empty():',
+      '\t\t\t_show("The story goes on to %s, which is not on the graph." % key, [])',
+      '\t\t\treturn',
+      '\t\tvar kind := str(node.get("kind", ""))',
+      '\t\tvar title := str(node.get("name", key))',
+      '\t\tif kind == "end" or (node.has("outcome") and kind != "scene"):',
+      '\t\t\t_end(node)',
+      '\t\t\treturn',
+      '\t\tif kind == "scene":',
+      '\t\t\tvar file := str(node.get("file", ""))',
+      '\t\t\t_show("Next: " + title, [["Play " + title, func() -> void: (Engine.get_main_loop() as SceneTree).change_scene_to_file(file)]])',
+      '\t\t\treturn',
+      '\t\tif kind == "choice":',
+      '\t\t\tvar choice_script: GDScript = load(str(node.get("script", "")))',
+      '\t\t\tif not choice_script.available(game):',
+      '\t\t\t\tkey = _onward(node, game)',
+      '\t\t\t\tcontinue',
+      '\t\t\tmode = "choice"',
+      '\t\t\tvar actions: Array = []',
+      '\t\t\tfor i in choice_script.offered(game):',
+      '\t\t\t\tvar pick: int = i',
+      '\t\t\t\tactions.append([str(choice_script.OPTIONS[i]["label"]), func() -> void: go_to(choice_script.choose(pick, game))])',
+      '\t\t\tvar prompt := str(choice_script.PROMPT)',
+      '\t\t\t_show(title + (("\\n" + prompt) if prompt != "" else ""), actions)',
+      '\t\t\treturn',
+      '\t\tif kind == "plotPoint" or kind == "cinematic":',
+      '\t\t\tvar after := _onward(node, game)',
+      '\t\t\tvar words := _cinematic(key, title) if kind == "cinematic" else title',
+      '\t\t\t_show(words, [["Continue", func() -> void: go_to(after)]])',
+      '\t\t\treturn',
+      '\t\tkey = _onward(node, game)',
+      '\t_show("The story goes round without stopping here.", [])',
+    ]),
+  ];
+};
+
+// ---------------------------------------------------------------- scenes
+
+interface Placed {
+  key: string;
+  name: string;
+  kind: string;
+  color: string;
+  /** An object's interactable script. */
+  script?: string;
+}
+
+/** What each category of a scene's contents is, looked up in the IR. */
+const lookup = (ir: HandoffIR, root: string) => {
+  const by = (list: { ident: { key: string }; name: string }[], kind: string, extra: (x: never) => Partial<Placed> = () => ({})) =>
+    new Map(list.map((x) => [x.ident.key, { key: x.ident.key, name: x.name, kind, color: COLORS[kind] ?? '#c8bfae', ...extra(x as never) }]));
+  return {
+    characters: new Map(ir.characters.map((c) => [c.ident.key, { key: c.ident.key, name: c.name, kind: 'character', color: c.color || COLORS.character! }])),
+    environment: by(ir.locations, 'environment'),
+    objects: new Map(ir.objects.filter((o) => o.kind === 'object').map((o) => [o.ident.key, { key: o.ident.key, name: o.name, kind: 'object', color: COLORS.object!, script: `res://${root}/objects/${o.ident.key}.gd` }])),
+    puzzles: new Map(ir.objects.filter((o) => o.kind === 'puzzle').map((o) => [o.ident.key, { key: o.ident.key, name: o.name, kind: 'puzzle', color: COLORS.puzzle! }])),
+    inventory: by(ir.items, 'inventory'),
+    cinematics: by(ir.cinematics, 'cinematic'),
+    choices: by(ir.choices, 'choice'),
+    logic: new Map<string, Placed>([
+      ...ir.flags.map((f): [string, Placed] => [f.ident.key, { key: f.ident.key, name: f.name, kind: 'state', color: COLORS.state! }]),
+      ...ir.triggers.map((t): [string, Placed] => [t.ident.key, { key: t.ident.key, name: t.name, kind: t.kind, color: COLORS[t.kind]! }]),
+    ]),
+  } as Record<string, Map<string, Placed>>;
+};
+
+const nodeName = (key: string) =>
+  key
+    .split('_')
+    .filter(Boolean)
+    .map((w) => w[0]!.toUpperCase() + w.slice(1))
+    .join('')
+    .replace(/^(\d)/, 'N$1') || 'Element';
+
+/** Where each group of placeholders sits in a 1152×648 window. */
+const ROWS: { category: string; group: string; y: number; x0: number; step: number; size: [number, number] }[] = [
+  { category: 'cinematics', group: 'Cinematics', y: 120, x0: 180, step: 160, size: [120, 60] },
+  { category: 'characters', group: 'Characters', y: 250, x0: 120, step: 130, size: [70, 90] },
+  { category: 'objects', group: 'Objects', y: 250, x0: 700, step: 140, size: [90, 80] },
+  { category: 'inventory', group: 'Items', y: 360, x0: 700, step: 110, size: [60, 60] },
+  { category: 'puzzles', group: 'Puzzles', y: 360, x0: 480, step: 120, size: [80, 70] },
+  { category: 'choices', group: 'Choices', y: 360, x0: 120, step: 120, size: [60, 60] },
+];
+
+export const sceneTscn = (ir: HandoffIR, scene: IrScene, root: string): string => {
+  const known = lookup(ir, root);
+  const ext: { type: string; path: string; id: string }[] = [];
+  const res = (path: string) => {
+    let found = ext.find((e) => e.path === path);
+    if (!found) ext.push((found = { type: 'Script', path, id: `${ext.length + 1}_script` }));
+    return `ExtResource(${str(found.id)})`;
+  };
+  const flow = res(`res://${root}/scenes/${scene.ident.key}.gd`);
+  const placeholder = res(`res://${RUNTIME}/placeholder.gd`);
+  const player = res(`res://${RUNTIME}/debug_player.gd`);
+  const nodes: string[] = [];
+  const node = (name: string, type: string, parent: string | null, props: Record<string, string> = {}, groups: string[] = []) =>
+    nodes.push(
+      [
+        `[node name=${str(name)} type=${str(type)}${parent !== null ? ` parent=${str(parent)}` : ''}${groups.length ? ` groups=[${groups.map(str).join(', ')}]` : ''}]`,
+        ...Object.entries(props).map(([k, v]) => `${k} = ${v}`),
+      ].join('\n'),
+    );
+
+  node(nodeName(scene.ident.key), 'Node2D', null);
+  node('Flow', 'Node', '.', { script: flow });
+  const location = (scene.contents['environment'] ?? []).map((k) => known['environment']!.get(k)).find(Boolean);
+  node('Location', 'Node2D', '.', {
+    position: 'Vector2(24, 24)',
+    script: placeholder,
+    kind: str('environment'),
+    label: str(location ? `${location.name} · ${scene.slug}` : scene.slug),
+    color: color(location?.color ?? COLORS.environment!),
+    size: 'Vector2(1104, 380)',
+  });
+
+  for (const row of ROWS) {
+    const placed = (scene.contents[row.category] ?? []).map((k) => known[row.category]!.get(k)).filter((p): p is Placed => !!p);
+    if (!placed.length) continue;
+    node(row.group, 'Node2D', '.');
+    const used = new Set<string>();
+    placed.forEach((p, i) => {
+      let name = nodeName(p.key);
+      for (let n = 2; used.has(name); n++) name = `${nodeName(p.key)}${n}`;
+      used.add(name);
+      node(name, 'Node2D', row.group, {
+        position: `Vector2(${row.x0 + i * row.step}, ${row.y})`,
+        script: placeholder,
+        kind: str(p.kind),
+        label: str(p.name),
+        color: color(p.color),
+        size: `Vector2(${row.size[0]}, ${row.size[1]})`,
+      });
+      if (p.script) node('Interactable', 'Node', `${row.group}/${name}`, { script: res(p.script) }, ['vcgs_interactable']);
+    });
+  }
+  const logic = (scene.contents['logic'] ?? []).map((k) => known['logic']!.get(k)).filter((p): p is Placed => !!p);
+  if (logic.length) {
+    node('Logic', 'Node2D', '.');
+    logic.forEach((p, i) =>
+      node(nodeName(p.key), 'Node2D', 'Logic', {
+        position: `Vector2(${520 + i * 110}, 120)`,
+        script: placeholder,
+        kind: str(p.kind),
+        label: str(p.name),
+        color: color(p.color),
+        size: 'Vector2(50, 50)',
+      }),
+    );
+  }
+  node('DebugPlayer', 'CanvasLayer', '.', {
+    script: player,
+    flow_path: 'NodePath("../Flow")',
+    scene_title: str(`${scene.code} ${scene.name}`.trim()),
+    generated_root: str(`res://${root}`),
+  });
+
+  return [
+    `[gd_scene load_steps=${ext.length + 1} format=3]`,
+    '',
+    ...ext.map((e) => `[ext_resource type=${str(e.type)} path=${str(e.path)} id=${str(e.id)}]`),
+    '',
+    nodes.join('\n\n'),
+    '',
+  ].join('\n');
+};
+
+/** Plays the whole story from its Beginning, scene after scene. */
+export const storyTscn = (ir: HandoffIR, root: string): string =>
+  [
+    '[gd_scene load_steps=2 format=3]',
+    '',
+    `[ext_resource type="Script" path=${str(`res://${RUNTIME}/debug_player.gd`)} id="1_script"]`,
+    '',
+    '[node name="PlayStory" type="Node2D"]',
+    '',
+    '[node name="DebugPlayer" type="CanvasLayer" parent="."]',
+    'script = ExtResource("1_script")',
+    `scene_title = ${str(ir.project.name)}`,
+    `generated_root = ${str(`res://${root}`)}`,
+    'whole_story = true',
+    '',
+  ].join('\n');
+
+/** The graph as the story player walks it: every node, its kind and name, where it goes, and its scene or choice file. */
+export const storyNodes = (ir: HandoffIR, root: string): Record<string, Record<string, unknown>> =>
+  Object.fromEntries(
+    ir.graph.map((n) => [
+      n.key,
+      {
+        kind: n.kind,
+        name: n.name,
+        onward: n.onward ?? '',
+        routes: n.routes.map((r) => ({ to: r.to, label: r.label, ...(r.when ? { when: r.when } : {}), ...(r.effects ? { effects: r.effects } : {}) })),
+        ...(n.outcome ? { outcome: n.outcome } : {}),
+        ...(n.kind === 'scene' ? { file: `res://${root}/scenes/${n.key}.tscn` } : {}),
+        ...(n.kind === 'choice' ? { script: `res://${root}/choices/${n.key}.gd` } : {}),
+      },
+    ]),
+  );

@@ -86,7 +86,7 @@ export const planHandoff = (project: Project): Handoff => {
   const target = targetOf(project);
   const adapter = engineById(target.engine);
   if (!adapter.available || !adapter.generate) return { adapter, target, output: null, rows: [], changed: 0, issues: [], blocking: [] };
-  const output = adapter.generate(buildIR(project), target.outputPath);
+  const output = adapter.generate(buildIR(project), target.outputPath, { placeholderScenes: target.placeholderScenes !== false });
   const last = project.handoff?.last?.engine === target.engine ? project.handoff.last : undefined;
   const found = findIssues(project);
   const issueOf = new Map(found.map((i) => [i.id, i.message]));

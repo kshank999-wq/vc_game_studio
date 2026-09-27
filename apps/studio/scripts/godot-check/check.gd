@@ -23,18 +23,28 @@ func _initialize() -> void:
 	walk("res://addons/vcgs_runtime", files)
 	var scripts := 0
 	var resources := 0
+	var scenes := 0
 	for path in files:
 		if path.ends_with(".gd"):
 			var script: GDScript = load(path)
 			if script == null or not script.can_instantiate() and not script.is_abstract():
 				fail("script did not load: " + path)
 			scripts += 1
+		elif path.ends_with(".tscn"):
+			var packed: PackedScene = load(path)
+			if packed == null or not packed.can_instantiate():
+				fail("scene did not load: " + path)
+			else:
+				packed.instantiate().free()
+			scenes += 1
 		elif path.ends_with(".tres"):
 			var res := load(path)
 			if res == null or res.get("key") == "":
 				fail("resource did not load: " + path)
 			resources += 1
-	print("loaded ", scripts, " scripts and ", resources, " resources")
+	print("loaded ", scripts, " scripts, ", resources, " resources and ", scenes, " scenes")
+	if scenes < 5:
+		fail("expected a placeholder scene per story scene and play_story.tscn, got " + str(scenes))
 
 	var mara: Resource = load("res://vcgs/generated/characters/mara.tres")
 	if mara.display_name != "Mara" or mara.role != "Main":
@@ -128,6 +138,49 @@ func _initialize() -> void:
 		fail("Crawl through should lead to the squeeze")
 	if not game.was_picked("take_the_lantern:crawl_through"):
 		fail("the pick should be remembered by its option key")
+
+	# The Vault Door's placeholder scene, played through its on-screen player.
+	load("res://vcgs/generated/logic/rules.gd").reset(game)
+	game.give_item("vault_key")
+	var vault: Node = load("res://vcgs/generated/scenes/sc_03_the_vault_door.tscn").instantiate()
+	var player: Node = vault.get_node("DebugPlayer")
+	player.autostart = false
+	root.add_child(vault)
+	if vault.get_node_or_null("Objects/RustedLever/Interactable") == null or vault.get_node_or_null("Characters/Mara") == null:
+		fail("the scene should hold the lever (wired to its script) and Mara")
+	player.start_now()
+	if not player.text().begins_with("[Cinematic] Door in the dark · 7.5s") or player.labels() != ["Continue"]:
+		fail("the scene should open on its cinematic, got " + player.text())
+	for i in 4:
+		player.press(0)
+	var free_play: Array = player.labels()
+	print("free play: ", free_play)
+	if not free_play.has("Pull Rusted Lever"):
+		fail("free play should offer to pull the lever, got " + str(free_play))
+	player.press(free_play.find("Pull Rusted Lever"))
+	print("choice: ", player.labels())
+	if player.labels() != ["Turn the key", "Force it"]:
+		fail("pulling the lever should end the free play into the choice, got " + str(player.labels()))
+	player.press(0)
+	print("after the scene: ", player.text().split("\n")[0], " ", player.labels())
+	if not player.text().begins_with("[Cinematic] The Vault Opens"):
+		fail("the scene should go on to the cinematic on the spine, got " + player.text())
+	player.press(0)
+	if player.labels() != ["Carry on", "Pocket it"]:
+		fail("then the ring choice, got " + str(player.labels()))
+	player.press(0)
+	if player.mode != "end":
+		fail("carrying on should reach the ending, got " + player.text())
+	print("ending: ", player.text())
+
+	# The whole story from its Beginning.
+	var story: Node = load("res://vcgs/generated/play_story.tscn").instantiate()
+	var story_player: Node = story.get_node("DebugPlayer")
+	story_player.autostart = false
+	root.add_child(story)
+	story_player.start_now()
+	if story_player.labels() != ["Play The Cave Mouth"]:
+		fail("the story should start at SC-01, got " + str(story_player.labels()))
 
 	print("OK" if failures == 0 else str(failures) + " FAILED")
 	quit(0 if failures == 0 else 1)

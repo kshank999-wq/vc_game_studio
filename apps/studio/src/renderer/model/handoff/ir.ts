@@ -234,9 +234,17 @@ export interface IrStoryNode {
   name: string;
 }
 
+/** Every node on the story graph, with where it goes: routes in order (first whose conditions hold), else onward. */
+export interface IrGraphNode extends IrStoryNode {
+  onward: string | null;
+  routes: { to: string; label: string; when?: IrRule; effects?: IrEffect[] }[];
+  outcome?: 'ending' | 'gameOver';
+}
+
 export interface HandoffIR {
   project: { id: string; name: string; key: string };
   spine: IrStoryNode[];
+  graph: IrGraphNode[];
   branches: { from: string; to: string; label: string; when?: IrRule; effects?: IrEffect[] }[];
   subplots: { key: string; name: string; from: string; to: string; beats: IrStoryNode[] }[];
   arcs: { character: string; name: string; events: { polarity: string; name: string; tiedTo: string | null }[] }[];
@@ -343,6 +351,22 @@ export const buildIR = (project: Project): HandoffIR => {
   return {
     project: { id: project.id, name: project.name, key: toKey(project.name) },
     spine: spineSequence(project).map(node),
+    graph: Object.keys(project.placements)
+      .filter((id) => project.objects[id] && project.objects[id]!.type !== 'arcEvent')
+      .sort((a, b) => key(a)!.localeCompare(key(b)!))
+      .map((id): IrGraphNode => {
+        const spine = spineSequence(project);
+        const at = spine.indexOf(id);
+        const outcome = project.objects[id]!.data.outcome;
+        return {
+          ...node(id),
+          onward: at >= 0 && spine[at + 1] ? key(spine[at + 1]) : null,
+          routes: project.connections
+            .filter((c) => c.kind === 'branch' && c.sourceId === id && project.objects[c.targetId])
+            .map((c) => ({ to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
+          ...(outcome ? { outcome } : {}),
+        };
+      }),
     branches: project.connections
       .filter((c) => c.kind === 'branch' && project.objects[c.sourceId] && project.objects[c.targetId])
       .map((c) => ({ from: key(c.sourceId)!, to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),

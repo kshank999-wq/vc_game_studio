@@ -189,6 +189,8 @@ export interface EngineTarget {
   /** Inside that project, where generated files are written. */
   outputPath: string;
   exportOnSave: boolean;
+  /** Generate engine scenes with placeholders to play the story in (default on). */
+  placeholderScenes?: boolean;
 }
 
 /** What was sent last time, so the handoff can say what changed since. */

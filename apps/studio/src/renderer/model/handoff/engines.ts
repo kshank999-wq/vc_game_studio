@@ -48,7 +48,12 @@ export interface EngineAdapter {
   setup: string[];
   /** A line for adapters still to come. */
   plan?: string;
-  generate?: (ir: HandoffIR, outputPath: string) => EngineOutput;
+  generate?: (ir: HandoffIR, outputPath: string, options?: GenerateOptions) => EngineOutput;
+}
+
+export interface GenerateOptions {
+  /** Engine scenes to run the story in, with placeholders for its elements (default on). */
+  placeholderScenes?: boolean;
 }
 
 /** FNV-1a, 32 bit: a short, stable fingerprint for text. */

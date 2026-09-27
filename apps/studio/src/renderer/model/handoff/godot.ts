@@ -1,6 +1,7 @@
-import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
+import type { EngineAdapter, ElementOutput, EngineOutput, GenerateOptions, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
 import type { HandoffIR, IrEvent, IrThing } from './ir';
+import { sceneRuntime, sceneTscn, storyNodes, storyTscn } from './godot-scenes';
 
 /**
  * The Godot 4 adapter: GDScript and Resources.
@@ -365,6 +366,11 @@ const runtime = (): GeneratedFile[] => {
       '\t\t\t\t_await_end(event["ends"])',
       '\t\t"choice":',
       '\t\t\tchoice_requested.emit(event.get("ref", ""), _options_at(_index))',
+      '\t\t"trigger":',
+      '\t\t\t# A trigger on the timeline fires as it is reached, and the scene moves on.',
+      '\t\t\tif game and event.get("ref", "") != "":',
+      '\t\t\t\tVCGSRules.fire(event["ref"], game)',
+      '\t\t\tadvance()',
       '',
       '## A free play ends by itself once its end rule holds.',
       'func _await_end(rule: Dictionary) -> void:',
@@ -540,6 +546,8 @@ const runtime = (): GeneratedFile[] => {
       '  GameState; set `GameState.auto_rules = false` to drive them yourself.',
       '- The Resource classes hold characters, items, locations, cinematics',
       '  and puzzles.',
+      '- `placeholder.gd` draws a stand-in for an element in the generated',
+      '  scenes; `debug_player.gd` is the plain on-screen player in them.',
     ]),
   ];
 };
@@ -554,9 +562,10 @@ const thingFields = (t: IrThing): Record<string, string> => ({
   details: gd(Object.fromEntries(Object.entries(t.fields).filter(([k]) => k !== 'seconds' && k !== 'shots'))),
 });
 
-export const generateGodot = (ir: HandoffIR, outputPath: string): EngineOutput => {
+export const generateGodot = (ir: HandoffIR, outputPath: string, options: GenerateOptions = {}): EngineOutput => {
+  const placeholders = options.placeholderScenes !== false;
   const root = outputPath.replace(/^res:\/\//, '').replace(/\/+$/, '') || 'vcgs/generated';
-  const files: GeneratedFile[] = [...runtime()];
+  const files: GeneratedFile[] = [...runtime(), ...sceneRuntime()];
   const elements: ElementOutput[] = [];
   const add = (path: string, content: string) => {
     files.push({ path: `${root}/${path}`, content: content.endsWith('\n') ? content : `${content}\n`, kind: 'generated' });
@@ -613,9 +622,19 @@ export const generateGodot = (ir: HandoffIR, outputPath: string): EngineOutput =
         '\treturn ONWARD',
       ].join('\n'),
     );
+    // A placeholder scene to run it in, with everything in it stood in for.
+    const tscn = placeholders ? sceneTscn(ir, s, root) : null;
+    const tscnPath = tscn ? add(`scenes/${s.ident.key}.tscn`, tscn) : null;
     row(
-      { id: s.id, label: `${s.code} ${s.name}`.trim(), symbol: 'scene', group: 'Story', generates: `Scene flow controller · ${s.main.length} event${s.main.length === 1 ? '' : 's'}${s.branches.length ? ` · ${s.branches.length} branch${s.branches.length === 1 ? '' : 'es'}` : ''}`, files: [path] },
-      s,
+      {
+        id: s.id,
+        label: `${s.code} ${s.name}`.trim(),
+        symbol: 'scene',
+        group: 'Story',
+        generates: `Scene flow controller · ${s.main.length} event${s.main.length === 1 ? '' : 's'}${s.branches.length ? ` · ${s.branches.length} branch${s.branches.length === 1 ? '' : 'es'}` : ''}${tscn ? ' · placeholder scene' : ''}`,
+        files: tscnPath ? [path, tscnPath] : [path],
+      },
+      { s, tscn },
     );
   }
 
@@ -705,9 +724,25 @@ export const generateGodot = (ir: HandoffIR, outputPath: string): EngineOutput =
       `const SUBPLOTS := ${gd(ir.subplots.map((s) => ({ key: s.key, name: s.name, from: s.from, to: s.to, beats: s.beats.map((b) => b.key) })))}`,
       `const ARCS := ${gd(Object.fromEntries(ir.arcs.map((a) => [a.character, a.events.map((e) => ({ polarity: e.polarity, name: e.name, tied_to: e.tiedTo ?? '' }))])))}`,
       `const SCENES := ${gd(Object.fromEntries(ir.scenes.map((s) => [s.ident.key, `res://${root}/scenes/${s.ident.key}.gd`])))}`,
+      '',
+      '## Where the story starts, and every node on the graph with where it goes:',
+      '## routes in order (the first whose conditions hold), else onward along the spine.',
+      `const START := ${gd(ir.graph.find((n) => n.kind === 'begin')?.key ?? '')}`,
+      `const NODES := ${gd(storyNodes(ir, root))}`,
     ].join('\n'),
   );
-  row({ id: 'story', label: 'Story graph', symbol: 'plotPoint', group: 'Story', generates: `Spine (${ir.spine.length}) · branches · subplots · arcs`, files: [storyPath] }, storyData);
+  const playStory = placeholders ? add('play_story.tscn', storyTscn(ir, root)) : null;
+  row(
+    {
+      id: 'story',
+      label: 'Story graph',
+      symbol: 'plotPoint',
+      group: 'Story',
+      generates: `Spine (${ir.spine.length}) · branches · subplots · arcs${playStory ? ' · play_story.tscn' : ''}`,
+      files: playStory ? [storyPath, playStory] : [storyPath],
+    },
+    { storyData, graph: ir.graph, playStory: !!playStory },
+  );
 
   // People and words.
   for (const c of ir.characters) {
@@ -735,6 +770,9 @@ export const generateGodot = (ir: HandoffIR, outputPath: string): EngineOutput =
       'extends RefCounted',
       '',
       `const LINES := ${gd(table)}`,
+      '',
+      '## Speaker keys to the names shown on screen.',
+      `const SPEAKERS := ${gd(Object.fromEntries(ir.characters.map((c) => [c.ident.key, c.name])))}`,
       '',
       'static func line(line_id: String) -> Dictionary:',
       '\treturn LINES.get(line_id, {})',
@@ -893,6 +931,18 @@ export const generateGodot = (ir: HandoffIR, outputPath: string): EngineOutput =
       '3. Attach an object\'s script (`objects/`) to its node; call `interact("Pull")` from your input code.',
       '4. Call `VCGSRules.reset(GameState)` when a new game begins. Triggers and',
       '   puzzles then fire and solve themselves as their conditions come true.',
+      '',
+      '## Placeholder scenes',
+      '',
+      'Each story scene has a `scenes/<scene>.tscn` to run straight away: a stand-in',
+      'for the location, its characters, objects (wired to their scripts), items,',
+      'cinematics, puzzles and logic, and a plain on-screen player. Open one and',
+      'press F6 (Run Current Scene) to play it; `play_story.tscn` plays the whole',
+      'story from the Beginning, scene after scene.',
+      '',
+      'These scenes are rewritten on every export. To build the real thing, make an',
+      'inherited scene from one (Scene > New Inherited Scene), save it outside this',
+      'folder and add art there: it keeps the generated nodes and your changes both.',
     ].join('\n'),
   );
   add(
@@ -920,6 +970,10 @@ export const godot: EngineAdapter = {
   available: true,
   defaultOutputPath: 'res://vcgs/generated',
   runtimeName: 'VCGS Runtime for Godot',
-  setup: ['Add res://addons/vcgs_runtime/game_state.gd as an autoload named GameState.', 'Call VCGSRules.reset(GameState) when a new game begins.'],
+  setup: [
+    'Add res://addons/vcgs_runtime/game_state.gd as an autoload named GameState.',
+    'Call VCGSRules.reset(GameState) when a new game begins.',
+    'To try the story at once, run play_story.tscn (or any scene’s .tscn) in the generated folder.',
+  ],
   generate: generateGodot,
 };
