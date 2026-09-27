@@ -70,7 +70,19 @@ export interface Lane {
 
 export type ConnectionKind = 'spine' | 'branch' | 'contains' | 'references' | 'arcEvent' | 'laneTie' | 'gate';
 
-export interface Connection {
+/**
+ * What a choice's option does once it has been picked (spec §14: options may
+ * remain or disappear after selection), and whether it shows while its
+ * conditions are not met. By default it stays on offer and shows greyed.
+ */
+export interface OptionBehaviour {
+  /** 'gone': disappears once picked. 'locked': stays in the list but can't be picked again. */
+  after?: 'gone' | 'locked';
+  /** Hidden until its conditions hold, rather than shown greyed. */
+  hideUnavailable?: boolean;
+}
+
+export interface Connection extends OptionBehaviour {
   id: string;
   sourceId: string;
   targetId: string;
@@ -144,6 +156,8 @@ export interface TimelineEvent {
   condition?: string;
   /** A choice's option that carries on along the main track. */
   mainLabel?: string;
+  /** What that main option does once picked. */
+  mainAfter?: OptionBehaviour['after'];
   /** Plays only when this holds (the plain-words `condition` is its note). */
   when?: Rule;
   /** Free play ends as soon as this holds. */
@@ -153,7 +167,7 @@ export interface TimelineEvent {
 }
 
 /** A choice's other option: its own track, which may reconnect to the main one. */
-export interface TimelineBranch {
+export interface TimelineBranch extends OptionBehaviour {
   id: string;
   sceneId: string;
   choiceEventId: string;

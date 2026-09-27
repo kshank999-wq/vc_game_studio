@@ -93,7 +93,17 @@ func _initialize() -> void:
 	print("options: ", choices)
 	print("finished: ", finished)
 	if choices.size() != 2 or choices[0] != ["Turn the key", "Force it"]:
-		fail("the choice should offer Turn the key and Force it twice, got " + str(choices))
+		fail("the choice should offer Turn the key and Force it first, got " + str(choices))
+	# Force it disappears once picked: the second time only the key is on offer.
+	if choices.size() == 2 and choices[1] != ["Turn the key"]:
+		fail("Force it should be gone the second time, got " + str(choices[1]))
+	if flow.options_detail.size() != 1:
+		fail("the options list should hold only Turn the key now, got " + str(flow.options_detail))
+
+	# The entry cinematic carries its shot list.
+	var door_cin: Resource = load("res://vcgs/generated/cinematics/door_in_the_dark.tres")
+	if door_cin.shot_list.size() != 3 or door_cin.shot_list[1]["framing"] != "Close-up" or door_cin.seconds != 7.5:
+		fail("Door in the dark should have 3 shots, 7.5s, got " + str(door_cin.shot_list.size()) + " / " + str(door_cin.seconds))
 	if finished != ["cin_01_the_vault_opens"] and finished != ["the_vault_opens"]:
 		fail("the scene should end into the cinematic, got " + str(finished))
 	if game.has_item("vault_key") or int(game.arcs.get("mara", 0)) != 1:
@@ -116,6 +126,8 @@ func _initialize() -> void:
 	print("C1 options: ", choice.OPTIONS)
 	if choice.choose(1, game) != "sc_04_the_squeeze":
 		fail("Crawl through should lead to the squeeze")
+	if not game.was_picked("take_the_lantern:crawl_through"):
+		fail("the pick should be remembered by its option key")
 
 	print("OK" if failures == 0 else str(failures) + " FAILED")
 	quit(0 if failures == 0 else 1)

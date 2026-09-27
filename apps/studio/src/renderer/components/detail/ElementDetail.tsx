@@ -1,3 +1,5 @@
+import { runningTime, shotsOf } from '../../model/shots';
+import { useNav } from '../../nav';
 import { useState } from 'react';
 
 import {
@@ -221,6 +223,7 @@ const Interactions = ({ object, project, onCommit }: { object: StoryObject; proj
  * so every view that shows it changes too.
  */
 export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenBible, onOpenCode, onNavigate, variant, onDelete }: Props) => {
+  const nav = useNav();
   const object = project.objects[id];
   if (!object) return null;
   const allUses = variant === 'bible';
@@ -298,6 +301,24 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
             {(FIELDS[object.type] ?? []).map((f) => (
               <Text key={f.key} spec={f} value={String(object.data[f.key] ?? '')} onSave={(v) => onCommit(setField(project, id, f.key, v))} />
             ))}
+          </div>
+        </section>
+      )}
+
+      {object.type === 'cinematic' && nav.openShots && (
+        <section className="detail-section">
+          <div className="dfld">
+            <span>Shot list</span>
+            <div className="shot-summary">
+              <span className="detail-text">
+                {shotsOf(object).length
+                  ? `${shotsOf(object).length} shot${shotsOf(object).length === 1 ? '' : 's'} · ${runningTime(shotsOf(object))}s`
+                  : 'Not broken into shots yet'}
+              </span>
+              <button className="tb-btn small" onClick={() => nav.openShots!(id)}>
+                {shotsOf(object).length ? 'Open the shot list' : 'Break it into shots…'}
+              </button>
+            </div>
           </div>
         </section>
       )}

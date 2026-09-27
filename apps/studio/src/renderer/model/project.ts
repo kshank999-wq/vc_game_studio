@@ -497,7 +497,7 @@ export const relabelConnection = (project: Project, id: string, label: string): 
 export const setConnectionRules = (
   project: Project,
   id: string,
-  patch: { conditions?: Connection['conditions']; effects?: Connection['effects'] },
+  patch: { conditions?: Connection['conditions']; effects?: Connection['effects']; after?: Connection['after']; hideUnavailable?: boolean },
 ): Project => {
   if (!project.connections.some((c) => c.id === id)) return project;
   return {
@@ -505,10 +505,10 @@ export const setConnectionRules = (
     connections: project.connections.map((c) => {
       if (c.id !== id) return c;
       const next: Connection = { ...c };
-      for (const key of ['conditions', 'effects'] as const) {
+      for (const key of ['conditions', 'effects', 'after', 'hideUnavailable'] as const) {
         if (!(key in patch)) continue;
         const value = patch[key];
-        if (value === undefined || (Array.isArray(value) && !value.length)) delete next[key];
+        if (value === undefined || value === false || (Array.isArray(value) && !value.length)) delete next[key];
         else (next as unknown as Record<string, unknown>)[key] = value;
       }
       return next;

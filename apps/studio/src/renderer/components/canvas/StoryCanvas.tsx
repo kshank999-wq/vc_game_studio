@@ -23,9 +23,10 @@ import type { Connection, Lane, ObjectType, Project } from '../../model/types';
 import { useWheelPanZoom } from '../../use-pan-zoom';
 import { HEADER_W, type View } from '../../view';
 import { connectionCurve, draftCurve, subplotPath, type Point } from './geometry';
-import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
+import { EffectsEditor, OptionBehaviourEditor, RuleEditor } from '../rules/RuleEditor';
 import { Minimap } from './Minimap';
 import { usePreferences } from '../../preferences';
+import { useNav } from '../../nav';
 import { NodeView, type PortState } from './NodeView';
 import { SubplotBand, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
 
@@ -581,6 +582,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
             </div>
             <RuleEditor project={project} rule={c.conditions} label="Offered when" onChange={(r) => props.onCommit(setConnectionRules(project, c.id, { conditions: r }))} />
             <EffectsEditor project={project} effects={c.effects} label="Taking it" onChange={(e) => props.onCommit(setConnectionRules(project, c.id, { effects: e }))} />
+            {project.objects[c.sourceId]?.type === 'choice' && <OptionBehaviourEditor value={c} onChange={(patch) => props.onCommit(setConnectionRules(project, c.id, patch))} />}
           </div>
         );
       })()}
@@ -697,7 +699,7 @@ const Pills = ({ project, rows, selection, editing, onSelect, onEdit, onMenu, on
 }) => (
   <>
     {project.connections.map((c) => {
-      if (c.kind !== 'branch' || (!c.label && !c.conditions && editing !== c.id)) return null;
+      if (c.kind !== 'branch' || (!c.label && !c.conditions && !c.after && editing !== c.id)) return null;
       const shape = connectionCurve(project, c, rows);
       if (!shape) return null;
       return (
@@ -740,6 +742,11 @@ const Pills = ({ project, rows, selection, editing, onSelect, onEdit, onMenu, on
                 </span>
               )}
               {c.label}
+              {c.after && (
+                <span className="pill-after" title={c.after === 'gone' ? 'Disappears once picked' : 'Can’t be picked again once picked'}>
+                  {c.after === 'gone' ? 'once' : 'locks'}
+                </span>
+              )}
             </>
           )}
         </div>
@@ -761,6 +768,7 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onO
   onRules: () => void;
   onPlayFrom?: (id: string) => void;
 }) => {
+  const nav = useNav();
   const item = (label: string, action: () => void, className?: string, checked?: boolean) => (
     <button
       key={label}
@@ -794,6 +802,9 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onO
       items.push(item('Explode scene', () => onOpenScene(object.id, 'exploded')));
       items.push(item('Scene timeline', () => onOpenScene(object.id, 'timeline')));
       items.push(<div key="sep0" className="menu-sep" />);
+    }
+    if (object.type === 'cinematic' && nav.openShots) {
+      items.push(item('Open the shot list', () => nav.openShots!(object.id)));
     }
     if (onPlayFrom && object.type !== 'end') {
       items.push(item(object.type === 'begin' ? 'Play the story' : 'Play from here', () => onPlayFrom(object.id)));

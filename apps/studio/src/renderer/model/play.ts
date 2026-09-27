@@ -2,8 +2,9 @@ import { initialState, interactionsOf, statesOf } from './details';
 import { spineSequence } from './layout';
 import { apply, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type Rule } from './rules';
 import { elementsIn } from './scene';
+import { cinematicTiming, describeShot, shotsOf } from './shots';
 import { eventLine, eventTitle, MAIN, sceneTimeline } from './timeline';
-import type { Project, StoryObject, TimelineEvent } from './types';
+import type { OptionBehaviour, Project, StoryObject, TimelineEvent } from './types';
 
 /**
  * Play the story inside the studio, the way the generated engine code plays
@@ -17,13 +18,15 @@ import type { Project, StoryObject, TimelineEvent } from './types';
 export interface PlayWorld extends PlayState {
   /** Triggers that have fired (each fires once by its rule). */
   fired: Record<string, boolean>;
+  /** How many times each option has been picked, by option key. */
+  picked: Record<string, number>;
 }
 
 export type Entry =
   | { kind: 'heading'; text: string; sub?: string; id: string }
   | { kind: 'line'; speaker: string | null; text: string; direction?: string; sceneId: string; lineId: string }
   | { kind: 'action'; text: string; detail?: string }
-  | { kind: 'cinematic'; text: string; detail?: string }
+  | { kind: 'cinematic'; text: string; detail?: string; shots?: string[]; skippable?: boolean }
   | { kind: 'picked'; text: string }
   | { kind: 'did'; text: string }
   | { kind: 'effect'; text: string }
@@ -78,7 +81,7 @@ const MAX_STEPS = 2000;
 // ---------------------------------------------------------------- the world
 
 export const startWorld = (project: Project): PlayWorld => {
-  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {} };
+  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {} };
   for (const o of Object.values(project.objects)) {
     const initial = initialState(o);
     if (o.type === 'state' && initial !== undefined) world.flags[o.id] = initial;
@@ -150,6 +153,20 @@ const settle = (d: Doing) => {
   }
 };
 
+/** A cinematic as it plays: its running time and camera notes, and each shot of its shot list. */
+const cinematicEntry = (project: Project, id: string, text: string, event?: TimelineEvent): Entry => {
+  const o = project.objects[id]!;
+  const timing = cinematicTiming(project, id, event);
+  const shots = shotsOf(o).map((s, i) => `${i + 1}. ${describeShot(project, s)} (${s.seconds}s${i < shotsOf(o).length - 1 && s.transition !== 'Cut' ? ` · ${s.transition.toLowerCase()}` : ''})`);
+  return {
+    kind: 'cinematic',
+    text,
+    detail: [`${timing.seconds}s · ${timing.shots} shot${timing.shots === 1 ? '' : 's'}`, (o.data.camera as string | undefined) ?? ''].filter(Boolean).join(' · '),
+    ...(shots.length ? { shots } : {}),
+    skippable: o.data.skippable !== 'Not skippable',
+  };
+};
+
 // ---------------------------------------------------------------- where the story goes
 
 const spineNext = (project: Project, id: string): string | null => {
@@ -162,6 +179,13 @@ const eventRule = (project: Project, event: TimelineEvent): Rule | undefined =>
   both(both(event.when, eventLine(project, event)?.conditions), event.kind === 'choice' && event.refId ? ruleOf(project.objects[event.refId]) : undefined);
 
 const trackOf = (project: Project, sceneId: string, track: string) => sceneTimeline(project, sceneId).find((t) => t.id === track);
+
+/** A choice with nothing left to pick: every option gone, locked or not on offer. */
+const stuck = (d: Doing, label: string): Cursor => {
+  const text = `Stuck at ${label}: no option is left to pick.`;
+  d.log.push({ kind: 'end', text });
+  return { at: 'end', outcome: 'deadEnd', text };
+};
 
 /** One unit of the story: move the cursor on, writing what happened. */
 const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
@@ -193,10 +217,11 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
           d.log.push({ kind: 'skip', text: label, needs: describeRule(project, ruleOf(o)) });
           return { at: 'after', id: o.id };
         }
+        if (!graphOptions(project, d.world, o.id).some((x) => x.available)) return stuck(d, label);
         return { at: 'graphChoice', id: o.id };
       }
       case 'cinematic':
-        d.log.push({ kind: 'cinematic', text: label, detail: (o.data.camera as string | undefined) ?? o.notes });
+        d.log.push(cinematicEntry(project, o.id, label));
         return { at: 'wait', next: { at: 'after', id: o.id } };
       default:
         d.log.push({ kind: 'heading', id: o.id, text: label, sub: (o.data.summary as string | undefined) || o.notes || undefined });
@@ -260,7 +285,7 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
         next = onward;
         break;
       case 'cinematic':
-        d.log.push({ kind: 'cinematic', text: eventTitle(project, event), detail: event.refId ? ((project.objects[event.refId]?.data.camera as string | undefined) ?? '') : event.detail });
+        d.log.push(event.refId && project.objects[event.refId] ? cinematicEntry(project, event.refId, eventTitle(project, event), event) : { kind: 'cinematic', text: eventTitle(project, event), detail: event.detail });
         next = { at: 'wait', next: onward };
         break;
       case 'freePlay':
@@ -268,6 +293,7 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
         break;
       case 'choice':
         // A choice's effects belong to its options.
+        if (!sceneOptions(project, d.world, cursor.sceneId, event).some((x) => x.available)) return stuck(d, eventTitle(project, event));
         return { ...cursor, at: 'sceneChoice' };
       default:
         d.log.push({ kind: 'action', text: eventTitle(project, event), detail: event.detail || undefined });
@@ -324,36 +350,64 @@ export const playToDecision = (project: Project, play: Play): Play => {
   return next;
 };
 
+/**
+ * One option as the player sees it now, or null when it is not in the list:
+ * gone once picked, or hidden until its conditions hold.
+ */
+const offer = (project: Project, world: PlayWorld, key: string, label: string, rule: Rule | undefined, behaviour: OptionBehaviour): (PlayOption & { key: string }) | null => {
+  const picked = (world.picked[key] ?? 0) > 0;
+  if (picked && behaviour.after === 'gone') return null;
+  if (picked && behaviour.after === 'locked') return { key, label, available: false, needs: 'already chosen' };
+  const available = evaluate(rule, world);
+  if (!available && behaviour.hideUnavailable) return null;
+  return { key, label, available, ...(available ? {} : { needs: describeRule(project, rule) }) };
+};
+
+/** The option keys the play-through remembers picks by (the engine code uses its own, from the same rules). */
+export const optionKey = {
+  onward: (choiceId: string) => `${choiceId}:onward`,
+  main: (eventId: string) => `${eventId}:main`,
+};
+
 interface GraphOption extends PlayOption {
+  key: string;
   to: string | null;
   effects?: Effect[];
 }
 
 const graphOptions = (project: Project, world: PlayWorld, id: string): GraphOption[] => {
   const onward = spineNext(project, id);
-  const routes = project.connections
-    .filter((c) => c.kind === 'branch' && c.sourceId === id && project.objects[c.targetId])
-    .map((c): GraphOption => {
-      const available = evaluate(c.conditions, world);
-      return { label: c.label || name(project, c.targetId), available, ...(available ? {} : { needs: describeRule(project, c.conditions) }), to: c.targetId, effects: c.effects };
-    });
-  return [...(onward ? [{ label: 'Carry on', available: true, to: onward }] : []), ...routes];
+  const list: GraphOption[] = [];
+  if (onward) list.push({ key: optionKey.onward(id), label: 'Carry on', available: true, to: onward });
+  for (const c of project.connections) {
+    if (c.kind !== 'branch' || c.sourceId !== id || !project.objects[c.targetId]) continue;
+    const o = offer(project, world, c.id, c.label || name(project, c.targetId), c.conditions, c);
+    if (o) list.push({ ...o, to: c.targetId, effects: c.effects });
+  }
+  return list;
 };
 
 interface SceneOption extends PlayOption {
+  key: string;
   branchId: string | null;
   effects?: Effect[];
 }
 
-const sceneOptions = (project: Project, world: PlayWorld, sceneId: string, event: TimelineEvent): SceneOption[] => [
-  { label: event.mainLabel || 'Carry on', available: true, branchId: null, effects: event.effects },
-  ...project.branches
-    .filter((b) => b.sceneId === sceneId && b.choiceEventId === event.id)
-    .map((b): SceneOption => {
-      const available = evaluate(b.when, world);
-      return { label: b.label, available, ...(available ? {} : { needs: describeRule(project, b.when) }), branchId: b.id, effects: b.effects };
-    }),
-];
+const sceneOptions = (project: Project, world: PlayWorld, sceneId: string, event: TimelineEvent): SceneOption[] => {
+  const list: SceneOption[] = [];
+  const main = offer(project, world, optionKey.main(event.id), event.mainLabel || 'Carry on', undefined, { after: event.mainAfter });
+  if (main) list.push({ ...main, branchId: null, effects: event.effects });
+  for (const b of project.branches) {
+    if (b.sceneId !== sceneId || b.choiceEventId !== event.id) continue;
+    const o = offer(project, world, b.id, b.label, b.when, b);
+    if (o) list.push({ ...o, branchId: b.id, effects: b.effects });
+  }
+  return list;
+};
+
+const remember = (d: Doing, key: string) => {
+  d.world = { ...d.world, picked: { ...d.world.picked, [key]: (d.world.picked[key] ?? 0) + 1 } };
+};
 
 const eventAt = (project: Project, c: { sceneId: string; track: string; index: number }) => trackOf(project, c.sceneId, c.track)?.events[c.index];
 
@@ -365,6 +419,7 @@ export const choose = (project: Project, play: Play, index: number): Play => {
     const option = graphOptions(project, play.world, c.id)[index];
     if (!option?.available || !option.to) return play;
     d.log.push({ kind: 'picked', text: option.label });
+    remember(d, option.key);
     d.world = { ...d.world, chosen: { ...d.world.chosen, [c.id]: option.label } };
     doEffects(d, option.effects);
     settle(d);
@@ -376,6 +431,7 @@ export const choose = (project: Project, play: Play, index: number): Play => {
     const option = sceneOptions(project, play.world, c.sceneId, event)[index];
     if (!option?.available) return play;
     d.log.push({ kind: 'picked', text: option.label });
+    remember(d, option.key);
     if (event.refId) d.world = { ...d.world, chosen: { ...d.world.chosen, [event.refId]: option.label } };
     doEffects(d, option.effects);
     settle(d);

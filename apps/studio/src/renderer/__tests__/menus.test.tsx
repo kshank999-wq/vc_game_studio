@@ -156,3 +156,21 @@ describe('play-through', () => {
     expect(container.querySelector('.play-transcript')?.textContent).toContain('Seam drains fires');
   });
 });
+
+describe('the shot list', () => {
+  it('opens from a cinematic in the Bible, adds a shot and edits it', () => {
+    const { container } = render(<App />);
+    openMenu('File');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    fireEvent.click(screen.getAllByText('Door in the dark')[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Open the shot list' }));
+    expect(container.querySelectorAll('.shot-card')).toHaveLength(3);
+    expect(container.querySelector('.shotlist-sum')?.textContent).toBe('3 shots · 7.5s');
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a shot at the end' }));
+    expect(container.querySelectorAll('.shot-card')).toHaveLength(4);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Framing' }), { target: { value: 'Insert' } });
+    expect(container.querySelectorAll('.seq-shot')[3]?.textContent).toContain('Insert');
+    expect(container.querySelector('.shotlist-sum')?.textContent).toBe('4 shots · 10.5s');
+  });
+});

@@ -1,3 +1,4 @@
+import { cinematicTiming } from './shots';
 import { spineSequence } from './layout';
 import { newId } from './project';
 import { addElement, addLine, inScene, removeLine, sceneElements, sceneLines } from './scene';
@@ -192,7 +193,7 @@ export const addEvent = (
   return { project: renumber(next, sceneId, track, sequence), id: event.id };
 };
 
-export type EventPatch = Partial<Pick<TimelineEvent, 'label' | 'detail' | 'seconds' | 'shots' | 'endsWhen' | 'condition' | 'mainLabel' | 'when' | 'ends' | 'effects'>>;
+export type EventPatch = Partial<Pick<TimelineEvent, 'label' | 'detail' | 'seconds' | 'shots' | 'endsWhen' | 'condition' | 'mainLabel' | 'mainAfter' | 'when' | 'ends' | 'effects'>>;
 
 export const updateEvent = (project: Project, sceneId: string, id: string, patch: EventPatch): Project => {
   const event = findEvent(project, sceneId, id);
@@ -233,10 +234,16 @@ export const addBranch = (project: Project, sceneId: string, choiceEventId: stri
   return { project: materialize({ ...project, branches: [...project.branches, branch] }, choice), id: branch.id };
 };
 
-export const updateBranch = (project: Project, id: string, patch: Partial<Pick<TimelineBranch, 'label' | 'rejoinEventId' | 'when' | 'effects'>>): Project => {
+export const updateBranch = (
+  project: Project,
+  id: string,
+  patch: Partial<Pick<TimelineBranch, 'label' | 'rejoinEventId' | 'when' | 'effects' | 'after' | 'hideUnavailable'>>,
+): Project => {
   const branch = project.branches.find((b) => b.id === id);
   if (!branch) return project;
   const next = { ...branch, ...patch };
+  if (!next.after) delete next.after;
+  if (!next.hideUnavailable) delete next.hideUnavailable;
   if (patch.label !== undefined) next.label = patch.label.trim() || branch.label;
   if (JSON.stringify(next) === JSON.stringify(branch)) return project;
   return { ...project, branches: project.branches.map((b) => (b.id === id ? next : b)) };
@@ -279,8 +286,10 @@ export const eventDetail = (project: Project, event: TimelineEvent): string => {
   switch (event.kind) {
     case 'dialogue':
       return lineOf(project, event)?.text || '…';
-    case 'cinematic':
-      return `${event.seconds ?? 0}s · ${event.shots ?? 1} shot${event.shots === 1 ? '' : 's'}`;
+    case 'cinematic': {
+      const t = event.refId ? cinematicTiming(project, event.refId, event) : { seconds: event.seconds ?? 0, shots: event.shots ?? 1 };
+      return `${t.seconds}s · ${t.shots} shot${t.shots === 1 ? '' : 's'}`;
+    }
     case 'freePlay':
       return !isEmpty(event.ends) ? `Ends when: ${describeRule(project, event.ends)}` : event.endsWhen ? `Ends when: ${event.endsWhen}` : 'Ends when…';
     default:

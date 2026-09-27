@@ -90,3 +90,39 @@ describe('play-through', () => {
     expect(promptOf(p, play).kind).toBe('freePlay');
   });
 });
+
+describe('options once picked', () => {
+  it('Force it disappears after it is picked: the second time only the key is offered', () => {
+    let play = playToDecision(p, choose(p, playToDecision(p, startPlay(p)), 0));
+    const lever = promptOf(p, play);
+    if (lever.kind !== 'freePlay') throw new Error('expected free play');
+    play = interact(p, play, lever.objects[0]!.id, lever.objects[0]!.verbs[0]!.id);
+    const first = promptOf(p, play);
+    expect(first.kind === 'choice' && first.options.map((o) => o.label)).toEqual(['Turn the key', 'Force it']);
+    play = playToDecision(p, choose(p, play, 1));
+    const second = promptOf(p, play);
+    expect(second.kind === 'choice' && second.options.map((o) => o.label)).toEqual(['Turn the key']);
+  });
+
+  it('a locked option stays in the list, greyed, and a hidden one shows only when it can be picked', async () => {
+    const { updateBranch } = await import('../timeline');
+    const force = p.branches.find((b) => b.label === 'Force it')!;
+    const locked = updateBranch(p, force.id, { after: 'locked' });
+    let play = playToDecision(locked, choose(locked, playToDecision(locked, startPlay(locked)), 0));
+    const lever = promptOf(locked, play);
+    if (lever.kind !== 'freePlay') throw new Error('expected free play');
+    play = interact(locked, play, lever.objects[0]!.id, lever.objects[0]!.verbs[0]!.id);
+    play = playToDecision(locked, choose(locked, play, 1));
+    const again = promptOf(locked, play);
+    expect(again.kind === 'choice' && again.options[1]).toEqual({ label: 'Force it', available: false, needs: 'already chosen' });
+
+    const hidden = updateBranch(p, force.id, { when: { match: 'all', items: [{ kind: 'item', ref: id(p, 'Vault Key'), op: 'hasNot' }] }, hideUnavailable: true });
+    let h = playToDecision(hidden, choose(hidden, playToDecision(hidden, startPlay(hidden)), 0));
+    const lv = promptOf(hidden, h);
+    if (lv.kind !== 'freePlay') throw new Error('expected free play');
+    h = interact(hidden, h, lv.objects[0]!.id, lv.objects[0]!.verbs[0]!.id);
+    // The key is carried, so Force it is not in the list at all.
+    const offered = promptOf(hidden, h);
+    expect(offered.kind === 'choice' && offered.options.map((o) => o.label)).toEqual(['Turn the key']);
+  });
+});

@@ -41,8 +41,18 @@ const EntryView = ({ entry }: { entry: Entry }) => {
     case 'cinematic':
       return (
         <div className="play-cinematic">
-          <Symbol type="cinematic" size={12} /> {entry.text}
-          {entry.detail && <span className="play-note"> · {entry.detail}</span>}
+          <div>
+            <Symbol type="cinematic" size={12} /> {entry.text}
+            {entry.detail && <span className="play-note"> · {entry.detail}</span>}
+            {entry.skippable === false && <span className="play-note"> · can’t be skipped</span>}
+          </div>
+          {entry.shots && (
+            <ol className="play-shots">
+              {entry.shots.map((s) => (
+                <li key={s}>{s.replace(/^\d+\. /, '')}</li>
+              ))}
+            </ol>
+          )}
         </div>
       );
     case 'picked':

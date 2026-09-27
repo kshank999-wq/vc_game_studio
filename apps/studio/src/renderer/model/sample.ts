@@ -4,6 +4,7 @@ import { addLane, connect, createProject, placeNew, relabelConnection, renameObj
 import { addElement, addLine, setSceneData, updateLine, useInScene } from './scene';
 import { addBranch, addEvent, moveEvent, sceneTimeline, updateBranch, updateEvent } from './timeline';
 import type { Condition } from './rules';
+import { addShot, updateShot } from './shots';
 import type { ObjectType, Project } from './types';
 
 /**
@@ -152,10 +153,23 @@ export const sunkenVault = (): Project => {
   const choice = addEvent(p, vaultDoor, 'choice', { refId: turn, index: 5 })!;
   p = updateEvent(choice.project, vaultDoor, choice.id, { mainLabel: 'Turn the key', effects: [{ kind: 'take', ref: key }, { kind: 'arc', ref: mara, amount: 1 }] });
   const force = addBranch(p, vaultDoor, choice.id, 'Force it')!;
-  p = updateBranch(force.project, force.id, { rejoinEventId: free.id });
+  // Forcing the door only happens once: after that, the key is the only way.
+  p = updateBranch(force.project, force.id, { rejoinEventId: free.id, after: 'gone' });
   const lastLine = sceneTimeline(p, vaultDoor)[0]!.events.filter((e) => e.kind === 'dialogue').at(-1)!;
   p = moveEvent(p, vaultDoor, lastLine.id, force.id, 0);
   p = addEvent(p, vaultDoor, 'action', { track: force.id, label: 'Water rises' })!.project;
+
+  // The entry cinematic, broken into shots over Mara's first line.
+  const maraLine = p.lines.find((l) => l.sceneId === vaultDoor && l.speakerId === mara)!;
+  for (const shot of [
+    { framing: 'Extreme wide', move: 'Crane', lens: '18mm', action: 'The chamber from above: black water, one lantern, the bronze door.', audio: 'Dripping, a low echo', seconds: 3, transition: 'Dissolve' },
+    { framing: 'Close-up', move: 'Push in', lens: '50mm', characters: [mara], action: 'Mara lifts the lantern; the seam weeps.', lineId: maraLine.id, seconds: 2.5 },
+    { framing: 'Over the shoulder', move: 'Static', lens: '35mm', characters: [explorer, mara], action: 'Past the explorer to the door and the half-buried lever.', vfx: 'Lantern flicker', seconds: 2 },
+  ] as const) {
+    const added = addShot(p, cinematic);
+    p = updateShot(added.project, cinematic, added.shotId, { ...shot, characters: 'characters' in shot && shot.characters ? [...shot.characters] : [] });
+  }
+  p = setField(p, cinematic, 'skippable', 'Skippable');
 
   // The key is found in the scene named for it, and carried on to the door.
   p = useInScene(p, theKey, key);

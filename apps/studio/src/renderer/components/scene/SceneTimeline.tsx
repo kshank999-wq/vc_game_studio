@@ -1,3 +1,4 @@
+import { cinematicTiming } from '../../model/shots';
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { addElement, sceneElements } from '../../model/scene';
 import {
@@ -56,10 +57,13 @@ const KIND_LABEL: Record<EventKind, string> = {
 };
 
 
-const widthOf = (event: TimelineEvent): number => {
+const widthOf = (project: Project, event: TimelineEvent): number => {
   switch (event.kind) {
-    case 'cinematic':
-      return Math.max(110, Math.min(240, 90 + (event.seconds ?? 6) * 10));
+    case 'cinematic': {
+      // Its running time: from the shot list when it has one.
+      const seconds = event.refId ? cinematicTiming(project, event.refId, event).seconds : (event.seconds ?? 6);
+      return Math.max(110, Math.min(240, 90 + seconds * 10));
+    }
     case 'choice':
       return CHOICE + 118;
     case 'freePlay':
@@ -85,7 +89,7 @@ interface Row {
 }
 
 /** Lay out every track: the main one from the left, each branch starting under its choice. */
-const layoutTracks = (tracks: Track[], grouped: boolean): Row[] => {
+const layoutTracks = (project: Project, tracks: Track[], grouped: boolean): Row[] => {
   const rows: Row[] = [];
   const choiceX = new Map<string, number>();
   tracks.forEach((track, i) => {
@@ -94,7 +98,7 @@ const layoutTracks = (tracks: Track[], grouped: boolean): Row[] => {
     let x = startX;
     const groups = grouped ? exchanges(track.events) : track.events.map((e) => [e]);
     const blocks = groups.map((events) => {
-      const w = events.length > 1 ? 170 : widthOf(events[0]!);
+      const w = events.length > 1 ? 170 : widthOf(project, events[0]!);
       const block = { events, x, w };
       if (events[0]!.kind === 'choice') choiceX.set(events[0]!.id, x);
       x += w + GAP;
@@ -122,7 +126,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
   const [drag, setDrag] = useState<{ id: string; dx: number; dy: number; x: number; y: number } | null>(null);
 
   const tracks = sceneTimeline(project, sceneId);
-  const rows = layoutTracks(tracks, grouped);
+  const rows = layoutTracks(project, tracks, grouped);
   const all = tracks.flatMap((t) => t.events);
   const event = selected ? all.find((e) => e.id === selected) : undefined;
 
@@ -344,7 +348,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
               <div key={row.track.id}>
                 <div className={`track-band${row.track.branch ? ' branch' : ''}`} style={{ top: row.top, height: TRACK_H }} />
                 <div className={`track-label${row.track.branch ? ' branch' : ''}`} style={{ left: row.track.branch ? row.startX : PAD_X, top: row.top - 20 }}>
-                  {row.track.branch ? `Branch · ${row.track.branch.label}` : 'Main'}
+                  {row.track.branch ? `Branch · ${row.track.branch.label}${afterLabel(row.track.branch)}` : 'Main'}
                 </div>
               </div>
             ))}
@@ -419,7 +423,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
                         onPointerDown={(e) => onBlockDown(e, block)}
                       />
                       <span className="ev-choice-label" style={{ left: block.x + CHOICE + 8, top: row.top + EVENT_TOP + 24 }}>
-                        {first.mainLabel || eventTitle(project, first)}
+                        {first.mainLabel || eventTitle(project, first)}{afterLabel({ after: first.mainAfter })}
                       </span>
                     </div>
                   );
@@ -505,6 +509,9 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
     </div>
   );
 });
+
+/** " · once" or " · locks": what an option does after it is picked. */
+export const afterLabel = (o: { after?: 'gone' | 'locked' }): string => (o.after === 'gone' ? ' · once' : o.after === 'locked' ? ' · locks' : '');
 
 /** Where a cinematic plays: first on the main track is the entry, last is the exit. */
 const cinematicPlace = (row: Row, block: Block): string => {

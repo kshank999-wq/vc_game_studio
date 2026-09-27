@@ -13,7 +13,7 @@ import {
   type Effect,
   type Rule,
 } from '../../model/rules';
-import type { ObjectType, Project } from '../../model/types';
+import type { ObjectType, OptionBehaviour, Project } from '../../model/types';
 
 /** The options a choice can be answered with, from the graph and from scene timelines. */
 export const choiceOptions = (project: Project, choiceId: string): string[] => {
@@ -237,3 +237,28 @@ export const EffectsEditor = ({ project, effects, onChange, label }: {
     </div>
   );
 };
+
+/** What an option does once picked, and whether it hides while it can't be picked (spec §14). */
+export const OptionBehaviourEditor = ({ value, onChange, canHide = true }: {
+  value: OptionBehaviour;
+  onChange: (patch: OptionBehaviour) => void;
+  /** The main option has no conditions, so it is never hidden for them. */
+  canHide?: boolean;
+}) => (
+  <div className="rule option-behaviour">
+    <div className="rule-head">
+      <span className="rule-label">After it’s picked</span>
+    </div>
+    <select className="inp" aria-label="After it’s picked" value={value.after ?? ''} onChange={(e) => onChange({ after: (e.currentTarget.value || undefined) as OptionBehaviour['after'] })}>
+      <option value="">Stays on offer</option>
+      <option value="gone">Disappears</option>
+      <option value="locked">Stays, but can’t be picked again</option>
+    </select>
+    {canHide && (
+      <label className="option-hide">
+        <input type="checkbox" checked={!!value.hideUnavailable} onChange={(e) => onChange({ hideUnavailable: e.currentTarget.checked })} />
+        Hidden until its conditions are met (else shown greyed)
+      </label>
+    )}
+  </div>
+);

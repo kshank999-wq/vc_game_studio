@@ -3,6 +3,7 @@ import { laneSequence, spineSequence } from '../layout';
 import { CATEGORIES, elementsIn, sceneLines } from '../scene';
 import { eventTitle, sceneTimeline } from '../timeline';
 import { isEmpty, isRule, type Effect, type Rule } from '../rules';
+import { cinematicTiming, shotsOf } from '../shots';
 import type { ObjectType, Project, StoryObject } from '../types';
 
 /**
@@ -123,6 +124,24 @@ export interface IrThing {
   type: ObjectType;
   notes: string;
   fields: Record<string, string>;
+  /** A cinematic's shot list, in order. */
+  shots?: IrShot[];
+}
+
+export interface IrShot {
+  framing: string;
+  move: string;
+  lens: string;
+  /** Character keys in frame. */
+  characters: string[];
+  action: string;
+  /** The dialogue table id of the line spoken over it. */
+  line?: string;
+  audio: string;
+  vfx: string;
+  seconds: number;
+  transition: string;
+  notes: string;
 }
 
 export interface IrFlag {
@@ -169,6 +188,8 @@ export interface IrEvent {
   line?: string;
   /** A choice's option that carries on along the main track. */
   mainLabel?: string;
+  /** What that option does once picked: disappears ('gone') or locks. */
+  mainAfter?: 'gone' | 'locked';
   /** Plays only when this holds (a dialogue line's own condition included). */
   when?: IrRule;
   /** A free play ends when this holds. */
@@ -186,7 +207,7 @@ export interface IrScene {
   summary: string;
   contents: Record<string, string[]>;
   main: IrEvent[];
-  branches: { label: string; from: number; events: IrEvent[]; rejoin: number | null; when?: IrRule; effects?: IrEffect[] }[];
+  branches: { label: string; from: number; events: IrEvent[]; rejoin: number | null; when?: IrRule; effects?: IrEffect[]; after?: 'gone' | 'locked'; hide?: boolean }[];
   next: string | null;
   /** The routes out of this scene on the graph, taken in order: the first whose conditions hold. */
   exits: { to: string; label: string; when?: IrRule; effects?: IrEffect[] }[];
@@ -201,7 +222,8 @@ export interface IrChoice {
   name: string;
   prompt: string;
   scene: string | null;
-  options: { label: string; to: string | null; when?: IrRule; effects?: IrEffect[] }[];
+  /** `key` is stable for the option within its choice, for remembering picks. */
+  options: { key: string; label: string; to: string | null; when?: IrRule; effects?: IrEffect[]; after?: 'gone' | 'locked'; hide?: boolean }[];
   /** The choice is offered at all only when this holds. */
   available?: IrRule;
 }
@@ -281,6 +303,7 @@ export const buildIR = (project: Project): HandoffIR => {
         ...(e.endsWhen ? { endsWhen: e.endsWhen } : {}),
         ...(e.condition ? { condition: e.condition } : {}),
         ...(e.kind === 'choice' ? { mainLabel: e.mainLabel ?? '' } : {}),
+        ...(e.kind === 'choice' && e.mainAfter ? { mainAfter: e.mainAfter } : {}),
         ...ruled(rule(both(both(e.when, line?.conditions), e.kind === 'choice' && e.refId ? (project.objects[e.refId]?.data.rule as Rule | undefined) : undefined)), effects(e.effects)),
         ...(rule(e.ends) ? { ends: rule(e.ends) } : {}),
       };
@@ -308,6 +331,8 @@ export const buildIR = (project: Project): HandoffIR => {
         events: t.events.map(toEvent),
         rejoin: t.branch!.rejoinEventId ? main.findIndex((e) => e.id === t.branch!.rejoinEventId) : null,
         ...ruled(rule(t.branch!.when), effects(t.branch!.effects)),
+        ...(t.branch!.after ? { after: t.branch!.after } : {}),
+        ...(t.branch!.hideUnavailable ? { hide: true } : {}),
       })),
       next: exits[0] ? key(exits[0].targetId) : onward,
       exits: exits.map((c) => ({ to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
@@ -370,7 +395,24 @@ export const buildIR = (project: Project): HandoffIR => {
     items: of('inventory').map((o) => ({ id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, type: o.type, notes: o.notes, fields: fieldsOf(o) })),
     locations: of('environment').map((o) => ({ id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, type: o.type, notes: o.notes, fields: fieldsOf(o) })),
     cinematics: of('cinematic').map((o) => {
-      const timing = project.events.find((e) => e.refId === o.id);
+      const event = project.events.find((e) => e.refId === o.id);
+      const timing = event || shotsOf(o).length ? cinematicTiming(project, o.id, event) : undefined;
+      const shots = shotsOf(o).map((s): IrShot => {
+        const line = s.lineId ? project.lines.find((l) => l.id === s.lineId) : undefined;
+        return {
+          framing: s.framing,
+          move: s.move,
+          lens: s.lens,
+          characters: s.characters.map((c) => key(c)).filter((k): k is string => !!k),
+          action: s.action,
+          ...(line && project.objects[line.sceneId] ? { line: lineId(project.objects[line.sceneId]!.data.code ?? '', line.order) } : {}),
+          audio: s.audio,
+          vfx: s.vfx,
+          seconds: s.seconds,
+          transition: s.transition,
+          notes: s.notes,
+        };
+      });
       return {
         id: o.id,
         ident: ids.get(o.id)!,
@@ -378,7 +420,8 @@ export const buildIR = (project: Project): HandoffIR => {
         name: o.name,
         type: o.type,
         notes: o.notes,
-        fields: { ...fieldsOf(o), ...(timing ? { seconds: String(timing.seconds ?? 0), shots: String(timing.shots ?? 1) } : {}) },
+        fields: { ...fieldsOf(o), ...(timing ? { seconds: String(timing.seconds), shots: String(timing.shots) } : {}) },
+        ...(shots.length ? { shots } : {}),
       };
     }),
     flags: of('state').map((o) => {
@@ -402,20 +445,30 @@ export const buildIR = (project: Project): HandoffIR => {
     })),
     choices: of('choice').map((o) => {
       const scene = sceneOf(o.id);
+      const behaviour = (b: { after?: 'gone' | 'locked'; hideUnavailable?: boolean }) => ({ ...(b.after ? { after: b.after } : {}), ...(b.hideUnavailable ? { hide: true } : {}) });
       const graph = project.connections
         .filter((c) => c.kind === 'branch' && c.sourceId === o.id)
-        .map((c) => ({ label: c.label ?? '', to: key(c.targetId), ...ruled(rule(c.conditions), effects(c.effects)) }));
+        .map((c) => ({ label: c.label ?? '', to: key(c.targetId), ...ruled(rule(c.conditions), effects(c.effects)), ...behaviour(c) }));
       const inScene = project.events
         .filter((e) => e.refId === o.id && e.kind === 'choice')
         .flatMap((e) => [
-          { label: e.mainLabel ?? 'Continue', to: null as string | null, ...ruled(undefined, effects(e.effects)) },
-          ...project.branches.filter((b) => b.choiceEventId === e.id).map((b) => ({ label: b.label, to: null as string | null, ...ruled(rule(b.when), effects(b.effects)) })),
+          { label: e.mainLabel ?? 'Continue', to: null as string | null, ...ruled(undefined, effects(e.effects)), ...behaviour({ after: e.mainAfter }) },
+          ...project.branches.filter((b) => b.choiceEventId === e.id).map((b) => ({ label: b.label, to: null as string | null, ...ruled(rule(b.when), effects(b.effects)), ...behaviour(b) })),
         ]);
       // A choice on a track also carries on along it: that is its first option.
       const spine = spineSequence(project);
       const at = spine.indexOf(o.id);
       const onward = at >= 0 && spine[at + 1] ? [{ label: 'Carry on', to: key(spine[at + 1]) }] : [];
-      return { id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, prompt: String(o.data.prompt ?? ''), scene: key(scene), options: [...onward, ...graph, ...inScene], ...(rule(o.data.rule as Rule | undefined) ? { available: rule(o.data.rule as Rule | undefined) } : {}) };
+      // Each option's key: its words as an identifier, numbered if two read the same.
+      const used = new Set<string>();
+      const options = [...onward, ...graph, ...inScene].map((opt) => {
+        const base = toKey(opt.label || 'option');
+        let k = base;
+        for (let n = 2; used.has(k); n++) k = `${base}_${n}`;
+        used.add(k);
+        return { key: k, ...opt };
+      });
+      return { id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, prompt: String(o.data.prompt ?? ''), scene: key(scene), options, ...(rule(o.data.rule as Rule | undefined) ? { available: rule(o.data.rule as Rule | undefined) } : {}) };
     }),
     scenes,
     lines: project.lines

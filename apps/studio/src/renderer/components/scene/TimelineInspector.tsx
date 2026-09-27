@@ -1,3 +1,5 @@
+import { cinematicTiming } from '../../model/shots';
+import { useNav } from '../../nav';
 import { renameObject } from '../../model/project';
 import { TYPE_LABEL } from '../../model/semantics';
 import { speakers, updateLine } from '../../model/scene';
@@ -15,7 +17,7 @@ import {
   updateEvent,
 } from '../../model/timeline';
 import type { Project, TimelineEvent } from '../../model/types';
-import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
+import { EffectsEditor, OptionBehaviourEditor, RuleEditor } from '../rules/RuleEditor';
 import { Symbol } from '../Symbol';
 import { KIND_SYMBOL } from './parts';
 
@@ -79,6 +81,7 @@ const Field = ({ label, value, onSave, placeholder, script, multiline, type = 't
 
 /** The inspector under the timeline: everything about the selected event, edited in place. */
 export const TimelineInspector = ({ project, sceneId, event, element, numbers, onCommit, onSelect, onSay }: Props) => {
+  const nav = useNav();
   if (!event) {
     const object = element ? project.objects[element] : undefined;
     const kind = object ? eventKindFor(object.type) : null;
@@ -209,12 +212,31 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
         </>
       )}
 
-      {event.kind === 'cinematic' && (
-        <div className="insp-grid">
-          <Field label="Running time (seconds)" type="number" value={String(event.seconds ?? 6)} onSave={(v) => save({ seconds: Math.max(0, Number(v) || 0) })} />
-          <Field label="Shots" type="number" value={String(event.shots ?? 1)} onSave={(v) => save({ shots: Math.max(1, Math.round(Number(v) || 1)) })} />
-        </div>
-      )}
+      {event.kind === 'cinematic' && (() => {
+        const timing = event.refId ? cinematicTiming(project, event.refId, event) : null;
+        return (
+          <>
+            {timing?.fromList ? (
+              <div className="fld">
+                <span>Running time</span>
+                <span className="inp static">
+                  {timing.seconds}s · {timing.shots} shot{timing.shots === 1 ? '' : 's'}, from the shot list
+                </span>
+              </div>
+            ) : (
+              <div className="insp-grid">
+                <Field label="Running time (seconds)" type="number" value={String(event.seconds ?? 6)} onSave={(v) => save({ seconds: Math.max(0, Number(v) || 0) })} />
+                <Field label="Shots" type="number" value={String(event.shots ?? 1)} onSave={(v) => save({ shots: Math.max(1, Math.round(Number(v) || 1)) })} />
+              </div>
+            )}
+            {event.refId && nav.openShots && (
+              <button className="tb-btn small" onClick={() => nav.openShots!(event.refId!)}>
+                {timing?.fromList ? 'Open the shot list' : 'Break it into shots…'}
+              </button>
+            )}
+          </>
+        );
+      })()}
 
       {event.kind === 'freePlay' && (
         <>
@@ -235,6 +257,7 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
         <div className="branches">
           <Field label="Option that carries on along the main track" value={event.mainLabel ?? ''} placeholder="Turn the key" onSave={(v) => save({ mainLabel: v })} />
           <EffectsEditor project={project} effects={event.effects} label="Choosing it" onChange={(e) => save({ effects: e })} />
+          <OptionBehaviourEditor value={{ after: event.mainAfter }} canHide={false} onChange={(patch) => 'after' in patch && save({ mainAfter: patch.after })} />
           <div className="fld">
             <span>Other options · each its own branch</span>
             {tracks
@@ -267,10 +290,11 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
                     ×
                   </button>
                 </div>
-                <details className="interaction-more" open={!!(t.branch!.when || t.branch!.effects)}>
+                <details className="interaction-more" open={!!(t.branch!.when || t.branch!.effects || t.branch!.after || t.branch!.hideUnavailable)}>
                   <summary>Conditions &amp; effects</summary>
                   <RuleEditor project={project} rule={t.branch!.when} label="Offered when" onChange={(r) => onCommit(updateBranch(project, t.id, { when: r }))} />
                   <EffectsEditor project={project} effects={t.branch!.effects} label="Choosing it" onChange={(e) => onCommit(updateBranch(project, t.id, { effects: e }))} />
+                  <OptionBehaviourEditor value={t.branch!} onChange={(patch) => onCommit(updateBranch(project, t.id, patch))} />
                 </details>
                 </div>
               ))}

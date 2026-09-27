@@ -30,6 +30,8 @@ import { isPreview, PURCHASE_URL } from './edition';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
 import { PlayView } from './components/play/PlayView';
+import { ShotList } from './components/cinematic/ShotList';
+import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
 import { isMainClosed, isPanel, listen, openWindow, parseView, post, role, subscribeShared, type Command, type PanelView } from './windows';
 import { fitView, spineView, zoomAt, type View } from './view';
@@ -44,7 +46,8 @@ export type Route =
   | PlaceRoute
   | { view: 'bible'; focus?: string; report?: ReportKey; back: PlaceRoute }
   | { view: 'engine'; focus?: string; back: PlaceRoute }
-  | { view: 'play'; from?: string; back: PlaceRoute };
+  | { view: 'play'; from?: string; back: PlaceRoute }
+  | { view: 'cinematic'; id: string; back: PlaceRoute };
 
 /** Views that stand aside from the graph and scenes, with a way back to where they were opened. */
 const isAside = (r: Route): r is Extract<Route, { back: PlaceRoute }> => 'back' in r;
@@ -125,6 +128,8 @@ export const App = () => {
   };
   const [sceneSelection, setSceneSelection] = useState<string | null>(null);
   const placeOf = (r: Route): PlaceRoute => (isAside(r) ? r.back : r);
+  const openShots = (id: string) => setRoute((r) => ({ view: 'cinematic', id, back: placeOf(r) }));
+  const nav = useMemo(() => ({ openShots }), []);
   const openPlay = (from?: string) => setRoute((r) => ({ view: 'play', from, back: placeOf(r) }));
   const openBible = (focus?: string, report?: ReportKey) => setRoute((r) => ({ view: 'bible', focus, report, back: placeOf(r) }));
   const openEngine = (focus?: string) => setRoute((r) => ({ view: 'engine', focus, back: placeOf(r) }));
@@ -810,7 +815,13 @@ export const App = () => {
         ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Engine Handoff' }]
         : route.view === 'play'
           ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Play-through' }]
-          : undefined;
+          : route.view === 'cinematic'
+            ? [
+                { label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) },
+                { label: project.objects[route.id]?.name ?? 'Cinematic', symbol: 'cinematic' as const },
+                { label: 'Shot list' },
+              ]
+            : undefined;
   const bibleControls =
     isAside(route) ? (
       <button className="tb-btn back-btn" onClick={() => setRoute(route.back)}>
@@ -822,214 +833,219 @@ export const App = () => {
     ) : null;
 
   return (
-    <div
-      className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${isAside(route) ? ' no-palette' : ''}${preferences.showGrid ? '' : ' no-grid'}`}
-      style={{ '--script-size': `${preferences.scriptSize}px` } as React.CSSProperties}
-    >
-      <TopBar
-        menus={menus}
-        windowLabel={role.kind === 'panel' ? WINDOW_LABEL[role.start.view] : undefined}
-        projectName={project.name}
-        fileName={studio.file?.name}
-        renameRequest={renameRequest}
-        crumbs={crumbs ?? bibleCrumbs}
-        viewControls={sceneControls ?? bibleControls}
-        onRename={(name) => commit(renameProject(project, name))}
-        canUndo={studio.canUndo}
-        canRedo={studio.canRedo}
-        onUndo={studio.undo}
-        onRedo={studio.redo}
-        onFit={route.view === 'graph' ? fit : route.view === 'scene' && route.mode !== 'open' ? () => surface.current?.fit?.() : undefined}
-        onBible={() => (route.view === 'bible' ? setRoute(route.back) : openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : route.view === 'graph' ? (selection ?? undefined) : undefined))}
-        onEngine={() => (route.view === 'engine' ? setRoute(route.back) : openEngine())}
-        saveState={studio.saveState}
-        issueCount={route.view === 'graph' ? issues.length : 0}
-        onIssues={showNextIssue}
-        onSearch={() => setSearching(true)}
-        onPlay={() => (route.view === 'play' ? setRoute(route.back) : openPlay())}
-      />
-      {!isAside(route) && <Palette
-        active={drag?.placing ? drag.type : null}
-        onStart={startPaletteDrag}
-        mode={inSceneView ? 'scene' : 'graph'}
-        rail={railOn}
-        onToggleRail={() => setRail((r) => (inSceneView ? { ...r, scene: !r.scene } : { ...r, graph: !r.graph }))}
-      />}
-      <main className="main">
-        {route.view === 'graph' && (
-          <>
-            <StoryCanvas
-              ref={canvas}
+    <NavContext.Provider value={nav}>
+      <div
+        className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${isAside(route) ? ' no-palette' : ''}${preferences.showGrid ? '' : ' no-grid'}`}
+        style={{ '--script-size': `${preferences.scriptSize}px` } as React.CSSProperties}
+      >
+        <TopBar
+          menus={menus}
+          windowLabel={role.kind === 'panel' ? WINDOW_LABEL[role.start.view] : undefined}
+          projectName={project.name}
+          fileName={studio.file?.name}
+          renameRequest={renameRequest}
+          crumbs={crumbs ?? bibleCrumbs}
+          viewControls={sceneControls ?? bibleControls}
+          onRename={(name) => commit(renameProject(project, name))}
+          canUndo={studio.canUndo}
+          canRedo={studio.canRedo}
+          onUndo={studio.undo}
+          onRedo={studio.redo}
+          onFit={route.view === 'graph' ? fit : route.view === 'scene' && route.mode !== 'open' ? () => surface.current?.fit?.() : undefined}
+          onBible={() => (route.view === 'bible' ? setRoute(route.back) : openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : route.view === 'graph' ? (selection ?? undefined) : undefined))}
+          onEngine={() => (route.view === 'engine' ? setRoute(route.back) : openEngine())}
+          saveState={studio.saveState}
+          issueCount={route.view === 'graph' ? issues.length : 0}
+          onIssues={showNextIssue}
+          onSearch={() => setSearching(true)}
+          onPlay={() => (route.view === 'play' ? setRoute(route.back) : openPlay())}
+        />
+        {!isAside(route) && <Palette
+          active={drag?.placing ? drag.type : null}
+          onStart={startPaletteDrag}
+          mode={inSceneView ? 'scene' : 'graph'}
+          rail={railOn}
+          onToggleRail={() => setRail((r) => (inSceneView ? { ...r, scene: !r.scene } : { ...r, graph: !r.graph }))}
+        />}
+        <main className="main">
+          {route.view === 'graph' && (
+            <>
+              <StoryCanvas
+                ref={canvas}
+                project={project}
+                onCommit={commit}
+                view={view}
+                setView={setView}
+                selection={selection}
+                onSelect={setSelection}
+                paletteDrag={showGhost ? drag : null}
+                bottomInset={BOTTOM_BAR}
+                onConfirm={setAsk}
+                onDelete={deleteItem}
+                issues={issueMap}
+                onSay={say}
+                onOpenScene={openScene}
+                onPlayFrom={openPlay}
+              />
+              <BottomBar
+                lanes={project.lanes}
+                zoom={view.zoom}
+                onAddLane={onAddLane}
+                onToggleLane={onToggleLane}
+                onZoomToSpine={toSpine}
+                onZoom={zoomBy}
+              />
+            </>
+          )}
+          {route.view === 'scene' && scene && route.mode === 'open' && (
+            <SceneWorkspace
+              key={route.sceneId}
+              ref={surface}
               project={project}
+              sceneId={route.sceneId}
               onCommit={commit}
-              view={view}
-              setView={setView}
-              selection={selection}
-              onSelect={setSelection}
+              selection={sceneSelection}
+              onSelect={setSceneSelection}
               paletteDrag={showGhost ? drag : null}
-              bottomInset={BOTTOM_BAR}
-              onConfirm={setAsk}
-              onDelete={deleteItem}
-              issues={issueMap}
               onSay={say}
-              onOpenScene={openScene}
-              onPlayFrom={openPlay}
+              onTimeline={() => openScene(route.sceneId, 'timeline')}
+              onOpenBible={openBible}
+              onOpenCode={openEngine}
+              onNavigate={navigate}
+              focusLine={lineFocus}
             />
-            <BottomBar
-              lanes={project.lanes}
-              zoom={view.zoom}
-              onAddLane={onAddLane}
-              onToggleLane={onToggleLane}
-              onZoomToSpine={toSpine}
-              onZoom={zoomBy}
+          )}
+          {route.view === 'scene' && scene && route.mode === 'timeline' && (
+            <SceneTimeline
+              key={route.sceneId}
+              ref={surface}
+              project={project}
+              sceneId={route.sceneId}
+              onCommit={commit}
+              paletteDrag={showGhost ? drag : null}
+              onSay={say}
+              onOpen={() => openScene(route.sceneId, 'open')}
+              onRemove={(id) => removeFromSceneAsking(route.sceneId, id)}
+              onFullView={() => openScene(route.sceneId, 'exploded')}
             />
-          </>
-        )}
-        {route.view === 'scene' && scene && route.mode === 'open' && (
-          <SceneWorkspace
-            key={route.sceneId}
-            ref={surface}
-            project={project}
-            sceneId={route.sceneId}
-            onCommit={commit}
-            selection={sceneSelection}
-            onSelect={setSceneSelection}
-            paletteDrag={showGhost ? drag : null}
-            onSay={say}
-            onTimeline={() => openScene(route.sceneId, 'timeline')}
-            onOpenBible={openBible}
-            onOpenCode={openEngine}
-            onNavigate={navigate}
-            focusLine={lineFocus}
-          />
-        )}
-        {route.view === 'scene' && scene && route.mode === 'timeline' && (
-          <SceneTimeline
-            key={route.sceneId}
-            ref={surface}
-            project={project}
-            sceneId={route.sceneId}
-            onCommit={commit}
-            paletteDrag={showGhost ? drag : null}
-            onSay={say}
-            onOpen={() => openScene(route.sceneId, 'open')}
-            onRemove={(id) => removeFromSceneAsking(route.sceneId, id)}
-            onFullView={() => openScene(route.sceneId, 'exploded')}
-          />
-        )}
-        {route.view === 'scene' && scene && route.mode === 'exploded' && (
-          <ExplodedScene
-            key={route.sceneId}
-            ref={surface}
-            project={project}
-            sceneId={route.sceneId}
-            onCommit={commit}
-            selection={sceneSelection}
-            onSelect={setSceneSelection}
-            paletteDrag={showGhost ? drag : null}
-            onSay={say}
-            onOpen={() => openScene(route.sceneId, 'open')}
-            onTimeline={() => openScene(route.sceneId, 'timeline')}
-            onOpenBible={openBible}
-            onOpenCode={openEngine}
-            onNavigate={navigate}
-            onRemove={(id) => removeFromSceneAsking(route.sceneId, id)}
-          />
-        )}
-        {route.view === 'bible' && (
-          <GameBible key={route.report ?? 'bible'} project={project} onCommit={commit} focus={route.focus} report={route.report} onNavigate={navigate} onOpenCode={openEngine} onDelete={deleteItem} />
-        )}
-        {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} />}
-        {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} />}
-        {route.view === 'graph' && Object.keys(project.objects).length <= 3 && (
-          <div className="sample-card">
-            <span>New here? Open the sample from the mockups to see every part working.</span>
-            <button className="tb-btn small" onClick={() => showProject(sunkenVault(), null)}>
-              Open “The Sunken Vault”
-            </button>
+          )}
+          {route.view === 'scene' && scene && route.mode === 'exploded' && (
+            <ExplodedScene
+              key={route.sceneId}
+              ref={surface}
+              project={project}
+              sceneId={route.sceneId}
+              onCommit={commit}
+              selection={sceneSelection}
+              onSelect={setSceneSelection}
+              paletteDrag={showGhost ? drag : null}
+              onSay={say}
+              onOpen={() => openScene(route.sceneId, 'open')}
+              onTimeline={() => openScene(route.sceneId, 'timeline')}
+              onOpenBible={openBible}
+              onOpenCode={openEngine}
+              onNavigate={navigate}
+              onRemove={(id) => removeFromSceneAsking(route.sceneId, id)}
+            />
+          )}
+          {route.view === 'bible' && (
+            <GameBible key={route.report ?? 'bible'} project={project} onCommit={commit} focus={route.focus} report={route.report} onNavigate={navigate} onOpenCode={openEngine} onDelete={deleteItem} />
+          )}
+          {route.view === 'cinematic' && (
+            <ShotList key={route.id} project={project} id={route.id} onCommit={commit} onNavigate={navigate} onOpenBible={openBible} onOpenCode={openEngine} />
+          )}
+          {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} />}
+          {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} />}
+          {route.view === 'graph' && Object.keys(project.objects).length <= 3 && (
+            <div className="sample-card">
+              <span>New here? Open the sample from the mockups to see every part working.</span>
+              <button className="tb-btn small" onClick={() => showProject(sunkenVault(), null)}>
+                Open “The Sunken Vault”
+              </button>
+            </div>
+          )}
+        </main>
+        {showGhost && (
+          <div className="drag-ghost" style={{ left: drag.clientX + 12, top: drag.clientY + 12 }} aria-hidden="true">
+            <Symbol type={drag.type} />
+            {TYPE_LABEL[drag.type]}
+            {drag.placing && !drag.moved && <span className="drag-ghost-hint">click to place · Esc to cancel</span>}
           </div>
         )}
-      </main>
-      {showGhost && (
-        <div className="drag-ghost" style={{ left: drag.clientX + 12, top: drag.clientY + 12 }} aria-hidden="true">
-          <Symbol type={drag.type} />
-          {TYPE_LABEL[drag.type]}
-          {drag.placing && !drag.moved && <span className="drag-ghost-hint">click to place · Esc to cancel</span>}
-        </div>
-      )}
-      {ask && (
-        <div className="dialog-backdrop" onPointerDown={() => setAsk(null)}>
-          <div
-            className="dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="confirm-title"
-            aria-describedby="confirm-message"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <h2 id="confirm-title">{ask.title}</h2>
-            <p id="confirm-message">{ask.message}</p>
-            {ask.details && (
-              <ul className="dialog-list">
-                {ask.details.map((d) => (
-                  <li key={d}>{d}</li>
-                ))}
-              </ul>
-            )}
-            <div className="dialog-actions">
-              <button className="tb-btn" onClick={() => setAsk(null)}>
-                Cancel
-              </button>
-              {ask.alternate && (
+        {ask && (
+          <div className="dialog-backdrop" onPointerDown={() => setAsk(null)}>
+            <div
+              className="dialog"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="confirm-title"
+              aria-describedby="confirm-message"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <h2 id="confirm-title">{ask.title}</h2>
+              <p id="confirm-message">{ask.message}</p>
+              {ask.details && (
+                <ul className="dialog-list">
+                  {ask.details.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              )}
+              <div className="dialog-actions">
+                <button className="tb-btn" onClick={() => setAsk(null)}>
+                  Cancel
+                </button>
+                {ask.alternate && (
+                  <button
+                    className="tb-btn danger-btn"
+                    onClick={() => {
+                      ask.alternate!.onClick();
+                      setAsk(null);
+                    }}
+                  >
+                    {ask.alternate.label}
+                  </button>
+                )}
                 <button
-                  className="tb-btn danger-btn"
+                  className={`tb-btn ${ask.safe ? 'primary' : 'danger-btn'}`}
+                  autoFocus
                   onClick={() => {
-                    ask.alternate!.onClick();
+                    ask.onConfirm();
                     setAsk(null);
                   }}
                 >
-                  {ask.alternate.label}
+                  {ask.confirmLabel}
                 </button>
-              )}
-              <button
-                className={`tb-btn ${ask.safe ? 'primary' : 'danger-btn'}`}
-                autoFocus
-                onClick={() => {
-                  ask.onConfirm();
-                  setAsk(null);
-                }}
-              >
-                {ask.confirmLabel}
-              </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      {mainClosed && (
-        <div className="dialog-backdrop">
-          <div className="dialog" role="alertdialog" aria-labelledby="closed-title">
-            <h2 id="closed-title">The main window has closed</h2>
-            <p>This window worked on the main window’s project. Open the studio again to carry on.</p>
-            <div className="dialog-actions">
-              <button className="tb-btn primary" onClick={() => window.close()}>
-                Close this window
-              </button>
+        )}
+        {mainClosed && (
+          <div className="dialog-backdrop">
+            <div className="dialog" role="alertdialog" aria-labelledby="closed-title">
+              <h2 id="closed-title">The main window has closed</h2>
+              <p>This window worked on the main window’s project. Open the studio again to carry on.</p>
+              <div className="dialog-actions">
+                <button className="tb-btn primary" onClick={() => window.close()}>
+                  Close this window
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      {searching && (
-        <SearchPalette project={project} onGo={goToResult} onBible={(r) => openBible(r.id)} onClose={() => setSearching(false)} />
-      )}
-      {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
-      {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
-      {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
-      {dialog === 'previewSave' && <PreviewSaveDialog onClose={() => setDialog(null)} />}
-      {toast && (
-        <div className="toast" role="status">
-          {toast}
-        </div>
-      )}
-    </div>
+        )}
+        {searching && (
+          <SearchPalette project={project} onGo={goToResult} onBible={(r) => openBible(r.id)} onClose={() => setSearching(false)} />
+        )}
+        {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
+        {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
+        {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
+        {dialog === 'previewSave' && <PreviewSaveDialog onClose={() => setDialog(null)} />}
+        {toast && (
+          <div className="toast" role="status">
+            {toast}
+          </div>
+        )}
+      </div>
+    </NavContext.Provider>
   );
 };

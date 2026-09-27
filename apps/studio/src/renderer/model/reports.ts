@@ -1,3 +1,4 @@
+import { cinematicTiming, shotsOf } from './shots';
 import { FIELDS, describeInteraction, interactionsOf, sceneUse, statesOf, whereUsed } from './details';
 import { laneSequence } from './layout';
 import { CATEGORIES, elementsIn, sceneLines } from './scene';
@@ -152,10 +153,28 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
       break;
     case 'cinematics':
       for (const c of of(project, 'cinematic')) {
-        const timing = project.events.find((e) => e.refId === c.id);
-        blocks.push({ kind: 'h2', text: title(c), note: timing ? `${timing.seconds ?? 0}s · ${timing.shots ?? 1} shots` : undefined });
+        const event = project.events.find((e) => e.refId === c.id);
+        const timing = event || shotsOf(c).length ? cinematicTiming(project, c.id, event) : undefined;
+        blocks.push({ kind: 'h2', text: title(c), note: timing ? `${timing.seconds}s · ${timing.shots} shot${timing.shots === 1 ? '' : 's'}` : undefined });
         blocks.push({ kind: 'kv', rows: [...fieldRows(c), ['Scenes', scenesOf(project, c.id)]].filter(([, v]) => v) as [string, string][] });
         if (c.notes) blocks.push({ kind: 'p', text: c.notes });
+        const shots = shotsOf(c);
+        if (shots.length) {
+          blocks.push({
+            kind: 'table',
+            columns: ['#', 'Framing / move / lens', 'In frame', 'What we see', 'Line', 'Audio · VFX', 'Secs', 'Out'],
+            rows: shots.map((s, i) => [
+              String(i + 1),
+              [s.framing, s.move, s.lens].filter(Boolean).join(' · '),
+              s.characters.map((id) => project.objects[id]?.name).filter(Boolean).join(', '),
+              s.action,
+              s.lineId ? (project.lines.find((l) => l.id === s.lineId)?.text ?? '') : '',
+              [s.audio, s.vfx].filter(Boolean).join(' · '),
+              String(s.seconds),
+              s.transition,
+            ]),
+          });
+        }
       }
       break;
     case 'assets': {
