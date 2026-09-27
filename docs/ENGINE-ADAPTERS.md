@@ -123,3 +123,30 @@ definition, `VCGS.Runtime`), the story to `Assets/VCGS/Generated`:
   sample, compiles the runtime and keys as C# 9 with warnings as errors against
   stubs of UnityEngine, and plays the Vault Door scene and the graph to the
   ending. CI runs it. It has not been opened in the Unity editor here.
+
+## The Unreal adapter
+
+Pick **Unreal Engine 5**. It writes a plugin and the story's data:
+
+- **`Plugins/VCGS`** (the same for every project): `VcgsCore.h`, the story's
+  logic in portable C++17 (standard library only, no exceptions or RTTI, as
+  Unreal builds): story.json reader, `GameState`, `Rules`, `ScenePlayer`,
+  `Interactions`, `StoryWalker`, matching the Godot and Unity runtimes. Around
+  it: `UVcgsSubsystem` (a game-instance subsystem holding the playthrough,
+  every query Blueprint-callable), `UVcgsSceneFlowComponent` (a scene key and
+  Blueprint events: `OnDialogue`, `OnCinematic`, `OnFreePlay`, `OnChoice`,
+  `OnFinished`; `Advance`, `Choose`), `UVcgsInteractableComponent`, and
+  DataTable row structs.
+- **Generated**: `Content/VCGS/Generated/story.json`,
+  `Plugins/VCGS/Source/VCGS/Public/Generated/VcgsStoryKeys.h`
+  (`VcgsKeys::Scenes::Sc03TheVaultDoor` and every other key), DataTable CSVs
+  (characters, items, locations, cinematics, shots, lines) and
+  `import_datatables.py`, which imports them in the editor as DT_ assets.
+- `story.json` is read at runtime, so add `VCGS/Generated` to *Additional
+  Non-Asset Directories to Package*.
+- **Checked here without Unreal**: `apps/studio/scripts/check-unreal.sh` builds
+  and runs a program that plays the sample with the core (gcc and clang; it
+  also runs clean under gcc's address and undefined-behaviour sanitizers),
+  compiles every plugin source against stubs of Unreal's headers, byte-compiles
+  the import script and compiles `VCGS.Build.cs`. CI runs it. Unreal Header
+  Tool and the editor have not run on it.

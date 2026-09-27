@@ -1,5 +1,5 @@
 import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
@@ -31,12 +31,14 @@ export const registerHandoff = (getWindow: () => BrowserWindow | null): void => 
   });
 
   ipcMain.handle('vcgs:check-folder', (_e, folder: unknown) => {
-    if (typeof folder !== 'string' || !folder) return { exists: false, engineProject: false, unity: false };
+    if (typeof folder !== 'string' || !folder) return { exists: false, engineProject: false, unity: false, unreal: false };
     return {
       exists: existsSync(folder),
       // A Godot project has project.godot; a Unity project has Assets and ProjectSettings.
       engineProject: existsSync(join(folder, 'project.godot')),
       unity: existsSync(join(folder, 'Assets')) && existsSync(join(folder, 'ProjectSettings')),
+      // An Unreal project has a .uproject file.
+      unreal: existsSync(folder) && readdirSync(folder).some((f) => f.endsWith('.uproject')),
     };
   });
 

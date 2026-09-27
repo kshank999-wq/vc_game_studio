@@ -1,0 +1,85 @@
+// Plays the sample project's generated story with the VCGS Runtime for
+// Unreal's core: the same walk as the Godot and Unity checks.
+#include "VcgsCore.h"
+#include "Generated/VcgsStoryKeys.h"
+#include <cstdio>
+#include <fstream>
+#include <sstream>
+
+static int failures = 0;
+
+static void Fail(const std::string& message)
+{
+    failures++;
+    std::fprintf(stderr, "FAIL: %s\n", message.c_str());
+}
+
+static std::string Join(const std::vector<std::string>& list, const char* sep)
+{
+    std::string out;
+    for (size_t i = 0; i < list.size(); i++) out += (i ? sep : "") + list[i];
+    return out;
+}
+
+int main()
+{
+    std::ifstream in("Content/VCGS/Generated/story.json");
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    std::string error;
+    vcgs::Value root = vcgs::JsonReader::Parse(buffer.str(), &error);
+    if (!root.IsObject()) { Fail("story.json did not parse: " + error); return 1; }
+    vcgs::Story story(std::move(root));
+    vcgs::GameState game(story);
+    std::printf("story: %s · %zu scenes · starts at %s\n", story.Name.c_str(), story.Scenes.size(), story.Start.c_str());
+
+    using namespace VcgsKeys;
+    if (game.GetFlag(Flags::DoorSolved) != "no") Fail("door_solved should start at no");
+    if (game.GetObjectState(Objects::RustedLever) != "down") Fail("the lever should start down");
+    if (vcgs::StoryWalker::Onward(game, story.Start) != Scenes::Sc01TheCaveMouth) Fail("the story should start at SC-01");
+
+    game.GiveItem(Items::VaultKey);
+    std::vector<std::string> trace, finished;
+    std::vector<std::vector<std::string>> choices;
+    {
+        vcgs::ScenePlayer player(game, Scenes::Sc03TheVaultDoor);
+        player.OnEvent = [&](const vcgs::Value& e) { trace.push_back(e["kind"].Str() + ":" + e["label"].Str()); };
+        player.OnChoice = [&](const std::string&, const std::vector<std::string>& options) { choices.push_back(options); };
+        player.OnFinished = [&](const std::string& next) { finished.push_back(next); };
+        player.Start();
+        if (!game.Visited.count(Scenes::Sc03TheVaultDoor)) Fail("starting the scene should mark it visited");
+        for (int i = 0; i < 4; i++) player.Advance();
+        if (!choices.empty()) Fail("the choice should wait for the free play to end");
+        if (Join(vcgs::Interactions::AvailableVerbs(game, Objects::RustedLever), ",") != "Pull") Fail("the lever should offer Pull");
+        if (!vcgs::Interactions::Interact(game, Objects::RustedLever, "Pull")) Fail("Pull should work");
+        if (game.GetObjectState(Objects::RustedLever) != "up" || game.GetFlag(Flags::DoorSolved) != "yes") Fail("Pull should leave the lever up and set door_solved");
+        if (!game.Fired.count(Triggers::SeamDrains) || !game.Solved.count(Puzzles::TheVaultDoor)) Fail("the lever should fire Seam drains and solve the door");
+        if (choices.size() != 1) Fail("free play should end into the choice");
+        player.Choose(1);
+        player.Advance();
+        player.Advance();
+        if (player.OptionsDetail.size() != 1) Fail("the options list should hold only Turn the key now");
+        player.Choose(0);
+    }
+    std::printf("trace: %s\n", Join(trace, " > ").c_str());
+    std::vector<std::string> shown;
+    for (const auto& c : choices) shown.push_back(Join(c, ", "));
+    std::printf("options: %s\nfinished: %s\n", Join(shown, " | ").c_str(), Join(finished, ", ").c_str());
+    if (choices.size() != 2 || Join(choices[0], ",") != "Turn the key,Force it") Fail("the choice should offer Turn the key and Force it first");
+    if (choices.size() == 2 && Join(choices[1], ",") != "Turn the key") Fail("Force it should be gone the second time");
+    if (finished.size() != 1 || finished[0] != Cinematics::TheVaultOpens) Fail("the scene should end into the cinematic");
+    if (game.HasItem(Items::VaultKey) || game.Arc(Characters::Mara) != 1) Fail("turning the key should use it up and move Mara +1");
+
+    const std::string ring = vcgs::StoryWalker::Onward(game, finished.empty() ? "" : finished[0]);
+    if (vcgs::StoryWalker::KindOf(game, ring) != "choice") Fail("after the cinematic comes the ring choice");
+    std::vector<std::string> labels;
+    std::vector<int> offered = vcgs::StoryWalker::Offered(game, ring);
+    for (int i : offered) labels.push_back(vcgs::StoryWalker::OptionLabel(game, ring, i));
+    if (Join(labels, ",") != "Carry on,Pocket it") Fail("the ring choice should offer Carry on and Pocket it");
+    const std::string end = offered.empty() ? "" : vcgs::StoryWalker::Choose(game, ring, offered[0]);
+    if (vcgs::StoryWalker::KindOf(game, end) != "end") Fail("carrying on should reach the end");
+    if (vcgs::StoryWalker::GetLine(game, "sc_03_line_02").Speaker != "Mara") Fail("line 2 should be Mara's");
+
+    std::printf("%s\n", failures == 0 ? "OK" : (std::to_string(failures) + " FAILED").c_str());
+    return failures == 0 ? 0 : 1;
+}

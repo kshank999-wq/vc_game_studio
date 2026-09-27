@@ -3,7 +3,7 @@ export interface DesktopBridge {
   platform: string;
   desktop: true;
   pickFolder: () => Promise<string | null>;
-  checkFolder: (folder: string) => Promise<{ exists: boolean; engineProject: boolean; unity?: boolean }>;
+  checkFolder: (folder: string) => Promise<{ exists: boolean; engineProject: boolean; unity?: boolean; unreal?: boolean }>;
   writeFiles: (folder: string, files: { path: string; content: string }[]) => Promise<{ written: number }>;
   openProject?: () => Promise<{ path: string; content: string } | null>;
   readProject?: (path: string) => Promise<{ path: string; content: string } | null>;

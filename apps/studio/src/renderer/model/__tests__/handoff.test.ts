@@ -89,18 +89,17 @@ describe('export status', () => {
     expect(edited.rows.find((r) => r.label === 'Mara')!.status).toBe('ready');
   });
 
-  it('lists the engines, with Godot, Unity and JSON ready now', () => {
+  it('lists the engines, every one ready', () => {
     expect(ENGINES.map((e) => [e.id, e.available])).toEqual([
       ['godot', true],
       ['unity', true],
-      ['unreal', false],
+      ['unreal', true],
       ['custom', true],
     ]);
     const p = setTarget(sunkenVault(), { engine: 'unity' });
     expect(targetOf(p).outputPath).toBe('Assets/VCGS/Generated');
     expect(planHandoff(p).output).not.toBeNull();
-    // An engine still to come plans nothing yet.
-    expect(planHandoff(setTarget(sunkenVault(), { engine: 'unreal' })).output).toBeNull();
+    expect(targetOf(setTarget(sunkenVault(), { engine: 'unreal' })).outputPath).toBe('Content/VCGS/Generated');
   });
 });
 
@@ -169,5 +168,23 @@ describe('the Unity adapter', () => {
     const cin = out.files.find((f) => f.path.endsWith('Cinematics/door_in_the_dark.asset'))!.content;
     expect(cin).toContain('- framing: "Close-up"');
     expect(cin).toContain('seconds: 7.5');
+  });
+});
+
+describe('the Unreal adapter', () => {
+  it('writes the plugin, story.json, keys, DataTable CSVs and their import script', async () => {
+    const { generateUnreal } = await import('../handoff/unreal');
+    const out = generateUnreal(buildIR(sunkenVault()), 'Content/VCGS/Generated');
+    const file = (path: string) => out.files.find((f) => f.path === path)!.content;
+    expect(out.files.map((f) => f.path)).toEqual(expect.arrayContaining(['Plugins/VCGS/VCGS.uplugin', 'Plugins/VCGS/Source/VCGS/Public/VcgsCore.h', 'Content/VCGS/Generated/story.json']));
+    expect(file('Plugins/VCGS/Source/VCGS/Public/Generated/VcgsStoryKeys.h')).toContain('constexpr const TCHAR* Sc03TheVaultDoor = TEXT("sc_03_the_vault_door");');
+    const characters = file('Content/VCGS/Generated/DataTables/Characters.csv').split('\n');
+    expect(characters[0]).toBe('---,Key,Code,DisplayName,Description,Role,Arc,Color');
+    expect(characters.find((l) => l.startsWith('mara,'))).toContain('(R=0.851,G=0.376,B=0.478,A=1.000)');
+    // A cell with a comma or a line break is quoted as CSV.
+    expect(file('Content/VCGS/Generated/DataTables/Locations.csv')).toContain('"lighting: Lantern only\nambience: Dripping, a low echo"');
+    expect(file('Content/VCGS/Generated/DataTables/Shots.csv').trim().split('\n')).toHaveLength(4);
+    expect(file('Content/VCGS/Generated/import_datatables.py')).toContain('"Characters": "/Script/VCGS.VcgsCharacterRow",');
+    expect(JSON.parse(file('Plugins/VCGS/VCGS.uplugin')).Modules[0]).toEqual({ Name: 'VCGS', Type: 'Runtime', LoadingPhase: 'Default' });
   });
 });

@@ -4,28 +4,14 @@ import type { EngineAdapter, ElementOutput, EngineOutput } from './engines';
 import { godot } from './godot';
 import { json } from './json';
 import { unity } from './unity';
+import { unreal } from './unreal';
 import { buildIR } from './ir';
 
 /**
- * Every engine VC Game Studio will hand off to. Godot, Unity and plain JSON
- * (for any other engine) are ready; Unreal is listed with its plan so the picker, the target and the export record
- * already work for them. Adding one is one adapter file.
+ * Every engine VC Game Studio hands off to: Godot, Unity, Unreal, and plain
+ * JSON for any other engine. Adding one is one adapter file.
  */
-export const ENGINES: readonly EngineAdapter[] = [
-  godot,
-  unity,
-  {
-    id: 'unreal',
-    name: 'Unreal Engine 5',
-    language: 'C++ · Data Assets + Blueprints',
-    available: false,
-    defaultOutputPath: 'Content/VCGS/Generated',
-    runtimeName: 'VCGS Runtime plugin for Unreal',
-    setup: [],
-    plan: 'Data Assets and Data Tables, with Blueprint-callable functions for choices and rules.',
-  },
-  json,
-];
+export const ENGINES: readonly EngineAdapter[] = [godot, unity, unreal, json];
 
 export const engineById = (id: EngineId): EngineAdapter => ENGINES.find((e) => e.id === id) ?? godot;
 

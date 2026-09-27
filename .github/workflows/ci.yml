@@ -71,3 +71,26 @@ jobs:
           dotnet-version: 8.0.x
       - run: npm ci
       - run: apps/studio/scripts/check-unity.sh
+
+  unreal:
+    # The generated Unreal plugin: its core built and run on the sample
+    # (C++17, warnings as errors, no exceptions or RTTI) with gcc and clang,
+    # every source compiled against stubs of Unreal's headers, the DataTable
+    # import script byte-compiled and VCGS.Build.cs compiled.
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: npm ci
+      - run: apps/studio/scripts/check-unreal.sh
+      - run: CXX=clang++ apps/studio/scripts/check-unreal.sh
