@@ -4,6 +4,7 @@ import type { HandoffIR, IrThing, Ident } from './ir';
 import { JSON_FORMAT } from './json';
 import { ASMDEF, RUNTIME_FILES } from './unity-runtime';
 import { EDITOR_ASMDEF, LEVEL_EDITOR_FILES, LEVEL_RUNTIME_FILES, levelJson } from './unity-levels';
+import { markupInline } from '../inline';
 
 /**
  * The Unity adapter: C# and ScriptableObjects. The runtime (Assets/VCGS/Runtime)
@@ -158,7 +159,10 @@ export const generateUnity = (ir: HandoffIR, outputPath: string): EngineOutput =
   const elements: ElementOutput[] = [];
   const row = (e: Omit<ElementOutput, 'fingerprint'>, data: unknown) => elements.push({ ...e, fingerprint: fingerprint(`${VERSION}:${JSON.stringify(data)}`) });
 
-  const storyPath = put(`${root}/story.json`, JSON.stringify({ ...JSON_FORMAT, generator: 'VC Game Studio', ...ir }, null, 2), 'generated', 'text');
+  // A line with emphasis also carries it as TextMeshPro rich text.
+  const tmp = (text: string) => markupInline(text, (run, st) => `${st.bold ? '<b>' : ''}${st.italic ? '<i>' : ''}${st.underline ? '<u>' : ''}${run}${st.underline ? '</u>' : ''}${st.italic ? '</i>' : ''}${st.bold ? '</b>' : ''}`);
+  const lines = ir.lines.map((l) => (l.styled ? { ...l, rich: tmp(l.styled) } : l));
+  const storyPath = put(`${root}/story.json`, JSON.stringify({ ...JSON_FORMAT, generator: 'VC Game Studio', ...ir, lines }, null, 2), 'generated', 'text');
   const keysPath = put(`${root}/StoryKeys.cs`, storyKeys(ir), 'generated', 'script');
   put(`${root}/README.md`, README(ir, root), 'generated', 'text');
 

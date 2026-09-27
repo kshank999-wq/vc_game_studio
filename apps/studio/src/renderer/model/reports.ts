@@ -5,6 +5,7 @@ import { CATEGORIES, elementsIn, sceneLines } from './scene';
 import { TYPE_LABEL } from './semantics';
 import { eventDetail, eventTitle, sceneTimeline } from './timeline';
 import type { ObjectType, Project, StoryObject } from './types';
+import { plainInline } from './inline';
 
 /**
  * Production reports from the Bible (spec §20): organized breakdowns built
@@ -87,7 +88,7 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
         blocks.push({
           kind: 'table',
           columns: ['Scene', '#', 'Line', 'Direction', 'VO'],
-          rows: own.map((l) => [project.objects[l.sceneId]?.data.code ?? '', String(l.order), l.text, l.direction, VO_LABEL[l.vo]]),
+          rows: own.map((l) => [project.objects[l.sceneId]?.data.code ?? '', String(l.order), plainInline(l.text), l.direction, VO_LABEL[l.vo]]),
         });
       }
       break;
@@ -99,7 +100,7 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
         blocks.push({
           kind: 'table',
           columns: ['#', 'Speaker', 'Line', 'Direction', 'VO'],
-          rows: own.sort((a, b) => a.order - b.order).map((l) => [String(l.order), speakerName(project, l.speakerId), l.text, l.direction, VO_LABEL[l.vo]]),
+          rows: own.sort((a, b) => a.order - b.order).map((l) => [String(l.order), speakerName(project, l.speakerId), plainInline(l.text), l.direction, VO_LABEL[l.vo]]),
         });
       }
       break;

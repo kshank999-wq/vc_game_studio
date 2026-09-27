@@ -4,6 +4,7 @@ import { statesOf } from '../../model/details';
 import { advance, choose, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { Symbol } from '../Symbol';
+import { Inline } from '../Inline';
 
 interface Props {
   project: Project;
@@ -28,7 +29,7 @@ const EntryView = ({ entry }: { entry: Entry }) => {
         <div className="play-line">
           <div className="play-speaker">{entry.speaker?.toUpperCase() ?? 'NO SPEAKER'}</div>
           {entry.direction && <div className="play-direction">({entry.direction})</div>}
-          <div className="play-said">{entry.text || '…'}</div>
+          <div className="play-said">{entry.text ? <Inline text={entry.text} /> : '…'}</div>
         </div>
       );
     case 'action':

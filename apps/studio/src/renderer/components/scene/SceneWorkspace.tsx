@@ -20,6 +20,7 @@ import { ScriptEditor, ScriptFooter } from './ScriptEditor';
 import { timelineSummary } from '../../model/timeline';
 import { ElementDetail } from '../detail/ElementDetail';
 import type { Destination } from '../../model/details';
+import { Inline } from '../Inline';
 
 /** The collapsed timeline under the writing box. */
 const STRIP_H = 52;
@@ -322,7 +323,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                           }}
                         >
                           <span className="mono">#{l.order}</span>
-                          <span className="dlg-text">{l.text || '…'}</span>
+                          <span className="dlg-text">{l.text ? <Inline text={l.text} /> : '…'}</span>
                         </button>
                       ))}
                       {said.length > DLG_ROWS && <span className="dlg-more">+ {said.length - DLG_ROWS} more</span>}

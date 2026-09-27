@@ -1,5 +1,6 @@
 import { newId } from './project';
 import type { Project, StoryObject } from './types';
+import { plainInline } from './inline';
 
 /**
  * A cinematic's shot list (spec §17, Game Studio §12): the shots in order,
@@ -125,7 +126,7 @@ export const describeShot = (project: Project, shot: Shot): string => {
     [shot.framing, shot.move !== 'Static' ? shot.move.toLowerCase() : '', shot.lens].filter(Boolean).join(' · '),
     who,
     shot.action,
-    line?.text ? `“${line.text}”` : '',
+    line?.text ? `“${plainInline(line.text)}”` : '',
   ]
     .filter(Boolean)
     .join(' — ');

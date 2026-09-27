@@ -4,6 +4,11 @@ import type { HandoffIR, Ident } from './ir';
 import { JSON_FORMAT } from './json';
 import { VCGS_CORE_H } from './unreal-core';
 import { buildLevelScript, LEVEL_PLUGIN_FILES, levelJsonUnreal } from './unreal-levels';
+import { markupInline } from '../inline';
+
+/** Emphasis as URichTextBlock markup: one style row per run, named for what it combines. */
+const richText = (text: string) =>
+  markupInline(text, (run, st) => `<${[st.bold && 'Bold', st.italic && 'Italic', st.underline && 'Underline'].filter(Boolean).join('')}>${run}</>`);
 
 /**
  * The Unreal adapter: a plugin (Plugins/VCGS) and the story's data.
@@ -165,6 +170,10 @@ struct VCGS_API FVcgsLineRow : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS", meta = (MultiLine = true)) FString Text;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Direction;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Vo;
+    /** The line with its emphasis, for a URichTextBlock: <Bold>, <Italic>, <Underline> and their pairs (<BoldItalic>…) as rows of its text style set. Empty when it has none. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS", meta = (MultiLine = true)) FString Rich;
+    /** Dual dialogue: the line this one is spoken at the same time as. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString DualWith;
 };
 `,
 
@@ -638,7 +647,7 @@ export const dataTables = (ir: HandoffIR): Record<string, { struct: string; csv:
         ),
       ),
     },
-    Lines: { struct: 'VcgsLineRow', csv: csv(['---', 'Scene', 'Speaker', 'Text', 'Direction', 'Vo'], ir.lines.map((l) => [l.id, l.scene, l.speaker ?? '', l.text, l.direction, l.vo])) },
+    Lines: { struct: 'VcgsLineRow', csv: csv(['---', 'Scene', 'Speaker', 'Text', 'Direction', 'Vo', 'Rich', 'DualWith'], ir.lines.map((l) => [l.id, l.scene, l.speaker ?? '', l.text, l.direction, l.vo, l.styled ? richText(l.styled) : '', l.dual ?? ''])) },
   };
 };
 

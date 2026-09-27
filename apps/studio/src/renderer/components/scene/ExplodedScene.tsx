@@ -13,6 +13,7 @@ import type { SceneSurface } from './SceneWorkspace';
 import { ElementDetail } from '../detail/ElementDetail';
 import type { Destination } from '../../model/details';
 import { findIssues } from '../../model/validate';
+import { Inline } from '../Inline';
 
 interface Props {
   project: Project;
@@ -519,7 +520,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
               {said.slice(0, DLG_ROWS).map((l) => (
                 <span key={l.id} className="dlg-row">
                   <span className="mono">#{l.order}</span>
-                  <span className="dlg-text">{l.text || '…'}</span>
+                  <span className="dlg-text">{l.text ? <Inline text={l.text} /> : '…'}</span>
                 </span>
               ))}
               {said.length > DLG_ROWS && <span className="dlg-more">+ {said.length - DLG_ROWS} more</span>}

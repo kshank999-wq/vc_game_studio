@@ -3,6 +3,7 @@ import { usePreferences } from '../../preferences';
 import { newId } from '../../model/project';
 import { addLine, characterNamed, continues, headingSuggestions, inScene, nextSpeaker, sceneHeading, sceneLines, setSceneHeading, speakers, transitionSuggestions } from '../../model/scene';
 import { cueNames, cueText, fromElements, lineIdOf, resolveCue, sameScript, toElements, type ScriptElement } from '../../model/script-elements';
+import { parseInlineMarks, toggleInline, type InlineMark, type InlineSpan } from '../../model/inline';
 import { autoType, cueName, EXTENSION_GROUPS, EXTENSIONS, hasExtension, onEnter, onTab, reformatText, retype, STYLE_SHORTCUTS, withExtension, type ElementType, type Typing } from '../../model/screenplay';
 import type { Project } from '../../model/types';
 import { Symbol } from '../Symbol';
@@ -49,6 +50,8 @@ const PLACEHOLDER: Partial<Record<ElementType, string>> = {
   general: 'General',
 };
 
+const MARK_KEYS: Record<string, InlineMark> = { b: 'bold', i: 'italic', u: 'underline' };
+
 const isSpeech = (type: ElementType) => type === 'character' || type === 'parenthetical' || type === 'dialogue';
 
 /** The completion list open under a cue or a transition, and the highlighted entry (-1: none yet). */
@@ -71,6 +74,11 @@ interface Offer {
  *    a cue gives dialogue, dialogue gives action.
  *  - **Ctrl/Cmd+1…7** set the style outright (1 goes to the scene heading).
  *  - A line of action that reads `CUT TO:` becomes a transition.
+ *  - **Ctrl/Cmd+B/I/U** put emphasis on the selection, written into the text
+ *    as Fountain's `**bold**`, `*italic*` and `_underline_` and drawn styled
+ *    under the very characters being typed.
+ *  - **Ctrl/Cmd+Alt+D** (or ⇹ on the cue) makes a speech dual dialogue:
+ *    spoken at the same time as the one before, and set beside it.
  *  - A script pasted as text comes in as sluglines, cues and dialogue.
  *  - Cues complete from the cast, whoever is likeliest to speak next first. A
  *    name nobody has yet makes a new character when the writer leaves the
@@ -99,9 +107,11 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
     }
   }
 
-  const [focus, setFocus] = useState<{ id: string; caret?: number } | null>(null);
+  const [focus, setFocus] = useState<{ id: string; caret?: number; end?: number } | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
   const [extensionsFor, setExtensionsFor] = useState<string | null>(null);
+  // The line the writer is on, whose style the picker above shows.
+  const [here, setHere] = useState<string | null>(null);
   // Cues whose extensions have been offered: the next Tab walks on.
   const offered = useRef(new Set<string>());
   const root = useRef<HTMLDivElement>(null);
@@ -119,7 +129,7 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
     if (!el) return;
     el.focus();
     const at = focus.caret ?? el.value.length;
-    el.setSelectionRange(at, at);
+    el.setSelectionRange(at, focus.end ?? at);
     setFocus(null);
   });
 
@@ -201,6 +211,16 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
     if (element.type === 'character' || element.type === 'transition') setOffer({ id: element.id, index: text.trim() ? 0 : -1 });
   };
 
+  /** Dual dialogue on or off, for the speech this line is in. */
+  const toggleDual = (index: number) => {
+    const cue = cueOf(index);
+    if (!cue) return;
+    const next = els.current.map((e) => (e.id === cue.id ? (({ dual: _, ...rest }) => (cue.dual ? rest : { ...rest, dual: true }))(e) : e));
+    setElements(next);
+    save(next);
+    setFocus({ id: els.current[index]!.id });
+  };
+
   // ------------------------------------------------------------ completion
 
   /** The speech an element belongs to: its cue, walking back. */
@@ -278,6 +298,23 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
     }
 
     const empty = element.text.trim().length === 0;
+
+    // Ctrl/Cmd+Alt+D prints this speech beside the one above it.
+    if (chord && e.altKey && e.code === 'KeyD') {
+      e.preventDefault();
+      toggleDual(index);
+      return;
+    }
+
+    // Ctrl/Cmd+B, I, U put emphasis on the selection. A cue is a name, not a line to style.
+    if (chord && !e.altKey && MARK_KEYS[e.key.toLowerCase()]) {
+      e.preventDefault();
+      if (element.type === 'character') return;
+      const edit = toggleInline(element.text, input.selectionStart, input.selectionEnd, MARK_KEYS[e.key.toLowerCase()]!);
+      update(element.id, { text: edit.text });
+      setFocus({ id: element.id, caret: edit.selectionStart, end: edit.selectionEnd });
+      return;
+    }
 
     // Ctrl/Cmd+1…9 sets the style outright.
     if (chord && !e.altKey && STYLE_SHORTCUTS[e.key]) {
@@ -447,16 +484,14 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
     const label = element.type === 'dialogue' ? `Line for ${(speakerName && (characterNamed(latest.current, speakerName)?.name ?? speakerName)) || 'no speaker'}` : LABEL[element.type];
     const ghost = element.type === 'character' && !element.text ? cueNames(latest.current, sceneId, lineIdOf(element.id))[0] : undefined;
     return (
-      <div key={element.id} className={`element element-${element.type}`} data-line={lineIdOf(element.id)}>
-        <select className="element-type" value={element.type} aria-label="Element type" tabIndex={-1} onChange={(e) => becomes(element, e.currentTarget.value as ElementType)}>
-          {LINE_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {LABEL[t]}
-            </option>
-          ))}
-        </select>
-        <div className="field">
+      <div key={element.id} className={`element element-${element.type}`} data-line={lineIdOf(element.id)} data-type={element.type}>
+        <div className={element.type === 'character' ? 'field' : 'field inked'}>
           {element.type === 'character' && <Symbol type="character" size={10} color={characterColor(latest.current, line?.speakerId)} />}
+          {element.type === 'character' ? null : (
+            <div className="ink" aria-hidden="true">
+              <Marked text={element.text} />
+            </div>
+          )}
           <textarea
             data-el={element.id}
             className={element.type === 'character' ? `line-cue${line?.speakerId || !element.text ? '' : ' unnamed'}` : element.type === 'parenthetical' ? 'line-direction' : 'line-text'}
@@ -470,7 +505,10 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
             value={element.text}
             // A cue is as wide as its name, so (CONT’D) sits beside it.
             style={element.type === 'character' ? { width: `calc(${(element.text || ghost || 'CHARACTER').length + 1}ch + 20px)` } : undefined}
-            onFocus={() => (element.type === 'character' || element.type === 'transition') && setOffer({ id: element.id, index: element.text.trim() ? 0 : -1 })}
+            onFocus={() => {
+              setHere(element.id);
+              if (element.type === 'character' || element.type === 'transition') setOffer({ id: element.id, index: element.text.trim() ? 0 : -1 });
+            }}
             onChange={(e) => {
               writeText(element, e.currentTarget.value);
               fit(e.currentTarget);
@@ -483,6 +521,20 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
             <span className="line-contd" title="The same character spoke last, with only action between">
               (CONT’D)
             </span>
+          )}
+          {element.type === 'character' && (
+            <button
+              type="button"
+              className={element.dual ? 'dual-toggle on' : 'dual-toggle'}
+              aria-pressed={!!element.dual}
+              aria-label="Speak at the same time as the speech above"
+              title="Dual dialogue: spoken at the same time as the speech above, and set beside it (Ctrl/Cmd+Alt+D)"
+              tabIndex={-1}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => toggleDual(index)}
+            >
+              ⇹
+            </button>
           )}
           {list.length > 0 && (
             <Suggestions
@@ -529,17 +581,46 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
     );
   };
 
-  // A speech — cue, parentheticals, dialogue — is drawn as one block.
-  const blocks: { speech: boolean; items: { element: ScriptElement; index: number }[] }[] = [];
+  // A speech — cue, parentheticals, dialogue — is drawn as one block, and a
+  // dual speech beside the one before it (VC Writer's `groupManuscript`).
+  type Item = { element: ScriptElement; index: number };
+  type Block = { speech: boolean; items: Item[]; beside?: Item[] };
+  const blocks: Block[] = [];
   elements.forEach((element, index) => {
     const speech = isSpeech(element.type);
     const last = blocks[blocks.length - 1];
-    if (speech && last?.speech && element.type !== 'character') last.items.push({ element, index });
+    if (speech && last?.speech && element.type !== 'character') (last.beside ?? last.items).push({ element, index });
+    else if (element.type === 'character' && element.dual && last?.speech && !last.beside) last.beside = [{ element, index }];
     else blocks.push({ speech, items: [{ element, index }] });
   });
+  const speechBlock = (items: Item[]) => (
+    <>
+      <SpeechMeta project={project} lineId={lineIdOf(items[0]!.element.id)} />
+      {items.map(({ element, index }) => row(element, index))}
+    </>
+  );
 
+  const current = elements.find((e) => e.id === here);
   return (
     <div className="script" ref={root}>
+      {current && (
+        <div className="script-style">
+          <select
+            className="element-type"
+            aria-label="Element type"
+            value={current.type}
+            tabIndex={-1}
+            onMouseDown={() => save()}
+            onChange={(e) => becomes(current, e.currentTarget.value as ElementType)}
+          >
+            {LINE_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {LABEL[t]}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="line line-heading-wrap">
         <input
           key={sceneHeading(project, sceneId)}
@@ -585,10 +666,16 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
       )}
       {blocks.map((block) =>
         block.speech ? (
-          <div key={`speech-${block.items[0]!.element.id}`} className="line line-dialogue">
-            <SpeechMeta project={project} lineId={lineIdOf(block.items[0]!.element.id)} />
-            {block.items.map(({ element, index }) => row(element, index))}
-          </div>
+          block.beside ? (
+            <div key={`speech-${block.items[0]!.element.id}`} className="dual-row" role="group" aria-label="Dual dialogue">
+              <div className="line line-dialogue dual-column">{speechBlock(block.items)}</div>
+              <div className="line line-dialogue dual-column">{speechBlock(block.beside)}</div>
+            </div>
+          ) : (
+            <div key={`speech-${block.items[0]!.element.id}`} className="line line-dialogue">
+              {speechBlock(block.items)}
+            </div>
+          )
         ) : (
           <Fragment key={block.items[0]!.element.id}>{block.items.map(({ element, index }) => row(element, index))}</Fragment>
         ),
@@ -624,12 +711,35 @@ export const ScriptFooter = ({ project, sceneId, onCommit }: Props) => {
       <button onClick={() => onCommit(addLine(project, sceneId, 'transition', last?.id).project)}>Transition</button>
       <span
         className="script-keys mono"
-        title="As in VC Writer and Final Draft — Tab changes the line: action → character → (extension) → parenthetical; in dialogue, a parenthetical · Shift+Tab walks back · Return starts the next line: a cue gives dialogue, dialogue gives action · Ctrl/Cmd+1–7: heading, action, character, parenthetical, dialogue, transition, shot · Backspace on an empty line removes it · paste a script as text and it comes in formatted"
+        title="As in VC Writer and Final Draft — Tab changes the line: action → character → (extension) → parenthetical; in dialogue, a parenthetical · Shift+Tab walks back · Return starts the next line: a cue gives dialogue, dialogue gives action · Ctrl/Cmd+1–7: heading, action, character, parenthetical, dialogue, transition, shot · Ctrl/Cmd+B, I, U: bold, italic, underline on the selection · Ctrl/Cmd+Alt+D: dual dialogue, spoken with the speech above · Backspace on an empty line removes it · paste a script as text and it comes in formatted"
       >
         Return next · Tab changes
       </span>
     </div>
   );
+};
+
+/**
+ * The line's own characters, marks included, wearing their emphasis (VC
+ * Writer's `Marked`): drawn under the textarea, so what is typed is what
+ * will show, marks dimmed, without the editor becoming a rich text engine.
+ */
+const Marked = ({ text }: { text: string }) => (
+  <>
+    {parseInlineMarks(text).map((span, i) => (
+      <Emphasis key={i} span={span} />
+    ))}
+    {/* A zero-width space keeps an empty line the height of a full one. */}
+    {'\u200b'}
+  </>
+);
+
+const Emphasis = ({ span }: { span: InlineSpan }) => {
+  let node: React.ReactNode = span.marker ? <span className="mark">{span.text}</span> : span.text;
+  if (span.underline) node = <u>{node}</u>;
+  if (span.italic) node = <i>{node}</i>;
+  if (span.bold) node = <b>{node}</b>;
+  return <>{node}</>;
 };
 
 /** A list of completions under what is being typed; a click takes one without losing the caret. */

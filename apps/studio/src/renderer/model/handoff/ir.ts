@@ -1,6 +1,7 @@
 import { interactionsOf, initialState, statesOf } from '../details';
 import { laneSequence, spineSequence } from '../layout';
-import { CATEGORIES, elementsIn, sceneLines } from '../scene';
+import { CATEGORIES, dualWith, elementsIn, sceneLines } from '../scene';
+import { hasInline, plainInline } from '../inline';
 import { eventTitle, sceneTimeline } from '../timeline';
 import { isEmpty, isRule, type Effect, type Rule } from '../rules';
 import { cinematicTiming, shotsOf } from '../shots';
@@ -178,6 +179,10 @@ export interface IrLine {
   direction: string;
   vo: string;
   order: number;
+  /** The line with its emphasis, as Fountain writes it (**bold**, *italic*, _underline_). Only when it has some; `text` is always plain. */
+  styled?: string;
+  /** Dual dialogue: the line this one is spoken at the same time as. */
+  dual?: string;
 }
 
 export interface IrEvent {
@@ -517,10 +522,12 @@ export const buildIR = (project: Project): HandoffIR => {
         id: lineId(project.objects[l.sceneId]!.data.code ?? '', l.order),
         scene: key(l.sceneId)!,
         speaker: key(l.speakerId),
-        text: l.text,
+        text: plainInline(l.text),
         direction: l.direction,
         vo: l.vo,
         order: l.order,
+        ...(hasInline(l.text) ? { styled: l.text } : {}),
+        ...((partner) => (partner ? { dual: lineId(project.objects[l.sceneId]!.data.code ?? '', partner.order) } : {}))(dualWith(project, l.id)),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     levels: buildLevels(project, { key, rule, effects, toKey }),

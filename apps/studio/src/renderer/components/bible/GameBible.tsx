@@ -12,6 +12,7 @@ import type { ObjectType, Project } from '../../model/types';
 import { ElementDetail } from '../detail/ElementDetail';
 import { Symbol } from '../Symbol';
 import { ReportPreview } from './ReportPreview';
+import { Inline } from '../Inline';
 
 interface Props {
   project: Project;
@@ -137,7 +138,7 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
       <button key={entry.id} className={`bible-row${selection === entry.id ? ' on' : ''}`} onClick={() => setSelected(entry.id)}>
         <Symbol type={symbol} size={14} color={color} />
         <span className="bible-row-main">
-          <span className="bible-row-name">{entry.kind === 'line' ? entry.line.text || '…' : entry.object.name}</span>
+          <span className="bible-row-name">{entry.kind === 'line' ? (entry.line.text ? <Inline text={entry.line.text} /> : '…') : entry.object.name}</span>
           <span className={`bible-row-sub${issue ? ' warn' : ''}`}>{issue ?? subtitle(entry)}</span>
         </span>
         {entry.kind === 'object' && entry.object.data.code && <span className="mono bible-row-code">{entry.object.data.code}</span>}

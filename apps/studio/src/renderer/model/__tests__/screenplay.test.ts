@@ -119,3 +119,23 @@ describe('the script’s elements, as the scene’s lines', () => {
     expect(cueNames(p, sceneId)).toEqual(['MARA', 'JONAH']);
   });
 });
+
+describe('emphasis and dual dialogue in the handoff', () => {
+  it('gives every engine plain text, and the emphasis and dual pairing beside it', async () => {
+    const { sunkenVault } = await import('../sample');
+    const { buildIR } = await import('../handoff/ir');
+    const { godot } = await import('../handoff/godot');
+    const { unity } = await import('../handoff/unity');
+    const { unreal } = await import('../handoff/unreal');
+    const ir = buildIR(sunkenVault());
+    const not = ir.lines.find((l) => l.styled)!;
+    expect(not).toMatchObject({ text: 'Not like that.', styled: '*Not* like that.' });
+    const partner = ir.lines.find((l) => l.id === not.dual)!;
+    expect(partner.text).toBe('Stand back. I’ll find it.');
+    const all = (e: typeof godot) => e.generate!(ir, e.defaultOutputPath).files.map((f) => f.content).join('\n');
+    expect(all(godot)).toContain('[i]Not[/i] like that.');
+    expect(all(godot)).toContain(`"dual_with": "${not.dual}"`);
+    expect(all(unity)).toContain('"rich": "<i>Not</i> like that."');
+    expect(all(unreal)).toContain(`<Italic>Not</> like that.`);
+  });
+});

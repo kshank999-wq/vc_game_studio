@@ -4,6 +4,7 @@ import { newId } from './project';
 import { addElement, addLine, inScene, removeLine, sceneElements, sceneLines } from './scene';
 import type { DialogueLine, EventKind, ObjectType, Project, TimelineBranch, TimelineEvent } from './types';
 import { describeEffects, describeRule, isEmpty } from './rules';
+import { plainInline } from './inline';
 
 /**
  * A scene's timeline (spec §13): how it plays from entry to exit. Events sit
@@ -285,7 +286,7 @@ export const eventTitle = (project: Project, event: TimelineEvent): string => {
 export const eventDetail = (project: Project, event: TimelineEvent): string => {
   switch (event.kind) {
     case 'dialogue':
-      return lineOf(project, event)?.text || '…';
+      return plainInline(lineOf(project, event)?.text ?? '') || '…';
     case 'cinematic': {
       const t = event.refId ? cinematicTiming(project, event.refId, event) : { seconds: event.seconds ?? 0, shots: event.shots ?? 1 };
       return `${t.seconds}s · ${t.shots} shot${t.shots === 1 ? '' : 's'}`;

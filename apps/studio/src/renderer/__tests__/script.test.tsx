@@ -45,7 +45,7 @@ const typeIn = (el: HTMLElement, value: string) => {
   }
 };
 const key = (el: Element, k: string, opts: Partial<KeyboardEventInit> = {}) => act(() => void fireEvent.keyDown(el, { key: k, ...opts }));
-const styles = (container: HTMLElement) => [...container.querySelectorAll<HTMLSelectElement>('select.element-type')].map((s) => s.value);
+const styles = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.element[data-type]')].map((e) => e.dataset.type);
 
 describe('writing the script (VC Writer’s editor)', () => {
   it('completes a character’s name as it is typed, the scene’s cast first', () => {
@@ -167,11 +167,72 @@ describe('writing the script (VC Writer’s editor)', () => {
     const { container } = openScene();
     fireEvent.click(screen.getByRole('button', { name: 'Start with action' }));
     typeIn(screen.getByRole('textbox', { name: 'Action' }), 'The door groans.');
+    // The picker above shows the style of the line the writer is on, and sets it.
+    const picker = screen.getByRole('combobox', { name: 'Element type' }) as HTMLSelectElement;
+    expect(picker.value).toBe('action');
+    fireEvent.change(picker, { target: { value: 'shot' } });
+    expect(styles(container)).toEqual(['shot']);
+    fireEvent.change(picker, { target: { value: 'action' } });
     key(screen.getByRole('textbox', { name: 'Action' }), 'Enter');
     expect(styles(container)).toEqual(['action', 'action']);
     key(screen.getAllByRole('textbox', { name: 'Action' })[1]!, 'Backspace');
     expect(styles(container)).toEqual(['action']);
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Action' }));
+  });
+
+  it('puts emphasis on the selection with Ctrl+B, I and U, drawn under the words and read without the marks', () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(setup()));
+    const { container } = openScene();
+    fireEvent.click(screen.getByRole('button', { name: 'Start with a character' }));
+    typeIn(cue(container), 'Mara');
+    key(cue(container), 'Enter');
+    const text = screen.getByRole('textbox', { name: 'Line for Mara' }) as HTMLTextAreaElement;
+    typeIn(text, 'Not like that.');
+    text.setSelectionRange(0, 3);
+    key(text, 'i', { ctrlKey: true });
+    expect(text.value).toBe('*Not* like that.');
+    // The selection stays on the word, inside its marks.
+    expect([text.selectionStart, text.selectionEnd]).toEqual([1, 4]);
+    // Again takes it off; bold and underline work the same way.
+    key(text, 'i', { ctrlKey: true });
+    expect(text.value).toBe('Not like that.');
+    text.setSelectionRange(9, 13);
+    key(text, 'b', { metaKey: true });
+    expect(text.value).toBe('Not like **that**.');
+    const ink = text.parentElement!.querySelector('.ink')!;
+    expect(ink.querySelector('b')!.textContent).toBe('that');
+    fireEvent.blur(text);
+    // The dialogue box reads it styled, the marks gone.
+    const box = screen.getByRole('group', { name: 'Mara’s dialogue' });
+    expect(box.textContent).toContain('Not like that.');
+    expect(box.querySelector('b')!.textContent).toBe('that');
+  });
+
+  it('sets a speech beside the one before it with Ctrl+Alt+D: dual dialogue', () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(setup()));
+    const { container } = openScene();
+    fireEvent.click(screen.getByRole('button', { name: 'Start with a character' }));
+    typeIn(cue(container), 'Mara');
+    key(cue(container), 'Enter');
+    typeIn(screen.getByRole('textbox', { name: 'Line for Mara' }), 'Stand back.');
+    key(screen.getByRole('textbox', { name: 'Line for Mara' }), 'Enter');
+    key(screen.getByRole('textbox', { name: 'Action' }), 'Tab');
+    typeIn(cue(container), 'Jonah');
+    key(cue(container), 'Enter');
+    const jonah = screen.getByRole('textbox', { name: 'Line for Jonah' });
+    typeIn(jonah, 'Not like that!');
+    expect(screen.queryByRole('group', { name: 'Dual dialogue' })).toBeNull();
+    key(jonah, 'd', { ctrlKey: true, altKey: true, code: 'KeyD' } as KeyboardEventInit);
+    const pair = screen.getByRole('group', { name: 'Dual dialogue' });
+    const columns = [...pair.querySelectorAll('.dual-column')].map((c) => [...c.querySelectorAll('textarea')].map((t) => t.value));
+    expect(columns).toEqual([
+      ['Mara', 'Stand back.'],
+      ['Jonah', 'Not like that!'],
+    ]);
+    expect(screen.getAllByRole('button', { name: 'Speak at the same time as the speech above' })[1]!.getAttribute('aria-pressed')).toBe('true');
+    // And off again, from the cue's own button.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Speak at the same time as the speech above' })[1]!);
+    expect(screen.queryByRole('group', { name: 'Dual dialogue' })).toBeNull();
   });
 
   it('writes the scene heading as the first line, completing INT./EXT., the place and the time', () => {

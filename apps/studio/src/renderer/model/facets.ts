@@ -4,6 +4,7 @@ import { sceneLines } from './scene';
 import { describeShot, runningTime, shotsOf } from './shots';
 import { sceneTimeline } from './timeline';
 import type { ObjectType, Project, StoryObject } from './types';
+import { plainInline } from './inline';
 
 /**
  * The second level of the mind map (spec §11): what one element exposes when
@@ -35,7 +36,7 @@ export const facetsOf = (project: Project, sceneId: string, object: StoryObject)
       const lines = sceneLines(project, sceneId).filter((l) => l.speakerId === object.id);
       return cap([
         ...useFacets,
-        ...lines.map((l): Facet => ({ label: `“${l.text || '…'}”`, detail: l.direction || undefined, symbol: 'dialogue' })),
+        ...lines.map((l): Facet => ({ label: `“${plainInline(l.text) || '…'}”`, detail: l.direction || undefined, symbol: 'dialogue' })),
         ...(lines.length ? [] : [{ label: 'No lines here' }]),
       ]);
     }

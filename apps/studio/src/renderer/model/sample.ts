@@ -147,10 +147,11 @@ export const sunkenVault = (): Project => {
     ['action', null, 'Ankle-deep water. The vault door is a slab of green bronze, its seam weeping.', ''],
     ['dialogue', mara, 'Water’s holding it shut. There’s a lever somewhere.', 'listening'],
     ['dialogue', explorer, 'Stand back. I’ll find it.', 'wading forward'],
-    ['dialogue', mara, 'Not like that.', ''],
+    // Mara talks over him (dual dialogue), and leans on the word.
+    ['dialogue', mara, '*Not* like that.', ''],
   ] as const) {
     const line = addLine(p, vaultDoor, kind, last, speaker);
-    p = updateLine(line.project, line.id, { text, direction });
+    p = updateLine(line.project, line.id, { text, direction, ...(text.startsWith('*Not*') ? { dual: true } : {}) });
     last = line.id;
   }
 

@@ -134,6 +134,8 @@ export interface DialogueLine {
   joined?: boolean;
   /** An action line written as a shot (ANGLE ON, CLOSE ON). */
   shot?: boolean;
+  /** Dual dialogue: this speech is spoken at the same time as the one before it, and printed beside it. */
+  dual?: boolean;
   order: number;
   /** Spoken only when this holds. */
   conditions?: Rule;

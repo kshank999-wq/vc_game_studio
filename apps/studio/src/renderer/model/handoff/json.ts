@@ -47,7 +47,7 @@ export const storySchema = () => ({
     triggers: { type: 'array', items: ref('trigger') },
     choices: { type: 'array', items: ref('choice') },
     scenes: { type: 'array', items: ref('scene') },
-    lines: { type: 'array', items: obj({ id: str, scene: str, speaker: { type: ['string', 'null'] }, text: str, direction: str, vo: { enum: ['none', 'todo', 'recorded'] }, order: num }) },
+    lines: { type: 'array', items: obj({ id: str, scene: str, speaker: { type: ['string', 'null'] }, text: str, direction: str, vo: { enum: ['none', 'todo', 'recorded'] }, order: num, styled: { type: 'string', description: 'The line with its emphasis, as Fountain writes it: **bold**, *italic*, _underline_. Only when it has some; text is always plain.' }, dual: { type: 'string', description: 'Dual dialogue: the id of the line this one is spoken at the same time as.' } }, ['id', 'scene', 'speaker', 'text', 'direction', 'vo', 'order']) },
     levels: { type: 'array', items: ref('level'), description: 'The Level Designer\'s levels: items with GUIDs, transforms, settings, story links and rules, and their graybox pieces.' },
   },
   $defs: {

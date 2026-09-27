@@ -21,6 +21,8 @@ export interface ScriptElement {
   id: string;
   type: ElementType;
   text: string;
+  /** On a cue: this speech is spoken at the same time as the one before it (dual dialogue). */
+  dual?: boolean;
 }
 
 /** JSON with its keys in order, so two lines that say the same compare equal however they were built. */
@@ -49,7 +51,7 @@ export const toElements = (project: Project, sceneId: string): ScriptElement[] =
     if (line.kind === 'action') return [{ id: line.id, type: line.shot ? 'shot' : 'action', text: line.text }];
     if (line.kind === 'transition') return [{ id: line.id, type: 'transition', text: line.text }];
     return [
-      ...(line.joined ? [] : [{ id: line.id, type: 'character' as const, text: cueText(project, line) }]),
+      ...(line.joined ? [] : [{ id: line.id, type: 'character' as const, text: cueText(project, line), ...(line.dual ? { dual: true } : {}) }]),
       ...(line.direction ? [{ id: `${line.id}:paren`, type: 'parenthetical' as const, text: `(${line.direction})` }] : []),
       { id: `${line.id}:text`, type: 'dialogue', text: line.text },
     ];
@@ -57,7 +59,7 @@ export const toElements = (project: Project, sceneId: string): ScriptElement[] =
 
 /** Two element lists that say the same thing, whatever their ids. */
 export const sameScript = (a: readonly ScriptElement[], b: readonly ScriptElement[]): boolean =>
-  a.length === b.length && a.every((e, i) => e.type === b[i]!.type && e.text === b[i]!.text);
+  a.length === b.length && a.every((e, i) => e.type === b[i]!.type && e.text === b[i]!.text && !!e.dual === !!b[i]!.dual);
 
 /**
  * The scene's lines, rewritten from its elements. A cue names a character
@@ -113,7 +115,8 @@ export const fromElements = (project: Project, sceneId: string, elements: readon
         const extension = cueExtension(element.text);
         const who = name ? characterNamed(project, name) : undefined;
         speech = { speakerId: who?.id ?? null, ...(who ? {} : { cue: name }), ...(extension ? { extension } : {}) };
-        speaking(element, false);
+        const line = speaking(element, false);
+        if (element.dual) line.dual = true;
         break;
       }
       case 'parenthetical': {

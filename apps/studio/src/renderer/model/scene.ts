@@ -262,7 +262,7 @@ export const addLine = (
   return { project: next, id: line.id };
 };
 
-export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'kind' | 'vo' | 'notes' | 'conditions' | 'extension' | 'cue'>>;
+export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'kind' | 'vo' | 'notes' | 'conditions' | 'extension' | 'cue' | 'dual'>>;
 
 export const updateLine = (project: Project, id: string, patch: LinePatch): Project => {
   const line = project.lines.find((l) => l.id === id);
@@ -275,6 +275,7 @@ export const updateLine = (project: Project, id: string, patch: LinePatch): Proj
     delete next.extension;
     delete next.cue;
     delete next.joined;
+    delete next.dual;
     if (next.kind === 'transition') next.direction = '';
   } else if (line.kind !== 'dialogue') {
     next.vo = 'todo';
@@ -477,4 +478,21 @@ export const continues = (project: Project, lineId: string): boolean => {
     return before.kind === 'dialogue' && before.speakerId === line.speakerId;
   }
   return false;
+};
+
+/**
+ * The speech a dual speech is spoken beside: the one directly before it, by
+ * its cue's line. Undefined when the line isn't dual, or nothing sits there
+ * to be beside (it is then an ordinary speech until something does).
+ */
+export const dualWith = (project: Project, lineId: string): DialogueLine | undefined => {
+  const line = project.lines.find((l) => l.id === lineId);
+  if (!line?.dual || line.joined) return undefined;
+  const lines = sceneLines(project, line.sceneId);
+  let i = lines.findIndex((l) => l.id === lineId) - 1;
+  if (lines[i]?.kind !== 'dialogue') return undefined;
+  while (i > 0 && lines[i]!.joined) i--;
+  const cue = lines[i]!;
+  // A pair is two speeches: the one before must not be the right half of another.
+  return cue.dual && dualWith(project, cue.id) ? undefined : cue;
 };

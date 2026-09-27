@@ -3,6 +3,7 @@ import { fingerprint } from './engines';
 import type { HandoffIR, IrEvent, IrThing } from './ir';
 import { levelRuntime, levelScript, levelTscn, playTscn } from './godot-levels';
 import { sceneRuntime, sceneTscn, storyNodes, storyTscn } from './godot-scenes';
+import { markupInline } from '../inline';
 
 /**
  * The Godot 4 adapter: GDScript and Resources.
@@ -762,7 +763,11 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
     row({ id: c.id, label: c.name, symbol: 'character', group: 'People + words', generates: 'Character resource · arc', files: [path] }, c);
   }
 
-  const table = Object.fromEntries(ir.lines.map((l) => [l.id, { scene: l.scene, speaker: l.speaker ?? '', text: l.text, direction: l.direction, vo: l.vo }]));
+  // A line with emphasis carries it as BBCode for a RichTextLabel; a dual line names the one it is spoken with.
+  const bbcode = (text: string) => markupInline(text, (run, st) => `${st.bold ? '[b]' : ''}${st.italic ? '[i]' : ''}${st.underline ? '[u]' : ''}${run}${st.underline ? '[/u]' : ''}${st.italic ? '[/i]' : ''}${st.bold ? '[/b]' : ''}`);
+  const table = Object.fromEntries(
+    ir.lines.map((l) => [l.id, { scene: l.scene, speaker: l.speaker ?? '', text: l.text, direction: l.direction, vo: l.vo, ...(l.styled ? { bbcode: bbcode(l.styled) } : {}), ...(l.dual ? { dual_with: l.dual } : {}) }]),
+  );
   const dialoguePath = add(
     'dialogue/dialogue_table.gd',
     [

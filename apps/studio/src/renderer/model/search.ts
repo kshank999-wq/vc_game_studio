@@ -1,6 +1,7 @@
 import type { Destination } from './details';
 import { TYPE_LABEL } from './semantics';
 import type { ObjectType, Project } from './types';
+import { plainInline } from './inline';
 
 /**
  * Search across the whole project (spec §4: search in the command bar; §24:
@@ -103,7 +104,7 @@ export const search = (project: Project, query: string, limit = 40): SearchResul
       id: l.id,
       kind: 'line',
       type: l.kind === 'dialogue' ? 'dialogue' : 'scene',
-      label: speaker ? `${speaker.toUpperCase()}: ${l.text}` : l.text,
+      label: speaker ? `${speaker.toUpperCase()}: ${plainInline(l.text)}` : plainInline(l.text),
       detail: `${l.kind === 'dialogue' ? 'Line' : l.kind === 'transition' ? 'Transition' : 'Action'} · ${sceneName(l.sceneId)}`,
       score,
       to: { kind: 'scene', sceneId: l.sceneId, mode: 'open' },
