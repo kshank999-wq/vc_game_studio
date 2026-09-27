@@ -25,7 +25,8 @@ import {
   updateSettings,
 } from '../../model/level/level';
 import { exportNameOf, levelExportName, NAMING_LABEL } from '../../model/level/naming';
-import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelRule, NamingClass, ParamDef, PropertyGroup } from '../../model/level/types';
+import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelRule, NamingClass, ParamDef, PlayNote, PropertyGroup } from '../../model/level/types';
+import { removePreset, resolveNote } from '../../model/level/play';
 import type { LevelIssue } from '../../model/level/validate';
 import { newId } from '../../model/project';
 import { TYPE_LABEL } from '../../model/semantics';
@@ -206,6 +207,23 @@ export const LevelInspector = (props: Props) => {
             hint="The plot points and scenes this level is for."
           />
         </Section>
+        <Section title="Play Mode" open={!closed.has('play')} onToggle={() => toggle('play')} count={(set.presets?.length ?? 0) + (set.notes ?? []).filter((n) => n.levelId === level.id && !n.resolved).length}>
+          <SelectField label="Perspective" value={set.settings.perspective ?? 'first'} options={[{ value: 'first', label: 'First person' }, { value: 'third', label: 'Third person' }, { value: 'top', label: 'Top-down' }]} onCommit={(v) => onCommit(updateSettings(project, { perspective: v as 'first' | 'third' | 'top' }))} />
+          <span className="lvl-flabel">Test presets</span>
+          {(set.presets ?? []).length === 0 && <p className="lvl-hint">Pause while playing and save the story’s state to test from it again.</p>}
+          {(set.presets ?? []).map((pr) => (
+            <div key={pr.id} className="lvl-link">
+              <span className="lvl-link-go">
+                {pr.name}
+                <span className="muted">{Object.keys(pr.items).length} items · {Object.keys(pr.solved).length} solved</span>
+              </span>
+              <button className="icon-btn small" aria-label={`Remove preset ${pr.name}`} onClick={() => onCommit(removePreset(project, pr.id))}>
+                ×
+              </button>
+            </div>
+          ))}
+          <Notes project={project} notes={(set.notes ?? []).filter((n) => n.levelId === level.id && !n.resolved)} onCommit={onCommit} showItem items={set.items} />
+        </Section>
         <Section title="Units, grid and names" open={!closed.has('settings')} onToggle={() => toggle('settings')}>
           <SelectField label="Units" value={set.settings.units} options={[{ value: 'm', label: 'Metres' }, { value: 'ft', label: 'Feet' }]} onCommit={(v) => onCommit(updateSettings(project, { units: v as 'm' | 'ft' }))} />
           <NumberField label="Grid" unit="length" units={units} value={set.settings.grid} step={0.25} min={0.05} onCommit={(v) => onCommit(updateSettings(project, { grid: v }))} />
@@ -274,11 +292,12 @@ export const LevelInspector = (props: Props) => {
           <button className="tb-btn small" onClick={props.onDuplicate}>Duplicate</button>
           <button className="tb-btn small danger-btn" onClick={props.onDelete}>Delete</button>
         </div>
-        {itemIssues.map((i) => (
+        {itemIssues.filter((i) => !i.message.startsWith('Play note')).map((i) => (
           <p key={i.message} className={`lvl-issue ${i.severity}`}>
             {i.message} <span className="muted">{i.export}</span>
           </p>
         ))}
+        <Notes project={project} notes={(set.notes ?? []).filter((n) => n.itemId === item.id && !n.resolved)} onCommit={onCommit} />
       </header>
       <input className="inp small lvl-search" placeholder="Find a property" aria-label="Find a property" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="lvl-secs">
@@ -381,6 +400,23 @@ export const LevelInspector = (props: Props) => {
     </aside>
   );
 };
+
+const Notes = ({ project, notes, onCommit, showItem, items }: { project: Project; notes: PlayNote[]; onCommit: (p: Project) => void; showItem?: boolean; items?: LevelItem[] }) =>
+  notes.length ? (
+    <div className="lvl-notes">
+      {notes.map((n) => (
+        <div key={n.id} className="lvl-issue warning lvl-note">
+          <strong>
+            Play note{showItem ? ` · ${items?.find((i) => i.id === n.itemId)?.name ?? 'the level'}` : ''}
+          </strong>
+          <span>{n.text}</span>
+          <button className="tb-btn small" onClick={() => onCommit(resolveNote(project, n.id))}>
+            Resolve
+          </button>
+        </div>
+      ))}
+    </div>
+  ) : null;
 
 const SaveToLibrary = ({ name, setName, onSave, placeholder }: { name: string; setName: (v: string) => void; onSave: (name: string) => void; placeholder: string }) => (
   <form

@@ -482,7 +482,8 @@ export const App = () => {
       } else if (e.shiftKey && e.code === 'Digit2' && !mod && !isTyping(e.target) && route.view === 'graph' && selection) {
         e.preventDefault();
         zoomTo(selection);
-      } else if (e.key === 'F5') {
+      } else if (e.key === 'F5' && route.view !== 'level') {
+        // In the levels, F5 plays the level (the Level Designer takes it).
         e.preventDefault();
         if (e.shiftKey) {
           const from = route.view === 'scene' ? route.sceneId : route.view === 'graph' && selection && project.placements[selection] ? selection : null;

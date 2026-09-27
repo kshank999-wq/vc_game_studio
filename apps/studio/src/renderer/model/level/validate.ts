@@ -106,6 +106,13 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
     }
   }
 
+  // What someone noticed while playing, until it is marked resolved.
+  for (const note of set.notes ?? []) {
+    if (note.resolved) continue;
+    const item = note.itemId ? set.items.find((i) => i.id === note.itemId) : undefined;
+    add({ id: item?.id ?? note.levelId, levelId: note.levelId, severity: 'warning', message: item ? `Play note on ${item.name}: ${note.text}` : `Play note: ${note.text}`, export: 'Noted during Play Mode. Mark it resolved in the inspector once it is dealt with.' });
+  }
+
   // Spaces on the same floor that overlap.
   for (let a = 0; a < spaces.length; a++) {
     for (let b = a + 1; b < spaces.length; b++) {

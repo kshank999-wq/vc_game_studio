@@ -7,7 +7,8 @@ import { createProject, placeNew } from '../model/project';
 import { addElement, addLine, updateLine } from '../model/scene';
 
 /** The Bible, play-through, shot list and handoff load on first use; wait for the one just opened. */
-const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull());
+// The first import of a lazy view (three.js among them) can take a few seconds on a busy machine.
+const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull(), { timeout: 5000 });
 
 beforeAll(() => {
   // jsdom has no PointerEvent; a MouseEvent carries the button the handlers read.

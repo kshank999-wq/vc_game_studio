@@ -181,6 +181,19 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
       ['Mod+G', 'Group (Mod+Shift+G: ungroup)'],
       ['F', 'Frame the selection'],
       ['Arrows', 'Nudge by the grid (Shift: four steps)'],
+      ['F5', 'Play the level (Shift+F5: from the selection)'],
+    ],
+  },
+  {
+    group: 'Level Play Mode',
+    keys: [
+      ['W A S D', 'Move (arrows too; the mouse or Q and ← → turn)'],
+      ['Space', 'Jump (Shift: run)'],
+      ['E', 'Use what is in reach (also F); skip a cinematic'],
+      ['Tab', 'Pause and inspect (also P and Esc)'],
+      ['V', 'First person, third person, top-down'],
+      ['F3', 'Debug overlay: names, volumes, the event log'],
+      ['N', 'Note an issue'],
     ],
   },
   {

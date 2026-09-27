@@ -27,6 +27,16 @@ export interface Preferences {
   pinned: { graph: string[]; scene: string[] };
   /** Palette groups folded away. */
   paletteCollapsed: Record<string, boolean>;
+  /** Level Play Mode's controls (spec §9.2): only what differs from the defaults in components/level/input.ts. */
+  playControls: PlayControlPrefs;
+}
+
+export interface PlayControlPrefs {
+  keys: Record<string, string[]>;
+  pad: Record<string, number[]>;
+  lookSpeed: number;
+  invertY: boolean;
+  deadzone: number;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -41,6 +51,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   uiScale: 100,
   pinned: { graph: [], scene: [] },
   paletteCollapsed: {},
+  playControls: { keys: {}, pad: {}, lookSpeed: 1, invertY: false, deadzone: 0.18 },
 };
 
 const KEY = 'vcgs.prefs.v1';

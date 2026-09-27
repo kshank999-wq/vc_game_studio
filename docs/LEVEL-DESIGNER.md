@@ -104,6 +104,46 @@ items linked to what you had selected.
 | Delete | Delete, asking first when a room's doors would go with it |
 | Esc | Put down what you picked up, then clear the selection |
 
+## Play Mode (spec §9)
+
+Press **▶ Play** in the toolbar, or **F5** (Shift+F5 plays from the
+selection). Beside the button, choose where to start and what the story holds:
+- **from the start** (the level's player start), **from the selection** (standing beside the selected item, or in the selected space), or **from the 3D camera** (where the graybox camera stands, dropping to the floor)
+- **a fresh story**, or a **test preset** saved while playing
+- the **perspective** (first person, third person or top-down), a project setting that can also be changed while playing (**V**)
+
+**Controls.**
+- **Keyboard and mouse:** WASD or the arrows to move, the mouse to look, Shift to run, Space to jump, **E** to use what's in reach. Click the view to capture the mouse; Esc gives it back. Without pointer lock, dragging looks around.
+- **Controller:** the left stick moves, the right stick looks, A jumps, X uses and Start pauses.
+- **Rebinding:** every action's keys and buttons can be changed in the pause panel's **Controls** tab, along with look speed, inverted look and the stick dead zone. These are kept on this computer.
+
+**What happens.** The player is a capsule that walks, climbs steps and stairs,
+slides along walls, falls off edges and stands on floors. Closed doors,
+solids and blocking gates are in the way; doorways and open doors are not. A
+door or window cuts every wall it sits in, so rooms that share a wall share
+the opening.
+
+The level runs on the same story state as the story's play-through, changed by
+the same effects, with triggers and puzzles settling after every change:
+- **Doors:** open and close; a locked door says what it needs, and opens with its key item.
+- **Pickups:** give their inventory item.
+- **Characters:** a linked scene starts, shown as a scene card.
+- **Interaction points:** tied to a story object, they use it the way free play does.
+- **Volumes:** notice entering and leaving. Cinematic triggers play their cinematic (with its shot list, skippable); checkpoints set where you come back; portals lead to another level, carrying the story with them; hazards and damage volumes hurt.
+- **Spawners:** put their characters or items in the level, after their delay.
+- **Rules:** run on enter, exit, interact, pickup, use, timers and story changes. Each is logged with its conditions and whether they held, then its story effects and level actions.
+- **Present only when:** items appear and disappear as it comes and goes; in the sample, the flooded seam drains and the bronze door gives way once the lever is pulled.
+
+**Test tools (spec §9.3).**
+- **Pause** (Tab, P or Esc) opens the inspect panel:
+  - what the player carries, every state and object state, puzzles, scenes seen, all changeable by hand
+  - the level: objective, health, checkpoint, the volumes you're in, doors, spawned actors
+  - **Save preset** keeps the story state to start from later
+- **Event log:** every check (✓ or ✗) and everything that fired, newest first, filterable.
+- **Notes:** record an issue against the nearest item or the level. Notes appear in the preflight and on the item's inspector until resolved.
+- **Debug overlay** (F3): every item's name, export name and story links over it; volumes and markers drawn; the player's position and the volumes they're in; the last few log entries.
+- **Game over** offers the last checkpoint, or starting again.
+
 ## The sample
 
 *The Sunken Vault* (**File › New from the sample**) includes a level:
@@ -125,8 +165,9 @@ Its preflight is clean.
 | `model/level/library.ts` | The starter catalog. Each asset has a kind, a role, a naming class, default size, proxy shape, parameters grouped by inspector section, and hints for the Godot, Unity and Unreal mappings. |
 | `model/level/level.ts` | Every edit, as a pure function returning a new project. |
 | `model/level/geometry.ts` | Frames, walls, openings, nearest wall, and `meshesFor`, which turns a level into engine-neutral graybox pieces. The map, the graybox and (next) the exporters all draw from it. |
+| `model/level/play.ts`, `controller.ts` | Play Mode's rules (doors, pickups, volumes, spawns, hazards, rules and actions, presets, notes) and the character controller. Pure functions, tested without a screen. |
 | `model/level/naming.ts`, `validate.ts`, `links.ts` | Export names, preflight, and story links (including clean-up when story elements are deleted). |
-| `components/level/` | `LevelDesigner`, `LevelMap` (SVG), `Graybox` (three.js, loaded on demand), `LevelLibrary`, `LevelInspector`. |
+| `components/level/` | `LevelDesigner`, `LevelMap` (SVG), `Graybox` and `PlayMode` (three.js, loaded on demand), `PlayInspect`, `PlayControls`, `input.ts`, `LevelLibrary`, `LevelInspector`. |
 
 Coordinates are metres. A plan position (x, y) is the item's centre seen from
 above, x east and y south; in 3D that is (x, z) with y up. Rotation is
@@ -142,8 +183,8 @@ clockwise seen from above.
 | §5 3D graybox | Box, plane, cylinder, sphere, wedge, stairs and ramps; walls with openings; move, rotate and scale, and hosted assets that follow their wall. Moving in 3D is done. **Not yet:** resize handles in 3D, pivot editing, extrude, and collision or navigation preview beyond showing the volumes. |
 | §6 Inspector | Done, including search and "More" for advanced fields. |
 | §7 Narrative | Links both ways, conditions from choices and state. The Scene timeline does not reference level objects yet (§7.3). |
-| §8 Logic, spawns | The rule model and editor, spawn parameters and radius preview are done. They run in Play Mode, which is next. |
-| §9 Play Mode | **Next.** A first-person, third-person or top-down walk through the graybox, running the rules, pickups, doors and triggers on the same state the story's play-through uses. |
+| §8 Logic, spawns | Done: rules, conditions, story effects and level actions run in Play Mode; spawners spawn after their delay, conditionally. Spawned actors stand where they spawn (no AI or pathing). |
+| §9 Play Mode | Done: first person, third person and top-down; keyboard, mouse and controller through rebindable actions; collision, gravity, jumping, stairs; pause and inspect with editable state; test presets; start from the level start, the selection or the 3D camera; debug overlay; event log; notes linked to items. Scenes linked to characters show as cards rather than playing their script in the level. |
 | §10 Identity and names | Done. |
 | §11 Engine handoff | **Next.** Levels go through the Godot, Unity, Unreal and JSON adapters using `meshesFor` and the GUID manifest; "final art locked" is already a per-item setting. |
 | §12 Preflight | Done for everything the studio can know today. Engine-specific checks (unsupported properties, externally modified assets) arrive with the exporters. |

@@ -16,11 +16,15 @@ import {
   saveToLibrary,
   ungroupItems,
   updateItem,
+  updateSettings,
   withGroups,
 } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
-import type { AssetCategory, AssetDefinition } from '../../model/level/types';
+import type { AssetCategory, AssetDefinition, Perspective } from '../../model/level/types';
 import { levelIssues } from '../../model/level/validate';
+import { pointNear, startPoint } from '../../model/level/play';
+import type { PlayWorld } from '../../model/play';
+import type { PlayStart } from './PlayMode';
 import type { Destination } from '../../model/details';
 import type { Project } from '../../model/types';
 import type { View } from '../../view';
@@ -34,6 +38,7 @@ import { formatLength } from './units';
 
 // three.js is big: it loads the first time the graybox is opened.
 const Graybox = lazy(() => import('./Graybox'));
+const PlayMode = lazy(() => import('./PlayMode'));
 
 export type LevelMode = '2d' | '3d';
 
@@ -97,11 +102,17 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [hover, setHover] = useState<Point | null>(null);
   const [showIssues, setShowIssues] = useState(false);
   const [focus3d, setFocus3d] = useState<string[] | undefined>(focusItem ? [focusItem.id] : undefined);
+  const [playing, setPlaying] = useState<{ levelId: string; start: PlayStart; world?: PlayWorld; presetId?: string; key: number } | null>(null);
+  const [playFrom, setPlayFrom] = useState<'start' | 'selection' | 'camera'>('start');
+  const [playPreset, setPlayPreset] = useState('');
+  const [playPerspective, setPlayPerspective] = useState<Perspective | null>(null);
   const map = useRef<MapApi>(null);
   const box = useRef<GrayboxApi>(null);
+  const playingRef = useRef(false);
   const latest = useRef({ project, selection, levelId: level?.id ?? '', floorId: floor?.id ?? '' });
   latest.current = { project, selection, levelId: level?.id ?? '', floorId: floor?.id ?? '' };
 
+  playingRef.current = !!playing;
   const issues = useMemo(() => levelIssues(project, global), [project, global]);
   const levelIssuesHere = issues.filter((i) => i.levelId === level?.id);
   const issueMap = useMemo(() => new Map(issues.map((i) => [i.id, i.message])), [issues]);
@@ -241,6 +252,22 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
     setMode('3d');
   };
 
+  /** Into Play Mode (spec §9.3): from the level's start, the selected item, or where the 3D camera is. */
+  const beginPlay = (from = playFrom) => {
+    const { project: p, selection: sel, levelId: lid, floorId: fid } = latest.current;
+    let start: PlayStart = startPoint(p, lid, global);
+    if (from === 'selection' && sel[0]) start = pointNear(p, sel[0], global) ?? start;
+    if (from === 'camera' && mode === '3d') {
+      const spot = box.current?.cameraSpot();
+      const elevation = levelsOf(p).levels.find((l) => l.id === lid)?.floors.find((f) => f.id === fid)?.elevation ?? 0;
+      if (spot) start = { x: spot.x, y: spot.y, z: elevation + 2, yaw: spot.yaw, floorId: fid };
+    }
+    setShowIssues(false);
+    setPick(null);
+    setPlayPerspective(null);
+    setPlaying({ levelId: lid, start, presetId: playPreset || undefined, key: Date.now() });
+  };
+
   const deleteAsset = (a: AssetDefinition) => {
     if (a.source === 'global') {
       forgetAsset(a.id);
@@ -266,7 +293,14 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || document.querySelector('.dialog-backdrop, .search-backdrop')) return;
+      // Play Mode has the keyboard to itself.
+      if (playingRef.current) return;
       const mod = e.ctrlKey || e.metaKey;
+      if (e.key === 'F5') {
+        e.preventDefault();
+        beginPlay(e.shiftKey && latest.current.selection.length ? 'selection' : undefined);
+        return;
+      }
       const key = e.key.toLowerCase();
       const { project: p, selection: sel, floorId: fid, levelId: lid } = latest.current;
       if (e.key === 'Escape') {
@@ -333,8 +367,19 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const picked = pick && findAsset(pick.assetId, set.assets, global);
 
   return (
-    <div className={`lvl${pick ? ' is-placing' : ''}`}>
+    <div className={`lvl${pick ? ' is-placing' : ''}${playing ? ' playing' : ''}`}>
       <div className="lvl-bar" role="toolbar" aria-label="Level tools">
+        {playing ? (
+          <>
+            <span className="lvl-playing">▶ Playing {set.levels.find((l) => l.id === playing.levelId)?.name}</span>
+            <span className="muted">Esc or Tab pauses; the level’s rules and the story’s state are live.</span>
+            <div className="grow" />
+            <button className="tb-btn small" onClick={() => setPlaying(null)}>
+              ■ Stop
+            </button>
+          </>
+        ) : (
+        <>
         <select className="inp small lvl-pick" aria-label="Level" value={level.id} onChange={(e) => {
           if (e.target.value === '+') {
             const made = addLevel(project);
@@ -412,6 +457,29 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         )}
         <label className="lvl-toggle" title="Snap to the grid"><input type="checkbox" checked={set.settings.snap} onChange={(e) => onCommit({ ...project, levels: { ...set, settings: { ...set.settings, snap: e.target.checked } } })} /> Snap {formatLength(set.settings.grid, set.settings.units)}</label>
         <div className="grow" />
+        <div className="lvl-play" role="group" aria-label="Play">
+          <button className="tb-btn small primary" onClick={() => beginPlay()} title="Walk the level (F5; Shift+F5 from the selection)">
+            ▶ Play
+          </button>
+          <select className="inp small lvl-pick" aria-label="Play from" value={playFrom} onChange={(e) => setPlayFrom(e.target.value as typeof playFrom)}>
+            <option value="start">from the start</option>
+            <option value="selection" disabled={!selection.length}>from the selection</option>
+            <option value="camera" disabled={mode !== '3d'}>from the 3D camera</option>
+          </select>
+          <select className="inp small lvl-pick" aria-label="Start with" value={playPreset} onChange={(e) => setPlayPreset(e.target.value)}>
+            <option value="">a fresh story</option>
+            {(set.presets ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <select className="inp small lvl-pick" aria-label="Perspective" value={set.settings.perspective ?? 'first'} onChange={(e) => onCommit(updateSettings(project, { perspective: e.target.value as Perspective }))}>
+            <option value="first">first person</option>
+            <option value="third">third person</option>
+            <option value="top">top-down</option>
+          </select>
+        </div>
         <button className="tb-btn small" onClick={() => (mode === '3d' ? box.current : map.current)?.frame(selection.length ? selection : undefined)} title="Frame the selection, or the floor (F)">
           Frame
         </button>
@@ -450,6 +518,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
       <LevelLibrary
         set={set}
@@ -482,7 +552,34 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         }}
       />
       <div className="lvl-centre">
-        {mode === '2d' ? (
+        {playing ? (
+          <Suspense fallback={<div className="view-loading" role="status">Starting Play Mode…</div>}>
+            <PlayMode
+              key={playing.key}
+              project={project}
+              levelId={playing.levelId}
+              global={global}
+              start={playing.start}
+              preset={(set.presets ?? []).find((p) => p.id === playing.presetId)}
+              world={playing.world}
+              perspective={playPerspective ?? set.settings.perspective ?? 'first'}
+              onPerspective={setPlayPerspective}
+              onCommit={onCommit}
+              onExit={(near) => {
+                setPlaying(null);
+                if (near) setSelection([near]);
+              }}
+              onGoToLevel={(lid, world) => {
+                const next = set.levels.find((l) => l.id === lid);
+                if (!next) return;
+                setLevelId(lid);
+                setFloorId(next.floors[0]!.id);
+                onSay(`On to ${next.name}.`);
+                setPlaying({ levelId: lid, start: startPoint(project, lid, global), world, key: Date.now() });
+              }}
+            />
+          </Suspense>
+        ) : mode === '2d' ? (
           <LevelMap
             ref={map}
             project={project}

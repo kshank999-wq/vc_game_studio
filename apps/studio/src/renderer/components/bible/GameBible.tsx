@@ -1,6 +1,6 @@
 import { applyFilters, regroup, type Filter, type GroupBy } from '../../model/bible-filters';
 import { BibleChips } from './BibleChips';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { VIEWS, viewCount, viewGroups, voProgress, type Entry, type ViewKey } from '../../model/bible';
 import type { Destination } from '../../model/details';
 import { makeObject, nextCode } from '../../model/project';
@@ -81,11 +81,14 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
   const [filtersBy, setFiltersBy] = useState<Partial<Record<ViewKey, Filter[]>>>({});
   const [groupsBy, setGroupsBy] = useState<Partial<Record<ViewKey, GroupBy>>>({});
 
+  // A new focus (from search, say) moves the Bible to it. The first one is already in the state above;
+  // applying it again after mounting could undo a view the user has just picked.
+  const shownFocus = useRef(focus);
   useEffect(() => {
-    if (focus) {
-      setView(viewFor(project, focus));
-      setSelected(focus);
-    }
+    if (!focus || focus === shownFocus.current) return;
+    shownFocus.current = focus;
+    setView(viewFor(project, focus));
+    setSelected(focus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
 

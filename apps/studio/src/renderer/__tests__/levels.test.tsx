@@ -6,7 +6,8 @@ import { sunkenVault } from '../model/sample';
 import { resetPreferences } from '../preferences';
 
 /** Lazy views: wait until nothing is loading. */
-const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull());
+// The first import of a lazy view (three.js among them) can take a few seconds on a busy machine.
+const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull(), { timeout: 5000 });
 
 beforeAll(() => {
   globalThis.PointerEvent ??= class extends MouseEvent {} as unknown as typeof PointerEvent;
@@ -68,7 +69,7 @@ describe('the Level Designer', () => {
     render(<App />);
     await openLevels();
     fireEvent.click(screen.getByRole('button', { name: '3D graybox' }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('needs WebGL'));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('needs WebGL'), { timeout: 5000 });
   });
 
   it('goes from a Bible entry to its place in the level, and from the level back to the scene', async () => {
@@ -90,5 +91,50 @@ describe('the Level Designer', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Vault Chamber$/ }));
     fireEvent.click(screen.getByRole('button', { name: /SC-\d+ The Vault Door/ }));
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toContain('The Vault Door');
+  });
+});
+
+describe('Play Mode', () => {
+  it('starts from the toolbar or F5, says when WebGL is off, and goes back to the editor', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    const { container } = render(<App />);
+    await openLevels();
+    fireEvent.click(screen.getByRole('button', { name: '▶ Play' }));
+    // The message comes once the renderer has tried and failed to start.
+    expect(await screen.findByText(/Play Mode needs WebGL/, undefined, { timeout: 5000 })).toBeTruthy();
+    expect(container.querySelector('.lvl.playing')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the editor' }));
+    expect(container.querySelector('.play-mode')).toBeNull();
+
+    // F5 in the levels plays the level, not the story's play-through.
+    act(() => {
+      fireEvent.keyDown(window, { key: 'F5' });
+    });
+    await waitFor(() => expect(container.querySelector('.play-mode')).toBeTruthy(), { timeout: 5000 });
+    expect(container.querySelector('.play-view')).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toContain('Levels');
+    fireEvent.click(screen.getByRole('button', { name: '■ Stop' }));
+    expect(container.querySelector('.play-mode')).toBeNull();
+  });
+
+  it('pauses into the inspect panel, where a test preset and a note can be saved', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    const { container } = render(<App />);
+    await openLevels();
+    fireEvent.click(screen.getByRole('button', { name: '▶ Play' }));
+    await waitFor(() => expect(container.querySelector('.play-mode')).toBeTruthy(), { timeout: 5000 });
+    fireEvent.click(screen.getByRole('button', { name: /Inspect/ }));
+    const panel = screen.getByRole('dialog', { name: 'Paused' });
+    expect(panel.textContent).toContain('Vault Key');
+    fireEvent.click(screen.getByRole('button', { name: 'Give Vault Key' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Preset name' }), { target: { value: 'Has the key' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save preset' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Notes/ }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Note' }), { target: { value: 'Needs a light by the door' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save the note' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stop playing' }));
+    // The preset is offered next time; the note is in the preflight.
+    expect([...(screen.getByRole('combobox', { name: 'Start with' }) as HTMLSelectElement).options].map((o) => o.text)).toContain('Has the key');
+    expect(screen.getByRole('button', { name: /to check/ }).textContent).toContain('1 to check');
   });
 });

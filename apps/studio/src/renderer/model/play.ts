@@ -458,6 +458,58 @@ const interactionDoes = (project: Project, object: StoryObject, i: ReturnType<ty
     .filter(Boolean)
     .join(' · ') || 'nothing else';
 
+const useInteraction = (d: Doing, object: StoryObject, i: ReturnType<typeof interactionsOf>[number]) => {
+  if (i.becomes) {
+    d.world = { ...d.world, objects: { ...d.world.objects, [object.id]: i.becomes } };
+    d.log.push({ kind: 'effect', text: `${object.name} → ${i.becomes}` });
+  }
+  if (i.setsFlag && d.project.objects[i.setsFlag]) {
+    d.world = { ...d.world, flags: { ...d.world.flags, [i.setsFlag]: i.flagValue ?? '' } };
+    d.log.push({ kind: 'effect', text: `${name(d.project, i.setsFlag)} → ${i.flagValue ?? ''}` });
+  }
+  if (i.fires) fire(d, i.fires);
+  doEffects(d, i.effects);
+  settle(d);
+};
+
+// ---------------------------------------------------------------- for the level's play mode
+
+/** What changed in words, for a log. */
+export interface Changed {
+  world: PlayWorld;
+  log: Entry[];
+}
+
+/** Fire every trigger and solve every puzzle whose rule now holds (after a hand edit, say). */
+export const settleWorld = (project: Project, world: PlayWorld): Changed => {
+  const d: Doing = { project, world, log: [] };
+  settle(d);
+  return { world: d.world, log: d.log };
+};
+
+/** Do effects to the world, the way the timeline and choices do them, then settle. */
+export const applyStoryEffects = (project: Project, world: PlayWorld, effects: Effect[] | undefined): Changed => {
+  const d: Doing = { project, world, log: [] };
+  doEffects(d, effects);
+  settle(d);
+  return { world: d.world, log: d.log };
+};
+
+/**
+ * Use a story object the way free play does: its first interaction that is
+ * allowed now. Returns what it needs instead when none is.
+ */
+export const useStoryObject = (project: Project, world: PlayWorld, objectId: string): Changed & { verb?: string; needs?: string } => {
+  const object = project.objects[objectId];
+  if (!object) return { world, log: [] };
+  const all = interactionsOf(object);
+  const i = all.find((x) => interactionAllowed(project, world, object, x).ok);
+  if (!i) return { world, log: [], needs: all[0] ? interactionAllowed(project, world, object, all[0]).needs : undefined };
+  const d: Doing = { project, world, log: [{ kind: 'did', text: `${i.verb} the ${object.name}` }] };
+  useInteraction(d, object, i);
+  return { world: d.world, log: d.log, verb: i.verb };
+};
+
 /** Use an object during free play; the free play ends by itself if that makes its rule hold. */
 export const interact = (project: Project, play: Play, objectId: string, interactionId: string): Play => {
   const c = play.cursor;
@@ -466,17 +518,7 @@ export const interact = (project: Project, play: Play, objectId: string, interac
   const i = interactionsOf(object).find((x) => x.id === interactionId);
   if (!i || !interactionAllowed(project, play.world, object, i).ok) return play;
   const d: Doing = { project, world: play.world, log: [...play.log, { kind: 'did', text: `${i.verb} the ${object.name}` }] };
-  if (i.becomes) {
-    d.world = { ...d.world, objects: { ...d.world.objects, [object.id]: i.becomes } };
-    d.log.push({ kind: 'effect', text: `${object.name} → ${i.becomes}` });
-  }
-  if (i.setsFlag && project.objects[i.setsFlag]) {
-    d.world = { ...d.world, flags: { ...d.world.flags, [i.setsFlag]: i.flagValue ?? '' } };
-    d.log.push({ kind: 'effect', text: `${name(project, i.setsFlag)} → ${i.flagValue ?? ''}` });
-  }
-  if (i.fires) fire(d, i.fires);
-  doEffects(d, i.effects);
-  settle(d);
+  useInteraction(d, object, i);
   const event = eventAt(project, c);
   if (event && !isEmpty(event.ends) && evaluate(event.ends, d.world)) {
     d.log.push({ kind: 'action', text: `${event.label || 'Free play'} ends`, detail: describeRule(project, event.ends) });

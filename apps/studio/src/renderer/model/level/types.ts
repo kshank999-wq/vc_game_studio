@@ -250,6 +250,36 @@ export interface LevelSettings {
   /** {TYPE}, {Context}, {Name} and {###} (the serial, three digits). */
   template: string;
   prefixes: Record<NamingClass, string>;
+  /** How Play Mode sees the level (spec §9.2). */
+  perspective?: Perspective;
+}
+
+export type Perspective = 'first' | 'third' | 'top';
+
+/** A story state to start testing from (spec §9.3): what is held, set, solved and seen. */
+export interface PlayPreset {
+  id: string;
+  name: string;
+  flags: Record<string, string>;
+  items: Record<string, number>;
+  objects: Record<string, string>;
+  solved: Record<string, boolean>;
+  visited: Record<string, boolean>;
+  chosen: Record<string, string>;
+  arcs: Record<string, number>;
+}
+
+/** Something noticed while playing, tied to the item responsible (spec §9.3). */
+export interface PlayNote {
+  id: string;
+  levelId: string;
+  itemId?: string;
+  text: string;
+  at: string;
+  /** Where the player stood. */
+  x: number;
+  y: number;
+  resolved?: boolean;
 }
 
 /** What the last export sent for one item (spec §11.3). */
@@ -273,4 +303,6 @@ export interface LevelSet {
   /** The next serial for each naming class. */
   counters: Partial<Record<NamingClass, number>>;
   manifest?: ManifestEntry[];
+  presets?: PlayPreset[];
+  notes?: PlayNote[];
 }

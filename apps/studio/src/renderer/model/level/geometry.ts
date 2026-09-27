@@ -202,6 +202,8 @@ export interface Mesh {
   rotY: number;
   color: string;
   opacity: number;
+  /** Something the player bumps into and stands on in Play Mode. */
+  collide: boolean;
   /** A light this proxy stands for. */
   light?: { kind: 'point' | 'spot' | 'area'; color: string; intensity: number; range: number; angle?: number };
 }
@@ -241,6 +243,8 @@ export interface MeshOptions {
   global?: readonly AssetDefinition[];
   /** Items to leave out: hidden, or inactive in play. */
   skip?: (item: LevelItem) => boolean;
+  /** Doors standing open (Play Mode): no leaf, nothing to bump into. */
+  open?: (item: LevelItem) => boolean;
 }
 
 /** The whole level as graybox pieces. */
@@ -251,8 +255,10 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
   const elevation = new Map(level.floors.map((f) => [f.id, f.elevation]));
   const out: Mesh[] = [];
   const items = set.items.filter((i) => i.levelId === levelId && (!options.floorId || i.floorId === options.floorId) && !i.hidden && !options.skip?.(i));
-  const hostedBy = new Map<string, LevelItem[]>();
-  for (const i of set.items) if (i.host) hostedBy.set(i.host.id, [...(hostedBy.get(i.host.id) ?? []), i]);
+  // Openings stay cut even while their door is out of play (a door that is gone leaves a doorway).
+  const openings = set.items
+    .filter((i) => i.levelId === levelId && i.host && !i.hidden && set.items.some((h) => h.id === i.host!.id))
+    .map((i) => ({ floorId: i.floorId, frame: frameOf(set, i, g), z: i.z }));
 
   for (const item of items) {
     const def = assetOf(set, item, g);
@@ -263,30 +269,37 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
     const color = item.invalid ? INVALID_COLOR : material.color ?? CATEGORY_COLOR[def.category] ?? '#a59c86';
     const opacity = material.opacity ?? 1;
     const at = (lx: number, ly: number) => toPlan(f, lx, ly);
-    const push = (m: Omit<Mesh, 'itemId' | 'rotY'> & { rotY?: number }) => out.push({ itemId: item.id, rotY, ...m });
+    const push = (m: Omit<Mesh, 'itemId' | 'rotY' | 'collide'> & { rotY?: number; collide?: boolean }) => out.push({ itemId: item.id, rotY, collide: false, ...m });
 
     if (def.kind === 'space') {
       const t = num(paramOf(set, item, 'wallThickness', g), 0.2);
       const y0 = base + f.z;
       if (bool(paramOf(set, item, 'floorSlab', g), true)) {
-        push({ key: `${item.id}:floor`, part: 'floor', shape: 'box', x: f.x, y: y0 - 0.05, z: f.y, sx: f.w + t, sy: 0.1, sz: f.d + t, color: '#3d3727', opacity: 1 });
+        push({ key: `${item.id}:floor`, collide: true, part: 'floor', shape: 'box', x: f.x, y: y0 - 0.05, z: f.y, sx: f.w + t, sy: 0.1, sz: f.d + t, color: '#3d3727', opacity: 1 });
       }
       if (bool(paramOf(set, item, 'ceiling', g), true) && options.ceilings) {
-        push({ key: `${item.id}:ceiling`, part: 'ceiling', shape: 'box', x: f.x, y: y0 + f.h + 0.05, z: f.y, sx: f.w + t, sy: 0.1, sz: f.d + t, color: '#5d5848', opacity: 1 });
+        push({ key: `${item.id}:ceiling`, collide: true, part: 'ceiling', shape: 'box', x: f.x, y: y0 + f.h + 0.05, z: f.y, sx: f.w + t, sy: 0.1, sz: f.d + t, color: '#5d5848', opacity: 1 });
       }
       if (bool(paramOf(set, item, 'walls', g), true)) {
-        const hosted = (hostedBy.get(item.id) ?? []).filter((h) => !h.hidden);
         for (const wall of wallsOf(f)) {
           // North and south walls run the full width plus the corners; east and west fit between them.
           const long = wall.index % 2 === 0;
           const length = long ? wall.length + t : Math.max(0, wall.length - t);
           const shift = long ? t / 2 : -t / 2;
-          const holes = hosted
-            .filter((h) => h.host!.wall === wall.index)
-            .map((h) => {
-              const o = openingOf(set, h, g)!;
-              const hs = sizeOf(set, h, g);
-              return { from: Math.max(0, o.from + shift), to: Math.min(length, o.to + shift), bottom: h.z, top: Math.min(f.h, h.z + hs.h) };
+          const dir = { x: (wall.b.x - wall.a.x) / (wall.length || 1), y: (wall.b.y - wall.a.y) / (wall.length || 1) };
+          const wallAngle = (Math.atan2(dir.y, dir.x) * 180) / Math.PI;
+          // Every door and window standing in this wall's line cuts it, whichever room it was put in:
+          // two rooms that share a wall share its openings.
+          const holes = openings
+            .filter((o) => o.floorId === item.floorId)
+            .flatMap((o) => {
+              const vx = o.frame.x - wall.a.x;
+              const vy = o.frame.y - wall.a.y;
+              const along = vx * dir.x + vy * dir.y;
+              const across = Math.abs(vx * dir.y - vy * dir.x);
+              const turn = Math.abs((((o.frame.rotation - wallAngle) % 180) + 180) % 180);
+              if (across > Math.max(t, 0.3) || Math.min(turn, 180 - turn) > 5 || along < -o.frame.w / 2 || along > wall.length + o.frame.w / 2) return [];
+              return [{ from: Math.max(0, along - o.frame.w / 2 + shift), to: Math.min(length, along + o.frame.w / 2 + shift), bottom: o.z, top: Math.min(f.h, o.z + o.frame.h) }];
             })
             .filter((o) => o.to > o.from)
             .sort((a, b) => a.from - b.from);
@@ -303,7 +316,6 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
           }
           if (cursor < length) pieces.push({ from: cursor, to: length, bottom: 0, top: f.h });
           // A wall's local frame: from its start, along its length.
-          const dir = { x: (wall.b.x - wall.a.x) / (wall.length || 1), y: (wall.b.y - wall.a.y) / (wall.length || 1) };
           const start = { x: wall.a.x - dir.x * (long ? t / 2 : -t / 2), y: wall.a.y - dir.y * (long ? t / 2 : -t / 2) };
           const wallRot = -Math.atan2(dir.y, dir.x);
           pieces.forEach((p, n) => {
@@ -320,6 +332,7 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
               sy: p.top - p.bottom,
               sz: t,
               rotY: wallRot,
+              collide: true,
               color: item.invalid ? INVALID_COLOR : material.color ?? CATEGORY_COLOR.spaces!,
               opacity,
             });
@@ -334,10 +347,11 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
       // The opening is cut in the wall; a door shows as a thin leaf in it, a window as glass.
       const host = item.host && set.items.find((i) => i.id === item.host!.id);
       const hostBase = host ? elevation.get(host.floorId) ?? 0 : base;
-      const open = def.role === 'door' ? String(paramOf(set, item, 'swing', g)) === 'open archway' : false;
+      const open = def.role === 'door' ? String(paramOf(set, item, 'swing', g)) === 'open archway' || !!options.open?.(item) : false;
       if (!open) {
         push({
           key: `${item.id}:leaf`,
+          collide: true,
           part: 'door',
           shape: 'box',
           x: f.x,
@@ -354,7 +368,9 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
     }
 
     if (def.kind === 'volume') {
-      push({ key: `${item.id}:volume`, part: 'volume', shape: 'box', x: f.x, y: y0 + f.h / 2, z: f.y, sx: f.w, sy: f.h, sz: f.d, color, opacity: 0.16 });
+      // A state gate that blocks the way is solid while it is there.
+      const blocks = def.role === 'gate' && bool(paramOf(set, item, 'blocks', g), true);
+      push({ key: `${item.id}:volume`, part: 'volume', shape: 'box', x: f.x, y: y0 + f.h / 2, z: f.y, sx: f.w, sy: f.h, sz: f.d, color, opacity: 0.16, collide: blocks });
       continue;
     }
 
@@ -396,7 +412,9 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
       continue;
     }
 
-    // Solids.
+    // Solids: in the way unless their collision is off (or a trigger).
+    const collision = String(paramOf(set, item, 'collision', g) ?? 'static');
+    const solid = collision === 'static' || collision === 'dynamic';
     if (def.proxy === 'stairs') {
       const steps = Math.max(2, Math.round(num(paramOf(set, item, 'steps', g), 16)));
       const run = f.d / steps;
@@ -404,12 +422,12 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
         const rise = (f.h * (s + 1)) / steps;
         // The first step is at the south end; the flight climbs north.
         const c = at(0, f.d / 2 - run * (s + 0.5));
-        push({ key: `${item.id}:step${s}`, part: 'solid', shape: 'box', x: c.x, y: y0 + rise / 2, z: c.y, sx: f.w, sy: rise, sz: run, color, opacity });
+        push({ key: `${item.id}:step${s}`, collide: solid, part: 'solid', shape: 'box', x: c.x, y: y0 + rise / 2, z: c.y, sx: f.w, sy: rise, sz: run, color, opacity });
       }
       continue;
     }
     const shape: MeshShape = def.proxy === 'cylinder' ? 'cylinder' : def.proxy === 'sphere' ? 'sphere' : def.proxy === 'wedge' ? 'wedge' : 'box';
-    push({ key: `${item.id}:solid`, part: 'solid', shape, x: f.x, y: y0 + f.h / 2, z: f.y, sx: f.w, sy: Math.max(0.01, f.h), sz: f.d, color, opacity });
+    push({ key: `${item.id}:solid`, collide: solid && def.proxy !== 'plane', part: 'solid', shape, x: f.x, y: y0 + f.h / 2, z: f.y, sx: f.w, sy: Math.max(0.01, f.h), sz: f.d, color, opacity });
   }
   return out;
 };

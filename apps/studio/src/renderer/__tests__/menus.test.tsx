@@ -7,12 +7,13 @@ import { sunkenVault } from '../model/sample';
 import { getPreferences, resetPreferences, setPreferences } from '../preferences';
 
 /** The Bible, play-through, shot list and handoff load on first use; wait for the one just opened. */
-const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull());
+// The first import of a lazy view (three.js among them) can take a few seconds on a busy machine.
+const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull(), { timeout: 5000 });
 
 /** File › New from the sample, which loads the sample on demand. */
 const openSample = async () => {
   fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
-  await waitFor(() => expect(document.querySelectorAll('[data-node]').length).toBeGreaterThan(10));
+  await waitFor(() => expect(document.querySelectorAll('[data-node]').length).toBeGreaterThan(10), { timeout: 5000 });
 };
 
 beforeAll(() => {
