@@ -1,5 +1,5 @@
 import type { GeneratedFile } from './engines';
-import { slabFaces, type IrLevel, type IrLevelItem, type IrPiece } from './levels';
+import { slabFaces, slabPrisms, type IrLevel, type IrLevelItem, type IrPiece } from './levels';
 
 /**
  * Levels for Godot 4 (spec §11.2): a scene per level whose nodes are the
@@ -661,7 +661,20 @@ export const levelTscn = (level: IrLevel, root: string): string => {
       });
     }
     // A volume notices the player in its box.
-    if (item.kind === 'volume') {
+    const zone = item.kind === 'volume' ? item.pieces.find((p) => p.part === 'volume' && p.shape === 'slab' && p.outline) : undefined;
+    if (zone) {
+      // A freeform volume: one convex prism per triangle, so the area notices the player anywhere inside its outline.
+      slabPrisms(zone).forEach((points, n) => {
+        t.node(n ? `Shape_${n + 1}` : 'Shape', 'CollisionShape3D', at, { transform: transform(rotY(zone.turn), zone.at), shape: t.sub('ConvexPolygonShape3D', { points: `PackedVector3Array(${points.flat().map(f).join(', ')})` }) });
+      });
+      if (zone.collide) {
+        t.node('Collision', 'StaticBody3D', at);
+        t.node('Shape', 'CollisionShape3D', `${at}/Collision`, {
+          transform: transform(rotY(zone.turn), zone.at),
+          shape: t.sub('ConcavePolygonShape3D', { data: `PackedVector3Array(${slabFaces(zone).flat(2).map(f).join(', ')})`, backface_collision: 'true' }),
+        });
+      }
+    } else if (item.kind === 'volume') {
       const [w, h, d] = item.size;
       const blocks = item.pieces.some((p) => p.part === 'volume' && p.collide);
       t.node('Shape', 'CollisionShape3D', at, { transform: transform(rotY(0), [0, h / 2, 0]), shape: t.sub('BoxShape3D', { size: `Vector3(${f(w)}, ${f(h)}, ${f(d)})` }) });

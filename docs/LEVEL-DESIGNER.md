@@ -30,10 +30,11 @@ items linked to what you had selected.
 - **Sizes** labels the selected item's width and depth in the project's units (metres or feet).
 - **Story** badges every space linked to a scene with its code (SC-01…) and joins them in story order.
 
-**Spaces of any shape (spec §3.1).**
+**Spaces and volumes of any shape (spec §3.1).**
 - **Outline** (O) draws a space corner by corner, snapped to the grid. Close it by clicking the first corner, double-clicking, or pressing Enter. Backspace takes back the last corner; Escape drops the outline. An outline whose edges would cross is not made.
-- The picker beside the tools says which space it makes: a room, hallway, stairwell, exterior zone or arena. **Irregular room** in the library starts as an L.
-- A selected outlined space shows a diamond on each corner and a dot in the middle of each wall:
+- The picker beside the tools says what it makes: a room, hallway, stairwell, exterior zone or arena, or a volume (trigger, cinematic trigger, ambient zone, hazard, damage volume, wave or checkpoint). **Irregular room** in the library starts as an L.
+- A freeform volume notices the player anywhere inside its outline, up to its height, in Play Mode and in every engine.
+- A selected outlined space or volume shows a diamond on each corner and a dot in the middle of each wall:
   - Drag a corner to move it.
   - Drag or click a wall's dot to add a corner there.
   - Double-click a corner to take it out (three is the fewest).
@@ -184,6 +185,12 @@ A freeform space's floor and ceiling go over as a **slab**: the outline raised t
 - **Unreal:** the item keeps its slabs as data (`FVcgsSlab`) and builds them into a procedural mesh whenever it is constructed. The plugin now depends on Unreal's ProceduralMeshComponent plugin.
 - **JSON:** a `slab` piece with `outline` and `triangles`, and the space's own `outline`.
 
+A freeform volume goes over as a `volume` piece of shape `slab`. Engine triggers must be convex, so it is built from one upright prism per triangle.
+- **Godot:** convex shapes under the volume's `Area3D`; Godot reports entering and leaving across all of them.
+- **Unity:** convex trigger `MeshCollider`s on the item. The item counts overlaps, so crossing from one prism to the next isn't an exit and an entry.
+- **Unreal:** the item keeps its outline as `Zones` and builds convex trigger collision on a `Zone` component; the director listens to it as it does to the box.
+- A blocking state gate is solid only in Godot and in Play Mode, as before: the Unity and Unreal builders don't yet make any gate solid, box or outline.
+
 **Who owns what.** VC Game Studio owns each item's place, name, collision,
 graybox and data. The Unity and Unreal builders never touch final art, or
 anything else you added in the engine:
@@ -203,7 +210,7 @@ silently. If you keep a file, it is pointed out again next time.
 ## The sample
 
 *The Sunken Vault* (**File › New from the sample**) includes a level:
-- **Spaces:** the Cave Mouth, the Squeeze, the Silt Camp and the Vault Chamber, each linked to its scene. The Cave Mouth is open ground with an irregular outline, and the Vault Chamber has its corners cut.
+- **Spaces:** the Cave Mouth, the Squeeze, the Silt Camp and the Vault Chamber, each linked to its scene. The Cave Mouth is open ground with an irregular outline, and the Vault Chamber has its corners cut. So does its Dripping echo ambient zone.
 - **The Bronze Door:** needs the Vault Key and stays until the puzzle is solved.
 - **The Vault Key:** a pickup that gives the story's key.
 - **The Rusted Lever:** an interaction that sets the lever up.
@@ -236,7 +243,7 @@ clockwise seen from above.
 | Spec | Status |
 | --- | --- |
 | §2 Workspace | Done. |
-| §3 2D map | Done: spaces as rectangles or freeform outlines, grid, snap, align, distribute, rotate, duplicate, mirror, groups, layers, hide and lock, floors with a ghosted floor below, units, dimension labels, symbols. Outlines are for spaces; volumes (triggers, zones) are still boxes. |
+| §3 2D map | Done: spaces as rectangles or freeform outlines, grid, snap, align, distribute, rotate, duplicate, mirror, groups, layers, hide and lock, floors with a ghosted floor below, units, dimension labels, symbols. Spaces and volumes can both be outlined. |
 | §4 Asset library | Done: every category, definitions and instances, overrides with reset, project assets, assemblies, my library. The migration step that applies a changed definition to old instances is recorded (versions) but not yet offered in the UI. |
 | §5 3D graybox | Box, plane, cylinder, sphere, wedge, stairs and ramps; walls with openings; move, rotate and scale, and hosted assets that follow their wall. Moving in 3D is done. **Not yet:** resize handles in 3D, pivot editing, extrude, and collision or navigation preview beyond showing the volumes. |
 | §6 Inspector | Done, including search and "More" for advanced fields. |

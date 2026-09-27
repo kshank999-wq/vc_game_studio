@@ -405,6 +405,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") TArray<FVcgsSlab> Slabs;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VCGS") UProceduralMeshComponent* SlabMesh = nullptr;
 
+    /** A freeform volume's outline raised to its height (instead of Box); build_level.py sets it. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") TArray<FVcgsSlab> Zones;
+    /** Zones as convex trigger pieces, one per triangle: it notices the player anywhere inside the outline. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VCGS") UProceduralMeshComponent* ZoneMesh = nullptr;
+
     virtual void OnConstruction(const FTransform& Transform) override;
 };
 `,
@@ -427,6 +432,11 @@ AVcgsLevelItem::AVcgsLevelItem()
     SlabMesh->SetupAttachment(RootComponent);
     SlabMesh->bUseComplexAsSimpleCollision = true;
     SlabMesh->SetCollisionProfileName(TEXT("BlockAll"));
+    ZoneMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Zone"));
+    ZoneMesh->SetupAttachment(RootComponent);
+    ZoneMesh->bUseComplexAsSimpleCollision = false;
+    ZoneMesh->SetGenerateOverlapEvents(false);
+    ZoneMesh->SetCollisionProfileName(TEXT("NoCollision"));
 }
 
 namespace
@@ -489,6 +499,33 @@ void AVcgsLevelItem::OnConstruction(const FTransform& Transform)
         SlabMesh->CreateMeshSection_LinearColor(Index, Vertices, Triangles, Normals, TArray<FVector2D>(), TArray<FLinearColor>(), TArray<FProcMeshTangent>(), Slab.bCollide);
         SlabMesh->SetMeshSectionVisible(Index, Slab.bVisible);
     }
+
+    // A freeform volume: a convex prism per triangle, as the zone's trigger collision.
+    if (!ZoneMesh) return;
+    ZoneMesh->ClearCollisionConvexMeshes();
+    int32 Pieces = 0;
+    for (int32 Index = 0; Index < Zones.Num(); Index++)
+    {
+        FVcgsSlab& Zone = Zones[Index];
+        const int32 Count = Zone.Outline.Num();
+        const double Half = Zone.Thickness / 2;
+        for (int32 k = 0; k + 2 < Zone.Triangles.Num(); k += 3)
+        {
+            TArray<FVector> Prism;
+            for (int32 c = 0; c < 3; c++)
+            {
+                const int32 i = Zone.Triangles[k + c];
+                if (i < 0 || i >= Count) continue;
+                Prism.Add(FVector(Zone.Center.X + Zone.Outline[i].X, Zone.Center.Y + Zone.Outline[i].Y, Zone.Center.Z + Half));
+                Prism.Add(FVector(Zone.Center.X + Zone.Outline[i].X, Zone.Center.Y + Zone.Outline[i].Y, Zone.Center.Z - Half));
+            }
+            if (Prism.Num() != 6) continue;
+            ZoneMesh->AddCollisionConvexMesh(Prism);
+            Pieces++;
+        }
+    }
+    ZoneMesh->SetGenerateOverlapEvents(Pieces > 0);
+    ZoneMesh->SetCollisionProfileName(Pieces > 0 ? TEXT("Trigger") : TEXT("NoCollision"));
 }
 `,
 
@@ -561,6 +598,7 @@ private:
 #include "VcgsLevelItem.h"
 #include "VcgsSubsystem.h"
 #include "Components/BoxComponent.h"
+#include "ProceduralMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -610,6 +648,12 @@ void AVcgsLevelDirector::BeginPlay()
             Item->Box->OnComponentBeginOverlap.AddDynamic(this, &AVcgsLevelDirector::OnBoxBegin);
             Item->Box->OnComponentEndOverlap.AddDynamic(this, &AVcgsLevelDirector::OnBoxEnd);
         }
+        // A freeform volume notices the player through its zone instead.
+        if (Item->ZoneMesh)
+        {
+            Item->ZoneMesh->OnComponentBeginOverlap.AddDynamic(this, &AVcgsLevelDirector::OnBoxBegin);
+            Item->ZoneMesh->OnComponentEndOverlap.AddDynamic(this, &AVcgsLevelDirector::OnBoxEnd);
+        }
     }
     Refresh();
 }
@@ -652,7 +696,7 @@ bool AVcgsLevelDirector::IsPlayer(const AActor* Other) const
 FString AVcgsLevelDirector::GuidOfBox(const UPrimitiveComponent* Box) const
 {
     for (const auto& Pair : ItemsByGuid)
-        if (Pair.Value->Box == Box) return Pair.Key;
+        if (Pair.Value->Box == Box || Pair.Value->ZoneMesh == Box) return Pair.Key;
     return FString();
 }
 
@@ -855,9 +899,15 @@ def build():
         item.set_editor_property("exported", True)
         item.tags = ["vcgs:" + guid]
 
-        # A volume's box notices the player.
+        # A volume's box notices the player; a freeform one's zone does, and its box stays out of it.
         box = item.get_editor_property("box")
-        if item_data["kind"] == "volume":
+        zones = [slab_of(p, False) for p in item_data["pieces"] if p["part"] == "volume" and p["shape"] == "slab"]
+        item.set_editor_property("zones", zones)
+        if zones:
+            box.set_box_extent(unreal.Vector(1.0, 1.0, 1.0), False)
+            box.set_collision_profile_name("NoCollision")
+            box.set_generate_overlap_events(False)
+        elif item_data["kind"] == "volume":
             w, h, d = item_data["size"]
             box.set_box_extent(unreal.Vector(d * 50.0, w * 50.0, h * 50.0), False)
             box.set_relative_location(unreal.Vector(0.0, 0.0, h * 50.0), False, False)

@@ -1,5 +1,5 @@
 import type { Project } from '../types';
-import { assetOf, boundsOf, corners, frameOf, nearestWall, openingOf, outlineOf, selfIntersects, sizeOf, tidyOutline, toLocal, toPlan, wallNearest, type Point } from './geometry';
+import { assetOf, boundsOf, corners, frameOf, nearestWall, openingOf, OUTLINED_KINDS, outlineOf, selfIntersects, sizeOf, tidyOutline, toLocal, toPlan, wallNearest, type Point } from './geometry';
 import { findAsset } from './library';
 import { defaultSettings } from './naming';
 import type { AssemblyPart, AssetDefinition, Floor, Level, LevelItem, LevelSet, LevelSettings, NamingClass, OutlinePoint, ParamValue, Size } from './types';
@@ -314,7 +314,7 @@ const rehostOpenings = (set: LevelSet, openings: { id: string; hostId: string; a
 };
 
 /**
- * Give a space the outline through these plan corners. Its centre and size
+ * Give a space or volume the outline through these plan corners. Its centre and size
  * become the outline's bounds, its facing stays, and its doors and windows go
  * into the nearest of its new walls. Refused (no change) when the corners
  * don't make a shape that can be walled: fewer than three, or edges crossing.
@@ -322,7 +322,7 @@ const rehostOpenings = (set: LevelSet, openings: { id: string; hostId: string; a
 export const setOutline = (project: Project, id: string, points: readonly Point[], global?: readonly AssetDefinition[]): Project => {
   const set = levelsOf(project);
   const item = set.items.find((i) => i.id === id);
-  if (!item || item.locked || assetOf(set, item, global).kind !== 'space') return project;
+  if (!item || item.locked || !OUTLINED_KINDS.has(assetOf(set, item, global).kind)) return project;
   const f = frameOf(set, item, global);
   const local = tidyOutline(points.map((p) => toLocal(f, p)));
   if (local.length < 3 || selfIntersects(local)) return project;

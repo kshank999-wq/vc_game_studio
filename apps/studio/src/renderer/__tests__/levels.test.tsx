@@ -125,6 +125,20 @@ describe('the Level Designer', () => {
     expect(container.querySelectorAll('.lvl-space')).toHaveLength(1);
   });
 
+  it('outlines a trigger volume too', async () => {
+    const { container } = render(<App />);
+    await openLevels();
+    fireEvent.click(screen.getByRole('button', { name: '+ Create the first level' }));
+    const map = screen.getByRole('application', { name: 'Level map' });
+    fireEvent.click(screen.getByRole('button', { name: 'Outline' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Draw' }), { target: { value: 'logic.trigger' } });
+    for (const [x, y] of [[96, 96], [240, 96], [168, 216]] as const) fireEvent.pointerDown(map, { button: 0, clientX: x, clientY: y });
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(container.querySelector('.lvl-right-head')!.textContent).toContain('Trigger volume');
+    expect(container.querySelector('.lvl-shape')!.textContent).toContain('3 corners');
+    expect(container.querySelectorAll('[data-handle^="corner-"]')).toHaveLength(3);
+  });
+
   it('says so when the graybox cannot use WebGL', async () => {
     const p = sunkenVault();
     localStorage.setItem('vcgs.project.v1', JSON.stringify(p));

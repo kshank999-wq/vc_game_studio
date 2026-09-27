@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { areaOf, assetOf, corners, frameOf, num, outlineOf, paramOf, perimeterOf, sizeOf } from '../../model/level/geometry';
+import { areaOf, assetOf, corners, frameOf, num, OUTLINED_KINDS, outlineOf, paramOf, perimeterOf, sizeOf } from '../../model/level/geometry';
 import { GROUPS } from '../../model/level/library';
 import {
   addFloor,
@@ -341,7 +341,7 @@ export const LevelInspector = (props: Props) => {
           'dimensions',
           def.kind !== 'marker' && (!q || matches('width depth height shape outline corners')) ? (
             <>
-            {def.kind === 'space' && (
+            {OUTLINED_KINDS.has(def.kind) && !item.host && (
               <>
                 <div className="lvl-kv lvl-shape">
                   <span>Shape</span>

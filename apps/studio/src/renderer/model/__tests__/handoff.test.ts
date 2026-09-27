@@ -283,6 +283,20 @@ describe('level export', () => {
     expect(schema.$defs.piece.properties.shape.enum).toContain('slab');
   });
 
+  it('sends a freeform volume as its outline, a convex prism per triangle where triggers must be convex', async () => {
+    const { slabPrisms } = await import('../handoff/levels');
+    const plan = planHandoff(sunkenVault());
+    const echo = plan.levels[0]!.items.find((i) => i.name === 'Dripping echo')!;
+    expect(echo.outline).toHaveLength(8);
+    const zone = echo.pieces.find((p) => p.part === 'volume')!;
+    expect(zone).toMatchObject({ shape: 'slab', size: [10, 4.5, 8] });
+    const prisms = slabPrisms(zone);
+    expect(prisms).toHaveLength(6);
+    expect(prisms.every((p) => p.length === 6 && p.slice(0, 3).every((c) => c[1] === 2.25) && p.slice(3).every((c) => c[1] === -2.25))).toBe(true);
+    const tscn = plan.output!.files.find((f) => f.path.endsWith('levels/sunken_vault.tscn'))!.content;
+    expect(tscn.match(/\[sub_resource type="ConvexPolygonShape3D"/g)).toHaveLength(6);
+  });
+
   it('flags engine-specific preflight on the level row', () => {
     const unreal = planHandoff(setTarget(sunkenVault(), { engine: 'unreal' }));
     const godot = planHandoff(sunkenVault());

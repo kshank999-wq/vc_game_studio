@@ -36,7 +36,8 @@ export const sampleLevel = (
   const vault = put('space.room', 'Vault Chamber', 10, -16, { w: 10, d: 8, h: 4.5 });
   // The cave mouth is open ground of no particular shape; the chamber has its corners cut.
   p = setOutline(p, cave, [{ x: -8, y: -6 }, { x: 8, y: -6 }, { x: 8, y: 2 }, { x: 5, y: 6 }, { x: -4, y: 6 }, { x: -8, y: 3 }]);
-  p = setOutline(p, vault, [{ x: 6.5, y: -20 }, { x: 13.5, y: -20 }, { x: 15, y: -18.5 }, { x: 15, y: -13.5 }, { x: 13.5, y: -12 }, { x: 6.5, y: -12 }, { x: 5, y: -13.5 }, { x: 5, y: -18.5 }]);
+  const chamberCorners = [{ x: 6.5, y: -20 }, { x: 13.5, y: -20 }, { x: 15, y: -18.5 }, { x: 15, y: -13.5 }, { x: 13.5, y: -12 }, { x: 6.5, y: -12 }, { x: 5, y: -13.5 }, { x: 5, y: -18.5 }];
+  p = setOutline(p, vault, chamberCorners);
   p = linkItem(p, cave, refs.caveMouth);
   p = linkItem(p, squeeze, refs.squeeze);
   p = linkItem(p, camp, refs.theKey);
@@ -87,6 +88,8 @@ export const sampleLevel = (
   put('pres.camera', 'Chamber crane', 14, -13, undefined, 315);
   const lamp = put('light.spot', 'Seam glow', 7, -19, undefined, 135);
   set(lamp, { color: '#9fc6d8', intensity: 2 });
-  put('pres.ambient', 'Dripping echo', 10, -16, { w: 10, d: 8, h: 4.5 });
+  // The chamber's echo fills it, cut corners and all.
+  const echo = put('pres.ambient', 'Dripping echo', 10, -16, { w: 10, d: 8, h: 4.5 });
+  p = setOutline(p, echo, chamberCorners);
   return p;
 };

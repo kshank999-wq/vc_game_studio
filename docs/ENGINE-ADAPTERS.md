@@ -178,7 +178,9 @@ from corner n to the next. Its floor and ceiling are `slab` pieces: an
 the top, each clockwise from above. That winding faces up in Godot and Unity
 alike, since both see the same map from above. `slabFaces` gives the closed
 solid for collision. Unreal gets both sides of every face, so it shows
-whichever way it is wound.
+whichever way it is wound. A freeform volume's `volume` piece is a slab too;
+`slabPrisms` cuts it into one convex prism per triangle, since engine
+triggers must be convex.
 
 The export record keeps each item's revision (`levelItems`), so the handoff
 can say what changed. It also keeps a hash of each generated file

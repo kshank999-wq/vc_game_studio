@@ -64,6 +64,13 @@ else:
         fail("a slab keeps its triangles and collides")
 if not any(p["shape"] == "slab" for p in cave_data["pieces"]) or not cave.get_editor_property("slabs"):
     fail("the cave mouth's outlined ground should be a slab")
+# A freeform volume notices the player through its zone: the outline's prisms, not the box.
+echo = placed["AUD_VaultChamber_DrippingEcho_001"]
+echo_zones = echo.get_editor_property("zones")
+if len(echo_zones) != 1 or len(echo_zones[0].get_editor_property("triangles")) != 18 or echo.get_editor_property("box").calls.get("set_collision_profile_name") != ("NoCollision",):
+    fail("the outlined ambient zone should be a zone with its outline's triangles, its box out of it")
+if placed["TRG_VaultChamber_DoorInTheDarkTrigger_002"].get_editor_property("zones"):
+    fail("a box volume has no zones")
 trigger = placed["TRG_VaultChamber_DoorInTheDarkTrigger_002"]
 if trigger.get_editor_property("box").calls.get("set_collision_profile_name") != ("Trigger",):
     fail("a volume's box should be a trigger")

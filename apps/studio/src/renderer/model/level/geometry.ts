@@ -286,10 +286,13 @@ export const wallsOf = (f: Frame): Wall[] => {
   ];
 };
 
-/** A space's outline, when it has one: its own, or its definition's. */
+/** Spaces and volumes can be drawn freeform. */
+export const OUTLINED_KINDS: ReadonlySet<string> = new Set(['space', 'volume']);
+
+/** A space's or volume's outline, when it has one: its own, or its definition's. */
 export const outlineOf = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): OutlinePoint[] | undefined => {
   const def = assetOf(set, item, global);
-  if (def.kind !== 'space') return undefined;
+  if (!OUTLINED_KINDS.has(def.kind)) return undefined;
   const o = item.outline ?? def.outline;
   return o && o.length >= 3 ? o : undefined;
 };
@@ -578,7 +581,11 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
     if (def.kind === 'volume') {
       // A state gate that blocks the way is solid while it is there.
       const blocks = def.role === 'gate' && bool(paramOf(set, item, 'blocks', g), true);
-      push({ key: `${item.id}:volume`, part: 'volume', shape: 'box', x: f.x, y: y0 + f.h / 2, z: f.y, sx: f.w, sy: f.h, sz: f.d, color, opacity: 0.16, collide: blocks });
+      // A freeform volume is its outline raised to its height.
+      const shape = f.outline
+        ? { shape: 'slab' as const, outline: f.outline.map((p) => ({ x: p.x, z: p.y })), triangles: triangulate(f.outline) }
+        : { shape: 'box' as const };
+      push({ key: `${item.id}:volume`, part: 'volume', x: f.x, y: y0 + f.h / 2, z: f.y, sx: f.w, sy: f.h, sz: f.d, color, opacity: 0.16, collide: blocks, ...shape });
       continue;
     }
 

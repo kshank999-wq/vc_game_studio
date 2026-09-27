@@ -448,14 +448,19 @@ namespace VCGS
 
         public VcgsLevel Level { get; set; }
 
+        // A freeform volume is several convex triggers: the player is in it from the first one entered until the last one left.
+        int overlaps;
+
         void OnTriggerEnter(Collider other)
         {
-            if (Level != null && Level.Logic != null && other.CompareTag("Player")) Level.Logic.Enter(guid);
+            if (!other.CompareTag("Player")) return;
+            if (overlaps++ == 0 && Level != null && Level.Logic != null) Level.Logic.Enter(guid);
         }
 
         void OnTriggerExit(Collider other)
         {
-            if (Level != null && Level.Logic != null && other.CompareTag("Player")) Level.Logic.Exit(guid);
+            if (!other.CompareTag("Player") || overlaps == 0) return;
+            if (--overlaps == 0 && Level != null && Level.Logic != null) Level.Logic.Exit(guid);
         }
     }
 }
@@ -597,8 +602,29 @@ namespace VCGS.EditorTools
                     var box = holder.gameObject.AddComponent<BoxCollider>();
                     box.size = Size(piece);
                 }
-                // A volume notices the player in its box; a blocking gate is solid too.
-                if (D.Str(data_, "kind") == "volume")
+                // A volume notices the player in its box.
+                Dictionary<string, object> zone = null;
+                foreach (var p in pieces)
+                {
+                    var piece = D.Map(p);
+                    if (D.Str(piece, "part") == "volume" && D.Str(piece, "shape") == "slab") zone = piece;
+                }
+                foreach (var old in item.GetComponents<MeshCollider>()) Object.DestroyImmediate(old);
+                if (zone != null)
+                {
+                    // A freeform volume: a convex trigger per triangle of its outline (Unity's triggers must be convex).
+                    var box = item.GetComponent<BoxCollider>();
+                    if (box != null) Object.DestroyImmediate(box);
+                    var prisms = Prisms(zone, exportName);
+                    foreach (var mesh in prisms)
+                    {
+                        var c = item.gameObject.AddComponent<MeshCollider>();
+                        c.sharedMesh = mesh;
+                        c.convex = true;
+                        c.isTrigger = true;
+                    }
+                }
+                else if (D.Str(data_, "kind") == "volume")
                 {
                     var size = D.List(data_, "size");
                     var trigger = item.GetComponent<BoxCollider>();
@@ -769,6 +795,36 @@ namespace VCGS.EditorTools
             Folder(Meshes);
             AssetDatabase.CreateAsset(mesh, Meshes + "/" + name + ".asset");
             return mesh;
+        }
+
+        /// <summary>A slab cut into upright prisms, one per triangle, relative to the item and saved as assets.</summary>
+        static List<Mesh> Prisms(Dictionary<string, object> piece, string name)
+        {
+            var outline = D.List(piece, "outline");
+            var triangles = D.List(piece, "triangles");
+            var h = (float)D.Num(D.List(piece, "size")[1], 1) / 2;
+            var centre = ToUnity(D.List(piece, "at"));
+            var meshes = new List<Mesh>();
+            Folder(Meshes);
+            for (var k = 0; k + 2 < triangles.Count; k += 3)
+            {
+                var v = new Vector3[6];
+                for (var c = 0; c < 3; c++)
+                {
+                    var p = D.List(outline[(int)D.Num(triangles[k + c], 0)]);
+                    var at = centre + new Vector3((float)D.Num(p[0], 0), 0, -(float)D.Num(p[1], 0));
+                    v[c] = at + new Vector3(0, h, 0);
+                    v[c + 3] = at - new Vector3(0, h, 0);
+                }
+                var mesh = new Mesh { name = name + "_zone_" + meshes.Count };
+                mesh.vertices = v;
+                mesh.triangles = new[] { 0, 1, 2, 3, 5, 4, 1, 0, 3, 1, 3, 4, 2, 1, 4, 2, 4, 5, 0, 2, 5, 0, 5, 3 };
+                mesh.RecalculateNormals();
+                mesh.RecalculateBounds();
+                AssetDatabase.CreateAsset(mesh, Meshes + "/" + mesh.name + ".asset");
+                meshes.Add(mesh);
+            }
+            return meshes;
         }
 
         /// <summary>A unit wedge rising to the north, saved as an asset.</summary>

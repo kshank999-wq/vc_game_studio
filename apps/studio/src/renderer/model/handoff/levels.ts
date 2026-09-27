@@ -264,4 +264,21 @@ export const slabFaces = (piece: IrPiece): [number, number, number][][] => {
   return out;
 };
 
+/**
+ * A slab cut into convex pieces, one upright prism per triangle: six [x, y, z]
+ * corners each (top three, then bottom three) around its centre. Engines whose
+ * triggers must be convex build a freeform volume from these.
+ */
+export const slabPrisms = (piece: IrPiece): [number, number, number][][] => {
+  const o = piece.outline ?? [];
+  const t = piece.triangles ?? [];
+  const h = piece.size[1] / 2;
+  const out: [number, number, number][][] = [];
+  for (let k = 0; k + 2 < t.length; k += 3) {
+    const corners = [t[k]!, t[k + 1]!, t[k + 2]!].map((i) => o[i]!);
+    out.push([...corners.map((c): [number, number, number] => [c[0], h, c[1]]), ...corners.map((c): [number, number, number] => [c[0], -h, c[1]])]);
+  }
+  return out;
+};
+
 export type { LevelItem };

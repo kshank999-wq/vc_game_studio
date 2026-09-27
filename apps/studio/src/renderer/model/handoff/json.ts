@@ -260,7 +260,8 @@ above), a \`size\`, its settings in \`params\` (story references as story keys)
 and its graybox \`pieces\` relative to it. Build the pieces as you like; those
 with \`collide\` are in the player's way. A \`slab\` piece is a freeform floor or
 ceiling: its \`outline\` corners raised to \`size[1]\`, with \`triangles\` for its
-top. A freeform space also has its \`outline\`, and a door's \`host.wall\` counts
+top. A freeform space or volume also has its \`outline\`; a volume is in the
+level wherever that outline is, up to its height. A door's \`host.wall\` counts
 its walls from corner 0.
 
 1. An item is in the level only while \`active_when\` holds.

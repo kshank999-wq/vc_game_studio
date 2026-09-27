@@ -70,7 +70,7 @@ const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
 const DRAW_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.exterior', 'space.arena', 'logic.trigger', 'pres.ambient', 'spawn.wave', 'space.platform', 'arch.floor'];
-const OUTLINE_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.exterior', 'space.arena'];
+const OUTLINE_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.exterior', 'space.arena', 'logic.trigger', 'pres.cinematic', 'pres.ambient', 'logic.hazard', 'logic.damage', 'spawn.wave', 'play.checkpoint'];
 
 /**
  * The Level Designer (docs/specs/level-designer-spec.md): library on the
@@ -291,7 +291,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
     });
   };
 
-  /** The outline tool draws spaces only; it starts with a plain room if a non-space was being drawn. */
+  /** The outline tool draws spaces and volumes; it starts with a plain room if something else was being drawn. */
   const outlineTool = () => {
     setTool((t) => (t === 'outline' ? 'select' : 'outline'));
     setDrawAsset((a) => (OUTLINE_ASSETS.includes(a) ? a : 'space.room'));
@@ -444,7 +444,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               <button className={tool === 'draw' ? 'on' : ''} aria-pressed={tool === 'draw'} onClick={() => setTool('draw')} title="Drag out a space on the map (D)">
                 Draw
               </button>
-              <button className={tool === 'outline' ? 'on' : ''} aria-pressed={tool === 'outline'} onClick={outlineTool} title="Click the corners of a space of any shape; click the first corner, double-click or press Enter to close it (O)">
+              <button className={tool === 'outline' ? 'on' : ''} aria-pressed={tool === 'outline'} onClick={outlineTool} title="Click the corners of a space or volume of any shape; click the first corner, double-click or press Enter to close it (O)">
                 Outline
               </button>
             </div>

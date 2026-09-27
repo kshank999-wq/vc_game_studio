@@ -223,6 +223,15 @@ func check_level(game: Node) -> void:
 			shape = child.shape
 	if shape == null or shape.get_faces().size() != ((8 - 2) * 2 + 8 * 2) * 3 or not shape.backface_collision:
 		fail("the chamber's floor should collide by its outline")
+	# The chamber's echo follows its cut corners: an Area3D of convex prisms, one per triangle.
+	var echo: Node = level.get_node_or_null("AUD_VaultChamber_DrippingEcho_001")
+	var prisms := 0
+	if echo is Area3D:
+		for child in echo.get_children():
+			if child is CollisionShape3D and child.shape is ConvexPolygonShape3D and (child.shape as ConvexPolygonShape3D).points.size() == 6:
+				prisms += 1
+	if prisms != 6:
+		fail("the outlined ambient zone should be an Area3D of 6 convex prisms, got " + str(prisms))
 	var crane: Node3D = level.get_node_or_null("CAM_VaultChamber_ChamberCrane_001")
 	if crane == null or not (crane is Camera3D) or absf(wrapf(crane.rotation.y, -PI, PI) - deg_to_rad(45.0)) > 0.01:
 		fail("the camera marker should be a Camera3D turned to face north-west, got " + str(crane.rotation if crane else null))

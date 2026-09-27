@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { collidersFrom, step, type Body } from '../level/controller';
 import { areaOf, contains, corners, frameOf, meshesFor, overlaps, polygonArea, selfIntersects, signedArea, triangulate, wallsOf } from '../level/geometry';
 import { addLevel, duplicateItems, insertCorner, itemById, levelsOf, makeRectangular, mirrorItems, moveCorner, placeAsset, removeCorner, resizeItem, rotateItems, setOutline } from '../level/level';
+import { startLevelPlay, tick } from '../level/play';
 import { levelIssues } from '../level/validate';
 import { createProject } from '../project';
 import type { Project } from '../types';
@@ -190,6 +191,39 @@ describe('freeform spaces', () => {
     let b = standing(0, -2);
     for (let i = 0; i < 90; i++) b = step({ ...b, yaw: Math.PI / 2 }, { forward: 1, strafe: 0, jump: false, run: false }, 1 / 60, colliders);
     expect(b.x).toBeLessThan(1 - 0.1);
+  });
+});
+
+describe('freeform volumes', () => {
+  it('notice the player inside their outline, not just their bounds', () => {
+    let { project, levelId, floorId } = start();
+    const placed = placeAsset(project, levelId, floorId, 'logic.trigger', { x: 0, y: 0 });
+    const id = placed.ids[0]!;
+    project = setOutline(placed.project, id, L);
+    const f = frameOf(levelsOf(project), itemById(project, id)!);
+    expect(corners(f)).toHaveLength(6);
+    const mesh = meshesFor(levelsOf(project), levelId).find((m) => m.itemId === id)!;
+    expect(mesh).toMatchObject({ part: 'volume', shape: 'slab', sy: 2.5 });
+    expect(mesh.triangles).toHaveLength(12);
+    let s = startLevelPlay(project, levelId);
+    // In the notch: inside the bounds, outside the outline.
+    s = tick(project, s, 0.1, { x: 3, y: -2, z: 0 });
+    expect(s.inside).not.toContain(id);
+    s = tick(project, s, 0.1, { x: -3, y: 2, z: 0 });
+    expect(s.inside).toContain(id);
+    // Above its height it is out again.
+    s = tick(project, s, 0.1, { x: -3, y: 2, z: 3 });
+    expect(s.inside).not.toContain(id);
+  });
+
+  it('can be made rectangular again, and markers and props never take an outline', () => {
+    let { project, levelId, floorId } = start();
+    const zone = placeAsset(project, levelId, floorId, 'pres.ambient', { x: 0, y: 0 });
+    project = setOutline(zone.project, zone.ids[0]!, L);
+    expect(itemById(project, zone.ids[0]!)!.outline).toHaveLength(6);
+    expect(itemById(makeRectangular(project, zone.ids[0]!), zone.ids[0]!)!.outline).toBeUndefined();
+    const crate = placeAsset(project, levelId, floorId, 'prop.crate', { x: 20, y: 0 });
+    expect(setOutline(crate.project, crate.ids[0]!, L.map((p) => ({ x: p.x + 20, y: p.y })))).toBe(crate.project);
   });
 });
 

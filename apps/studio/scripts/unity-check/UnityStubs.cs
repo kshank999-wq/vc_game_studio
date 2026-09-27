@@ -121,6 +121,7 @@ namespace UnityEngine
         public GameObject gameObject;
         public Transform transform => gameObject.transform;
         public T GetComponent<T>() where T : class => gameObject.GetComponent<T>();
+        public T[] GetComponents<T>() where T : class => gameObject.components.FindAll(c => c is T).ConvertAll(c => c as T).ToArray();
         public bool CompareTag(string tag) => gameObject.tag == tag;
 
         public T[] GetComponentsInChildren<T>(bool includeInactive) where T : class
@@ -190,6 +191,8 @@ namespace UnityEngine
     public sealed class MeshCollider : Collider
     {
         public Mesh sharedMesh;
+        public bool convex;
+        public bool isTrigger;
     }
 
     public sealed class Mesh : Object

@@ -130,6 +130,11 @@ static class Check
             var up = UnityEngine.Vector3.Cross(v[t[1]] - v[t[0]], v[t[2]] - v[t[0]]);
             if (up.y <= 0) Fail("the floor's top should face up");
         }
+        // The chamber's ambient zone follows its cut corners: a convex trigger per triangle, and no box.
+        var echo = root.transform.Find("AUD_VaultChamber_DrippingEcho_001");
+        var zones = echo == null ? new UnityEngine.MeshCollider[0] : echo.GetComponents<UnityEngine.MeshCollider>();
+        if (echo == null || zones.Length != 6 || echo.GetComponent<UnityEngine.BoxCollider>() != null || !Array.TrueForAll(zones, z => z.convex && z.isTrigger && z.sharedMesh.vertices.Length == 6))
+            Fail("the outlined ambient zone should be six convex trigger prisms, got " + zones.Length);
         var crane = root.transform.Find("CAM_VaultChamber_ChamberCrane_001");
         if (crane == null || Math.Abs(crane.localEulerAngles.y - 315) > 0.01) Fail("the camera marker should turn 315° in Unity, got " + crane?.localEulerAngles.y);
         var trig = root.transform.Find("TRG_VaultChamber_DoorInTheDarkTrigger_002").GetComponent<UnityEngine.BoxCollider>();
