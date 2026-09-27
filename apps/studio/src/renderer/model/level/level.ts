@@ -270,7 +270,13 @@ export const resizeItem = (project: Project, id: string, size: Partial<Size>, gl
   const set = levelsOf(project);
   const item = set.items.find((i) => i.id === id);
   if (!item) return project;
-  const changed = mapItems(set, [id], (i) => withSize(i, assetOf(set, i, global), size));
+  const changed = mapItems(set, [id], (i) => {
+    const sized = withSize(i, assetOf(set, i, global), size);
+    if (!i.pivot || i.host) return sized;
+    // It grows from its pivot: the pivot stays where it is.
+    const after = { ...sizeOf(set, i, global), ...sized.size };
+    return { ...sized, ...centreKeepingPivot(set, i, i.rotation, after, global) };
+  });
   return withSet(project, revalidate(changed, [id], global));
 };
 
@@ -420,19 +426,115 @@ export const moveItems = (project: Project, ids: readonly string[], dx: number, 
 };
 
 /** Put items at exact plan positions (the inspector's X and Y). */
-export const placeAt = (project: Project, id: string, at: Partial<Point & { z: number; rotation: number }>): Project =>
-  updateItem(project, id, {
-    ...(at.x !== undefined ? { x: at.x } : {}),
-    ...(at.y !== undefined ? { y: at.y } : {}),
+export const placeAt = (project: Project, id: string, at: Partial<Point & { z: number; rotation: number }>): Project => {
+  const rotation = at.rotation !== undefined ? ((at.rotation % 360) + 360) % 360 : undefined;
+  // Turning alone turns about the pivot.
+  const item = rotation !== undefined && at.x === undefined && at.y === undefined ? itemById(project, id) : undefined;
+  const about = item?.pivot && !item.host ? centreKeepingPivot(levelsOf(project), item, rotation!, sizeOf(levelsOf(project), item)) : undefined;
+  return updateItem(project, id, {
+    ...(at.x !== undefined ? { x: at.x } : about ? { x: about.x } : {}),
+    ...(at.y !== undefined ? { y: at.y } : about ? { y: about.y } : {}),
     ...(at.z !== undefined ? { z: at.z } : {}),
-    ...(at.rotation !== undefined ? { rotation: ((at.rotation % 360) + 360) % 360 } : {}),
+    ...(rotation !== undefined ? { rotation } : {}),
   });
+};
+
+// ---------------------------------------------------------------- pivots (spec §5.1)
+
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** Where an item's pivot is on the plan. */
+export const pivotPoint = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): Point => {
+  const f = frameOf(set, item, global);
+  const p = toPlan(f, (item.pivot?.x ?? 0) * f.w, (item.pivot?.y ?? 0) * f.d);
+  return { x: r3(p.x) + 0, y: r3(p.y) + 0 };
+};
+
+/** The centre that leaves the pivot where it is, at a new facing and size. */
+const centreKeepingPivot = (set: LevelSet, item: LevelItem, rotation: number, size: { w: number; d: number }, global?: readonly AssetDefinition[]): Point => {
+  const p = pivotPoint(set, item, global);
+  const off = toPlan({ x: 0, y: 0, z: 0, rotation, w: 0, d: 0, h: 0 }, (item.pivot?.x ?? 0) * size.w, (item.pivot?.y ?? 0) * size.d);
+  return { x: r3(p.x - off.x), y: r3(p.y - off.y) };
+};
+
+/** Put an item's pivot somewhere in its bounds (fractions of its width and depth); the centre when absent. */
+export const setPivot = (project: Project, id: string, pivot: { x: number; y: number } | undefined): Project => {
+  const clamp = (v: number) => Math.round(Math.max(-0.5, Math.min(0.5, v)) * 1000) / 1000;
+  const next = pivot && (clamp(pivot.x) || clamp(pivot.y)) ? { x: clamp(pivot.x), y: clamp(pivot.y) } : undefined;
+  const set = levelsOf(project);
+  const changed = mapItems(set, [id], (i) => {
+    if (JSON.stringify(i.pivot) === JSON.stringify(next)) return i;
+    const n = { ...i };
+    if (next) n.pivot = next;
+    else delete n.pivot;
+    return n;
+  });
+  return changed === set ? project : withSet(project, changed);
+};
+
+// ---------------------------------------------------------------- extrude (spec §5.1)
+
+/** A face to push or pull: a side of the item's box, its top, or one wall of an outline. */
+export type Face = 'n' | 'e' | 's' | 'w' | 'top' | { wall: number };
+
+const FACE_AXIS = { n: { lx: 0, ly: -1 }, s: { lx: 0, ly: 1 }, e: { lx: 1, ly: 0 }, w: { lx: -1, ly: 0 } } as const;
+
+/**
+ * Push a face out (or pull it in) by a distance, the opposite face staying
+ * where it is: a room grows eastward, a platform gets taller, one wall of an
+ * outlined room moves out. Sizes snap to the grid; one undo step.
+ */
+export const extrude = (project: Project, id: string, face: Face, distance: number, global?: readonly AssetDefinition[]): Project => {
+  const set = levelsOf(project);
+  const item = set.items.find((i) => i.id === id);
+  if (!item || item.locked || item.host) return project;
+  const f = frameOf(set, item, global);
+  const step = set.settings.snap ? set.settings.grid || 0.5 : 0.01;
+  if (typeof face === 'object') {
+    const c = corners(f);
+    const a = c[face.wall];
+    const b = c[(face.wall + 1) % c.length];
+    if (!f.outline || !a || !b) return project;
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const n = { x: (b.y - a.y) / len, y: -(b.x - a.x) / len };
+    const d = snap(set, distance);
+    if (!d) return project;
+    c[face.wall] = { x: a.x + n.x * d, y: a.y + n.y * d };
+    c[(face.wall + 1) % c.length] = { x: b.x + n.x * d, y: b.y + n.y * d };
+    return setOutline(project, id, c, global);
+  }
+  const def = assetOf(set, item, global);
+  if (face === 'top') {
+    const h = Math.max(0.05, Math.round((f.h + distance) * 20) / 20);
+    if (h === f.h) return project;
+    return withSet(project, revalidate(mapItems(set, [id], (i) => withSize(i, def, { h })), [id], global));
+  }
+  const { lx, ly } = FACE_AXIS[face];
+  const w = lx ? Math.max(step, snap(set, f.w + distance)) : f.w;
+  const d = ly ? Math.max(step, snap(set, f.d + distance)) : f.d;
+  if (w === f.w && d === f.d) return project;
+  // The opposite face stays put: the centre moves half the growth.
+  const shift = toPlan({ ...f, x: 0, y: 0 }, (lx * (w - f.w)) / 2, (ly * (d - f.d)) / 2);
+  return withSet(
+    project,
+    revalidate(
+      mapItems(set, [id], (i) => ({ ...withSize(i, def, { w, d }), x: r3(f.x + shift.x), y: r3(f.y + shift.y) })),
+      [id],
+      global,
+    ),
+  );
+};
 
 /** Turn items about their shared centre. */
 export const rotateItems = (project: Project, ids: readonly string[], degrees: number, global?: readonly AssetDefinition[]): Project => {
   const set = levelsOf(project);
   const free = set.items.filter((i) => ids.includes(i.id) && !i.host && !i.locked);
   if (!free.length) return project;
+  // One item turns about its own pivot.
+  if (free.length === 1 && free[0]!.pivot) return withSet(project, revalidate(mapItems(set, [free[0]!.id], (i) => {
+    const rotation = (((i.rotation + degrees) % 360) + 360) % 360;
+    return { ...i, rotation, ...centreKeepingPivot(set, i, rotation, sizeOf(set, i, global), global) };
+  }), ids, global));
   const b = boundsOf(free.map((i) => ({ x: i.x, y: i.y })));
   const cx = (b.minX + b.maxX) / 2;
   const cy = (b.minY + b.maxY) / 2;

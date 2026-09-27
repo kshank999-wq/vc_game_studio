@@ -1,9 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { meshesFor, type Point } from '../../model/level/geometry';
+import { frameOf, meshesFor, toLocal, type Point } from '../../model/level/geometry';
 import { buildPiece, disposePiece } from './three-pieces';
-import { levelsOf, moveItems, withGroups } from '../../model/level/level';
+import { extrude, levelsOf, moveItems, placeAt, setPivot, snap, withGroups } from '../../model/level/level';
+import { navigate } from '../../model/level/nav';
+import { alongLine, buildCollision, buildHandles, buildWalkable, clearGroup, type Axes, type Handle, type Tool3d } from './gizmo';
 import type { AssetDefinition } from '../../model/level/types';
 import type { Project } from '../../model/types';
 
@@ -38,12 +40,28 @@ interface Props {
   onHover: (at: Point | null) => void;
   /** Items to bring into view when the graybox opens. */
   focus?: readonly string[];
+  /** What the selected item's handles do: move it along an axis, push or pull its faces, or place its pivot. */
+  tool: Tool3d;
+  axes: Axes;
+  /** Show what the player collides with, and where they can walk from the start. */
+  collision: boolean;
+  walkable: boolean;
 }
 
 export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
   const { project, levelId, floorId, global } = props;
   const host = useRef<HTMLDivElement>(null);
-  const three = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; content: THREE.Group; grid: THREE.GridHelper; render: () => void } | null>(null);
+  const three = useRef<{
+    renderer: THREE.WebGLRenderer;
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
+    content: THREE.Group;
+    handles: THREE.Group;
+    overlay: THREE.Group;
+    grid: THREE.GridHelper;
+    render: () => void;
+  } | null>(null);
   const [failed, setFailed] = useState(false);
   const [preview, setPreview] = useState<Project | null>(null);
   const previewRef = useRef<Project | null>(null);
@@ -99,6 +117,10 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     scene.add(grid);
     const content = new THREE.Group();
     scene.add(content);
+    const handles = new THREE.Group();
+    scene.add(handles);
+    const overlay = new THREE.Group();
+    scene.add(overlay);
     const render = () => renderer.render(scene, camera);
     controls.addEventListener('change', render);
     const resize = () => {
@@ -110,7 +132,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     };
     const observer = new ResizeObserver(resize);
     observer.observe(el);
-    three.current = { renderer, scene, camera, controls, content, grid, render };
+    three.current = { renderer, scene, camera, controls, content, handles, overlay, grid, render };
     resize();
     return () => {
       observer.disconnect();
@@ -156,6 +178,37 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     t.render();
   }, [meshes, props.selection, floorElevation]);
 
+  // The selected item's handles.
+  const single = props.selection.length === 1 ? set.items.find((i) => i.id === props.selection[0]) : undefined;
+  const editable = single && !single.host && !single.locked && single.levelId === levelId && (props.allFloors || single.floorId === floorId) ? single : undefined;
+  const itemElevation = level?.floors.find((f) => f.id === editable?.floorId)?.elevation ?? floorElevation;
+  useEffect(() => {
+    const t = three.current;
+    if (!t) return;
+    clearGroup(t.handles);
+    if (editable) buildHandles(t.handles, set, editable, props.tool, props.axes, itemElevation, global);
+    t.render();
+  }, [set, editable, props.tool, props.axes, itemElevation, global]);
+
+  // Collision and where the player can walk.
+  const colliders = useMemo(
+    () => (props.collision ? meshesFor(set, levelId, { ceilings: true, global, ...(props.allFloors ? {} : { floorId }) }) : []),
+    [props.collision, set, levelId, global, props.allFloors, floorId],
+  );
+  const nav = useMemo(() => (props.walkable ? navigate(set, levelId, global) : null), [props.walkable, set, levelId, global]);
+  useEffect(() => {
+    const t = three.current;
+    if (!t) return;
+    clearGroup(t.overlay);
+    if (props.collision) buildCollision(t.overlay, colliders);
+    if (nav) {
+      const top = level?.floors.find((f) => f.id === floorId);
+      const cells = props.allFloors || !top ? nav.cells : nav.cells.filter((c) => c.z >= top.elevation - 0.6 && c.z < top.elevation + top.height);
+      buildWalkable(t.overlay, cells, nav.cell);
+    }
+    t.render();
+  }, [colliders, nav, props.collision, props.allFloors, floorId, level]);
+
   const frame = (ids?: readonly string[]) => {
     const t = three.current;
     if (!t) return;
@@ -193,6 +246,23 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -height), hit) ? hit : null;
   };
 
+  const rayAt = (clientX: number, clientY: number): THREE.Raycaster | null => {
+    const t = three.current;
+    if (!t) return null;
+    const r = t.renderer.domElement.getBoundingClientRect();
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1), t.camera);
+    return ray;
+  };
+
+  const handleAt = (clientX: number, clientY: number): Handle | null => {
+    const t = three.current;
+    const ray = rayAt(clientX, clientY);
+    if (!t || !ray) return null;
+    const hit = ray.intersectObjects(t.handles.children, false).find((h) => h.object.userData.handle);
+    return (hit?.object.userData.handle as Handle | undefined) ?? null;
+  };
+
   const pick = (clientX: number, clientY: number): string | null => {
     const t = three.current;
     if (!t) return null;
@@ -228,12 +298,24 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     if (!t) return;
     const el = t.renderer.domElement;
     let down: { x: number; y: number; drag: { ids: string[]; start: THREE.Vector3 } | null; moved: boolean } | null = null;
+    // A handle being dragged: which, on what item, and where along its line it was picked up.
+    let held: { handle: Handle; id: string; from: number; x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {
       const p = latest.current;
       if (e.button !== 0) return;
       if (p.placing) {
         const g = ground(e.clientX, e.clientY);
         if (g) p.onPlace({ x: g.x, y: g.z });
+        e.stopImmediatePropagation();
+        return;
+      }
+      const handle = handleAt(e.clientX, e.clientY);
+      const selected = p.selection[0];
+      if (handle && selected) {
+        const item = levelsOf(p.project).items.find((i) => i.id === selected)!;
+        const ray = rayAt(e.clientX, e.clientY)!;
+        held = { handle, id: selected, from: handle.kind === 'pivot' ? 0 : alongLine(ray.ray, handle.origin, handle.dir), x: item.x, y: item.y };
+        t.controls.enabled = false;
         e.stopImmediatePropagation();
         return;
       }
@@ -251,6 +333,35 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     };
     const onMove = (e: PointerEvent) => {
       const p = latest.current;
+      if (held) {
+        const ray = rayAt(e.clientX, e.clientY)!;
+        const h = held.handle;
+        let next: Project | null = null;
+        if (h.kind === 'pivot') {
+          const hit = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -h.height), new THREE.Vector3());
+          const set0 = levelsOf(p.project);
+          const item = set0.items.find((i) => i.id === held!.id)!;
+          if (hit) {
+            const f = frameOf(set0, item, p.global);
+            const l = toLocal(f, { x: hit.x, y: hit.z });
+            // Near a corner, an edge's middle or the centre, it settles there.
+            const settle = (v: number) => ([-0.5, 0, 0.5].find((q) => Math.abs(v - q) < 0.1) ?? v);
+            next = setPivot(p.project, item.id, { x: settle(l.x / (f.w || 1)), y: settle(l.y / (f.d || 1)) });
+          }
+        } else {
+          const delta = alongLine(ray.ray, h.origin, h.dir) - held.from;
+          if (h.kind === 'face') next = extrude(p.project, held.id, h.face, delta, p.global);
+          else {
+            const d = snap(levelsOf(p.project), delta);
+            next = placeAt(p.project, held.id, { x: Math.round((held.x + h.dir.x * d) * 1000) / 1000, y: Math.round((held.y + h.dir.z * d) * 1000) / 1000 });
+          }
+        }
+        if (next) {
+          previewRef.current = next;
+          setPreview(next);
+        }
+        return;
+      }
       const g = ground(e.clientX, e.clientY);
       p.onHover(g ? { x: g.x, y: g.z } : null);
       if (!down) return;
@@ -263,6 +374,16 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     };
     const onUp = (e: PointerEvent) => {
       const p = latest.current;
+      if (held) {
+        held = null;
+        t.controls.enabled = true;
+        if (previewRef.current) {
+          p.onCommit(previewRef.current);
+          previewRef.current = null;
+          setPreview(null);
+        }
+        return;
+      }
       if (!down) return;
       const was = down;
       down = null;

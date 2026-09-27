@@ -56,7 +56,7 @@ const EDGE_DIM = new THREE.LineBasicMaterial({ color: '#0b0a07', transparent: tr
 const EDGE_ON = new THREE.LineBasicMaterial({ color: '#e8c872' });
 
 /** A freeform floor or ceiling: its outline raised to its thickness, centred on its height. Made to size, not scaled. */
-const slabGeometry = (m: Mesh): THREE.BufferGeometry => {
+export const slabGeometry = (m: Mesh): THREE.BufferGeometry => {
   const shape = new THREE.Shape((m.outline ?? []).map((p) => new THREE.Vector2(p.x, p.z)));
   // The outline is drawn in x–y and pushed along z; turning it about x lays it flat with its depth downward.
   return new THREE.ExtrudeGeometry(shape, { depth: m.sy, bevelEnabled: false }).rotateX(Math.PI / 2).translate(0, m.sy / 2, 0);

@@ -51,7 +51,8 @@ export const sampleLevel = (
     set(id, { swing: 'open archway', interactive: false });
     return id;
   };
-  archway('Crawlway', 0, -6.05, 1.2, 1.6);
+  // Low, but a person fits: the player is 1.75 m tall.
+  archway('Crawlway', 0, -6.05, 1.2, 1.8);
   archway('Squeeze exit', 6, -7.5, 1.2, 1.8);
   archway('Chamber stair', 10, -12, 2);
   const bronze = put('arch.door', 'Bronze Door', 10, -20, { w: 2.4, h: 3.2 });

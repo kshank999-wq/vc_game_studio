@@ -1,7 +1,9 @@
 import type { Project } from '../types';
-import { assetOf, corners, frameOf, openingOf, outlineOf, overlaps, paramOf, selfIntersects, wallsOf } from './geometry';
+import { assetOf, corners, frameOf, openingOf, outlineOf, overlaps, paramOf, selfIntersects, sizeOf, wallsOf } from './geometry';
 import { referencesOf } from './links';
 import { migrationFor } from './migrate';
+import { navigate } from './nav';
+import { BODY } from './controller';
 import { engineSafe, exportNameOf, levelExportName } from './naming';
 import type { AssetDefinition, LevelItem } from './types';
 
@@ -124,6 +126,22 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
     }
     if (def.kind === 'volume' && def.role === 'trigger' && !(item.rules ?? []).length) {
       add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} has no rules, so it does nothing.`, export: 'An empty trigger is exported. Add a rule under Logic.' });
+    }
+  }
+
+  // Where the player can't get to (spec §5.3: inaccessible openings and placements).
+  for (const item of set.items) {
+    const def = assetOf(set, item, global);
+    if (def.role === 'door' && item.host && !item.hidden && sizeOf(set, item, global).h < BODY.height) {
+      add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} is lower than the player (${BODY.height} m).`, export: 'Play Mode’s player can’t get through it. Make it taller, or give the game a way to crouch.' });
+    }
+  }
+  for (const level of set.levels) {
+    const nav = navigate(set, level.id, global);
+    if (!nav.start) continue;
+    for (const id of nav.unreachable) {
+      const item = set.items.find((i) => i.id === id)!;
+      add({ id, levelId: level.id, severity: 'warning', message: `${item.name} can’t be reached from the player start.`, export: 'Doors and gates count as open. Look for a step too high to climb, a gap, or a wall in the way: the 3D graybox’s Walkable view shows where the player can get to.' });
     }
   }
 

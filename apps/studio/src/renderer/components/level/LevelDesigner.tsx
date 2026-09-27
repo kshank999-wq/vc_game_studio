@@ -34,6 +34,7 @@ import type { GrayboxApi } from './Graybox';
 import { AssetIcon, LevelLibrary } from './LevelLibrary';
 import { LevelInspector } from './LevelInspector';
 import { LevelMap, type MapApi, type MapTool } from './LevelMap';
+import type { Axes, Tool3d } from './gizmo';
 import { formatLength } from './units';
 
 // three.js is big: it loads the first time the graybox is opened.
@@ -100,7 +101,15 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [leftTab, setLeftTab] = useState<'library' | 'outliner'>('library');
   const [hidden, setHidden] = useState<ReadonlySet<AssetCategory>>(() => new Set());
   const [overlays, setOverlays] = useState({ story: true, dims: true, ghost: true });
-  const [view3d, setView3d] = useState({ ceilings: false, allFloors: false, logic: true });
+  const [view3d, setView3d] = useState<{ ceilings: boolean; allFloors: boolean; logic: boolean; collision: boolean; walkable: boolean; tool: Tool3d; axes: Axes }>({
+    ceilings: false,
+    allFloors: false,
+    logic: true,
+    collision: false,
+    walkable: false,
+    tool: 'size',
+    axes: 'world',
+  });
   const [view, setView] = useState<View>({ zoom: 1, panX: 400, panY: 300 });
   const [hover, setHover] = useState<Point | null>(null);
   const [showIssues, setShowIssues] = useState(false);
@@ -463,9 +472,24 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           </>
         ) : (
           <>
+            <div role="group" aria-label="3D handles" className="view-toggle">
+              {([['move', 'Move', 'Arrows move the selection along an axis'], ['size', 'Size', 'Push or pull a face: a side, the top, or a wall of an outline'], ['pivot', 'Pivot', 'Drag the point it turns about and grows from']] as const).map(([id, label, title]) => (
+                <button key={id} className={view3d.tool === id ? 'on' : ''} aria-pressed={view3d.tool === id} title={title} onClick={() => setView3d((o) => ({ ...o, tool: id }))}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {view3d.tool === 'move' && (
+              <select className="inp small lvl-pick" aria-label="Axes" value={view3d.axes} onChange={(e) => setView3d((o) => ({ ...o, axes: e.target.value as Axes }))}>
+                <option value="world">World axes</option>
+                <option value="local">Its own axes</option>
+              </select>
+            )}
             <label className="lvl-toggle"><input type="checkbox" checked={view3d.ceilings} onChange={(e) => setView3d((o) => ({ ...o, ceilings: e.target.checked }))} /> Ceilings</label>
             <label className="lvl-toggle"><input type="checkbox" checked={view3d.allFloors} onChange={(e) => setView3d((o) => ({ ...o, allFloors: e.target.checked }))} /> All floors</label>
             <label className="lvl-toggle"><input type="checkbox" checked={view3d.logic} onChange={(e) => setView3d((o) => ({ ...o, logic: e.target.checked }))} /> Logic volumes</label>
+            <label className="lvl-toggle" title="What the player bumps into and stands on"><input type="checkbox" checked={view3d.collision} onChange={(e) => setView3d((o) => ({ ...o, collision: e.target.checked }))} /> Collision</label>
+            <label className="lvl-toggle" title="Where the player can walk to from the player start (green), and where they can’t (amber). Doors and gates count as open."><input type="checkbox" checked={view3d.walkable} onChange={(e) => setView3d((o) => ({ ...o, walkable: e.target.checked }))} /> Walkable</label>
           </>
         )}
         <label className="lvl-toggle" title="Snap to the grid"><input type="checkbox" checked={set.settings.snap} onChange={(e) => onCommit({ ...project, levels: { ...set, settings: { ...set.settings, snap: e.target.checked } } })} /> Snap {formatLength(set.settings.grid, set.settings.units)}</label>
@@ -624,6 +648,10 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               allFloors={view3d.allFloors}
               ceilings={view3d.ceilings}
               logic={view3d.logic}
+              tool={view3d.tool}
+              axes={view3d.axes}
+              collision={view3d.collision}
+              walkable={view3d.walkable}
               global={global}
               selection={selection}
               onSelect={setSelection}

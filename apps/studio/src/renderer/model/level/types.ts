@@ -243,6 +243,12 @@ export interface LevelItem {
    * definition's outline).
    */
   outline?: OutlinePoint[];
+  /**
+   * The point it turns about and grows from (spec §5.1), in its own frame as
+   * a fraction of its width and depth; its centre when absent. For editing
+   * only: engines still get the item's centre.
+   */
+  pivot?: OutlinePoint;
   groupId?: string;
   hidden?: boolean;
   locked?: boolean;

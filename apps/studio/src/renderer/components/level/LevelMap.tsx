@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { areaOf, assetOf, boundsOf, CATEGORY_COLOR, contains, corners, frameOf, INVALID_COLOR, meshesFor, num, outlineOf, paramOf, selfIntersects, toLocal, toPlan, triangulate, type Frame, type Point } from '../../model/level/geometry';
-import { insertCorner, levelsOf, moveCorner, moveItems, placeAsset, placeAt, removeCorner, resizeItem, setOutline, snap, withGroups } from '../../model/level/level';
+import { insertCorner, levelsOf, moveCorner, pivotPoint, moveItems, placeAsset, placeAt, removeCorner, resizeItem, setOutline, snap, withGroups } from '../../model/level/level';
 import type { AssetCategory, AssetDefinition, LevelItem, LevelSet } from '../../model/level/types';
 import { spineSequence } from '../../model/layout';
 import type { Project } from '../../model/types';
@@ -628,6 +628,16 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
             .map((i) => (
               <polygon key={`sel-${i.id}`} points={pointsAttr(corners(frameOf(set, i, global)))} fill="none" stroke="var(--gold-hi)" strokeWidth={px(1.5)} strokeDasharray={`${px(5)} ${px(3)}`} pointerEvents="none" />
             ))}
+          {single && single.pivot && single.levelId === levelId && single.floorId === floorId && (() => {
+            const p = pivotPoint(set, single, global);
+            return (
+              <g className="lvl-pivot" pointerEvents="none">
+                <circle cx={p.x} cy={p.y} r={px(5)} fill="none" stroke="var(--gold-hi)" strokeWidth={px(1.5)} />
+                <line x1={p.x - px(8)} y1={p.y} x2={p.x + px(8)} y2={p.y} stroke="var(--gold-hi)" strokeWidth={px(1)} />
+                <line x1={p.x} y1={p.y - px(8)} x2={p.x} y2={p.y + px(8)} stroke="var(--gold-hi)" strokeWidth={px(1)} />
+              </g>
+            );
+          })()}
           {single && props.overlays.dims && !single.host && single.levelId === levelId && single.floorId === floorId && dims(single)}
           {single && single.levelId === levelId && single.floorId === floorId && resizable(single) && drag?.kind !== 'move' && (
             <g className="lvl-handles">

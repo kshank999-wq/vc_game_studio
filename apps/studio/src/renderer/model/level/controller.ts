@@ -21,6 +21,8 @@ export interface Collider {
   top: number;
   /** A freeform slab's corners on the plan, instead of the box's footprint. */
   poly?: { x: number; y: number }[];
+  /** What it is part of: a floor, a wall, a ceiling, a solid, a door. */
+  part?: string;
 }
 
 export interface Body {
@@ -54,7 +56,7 @@ export const collidersFrom = (meshes: readonly Mesh[]): Collider[] =>
   meshes
     .filter((m) => m.collide)
     .map((m) => {
-      const c: Collider = { itemId: m.itemId, x: m.x, y: m.z, hw: m.sx / 2, hd: m.sz / 2, rot: -m.rotY, bottom: m.y - m.sy / 2, top: m.y + m.sy / 2 };
+      const c: Collider = { itemId: m.itemId, part: m.part, x: m.x, y: m.z, hw: m.sx / 2, hd: m.sz / 2, rot: -m.rotY, bottom: m.y - m.sy / 2, top: m.y + m.sy / 2 };
       if (m.shape === 'slab' && m.outline) c.poly = m.outline.map((p) => world(c, p.x, p.z));
       return c;
     });

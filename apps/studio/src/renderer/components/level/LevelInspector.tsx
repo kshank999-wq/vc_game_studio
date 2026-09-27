@@ -20,6 +20,7 @@ import {
   rotateItems,
   setOutline,
   setParam,
+  setPivot,
   ungroupItems,
   unlinkItem,
   updateFloor,
@@ -339,6 +340,18 @@ export const LevelInspector = (props: Props) => {
                 <NumberField label="Rotation" unit="deg" value={item.rotation} step={15} onCommit={(v) => onCommit(placeAt(project, item.id, { rotation: v }))} />
               </div>
             )}
+            {!host && (
+              <SelectField
+                label="Pivot"
+                hint="The point it turns about and grows from. Drag it in 3D with Pivot."
+                value={pivotName(item.pivot)}
+                options={[...PIVOTS.map((p) => p.label), ...(pivotName(item.pivot) === 'Custom' ? ['Custom'] : [])]}
+                onCommit={(v) => {
+                  const p = PIVOTS.find((x) => x.label === v);
+                  if (p) onCommit(setPivot(project, item.id, p.at));
+                }}
+              />
+            )}
             <SelectField label="Floor" value={item.floorId} options={level.floors.map((fl) => ({ value: fl.id, label: fl.name }))} onCommit={(v) => onCommit(updateItem(project, item.id, { floorId: v, host: undefined }, global))} disabled={!!item.host} />
             <div className="lvl-btnrow">
               <BoolField label="Locked" value={!!item.locked} onCommit={(v) => onCommit(updateItem(project, item.id, { locked: v || undefined }, global))} />
@@ -649,3 +662,18 @@ const TimelineUses = ({ project, itemId, onOpen }: { project: Project; itemId: s
     </div>
   );
 };
+
+const PIVOTS: { label: string; at: { x: number; y: number } }[] = [
+  { label: 'Centre', at: { x: 0, y: 0 } },
+  { label: 'North-west corner', at: { x: -0.5, y: -0.5 } },
+  { label: 'North edge', at: { x: 0, y: -0.5 } },
+  { label: 'North-east corner', at: { x: 0.5, y: -0.5 } },
+  { label: 'East edge', at: { x: 0.5, y: 0 } },
+  { label: 'South-east corner', at: { x: 0.5, y: 0.5 } },
+  { label: 'South edge', at: { x: 0, y: 0.5 } },
+  { label: 'South-west corner', at: { x: -0.5, y: 0.5 } },
+  { label: 'West edge', at: { x: -0.5, y: 0 } },
+];
+
+const pivotName = (pivot: { x: number; y: number } | undefined): string =>
+  PIVOTS.find((p) => p.at.x === (pivot?.x ?? 0) && p.at.y === (pivot?.y ?? 0))?.label ?? 'Custom';

@@ -186,6 +186,29 @@ describe('the Level Designer', () => {
     expect(screen.getByLabelText('On scene timelines').textContent).toContain('SC-03');
   });
 
+  it('sets a pivot from the inspector, shows it on the map, and turns about it', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    const { container } = render(<App />);
+    await openLevels();
+    fireEvent.click(screen.getByRole('tab', { name: /Outliner/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Silt Camp$/ }));
+    expect(container.querySelector('.lvl-pivot')).toBeNull();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Pivot' }), { target: { value: 'North-west corner' } });
+    expect(container.querySelector('.lvl-pivot')).toBeTruthy();
+    const x = () => (screen.getByRole('textbox', { name: 'X' }) as HTMLInputElement).value;
+    expect(x()).toBe('10');
+    // A quarter turn about the north-west corner (6, -12) puts the centre at (3, -8).
+    act(() => {
+      fireEvent.keyDown(window, { key: 'r' });
+    });
+    expect(x()).toBe('3');
+    expect((screen.getByRole('textbox', { name: 'Y' }) as HTMLInputElement).value).toBe('-8');
+    // The 3D view's tools are there, even without WebGL.
+    fireEvent.click(screen.getByRole('button', { name: '3D graybox' }));
+    expect(screen.getByRole('group', { name: '3D handles' }).textContent).toBe('MoveSizePivot');
+    expect(screen.getByLabelText('Walkable')).toBeTruthy();
+  });
+
   it('says so when the graybox cannot use WebGL', async () => {
     const p = sunkenVault();
     localStorage.setItem('vcgs.project.v1', JSON.stringify(p));

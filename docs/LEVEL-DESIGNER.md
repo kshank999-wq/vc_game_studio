@@ -56,6 +56,17 @@ items linked to what you had selected.
 - Left-drag orbits, right-drag pans and the wheel zooms. Click selects; drag a selected item to move it across its floor.
 - Library drops land on the floor under the pointer.
 - Toggles show ceilings, every floor, and logic volumes (triggers, zones, spawn radii).
+- **Handles** on the selected item, from the tools beside 2D and 3D:
+  - **Size:** a gold handle on each face. Drag a side out or in and the opposite side stays put; drag the top to change the height. On an outlined space or volume each wall has a handle, pushing or pulling that one wall (extrude).
+  - **Move:** arrows along the world's axes, or the item's own (**Its own axes**), for a move in one direction only. Dragging the item itself still moves it freely.
+  - **Pivot:** drag the point it turns about and grows from. It settles on a corner, an edge's middle or the centre when near one. The inspector's **Pivot** picks one of those too, and the map marks it. Turning (R, the rotate handle, the inspector's rotation) and resizing keep the pivot where it is. It's for editing only: engines still get the item's centre.
+  - Sizes and moves snap to the grid, and each drag is one undo step.
+- **Collision** outlines in red everything the player bumps into and stands on, seen through walls.
+- **Walkable** shows where the player can stand: green where they can walk to from the player start, amber where they can't.
+  - Doors and state gates count as open.
+  - A step is climbable up to 42 cm, and a drop down to 4 m.
+  - Ladders, elevators and traversal links join the floors beside them.
+  - Doorways must be taller than the player (1.75 m).
 - three.js loads the first time 3D is opened. Without WebGL the view says so, and the map and inspector still do everything.
 
 **One model (spec §5.2).** The map, graybox, inspector and outliner all read the same items. Changing a room from 20 × 30 to 30 × 40 in the inspector changes its footprint and its walls at once. Every edit, whether a drag, a typed value or a regeneration, is one undo step.
@@ -233,6 +244,7 @@ silently. If you keep a file, it is pointed out again next time.
 - **The flooded seam:** gone once the lever is up.
 - **The cinematic trigger:** plays *Door in the dark* on the way in.
 - **People and lighting:** Mara, a player start, lights, a camera marker and an ambient zone.
+- **The Crawlway** into the Squeeze is 1.8 m high. It was 1.6 m, lower than the player, so Play Mode's player couldn't get past the Cave Mouth; the walkable preview found it.
 
 Its preflight is clean.
 
@@ -244,6 +256,7 @@ Its preflight is clean.
 | `model/level/library.ts` | The starter catalog. Each asset has a kind, a role, a naming class, default size, proxy shape, parameters grouped by inspector section, and hints for the Godot, Unity and Unreal mappings. |
 | `model/level/level.ts` | Every edit, as a pure function returning a new project. |
 | `model/level/geometry.ts` | Frames, walls, openings, nearest wall, and `meshesFor`, which turns a level into engine-neutral graybox pieces. The map, the graybox and (next) the exporters all draw from it. |
+| `model/level/nav.ts`, `migrate.ts`, `places.ts` | The walkable preview and what can't be reached; library version review; where timeline events happen in the level. |
 | `model/level/play.ts`, `controller.ts` | Play Mode's rules (doors, pickups, volumes, spawns, hazards, rules and actions, presets, notes) and the character controller. Pure functions, tested without a screen. |
 | `model/level/naming.ts`, `validate.ts`, `links.ts` | Export names, preflight, and story links (including clean-up when story elements are deleted). |
 | `model/handoff/levels.ts` | The levels in the handoff model: every item with its GUID, export name, position, turn, size, effective parameters, story links, rules, final art and graybox pieces, and a revision for each. `levelChanges` compares them with the last export. |
@@ -261,13 +274,13 @@ clockwise seen from above.
 | §2 Workspace | Done. |
 | §3 2D map | Done: spaces as rectangles or freeform outlines, grid, snap, align, distribute, rotate, duplicate, mirror, groups, layers, hide and lock, floors with a ghosted floor below, units, dimension labels, symbols. Spaces and volumes can both be outlined. |
 | §4 Asset library | Done: every category, definitions and instances, overrides with reset, project assets, assemblies, my library. Updating an asset from an item, and reviewing items from older versions, keeping old values or taking new. |
-| §5 3D graybox | Box, plane, cylinder, sphere, wedge, stairs and ramps; walls with openings; move, rotate and scale, and hosted assets that follow their wall. Moving in 3D is done. **Not yet:** resize handles in 3D, pivot editing, extrude, and collision or navigation preview beyond showing the volumes. |
+| §5 3D graybox | Done: box, plane, cylinder, sphere, wedge, stairs and ramps; walls with openings; move (free, or along world or local axes), resize and extrude faces and outline walls, pivots, hosted assets that follow their wall, collision and walkable previews. |
 | §6 Inspector | Done, including search and "More" for advanced fields. |
 | §7 Narrative | Done: links both ways, conditions from choices and state, and scene timeline events placed in the level. |
 | §8 Logic, spawns | Done: rules, conditions, story effects and level actions run in Play Mode; spawners spawn after their delay, conditionally. Spawned actors stand where they spawn (no AI or pathing). |
 | §9 Play Mode | Done: first person, third person and top-down; keyboard, mouse and controller through rebindable actions; collision, gravity, jumping, stairs; pause and inspect with editable state; test presets; start from the level start, the selection or the 3D camera; debug overlay; event log; notes linked to items. Scenes linked to characters show as cards rather than playing their script in the level. |
 | §10 Identity and names | Done. |
 | §11 Engine handoff | Done: Godot, Unity, Unreal and JSON (see *Sending a level to an engine*). Checked in Godot 4.3, and against Unity and Unreal stand-ins (C#, C++ with g++ and clang, and the Python builder). |
-| §12 Preflight | Done, including engine-specific checks (roles an engine gets as data only, wedges in Unreal, locked art with no final asset) and files changed in the engine since the last export. |
+| §12 Preflight | Done, including what can't be reached from the player start, doorways lower than the player, items from older library versions, engine-specific checks (roles an engine gets as data only, wedges in Unreal, locked art with no final asset) and files changed in the engine since the last export. |
 | §14 Undo, persistence | Done: every edit is one undo step, GUIDs survive save, load, duplicate (which gives new ones), rename and re-export, and the data is plain JSON in the project file. |
 | §19 Future | Not started, as the spec says. |
