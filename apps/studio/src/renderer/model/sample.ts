@@ -1,8 +1,9 @@
-import { addInteraction, interactionsOf, setField, setNotes, setSceneUse, setStates, toggleTag, updateInteraction } from './details';
+import { addInteraction, interactionsOf, setField, setNotes, setSceneUse, setStates, setValue, toggleTag, updateInteraction } from './details';
 import { spineLane } from './layout';
 import { addLane, connect, createProject, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
 import { addElement, addLine, setSceneData, updateLine, useInScene } from './scene';
 import { addBranch, addEvent, moveEvent, sceneTimeline, updateBranch, updateEvent } from './timeline';
+import type { Condition } from './rules';
 import type { ObjectType, Project } from './types';
 
 /**
@@ -111,11 +112,17 @@ export const sunkenVault = (): Project => {
   const cinematic = add('cinematic', 'Door in the dark');
   p = setStates(p, lever, ['down', 'up']);
   p = addInteraction(p, lever);
-  p = updateInteraction(p, lever, interactionsOf(p.objects[lever])[0]!.id, { verb: 'Pull', setsFlag: solved, flagValue: 'yes', fires: drains });
+  p = updateInteraction(p, lever, interactionsOf(p.objects[lever])[0]!.id, { verb: 'Pull' });
   p = setField(p, lever, 'assetNotes', 'Half-buried by the door. Needs pull anim + grind SFX.');
   p = toggleTag(toggleTag(p, lever, 'Animation'), lever, 'Audio');
   p = setField(p, drains, 'when', 'lever = up');
   p = setField(p, drains, 'does', 'Water drains from the seam');
+  // The conditions, as rules: the lever up drains the seam, which solves the door.
+  const is = (kind: 'flag' | 'object', ref: string, value: string): Condition => ({ kind, ref, op: 'is', value });
+  p = setValue(p, drains, 'rule', { match: 'all', items: [is('object', lever, 'up')] });
+  p = setValue(p, drains, 'effects', [{ kind: 'setFlag', ref: solved, value: 'yes' }]);
+  p = setValue(p, puzzle, 'rule', { match: 'all', items: [is('flag', solved, 'yes')] });
+  p = setValue(p, turn, 'rule', { match: 'all', items: [is('flag', solved, 'yes'), { kind: 'item', ref: key, op: 'has' }] });
   p = setField(p, key, 'persists', 'Between scenes');
   p = setField(p, puzzle, 'solution', 'Drain the seam, then turn the key');
   p = setField(p, puzzle, 'failState', 'The chamber floods');
@@ -141,9 +148,9 @@ export const sunkenVault = (): Project => {
   const echo = addEvent(p, vaultDoor, 'action', { index: 2, label: 'Echo cue' })!;
   p = echo.project;
   const free = addEvent(p, vaultDoor, 'freePlay', { index: 4, label: 'Search the chamber' })!;
-  p = updateEvent(free.project, vaultDoor, free.id, { endsWhen: 'lever = up' });
+  p = updateEvent(free.project, vaultDoor, free.id, { endsWhen: 'the seam drains', ends: { match: 'all', items: [is('flag', solved, 'yes')] } });
   const choice = addEvent(p, vaultDoor, 'choice', { refId: turn, index: 5 })!;
-  p = updateEvent(choice.project, vaultDoor, choice.id, { mainLabel: 'Turn the key' });
+  p = updateEvent(choice.project, vaultDoor, choice.id, { mainLabel: 'Turn the key', effects: [{ kind: 'take', ref: key }, { kind: 'arc', ref: mara, amount: 1 }] });
   const force = addBranch(p, vaultDoor, choice.id, 'Force it')!;
   p = updateBranch(force.project, force.id, { rejoinEventId: free.id });
   const lastLine = sceneTimeline(p, vaultDoor)[0]!.events.filter((e) => e.kind === 'dialogue').at(-1)!;

@@ -1,3 +1,5 @@
+import type { Effect, Rule } from './rules';
+
 /**
  * The project model (docs/ui/HANDOFF.md, "Data model"). Every view reads
  * these normalized records; none of them keeps its own copy.
@@ -75,12 +77,14 @@ export interface Connection {
   kind: ConnectionKind;
   /** The option text shown on the connector's pill (a choice's options). */
   label?: string;
+  /** On a branch: when the option is offered, and what choosing it does. */
+  effects?: Effect[];
   /**
    * On a 'contains' connection: what this element is in this one scene
    * (HANDOFF: SceneUse), kept here so the canonical object is never copied.
    */
   use?: Record<string, string>;
-  conditions?: unknown;
+  conditions?: Rule;
   routing?: unknown;
 }
 
@@ -109,7 +113,8 @@ export interface DialogueLine {
   /** A parenthetical: (listening), (wading forward). */
   direction: string;
   order: number;
-  conditions?: unknown;
+  /** Spoken only when this holds. */
+  conditions?: Rule;
   choiceId?: string;
   vo: 'none' | 'todo' | 'recorded';
   notes: string;
@@ -139,6 +144,12 @@ export interface TimelineEvent {
   condition?: string;
   /** A choice's option that carries on along the main track. */
   mainLabel?: string;
+  /** Plays only when this holds (the plain-words `condition` is its note). */
+  when?: Rule;
+  /** Free play ends as soon as this holds. */
+  ends?: Rule;
+  /** What happens when the event plays; for a choice, what its main option does. */
+  effects?: Effect[];
 }
 
 /** A choice's other option: its own track, which may reconnect to the main one. */
@@ -149,6 +160,9 @@ export interface TimelineBranch {
   label: string;
   /** The main-track event it reconnects to, or null when it leaves the scene. */
   rejoinEventId: string | null;
+  /** Offered only when this holds; what choosing it does. */
+  when?: Rule;
+  effects?: Effect[];
 }
 
 export type EngineId = 'godot' | 'unity' | 'unreal' | 'custom';

@@ -249,7 +249,7 @@ export const addLine = (
   return { project: next, id: line.id };
 };
 
-export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'kind' | 'vo' | 'notes'>>;
+export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'kind' | 'vo' | 'notes' | 'conditions'>>;
 
 export const updateLine = (project: Project, id: string, patch: LinePatch): Project => {
   const line = project.lines.find((l) => l.id === id);

@@ -2,6 +2,7 @@ import { spineSequence } from './layout';
 import { newId } from './project';
 import { addElement, addLine, inScene, removeLine, sceneElements, sceneLines } from './scene';
 import type { DialogueLine, EventKind, ObjectType, Project, TimelineBranch, TimelineEvent } from './types';
+import { describeEffects, describeRule, isEmpty } from './rules';
 
 /**
  * A scene's timeline (spec §13): how it plays from entry to exit. Events sit
@@ -191,7 +192,7 @@ export const addEvent = (
   return { project: renumber(next, sceneId, track, sequence), id: event.id };
 };
 
-export type EventPatch = Partial<Pick<TimelineEvent, 'label' | 'detail' | 'seconds' | 'shots' | 'endsWhen' | 'condition' | 'mainLabel'>>;
+export type EventPatch = Partial<Pick<TimelineEvent, 'label' | 'detail' | 'seconds' | 'shots' | 'endsWhen' | 'condition' | 'mainLabel' | 'when' | 'ends' | 'effects'>>;
 
 export const updateEvent = (project: Project, sceneId: string, id: string, patch: EventPatch): Project => {
   const event = findEvent(project, sceneId, id);
@@ -232,7 +233,7 @@ export const addBranch = (project: Project, sceneId: string, choiceEventId: stri
   return { project: materialize({ ...project, branches: [...project.branches, branch] }, choice), id: branch.id };
 };
 
-export const updateBranch = (project: Project, id: string, patch: Partial<Pick<TimelineBranch, 'label' | 'rejoinEventId'>>): Project => {
+export const updateBranch = (project: Project, id: string, patch: Partial<Pick<TimelineBranch, 'label' | 'rejoinEventId' | 'when' | 'effects'>>): Project => {
   const branch = project.branches.find((b) => b.id === id);
   if (!branch) return project;
   const next = { ...branch, ...patch };
@@ -281,8 +282,10 @@ export const eventDetail = (project: Project, event: TimelineEvent): string => {
     case 'cinematic':
       return `${event.seconds ?? 0}s · ${event.shots ?? 1} shot${event.shots === 1 ? '' : 's'}`;
     case 'freePlay':
-      return event.endsWhen ? `Ends when: ${event.endsWhen}` : 'Ends when…';
+      return !isEmpty(event.ends) ? `Ends when: ${describeRule(project, event.ends)}` : event.endsWhen ? `Ends when: ${event.endsWhen}` : 'Ends when…';
     default:
+      if (!isEmpty(event.when)) return `If ${describeRule(project, event.when)}`;
+      if (event.effects?.length) return describeEffects(project, event.effects);
       return event.condition ? `If ${event.condition}` : event.detail;
   }
 };
@@ -315,3 +318,7 @@ export const exchanges = (events: TimelineEvent[]): TimelineEvent[][] => {
   }
   return groups;
 };
+
+/** Does this event only play sometimes: a rule on it, or on its script line? */
+export const isConditional = (project: Project, event: TimelineEvent): boolean =>
+  !!event.condition || !isEmpty(event.when) || (event.kind === 'dialogue' && !isEmpty(lineOf(project, event)?.conditions));

@@ -54,12 +54,9 @@ func _initialize() -> void:
 	root.add_child(lever)
 	if lever.available_verbs() != ["Pull"] or lever.state != "down":
 		fail("lever should start down, is " + lever.state)
-	if not lever.interact("Pull"):
-		fail("Pull should work when the lever is down")
-	if lever.state != "up" or game.get_flag("door_solved") != "yes":
-		fail("Pull should leave the lever up and set door_solved = yes")
-	if lever.interact("Pull"):
-		fail("Pull should not work twice")
+
+	# The key was found earlier in the story.
+	game.give_item("vault_key")
 
 	var flow: Node = load("res://vcgs/generated/scenes/sc_03_the_vault_door.gd").new()
 	root.add_child(flow)
@@ -69,22 +66,51 @@ func _initialize() -> void:
 	var finished: Array = []
 	flow.scene_finished.connect(func(next: String) -> void: finished.append(next))
 	flow.start()
-	for i in 5:
+	if not game.was_visited("sc_03_the_vault_door"):
+		fail("starting the scene should mark it visited")
+	for i in 4:
 		flow.advance()
-	# At the choice: take the second option, Force it, which rejoins the free play.
+	# In free play now. It ends by itself when the door is solved.
+	if not choices.is_empty():
+		fail("the choice should wait for the free play to end")
+	if not lever.interact("Pull"):
+		fail("Pull should work when the lever is down")
+	if lever.state != "up" or game.get_flag("door_solved") != "yes":
+		fail("Pull should leave the lever up, and the seam draining should set door_solved = yes")
+	if not game.fired.has("seam_drains") or not game.is_solved("the_vault_door"):
+		fail("the lever should fire Seam drains and solve The Vault Door")
+	if lever.interact("Pull"):
+		fail("Pull should not work twice")
+	if choices.size() != 1:
+		fail("free play should end into the choice once the door is solved")
+	# Take the second option, Force it, which rejoins the free play; that ends straight away.
 	flow.choose(1)
 	flow.advance()
 	flow.advance()
-	# Back at free play; carry on to the choice and turn the key this time.
-	flow.advance()
+	# Back at the choice; turn the key this time.
 	flow.choose(0)
 	print("trace: ", " > ".join(trace))
 	print("options: ", choices)
 	print("finished: ", finished)
 	if choices.size() != 2 or choices[0] != ["Turn the key", "Force it"]:
-		fail("the choice should offer Turn the key and Force it")
+		fail("the choice should offer Turn the key and Force it twice, got " + str(choices))
 	if finished != ["cin_01_the_vault_opens"] and finished != ["the_vault_opens"]:
 		fail("the scene should end into the cinematic, got " + str(finished))
+	if game.has_item("vault_key") or int(game.arcs.get("mara", 0)) != 1:
+		fail("turning the key should use it up and move Mara +1")
+	if game.chosen.get("turn_the_key", "") != "Turn the key":
+		fail("the pick should be remembered")
+
+	# Without the key the choice is skipped.
+	var rules: GDScript = load("res://vcgs/generated/logic/rules.gd")
+	rules.reset(game)
+	var turn: GDScript = load("res://vcgs/generated/choices/turn_the_key.gd")
+	if turn.available(game):
+		fail("Turn the key should not be available before the door is solved")
+	game.set_flag("door_solved", "yes")
+	game.give_item("vault_key")
+	if not turn.available(game):
+		fail("Turn the key should be available with the key and the door solved")
 
 	var choice: GDScript = load("res://vcgs/generated/choices/take_the_lantern.gd")
 	print("C1 options: ", choice.OPTIONS)

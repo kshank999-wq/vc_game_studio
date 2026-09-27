@@ -16,7 +16,7 @@ import {
   setNotes,
   setSceneUse,
   setStates,
-  settersOf,
+  setterNames,
   statesOf,
   toggleTag,
   updateInteraction,
@@ -29,6 +29,17 @@ import { inScene } from '../../model/scene';
 import { TYPE_LABEL } from '../../model/semantics';
 import type { Project, StoryObject } from '../../model/types';
 import { Symbol } from '../Symbol';
+import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
+import type { Effect, Rule } from '../../model/rules';
+import { setValue } from '../../model/details';
+
+/** Which elements hold a rule, and what it and its effects are called. */
+const RULES: Partial<Record<StoryObject['type'], { rule: string; effects?: string }>> = {
+  gate: { rule: 'Opens when' },
+  trigger: { rule: 'Fires when', effects: 'Then' },
+  choice: { rule: 'Available when' },
+  puzzle: { rule: 'Solved when', effects: 'When solved' },
+};
 
 interface Props {
   project: Project;
@@ -186,6 +197,11 @@ const Interactions = ({ object, project, onCommit }: { object: StoryObject; proj
               </select>
             </div>
             <span className="interaction-says">{describeInteraction(project, i)}</span>
+            <details className="interaction-more" open={!!(i.requires || i.effects)}>
+              <summary>Conditions and effects</summary>
+              <RuleEditor project={project} rule={i.requires} label="Also needs" onChange={(r) => save({ requires: r })} />
+              <EffectsEditor project={project} effects={i.effects} label="Also does" onChange={(e) => save({ effects: e })} />
+            </details>
           </div>
         );
       })}
@@ -212,7 +228,7 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
   const useFields = inThisScene ? USE_FIELDS[object.type] : undefined;
   const use = inThisScene ? sceneUse(project, inThisScene, id) : {};
   const tags = (object.data.production as string[] | undefined) ?? [];
-  const setters = object.type === 'state' ? settersOf(project, id) : [];
+  const setters = object.type === 'state' ? setterNames(project, id) : [];
 
   return (
     <aside className={`detail detail-${variant}`} aria-label={`${object.name} detail`} onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
@@ -266,7 +282,7 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
           <div className="dfld">
             <span>Set by</span>
             {setters.length ? (
-              <span className="detail-text">{setters.map((s) => s.name).join(', ')}</span>
+              <span className="detail-text">{setters.join(', ')}</span>
             ) : (
               <span className="detail-warn">Nothing sets this state. Add an interaction or trigger that sets it.</span>
             )}
@@ -280,22 +296,21 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
             {(FIELDS[object.type] ?? []).map((f) => (
               <Text key={f.key} spec={f} value={String(object.data[f.key] ?? '')} onSave={(v) => onCommit(setField(project, id, f.key, v))} />
             ))}
-            {object.type === 'trigger' && (
-              <label className="dfld">
-                <span>Sets state</span>
-                <select className="inp" value={(object.data.setsFlag as string | undefined) ?? ''} onChange={(e) => onCommit(setField(project, id, 'setsFlag', e.currentTarget.value))}>
-                  <option value="">—</option>
-                  {Object.values(project.objects)
-                    .filter((o) => o.type === 'state')
-                    .map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            )}
           </div>
+        </section>
+      )}
+
+      {RULES[object.type] && (
+        <section className="detail-section">
+          <RuleEditor project={project} rule={object.data.rule as Rule | undefined} label={RULES[object.type]!.rule} onChange={(r) => onCommit(setValue(project, id, 'rule', r))} />
+          {RULES[object.type]!.effects && (
+            <EffectsEditor
+              project={project}
+              effects={object.data.effects as Effect[] | undefined}
+              label={RULES[object.type]!.effects!}
+              onChange={(e) => onCommit(setValue(project, id, 'effects', e))}
+            />
+          )}
         </section>
       )}
 

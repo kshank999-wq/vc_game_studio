@@ -4283,3 +4283,144 @@ a.send-btn:hover {
   color: var(--text-soft);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
 }
+
+/* ---------------------------------------------------------------- rules: conditions and effects */
+
+.rule {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--node);
+  min-width: 0;
+}
+
+.rule.nested {
+  padding: 6px;
+  background: var(--ground);
+  border-style: dashed;
+}
+
+.rule-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rule-label {
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.rule-says {
+  font-size: 11.5px;
+  color: var(--text-soft);
+  line-height: 1.4;
+}
+
+.rule-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.rule-row .inp,
+.rule-match .inp {
+  flex: 1 1 90px;
+  min-height: 26px;
+  padding: 2px 6px;
+  font-size: 12px;
+  width: auto;
+}
+
+.rule-row .inp.num {
+  flex: 0 0 58px;
+}
+
+.rule-row.broken .inp {
+  border-color: var(--c-error);
+}
+
+.rule-match {
+  display: flex;
+}
+
+.rule-group {
+  padding-left: 8px;
+  border-left: 2px solid var(--gold-lo);
+}
+
+.rule-add {
+  display: flex;
+  gap: 5px;
+}
+
+.interaction-more {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.interaction-more > summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 2px 0;
+}
+
+.interaction-more[open] > summary {
+  margin-bottom: 6px;
+}
+
+.interaction-more[open] {
+  display: flex;
+}
+
+.interaction-more > .rule + .rule {
+  margin-top: 6px;
+}
+
+.branch-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rules-popover {
+  position: absolute;
+  z-index: 31;
+  width: 340px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #26221a;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+
+.rules-popover-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.pill-if {
+  margin-right: 4px;
+  color: var(--gold-hi);
+  font-size: 10px;
+}

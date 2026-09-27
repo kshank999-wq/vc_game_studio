@@ -28,8 +28,18 @@ describe('the handoff model', () => {
     expect(door.main.map((e) => e.kind)).toEqual(['cinematic', 'dialogue', 'action', 'dialogue', 'freePlay', 'choice']);
     expect(door.branches).toEqual([expect.objectContaining({ label: 'Force it', from: 5, rejoin: 4 })]);
     expect(ir.objects.find((o) => o.name === 'Rusted Lever')!.interactions).toEqual([
-      { verb: 'Pull', when: 'down', becomes: 'up', sets: { flag: 'door_solved', value: 'yes' }, fires: 'seam_drains' },
+      { verb: 'Pull', when: 'down', becomes: 'up' },
     ]);
+    // Conditions travel as data with engine keys in place of ids.
+    expect(ir.triggers.find((t) => t.name === 'Seam drains')).toMatchObject({
+      rule: { match: 'all', items: [{ kind: 'object', ref: 'rusted_lever', op: 'is', value: 'up' }] },
+      effects: [{ kind: 'setFlag', ref: 'door_solved', value: 'yes' }],
+    });
+    expect(door.main[4]!.ends).toEqual({ match: 'all', items: [{ kind: 'flag', ref: 'door_solved', op: 'is', value: 'yes' }] });
+    // The choice's own availability gates its event; its main option spends the key.
+    expect(door.main[5]!.when!.items).toHaveLength(2);
+    expect(door.main[5]!.effects).toEqual([{ kind: 'take', ref: 'vault_key' }, { kind: 'arc', ref: 'mara', amount: 1 }]);
+    expect(ir.flags.find((f) => f.name === 'door_solved')!.setBy).toEqual(['seam_drains']);
     // A spine choice carries on along the spine as well as down its branch.
     expect(ir.choices.find((c) => c.name === 'Take the lantern')!.options.map((o) => o.label)).toEqual(['Carry on', 'Crawl through']);
   });
@@ -74,8 +84,8 @@ describe('export status', () => {
     const lever = Object.values(p.objects).find((o) => o.name === 'Rusted Lever')!;
     p = renameObject(p, lever.id, 'Old Lever');
     const edited = planHandoff(p);
-    // The lever, the scene that lists it, and the flag it sets (which records what sets it).
-    expect(edited.rows.filter((r) => r.status !== 'ready').map((r) => r.label).sort()).toEqual(['Old Lever', 'SC-03 The Vault Door', 'door_solved']);
+    // The lever, the scene that lists it, and the trigger whose rule watches it.
+    expect(edited.rows.filter((r) => r.status !== 'ready').map((r) => r.label).sort()).toEqual(['Old Lever', 'SC-03 The Vault Door', 'Seam drains']);
     expect(edited.rows.find((r) => r.label === 'Mara')!.status).toBe('ready');
   });
 

@@ -1,5 +1,6 @@
 import { laneSequence, spineSequence } from './layout';
-import { settersOf } from './details';
+import { setterNames } from './details';
+import { brokenReferences } from './rules';
 import type { Project } from './types';
 
 /**
@@ -51,9 +52,18 @@ export const findIssues = (project: Project): Issue[] => {
   for (const object of Object.values(project.objects)) {
     if (object.type !== 'state') continue;
     const used = project.connections.some((c) => c.kind === 'contains' && c.targetId === object.id);
-    if (used && settersOf(project, object.id).length === 0) {
+    if (used && setterNames(project, object.id).length === 0) {
       issues.push({ id: object.id, message: 'Nothing sets this state. Give an interaction or trigger “sets” it.' });
     }
+  }
+  // A condition or effect that points at something deleted (spec §25).
+  for (const b of brokenReferences(project)) {
+    if (!issues.some((i) => i.id === b.owner)) issues.push({ id: b.owner, message: `A condition or effect in ${b.where} points at something that no longer exists.` });
+  }
+  // A line nobody speaks (spec §25: dialogue speaker missing).
+  for (const line of project.lines) {
+    if (line.kind !== 'dialogue' || !project.objects[line.sceneId] || (line.speakerId && project.objects[line.speakerId])) continue;
+    if (!issues.some((i) => i.id === line.sceneId)) issues.push({ id: line.sceneId, message: `Line ${line.order} has no speaker.` });
   }
   return issues;
 };

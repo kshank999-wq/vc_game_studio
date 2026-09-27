@@ -9,6 +9,7 @@ import {
   moveNode,
   placeNew,
   relabelConnection,
+  setConnectionRules,
   removeLane,
   renameObject,
   setOutcome,
@@ -22,6 +23,7 @@ import type { Connection, Lane, ObjectType, Project } from '../../model/types';
 import { useWheelPanZoom } from '../../use-pan-zoom';
 import { HEADER_W, type View } from '../../view';
 import { connectionCurve, draftCurve, subplotPath, type Point } from './geometry';
+import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
 import { Minimap } from './Minimap';
 import { NodeView, type PortState } from './NodeView';
 import { SubplotBand, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
@@ -128,6 +130,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
   const [editingLane, setEditingLane] = useState<{ laneId: string; field: LaneField } | null>(null);
   const [laneMenu, setLaneMenu] = useState<string | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
+  const [rulesFor, setRulesFor] = useState<Menu | null>(null);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -290,6 +293,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
   const closeMenus = () => {
     setLaneMenu(null);
     setMenu(null);
+    setRulesFor(null);
   };
 
   const onBackgroundDown = (e: React.PointerEvent) => {
@@ -545,8 +549,30 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
           onRename={(id) => setEditing(id)}
           onDelete={props.onDelete}
           onOpenScene={props.onOpenScene}
+          onRules={() => setRulesFor(menu)}
         />
       )}
+
+      {rulesFor && (() => {
+        const c = project.connections.find((x) => x.id === rulesFor.id);
+        if (!c) return null;
+        const from = project.objects[c.sourceId]?.name ?? '';
+        const to = project.objects[c.targetId]?.name ?? '';
+        return (
+          <div className="rules-popover" role="dialog" aria-label="Conditions and effects" style={{ left: rulesFor.sx, top: rulesFor.sy }} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+            <div className="rules-popover-head">
+              <span>
+                {c.label ? `“${c.label}”` : 'Route'} · {from} → {to}
+              </span>
+              <button className="icon-btn small" aria-label="Close" onClick={() => setRulesFor(null)}>
+                ×
+              </button>
+            </div>
+            <RuleEditor project={project} rule={c.conditions} label="Offered when" onChange={(r) => props.onCommit(setConnectionRules(project, c.id, { conditions: r }))} />
+            <EffectsEditor project={project} effects={c.effects} label="Taking it" onChange={(e) => props.onCommit(setConnectionRules(project, c.id, { effects: e }))} />
+          </div>
+        );
+      })()}
 
       <Minimap
         project={shown}
@@ -660,7 +686,7 @@ const Pills = ({ project, rows, selection, editing, onSelect, onEdit, onMenu, on
 }) => (
   <>
     {project.connections.map((c) => {
-      if (c.kind !== 'branch' || (!c.label && editing !== c.id)) return null;
+      if (c.kind !== 'branch' || (!c.label && !c.conditions && editing !== c.id)) return null;
       const shape = connectionCurve(project, c, rows);
       if (!shape) return null;
       return (
@@ -696,7 +722,14 @@ const Pills = ({ project, rows, selection, editing, onSelect, onEdit, onMenu, on
               }}
             />
           ) : (
-            c.label
+            <>
+              {c.conditions && (
+                <span className="pill-if" title="Only offered when its conditions hold">
+                  ⚿
+                </span>
+              )}
+              {c.label}
+            </>
           )}
         </div>
       );
@@ -706,7 +739,7 @@ const Pills = ({ project, rows, selection, editing, onSelect, onEdit, onMenu, on
 
 // ---------------------------------------------------------------- context menu
 
-const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onOpenScene }: {
+const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onOpenScene, onRules }: {
   menu: Menu;
   project: Project;
   onClose: () => void;
@@ -714,6 +747,7 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onO
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
   onOpenScene: (id: string, mode: 'open' | 'exploded' | 'timeline') => void;
+  onRules: () => void;
 }) => {
   const item = (label: string, action: () => void, className?: string, checked?: boolean) => (
     <button
@@ -734,7 +768,10 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onO
   if (menu.kind === 'connection') {
     const c = project.connections.find((x) => x.id === menu.id);
     if (!c) return null;
-    if (c.kind === 'branch') items.push(item(c.label ? 'Edit label' : 'Add label', () => onRename(c.id)));
+    if (c.kind === 'branch') {
+      items.push(item(c.label ? 'Edit label' : 'Add label', () => onRename(c.id)));
+      items.push(item('Conditions & effects…', onRules));
+    }
     items.push(item('Delete connection', () => onDelete(c.id), 'danger'));
   } else {
     const object = project.objects[menu.id];

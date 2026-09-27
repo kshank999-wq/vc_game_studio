@@ -2,6 +2,7 @@ import { interactionsOf, initialState, statesOf } from '../details';
 import { laneSequence, spineSequence } from '../layout';
 import { CATEGORIES, elementsIn, sceneLines } from '../scene';
 import { eventTitle, sceneTimeline } from '../timeline';
+import { isEmpty, isRule, type Effect, type Rule } from '../rules';
 import type { ObjectType, Project, StoryObject } from '../types';
 
 /**
@@ -57,6 +58,26 @@ export const identifiers = (project: Project): Map<string, Ident> => {
   return out;
 };
 
+/** A condition with engine keys in place of ids: { kind: "flag", ref: "vault_door", op: "is", value: "open" }. */
+export interface IrCondition {
+  kind: string;
+  ref: string;
+  op: string;
+  value?: string | number;
+}
+
+export interface IrRule {
+  match: 'all' | 'any';
+  items: (IrCondition | IrRule)[];
+}
+
+export interface IrEffect {
+  kind: string;
+  ref: string;
+  value?: string;
+  amount?: number;
+}
+
 export interface IrCharacter {
   id: string;
   ident: Ident;
@@ -74,6 +95,8 @@ export interface IrInteraction {
   becomes?: string;
   sets?: { flag: string; value: string };
   fires?: string;
+  requires?: IrRule;
+  effects?: IrEffect[];
 }
 
 export interface IrObject {
@@ -87,6 +110,9 @@ export interface IrObject {
   interactions: IrInteraction[];
   notes: string;
   fields: Record<string, string>;
+  /** A puzzle: what solves it, and what solving it does. */
+  solvedWhen?: IrRule;
+  effects?: IrEffect[];
 }
 
 export interface IrThing {
@@ -117,6 +143,9 @@ export interface IrTrigger {
   condition: string;
   effect: string;
   sets?: { flag: string; value: string };
+  /** A trigger fires, and a gate opens, when this holds. */
+  rule?: IrRule;
+  effects?: IrEffect[];
 }
 
 export interface IrLine {
@@ -140,6 +169,12 @@ export interface IrEvent {
   line?: string;
   /** A choice's option that carries on along the main track. */
   mainLabel?: string;
+  /** Plays only when this holds (a dialogue line's own condition included). */
+  when?: IrRule;
+  /** A free play ends when this holds. */
+  ends?: IrRule;
+  /** What happens when it plays; for a choice, when its main option is picked. */
+  effects?: IrEffect[];
 }
 
 export interface IrScene {
@@ -151,8 +186,12 @@ export interface IrScene {
   summary: string;
   contents: Record<string, string[]>;
   main: IrEvent[];
-  branches: { label: string; from: number; events: IrEvent[]; rejoin: number | null }[];
+  branches: { label: string; from: number; events: IrEvent[]; rejoin: number | null; when?: IrRule; effects?: IrEffect[] }[];
   next: string | null;
+  /** The routes out of this scene on the graph, taken in order: the first whose conditions hold. */
+  exits: { to: string; label: string; when?: IrRule; effects?: IrEffect[] }[];
+  /** Where the story goes when no route out applies: the next node on its track. */
+  onward: string | null;
 }
 
 export interface IrChoice {
@@ -162,7 +201,9 @@ export interface IrChoice {
   name: string;
   prompt: string;
   scene: string | null;
-  options: { label: string; to: string | null }[];
+  options: { label: string; to: string | null; when?: IrRule; effects?: IrEffect[] }[];
+  /** The choice is offered at all only when this holds. */
+  available?: IrRule;
 }
 
 export interface IrStoryNode {
@@ -174,7 +215,7 @@ export interface IrStoryNode {
 export interface HandoffIR {
   project: { id: string; name: string; key: string };
   spine: IrStoryNode[];
-  branches: { from: string; to: string; label: string }[];
+  branches: { from: string; to: string; label: string; when?: IrRule; effects?: IrEffect[] }[];
   subplots: { key: string; name: string; from: string; to: string; beats: IrStoryNode[] }[];
   arcs: { character: string; name: string; events: { polarity: string; name: string; tiedTo: string | null }[] }[];
   characters: IrCharacter[];
@@ -199,6 +240,30 @@ export const buildIR = (project: Project): HandoffIR => {
   const of = (...types: ObjectType[]) => all.filter((o) => types.includes(o.type));
   const node = (id: string): IrStoryNode => ({ key: key(id)!, kind: project.objects[id]!.type, name: project.objects[id]!.name });
   const lineId = (sceneCode: string, order: number) => `${toKey(sceneCode || 'scene')}_line_${String(order).padStart(2, '0')}`;
+  const rule = (r: Rule | undefined): IrRule | undefined => {
+    if (!r || isEmpty(r)) return undefined;
+    const items = r.items.flatMap((i): (IrCondition | IrRule)[] => {
+      if (isRule(i)) {
+        const inner = rule(i);
+        return inner ? [inner] : [];
+      }
+      const ref = key(i.ref);
+      if (!ref) return [];
+      return [{ kind: i.kind, ref, op: i.op, ...('value' in i && i.value !== '' ? { value: i.value } : {}) }];
+    });
+    return items.length ? { match: r.match, items } : undefined;
+  };
+  const effects = (list: Effect[] | undefined): IrEffect[] | undefined => {
+    const out = (list ?? []).flatMap((e): IrEffect[] => {
+      const ref = key(e.ref);
+      if (!ref) return [];
+      return [{ kind: e.kind, ref, ...('value' in e ? { value: e.value } : {}), ...('amount' in e ? { amount: e.amount } : {}) }];
+    });
+    return out.length ? out : undefined;
+  };
+  const both = (a: Rule | undefined, b: Rule | undefined): Rule | undefined =>
+    isEmpty(a) ? b : isEmpty(b) ? a : { match: 'all', items: [a!, b!] };
+  const ruled = (w: IrRule | undefined, e: IrEffect[] | undefined) => ({ ...(w ? { when: w } : {}), ...(e ? { effects: e } : {}) });
   const sceneOf = (id: string) => project.connections.find((c) => c.kind === 'contains' && c.targetId === id)?.sourceId;
 
   const scenes: IrScene[] = of('scene').map((s) => {
@@ -216,12 +281,15 @@ export const buildIR = (project: Project): HandoffIR => {
         ...(e.endsWhen ? { endsWhen: e.endsWhen } : {}),
         ...(e.condition ? { condition: e.condition } : {}),
         ...(e.kind === 'choice' ? { mainLabel: e.mainLabel ?? '' } : {}),
+        ...ruled(rule(both(both(e.when, line?.conditions), e.kind === 'choice' && e.refId ? (project.objects[e.refId]?.data.rule as Rule | undefined) : undefined)), effects(e.effects)),
+        ...(rule(e.ends) ? { ends: rule(e.ends) } : {}),
       };
     };
     const main = tracks[0]!.events;
     const spine = spineSequence(project);
     const at = spine.indexOf(s.id);
-    const out = project.connections.find((c) => c.kind === 'branch' && c.sourceId === s.id);
+    const exits = project.connections.filter((c) => c.kind === 'branch' && c.sourceId === s.id && project.objects[c.targetId]);
+    const onward = at >= 0 && spine[at + 1] ? key(spine[at + 1]) : null;
     const location = s.data.locationId ? project.objects[s.data.locationId as string]?.name : undefined;
     return {
       id: s.id,
@@ -239,8 +307,11 @@ export const buildIR = (project: Project): HandoffIR => {
         from: main.findIndex((e) => e.id === t.branch!.choiceEventId),
         events: t.events.map(toEvent),
         rejoin: t.branch!.rejoinEventId ? main.findIndex((e) => e.id === t.branch!.rejoinEventId) : null,
+        ...ruled(rule(t.branch!.when), effects(t.branch!.effects)),
       })),
-      next: out ? key(out.targetId) : at >= 0 && spine[at + 1] ? key(spine[at + 1]) : null,
+      next: exits[0] ? key(exits[0].targetId) : onward,
+      exits: exits.map((c) => ({ to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
+      onward,
     };
   });
 
@@ -249,7 +320,7 @@ export const buildIR = (project: Project): HandoffIR => {
     spine: spineSequence(project).map(node),
     branches: project.connections
       .filter((c) => c.kind === 'branch' && project.objects[c.sourceId] && project.objects[c.targetId])
-      .map((c) => ({ from: key(c.sourceId)!, to: key(c.targetId)!, label: c.label ?? '' })),
+      .map((c) => ({ from: key(c.sourceId)!, to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
     subplots: project.lanes
       .filter((l) => l.kind === 'subplot' && l.span)
       .map((l) => ({ key: toKey(l.name), name: l.name, from: key(l.span!.startRef)!, to: key(l.span!.endRef)!, beats: laneSequence(project, l.id).map(node) })),
@@ -288,9 +359,13 @@ export const buildIR = (project: Project): HandoffIR => {
         ...(i.becomes ? { becomes: i.becomes } : {}),
         ...(i.setsFlag && key(i.setsFlag) ? { sets: { flag: key(i.setsFlag)!, value: i.flagValue ?? '' } } : {}),
         ...(i.fires && key(i.fires) ? { fires: key(i.fires)! } : {}),
+        ...(rule(i.requires) ? { requires: rule(i.requires) } : {}),
+        ...(effects(i.effects) ? { effects: effects(i.effects) } : {}),
       })),
       notes: o.notes,
       fields: fieldsOf(o),
+      ...(o.type === 'puzzle' && rule(o.data.rule as Rule | undefined) ? { solvedWhen: rule(o.data.rule as Rule | undefined) } : {}),
+      ...(o.type === 'puzzle' && effects(o.data.effects as Effect[] | undefined) ? { effects: effects(o.data.effects as Effect[] | undefined) } : {}),
     })),
     items: of('inventory').map((o) => ({ id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, type: o.type, notes: o.notes, fields: fieldsOf(o) })),
     locations: of('environment').map((o) => ({ id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, type: o.type, notes: o.notes, fields: fieldsOf(o) })),
@@ -308,7 +383,10 @@ export const buildIR = (project: Project): HandoffIR => {
     }),
     flags: of('state').map((o) => {
       const values = statesOf(o);
-      const setBy = all.filter((x) => interactionsOf(x).some((i) => i.setsFlag === o.id) || (x.type === 'trigger' && x.data.setsFlag === o.id)).map((x) => key(x.id)!);
+      const sets = (list: unknown) => ((list as Effect[] | undefined) ?? []).some((e) => e.kind === 'setFlag' && e.ref === o.id);
+      const setBy = all
+        .filter((x) => interactionsOf(x).some((i) => i.setsFlag === o.id || sets(i.effects)) || (x.type === 'trigger' && x.data.setsFlag === o.id) || sets(x.data.effects))
+        .map((x) => key(x.id)!);
       return { id: o.id, ident: ids.get(o.id)!, name: o.name, values, initial: initialState(o) ?? values[0] ?? '', setBy };
     }),
     triggers: of('trigger', 'gate').map((o) => ({
@@ -319,21 +397,25 @@ export const buildIR = (project: Project): HandoffIR => {
       condition: String(o.data.when ?? o.data.needs ?? ''),
       effect: String(o.data.does ?? o.data.holds ?? ''),
       ...(o.data.setsFlag && key(o.data.setsFlag as string) ? { sets: { flag: key(o.data.setsFlag as string)!, value: statesOf(project.objects[o.data.setsFlag as string]).at(-1) ?? '' } } : {}),
+      ...(rule(o.data.rule as Rule | undefined) ? { rule: rule(o.data.rule as Rule | undefined) } : {}),
+      ...(effects(o.data.effects as Effect[] | undefined) ? { effects: effects(o.data.effects as Effect[] | undefined) } : {}),
     })),
     choices: of('choice').map((o) => {
       const scene = sceneOf(o.id);
-      const graph = project.connections.filter((c) => c.kind === 'branch' && c.sourceId === o.id).map((c) => ({ label: c.label ?? '', to: key(c.targetId) }));
+      const graph = project.connections
+        .filter((c) => c.kind === 'branch' && c.sourceId === o.id)
+        .map((c) => ({ label: c.label ?? '', to: key(c.targetId), ...ruled(rule(c.conditions), effects(c.effects)) }));
       const inScene = project.events
         .filter((e) => e.refId === o.id && e.kind === 'choice')
         .flatMap((e) => [
-          { label: e.mainLabel ?? 'Continue', to: null as string | null },
-          ...project.branches.filter((b) => b.choiceEventId === e.id).map((b) => ({ label: b.label, to: null as string | null })),
+          { label: e.mainLabel ?? 'Continue', to: null as string | null, ...ruled(undefined, effects(e.effects)) },
+          ...project.branches.filter((b) => b.choiceEventId === e.id).map((b) => ({ label: b.label, to: null as string | null, ...ruled(rule(b.when), effects(b.effects)) })),
         ]);
       // A choice on a track also carries on along it: that is its first option.
       const spine = spineSequence(project);
       const at = spine.indexOf(o.id);
       const onward = at >= 0 && spine[at + 1] ? [{ label: 'Carry on', to: key(spine[at + 1]) }] : [];
-      return { id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, prompt: String(o.data.prompt ?? ''), scene: key(scene), options: [...onward, ...graph, ...inScene] };
+      return { id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, prompt: String(o.data.prompt ?? ''), scene: key(scene), options: [...onward, ...graph, ...inScene], ...(rule(o.data.rule as Rule | undefined) ? { available: rule(o.data.rule as Rule | undefined) } : {}) };
     }),
     scenes,
     lines: project.lines

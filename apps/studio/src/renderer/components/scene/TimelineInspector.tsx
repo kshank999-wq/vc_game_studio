@@ -15,6 +15,7 @@ import {
   updateEvent,
 } from '../../model/timeline';
 import type { Project, TimelineEvent } from '../../model/types';
+import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
 import { Symbol } from '../Symbol';
 import { KIND_SYMBOL } from './parts';
 
@@ -180,8 +181,8 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
           <Field label="Line" value={line.text} script multiline onSave={(v) => onCommit(updateLine(project, line.id, { text: v }))} />
           <div className="insp-grid">
             <Field label="Direction" value={line.direction} placeholder="(wading forward)" script onSave={(v) => onCommit(updateLine(project, line.id, { direction: v.replace(/^\(|\)$/g, '').trim() }))} />
-            <Field label="Condition" value={event.condition ?? ''} placeholder="Always · linear" onSave={(v) => save({ condition: v.trim() || undefined })} />
           </div>
+          <RuleEditor project={project} rule={line.conditions} label="Spoken when" onChange={(r) => onCommit(updateLine(project, line.id, { conditions: r }))} />
           <div className="fld">
             <span>VO / audio</span>
             <div className="chips" role="radiogroup" aria-label="Voice-over">
@@ -216,25 +217,31 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
       )}
 
       {event.kind === 'freePlay' && (
-        <Field label="Ends when" value={event.endsWhen ?? ''} placeholder="lever = up" onSave={(v) => save({ endsWhen: v.trim() })} />
+        <>
+          <RuleEditor project={project} rule={event.ends} label="Ends when" onChange={(r) => save({ ends: r })} />
+          <Field label="In words (optional)" value={event.endsWhen ?? ''} placeholder="The seam has drained" onSave={(v) => save({ endsWhen: v.trim() })} />
+        </>
       )}
 
       {(event.kind === 'action' || event.kind === 'interaction' || event.kind === 'trigger' || event.kind === 'cinematic') && (
-        <div className="insp-grid">
+        <>
           {event.kind !== 'cinematic' && <Field label="What happens" value={event.detail} placeholder="scripted" onSave={(v) => save({ detail: v })} />}
-          <Field label="Condition" value={event.condition ?? ''} placeholder="Always" onSave={(v) => save({ condition: v.trim() || undefined })} />
-        </div>
+          <RuleEditor project={project} rule={event.when} label="Plays when" onChange={(r) => save({ when: r })} />
+          <EffectsEditor project={project} effects={event.effects} label="Then" onChange={(e) => save({ effects: e })} />
+        </>
       )}
 
       {event.kind === 'choice' && (
         <div className="branches">
           <Field label="Option that carries on along the main track" value={event.mainLabel ?? ''} placeholder="Turn the key" onSave={(v) => save({ mainLabel: v })} />
+          <EffectsEditor project={project} effects={event.effects} label="Choosing it" onChange={(e) => save({ effects: e })} />
           <div className="fld">
             <span>Other options · each its own branch</span>
             {tracks
               .filter((t) => t.branch?.choiceEventId === event.id)
               .map((t) => (
-                <div key={t.id} className="branch-row">
+                <div key={t.id} className="branch-item">
+                <div className="branch-row">
                   <input
                     key={t.branch!.label}
                     className="inp"
@@ -259,6 +266,12 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
                   <button className="icon-btn small" aria-label={`Remove option ${t.branch!.label}`} title="Remove this option (its events move to the main track)" onClick={() => onCommit(removeBranch(project, sceneId, t.id))}>
                     ×
                   </button>
+                </div>
+                <details className="interaction-more" open={!!(t.branch!.when || t.branch!.effects)}>
+                  <summary>Conditions &amp; effects</summary>
+                  <RuleEditor project={project} rule={t.branch!.when} label="Offered when" onChange={(r) => onCommit(updateBranch(project, t.id, { when: r }))} />
+                  <EffectsEditor project={project} effects={t.branch!.effects} label="Choosing it" onChange={(e) => onCommit(updateBranch(project, t.id, { effects: e }))} />
+                </details>
                 </div>
               ))}
             <button

@@ -479,6 +479,29 @@ export const relabelConnection = (project: Project, id: string, label: string): 
   };
 };
 
+/** What a branch needs before it is offered, and what taking it does. Empty clears it. */
+export const setConnectionRules = (
+  project: Project,
+  id: string,
+  patch: { conditions?: Connection['conditions']; effects?: Connection['effects'] },
+): Project => {
+  if (!project.connections.some((c) => c.id === id)) return project;
+  return {
+    ...project,
+    connections: project.connections.map((c) => {
+      if (c.id !== id) return c;
+      const next: Connection = { ...c };
+      for (const key of ['conditions', 'effects'] as const) {
+        if (!(key in patch)) continue;
+        const value = patch[key];
+        if (value === undefined || (Array.isArray(value) && !value.length)) delete next[key];
+        else (next as unknown as Record<string, unknown>)[key] = value;
+      }
+      return next;
+    }),
+  };
+};
+
 export const removeConnection = (project: Project, id: string): Project =>
   project.connections.some((c) => c.id === id)
     ? { ...project, connections: project.connections.filter((c) => c.id !== id) }

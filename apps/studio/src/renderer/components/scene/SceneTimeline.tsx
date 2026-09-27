@@ -8,6 +8,7 @@ import {
   eventLine,
   eventTitle,
   exchanges,
+  isConditional,
   moveEvent,
   removeEvent,
   sceneExit,
@@ -422,7 +423,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
                     </div>
                   );
                 }
-                const conditional = !!first.condition;
+                const conditional = isConditional(project, first);
                 return (
                   <div
                     key={first.id}

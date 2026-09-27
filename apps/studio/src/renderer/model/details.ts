@@ -2,6 +2,7 @@ import { laneSequence, spineSequence } from './layout';
 import { newId } from './project';
 import { inScene } from './scene';
 import type { Connection, ObjectType, Project, StoryObject } from './types';
+import { effectsSetting, type Effect, type Rule } from './rules';
 
 /**
  * What an element holds beyond its name (step 6: element detail). Every
@@ -41,11 +42,11 @@ export const FIELDS: Partial<Record<ObjectType, readonly FieldSpec[]>> = {
     { key: 'failState', label: 'Fail state', placeholder: 'The chamber floods' },
   ],
   trigger: [
-    { key: 'when', label: 'Fires when', placeholder: 'lever = up' },
-    { key: 'does', label: 'What it does', placeholder: 'Water drains from the seam' },
+    { key: 'when', label: 'Fires when (in words)', placeholder: 'The lever is pulled up' },
+    { key: 'does', label: 'What it does (in words)', placeholder: 'Water drains from the seam' },
   ],
   gate: [
-    { key: 'needs', label: 'Needs', placeholder: 'Vault Key and lever up' },
+    { key: 'needs', label: 'Needs (in words)', placeholder: 'Vault Key and lever up' },
     { key: 'holds', label: 'What it holds back', placeholder: 'The Turn the key choice' },
   ],
   choice: [
@@ -105,6 +106,9 @@ const setData = (project: Project, id: string, patch: Record<string, unknown>): 
 
 export const setField = (project: Project, id: string, key: string, value: string): Project => setData(project, id, { [key]: value.trim() });
 
+/** Set a structured field (a rule, a list of effects); undefined clears it. */
+export const setValue = (project: Project, id: string, key: string, value: unknown): Project => setData(project, id, { [key]: value });
+
 export const setNotes = (project: Project, id: string, notes: string): Project => {
   const object = project.objects[id];
   if (!object || object.notes === notes) return project;
@@ -149,6 +153,10 @@ export interface Interaction {
   flagValue?: string;
   /** A trigger this fires. */
   fires?: string;
+  /** Anything else it needs besides the object's state (the Vault Key, say). */
+  requires?: Rule;
+  /** Anything else it does. */
+  effects?: Effect[];
 }
 
 export const statesOf = (object: StoryObject | undefined): string[] => {
@@ -217,8 +225,16 @@ export const describeInteraction = (project: Project, i: Interaction): string =>
 /** What sets a state element: interactions on objects, and triggers that set it. */
 export const settersOf = (project: Project, stateId: string): StoryObject[] =>
   Object.values(project.objects).filter(
-    (o) => interactionsOf(o).some((i) => i.setsFlag === stateId) || (o.type === 'trigger' && o.data.setsFlag === stateId),
+    (o) =>
+      interactionsOf(o).some((i) => i.setsFlag === stateId || (i.effects ?? []).some((e) => e.kind === 'setFlag' && e.ref === stateId)) ||
+      (o.type === 'trigger' && o.data.setsFlag === stateId) ||
+      ((o.data.effects as Effect[] | undefined) ?? []).some((e) => e.kind === 'setFlag' && e.ref === stateId),
   );
+
+/** Everywhere this state is set: elements, and also options and timeline events. */
+export const setterNames = (project: Project, stateId: string): string[] => [
+  ...new Set([...settersOf(project, stateId).map((o) => o.name), ...effectsSetting(project, stateId)]),
+];
 
 // ---------------------------------------------------------------- where used
 
