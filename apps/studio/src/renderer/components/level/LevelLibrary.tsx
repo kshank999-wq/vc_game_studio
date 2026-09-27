@@ -147,7 +147,7 @@ export const LevelLibrary = (props: Props) => {
                         <button className="lvl-asset-pick" onPointerDown={(e) => props.onPick(a.id, e)} aria-label={`Place ${a.name}`}>
                           <AssetIcon asset={a} />
                           <span className="lvl-asset-name">{a.name}</span>
-                          {a.source !== 'starter' && <span className="lvl-asset-src">{a.source === 'global' ? 'mine' : 'project'}</span>}
+                          {a.source !== 'starter' && <span className="lvl-asset-src">{a.source === 'global' ? 'mine' : 'project'}{a.version > 1 ? ` · v${a.version}` : ''}</span>}
                         </button>
                         {a.source === 'project' && (
                           <button className="icon-btn small" title="Add to my library, for every project" aria-label={`Add ${a.name} to my library`} onClick={() => props.onPromote(a)}>

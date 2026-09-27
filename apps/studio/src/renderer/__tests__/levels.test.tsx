@@ -2,6 +2,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
+import { addLevel, placeAsset, resizeItem, saveToLibrary, setParam } from '../model/level/level';
+import { createProject } from '../model/project';
 import { sunkenVault } from '../model/sample';
 import { resetPreferences } from '../preferences';
 
@@ -137,6 +139,51 @@ describe('the Level Designer', () => {
     expect(container.querySelector('.lvl-right-head')!.textContent).toContain('Trigger volume');
     expect(container.querySelector('.lvl-shape')!.textContent).toContain('3 corners');
     expect(container.querySelectorAll('[data-handle^="corner-"]')).toHaveLength(3);
+  });
+
+  it('saves an item’s changes to its library asset, and walks another item through the update', async () => {
+    const made = addLevel(createProject('Store'), 'Store');
+    const floorId = made.project.levels!.levels[0]!.floors[0]!.id;
+    const crate = placeAsset(made.project, made.id, floorId, 'prop.crate', { x: 0, y: 0 });
+    const saved = saveToLibrary(crate.project, crate.ids, 'Supply crate');
+    const a = placeAsset(saved.project, made.id, floorId, saved.assetId, { x: 4, y: 0 });
+    const b = placeAsset(a.project, made.id, floorId, saved.assetId, { x: 8, y: 0 });
+    const p = resizeItem(setParam(b.project, a.ids[0]!, 'material', 'metal'), a.ids[0]!, { w: 2 });
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(p));
+    const { container } = render(<App />);
+    await openLevels();
+    fireEvent.click(screen.getByRole('tab', { name: /Outliner/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Supply crate$/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes to Supply crate' }));
+    expect(screen.queryByRole('button', { name: 'Save changes to Supply crate' })).toBeNull();
+    // The other crate is from v1: it says what changed, and can keep its old width.
+    fireEvent.click(screen.getByRole('button', { name: /^Supply crate 2$/ }));
+    const box = screen.getByRole('group', { name: 'Library update' });
+    expect(box.textContent).toContain('v1 → v2');
+    expect(box.textContent).toContain('Proxy material: neutral → metal');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Width: 1 → 2/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update to v2' }));
+    expect(screen.queryByRole('group', { name: 'Library update' })).toBeNull();
+    expect((screen.getByRole('textbox', { name: 'Width' }) as HTMLInputElement).value).toBe('1');
+    expect(container.querySelector('.lvl-right-head')!.textContent).not.toContain('the library is at');
+  });
+
+  it('locates a timeline event’s place in the level, and lists the item’s events back', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    const { container } = render(<App />);
+    const card = [...container.querySelectorAll('[data-type="scene"]')].find((c) => c.textContent!.includes('The Vault Door'))!;
+    fireEvent.doubleClick(card);
+    fireEvent.click(screen.getByRole('button', { name: /SCENE TIMELINE/ }));
+    const cinematic = container.querySelector('.ev-cinematic')!;
+    expect(cinematic.querySelector('.ev-place')!.getAttribute('aria-label')).toBe('In the level: Door in the dark trigger');
+    fireEvent.pointerDown(cinematic, { button: 0 });
+    fireEvent.pointerUp(window);
+    const where = screen.getByRole('combobox', { name: 'Where in the level' }) as HTMLSelectElement;
+    expect(where.selectedOptions[0]!.textContent).toBe('Found by its link: Door in the dark trigger');
+    fireEvent.click(screen.getByRole('button', { name: 'Locate Door in the dark trigger' }));
+    await opened();
+    expect(container.querySelector('.lvl-right-head')!.textContent).toContain('Door in the dark trigger');
+    expect(screen.getByLabelText('On scene timelines').textContent).toContain('SC-03');
   });
 
   it('says so when the graybox cannot use WebGL', async () => {

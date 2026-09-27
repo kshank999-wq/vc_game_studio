@@ -71,6 +71,22 @@ items linked to what you had selected.
 - Several items become an assembly, placed as a group with new GUIDs. A room's doors are saved with it and go back into the new room's walls.
 - **↑** promotes a project asset to *my library* on this computer. Placing one copies it into the project, so the file still opens elsewhere.
 
+**Updating a library asset (spec §4.3, §4.4).**
+- **Save changes to *asset*** (in the inspector of an item placed from a project asset) makes that item's changes the asset's new defaults. The asset's version goes up, and the item goes back to inheriting everything.
+- The asset keeps what each earlier version gave. Every other item placed from an older version is flagged, in the inspector and in preflight, until someone reviews it. Nothing it had is lost without being shown.
+- The review lists:
+  - each value it inherited that the new version changes, with a box to **keep the old** one as its own;
+  - its own values the new version makes pointless (now the default), no longer valid (an option gone, out of range), or no longer has (a setting removed).
+- **Update to v*n*** applies that. **Update all** brings every outdated item from the asset up to date, taking the new values.
+- Every step is one undo.
+
+**Scene timeline events in the level (spec §7.3).**
+- An event on a scene's timeline can happen somewhere in the level. **Where in the level** in the event's inspector picks the item: the opening cinematic's trigger, the NPC who speaks, the lever being pulled, the door out. An action can also say where an actor **moves to**.
+- Without a choice, the place is found through the level's links: a cinematic at the trigger that plays it, dialogue at the NPC who stands for its speaker, an interaction at the item linked to its object.
+- Events with a place show ⌖ on the timeline. **Locate** opens the Level Designer on the item.
+- An item's inspector lists **On scene timelines**: the events that happen there, each opening its scene.
+- Places go to every engine as the item's GUID (`place`, `placeTo` on the event). Removing the item takes the place off the event.
+
 **The story (spec §7).**
 - Any item or level can link to plot points, scenes, locations, characters, items, puzzles, cinematics, choices and dialogue.
 - Ref parameters tie a pickup to its inventory item, an NPC to a character, a door to its key, and a cinematic trigger to its cinematic.
@@ -244,10 +260,10 @@ clockwise seen from above.
 | --- | --- |
 | §2 Workspace | Done. |
 | §3 2D map | Done: spaces as rectangles or freeform outlines, grid, snap, align, distribute, rotate, duplicate, mirror, groups, layers, hide and lock, floors with a ghosted floor below, units, dimension labels, symbols. Spaces and volumes can both be outlined. |
-| §4 Asset library | Done: every category, definitions and instances, overrides with reset, project assets, assemblies, my library. The migration step that applies a changed definition to old instances is recorded (versions) but not yet offered in the UI. |
+| §4 Asset library | Done: every category, definitions and instances, overrides with reset, project assets, assemblies, my library. Updating an asset from an item, and reviewing items from older versions, keeping old values or taking new. |
 | §5 3D graybox | Box, plane, cylinder, sphere, wedge, stairs and ramps; walls with openings; move, rotate and scale, and hosted assets that follow their wall. Moving in 3D is done. **Not yet:** resize handles in 3D, pivot editing, extrude, and collision or navigation preview beyond showing the volumes. |
 | §6 Inspector | Done, including search and "More" for advanced fields. |
-| §7 Narrative | Links both ways, conditions from choices and state. The Scene timeline does not reference level objects yet (§7.3). |
+| §7 Narrative | Done: links both ways, conditions from choices and state, and scene timeline events placed in the level. |
 | §8 Logic, spawns | Done: rules, conditions, story effects and level actions run in Play Mode; spawners spawn after their delay, conditionally. Spawned actors stand where they spawn (no AI or pathing). |
 | §9 Play Mode | Done: first person, third person and top-down; keyboard, mouse and controller through rebindable actions; collision, gravity, jumping, stairs; pause and inspect with editable state; test presets; start from the level start, the selection or the 3D camera; debug overlay; event log; notes linked to items. Scenes linked to characters show as cards rather than playing their script in the level. |
 | §10 Identity and names | Done. |

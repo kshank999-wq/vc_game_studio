@@ -20,6 +20,7 @@ import type { EventKind, ObjectType, Project, TimelineEvent } from '../../model/
 import type { PaletteDrag } from '../canvas/StoryCanvas';
 import { Symbol } from '../Symbol';
 import { KIND_SYMBOL } from './parts';
+import { placeOf } from '../../model/level/places';
 import { ExplodedScene } from './ExplodedScene';
 import { TimelineInspector } from './TimelineInspector';
 import type { SceneSurface } from './SceneWorkspace';
@@ -454,6 +455,11 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
                         </span>
                         <span className="et">{eventTitle(project, first)}</span>
                         <span className="es">{eventDetail(project, first)}</span>
+                        {placeOf(project, first) && (
+                          <span className="ev-place" role="img" aria-label={`In the level: ${placeOf(project, first)!.item.name}`} title={`In the level: ${placeOf(project, first)!.item.name}`}>
+                            ⌖
+                          </span>
+                        )}
                       </>
                     )}
                   </div>

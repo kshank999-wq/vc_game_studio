@@ -180,6 +180,8 @@ export const storySchema = () => ({
           when: ref('rule'),
           ends: ref('rule'),
           effects: ref('effects'),
+          place: { ...str, description: 'The level item (its guid in `levels`) where it happens.' },
+          placeTo: { ...str, description: 'Where an actor moves to: a level item guid.' },
         },
         ['kind', 'label'],
       ),

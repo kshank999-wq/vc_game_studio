@@ -135,6 +135,19 @@ export interface AssetDefinition {
   parts?: AssemblyPart[];
   /** A space's shape when it isn't a rectangle (an irregular room). */
   outline?: OutlinePoint[];
+  /**
+   * What earlier versions gave their instances (spec §4.4): so an item placed
+   * from one can be shown what changed since and keep what it had.
+   */
+  history?: AssetSnapshot[];
+}
+
+/** A definition's defaults as they were at one version. */
+export interface AssetSnapshot {
+  version: number;
+  size: Size;
+  defaults: Record<string, ParamValue>;
+  outline?: OutlinePoint[];
 }
 
 /** The classes export names are prefixed by (spec §10.2); the prefixes themselves are project settings. */

@@ -165,6 +165,10 @@ export interface TimelineEvent {
   ends?: Rule;
   /** What happens when the event plays; for a choice, what its main option does. */
   effects?: Effect[];
+  /** Where in the level it happens (spec §7.3): a level item's GUID. */
+  place?: string;
+  /** Where an actor moves to, for movement. */
+  placeTo?: string;
 }
 
 /** A choice's other option: its own track, which may reconnect to the main one. */

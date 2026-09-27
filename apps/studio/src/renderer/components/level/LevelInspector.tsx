@@ -30,6 +30,9 @@ import {
 import { exportNameOf, levelExportName, NAMING_LABEL } from '../../model/level/naming';
 import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelRule, NamingClass, ParamDef, PlayNote, PropertyGroup } from '../../model/level/types';
 import { removePreset, resolveNote } from '../../model/level/play';
+import { eventsAt } from '../../model/level/places';
+import { eventTitle } from '../../model/timeline';
+import { canSaveToAsset, migrateAll, migrateItem, migrationFor, outdatedItems, saveToAsset, type Change } from '../../model/level/migrate';
 import type { LevelIssue } from '../../model/level/validate';
 import { newId } from '../../model/project';
 import { TYPE_LABEL } from '../../model/semantics';
@@ -294,8 +297,14 @@ export const LevelInspector = (props: Props) => {
         <div className="lvl-btnrow">
           <button className="tb-btn small" onClick={props.onDuplicate}>Duplicate</button>
           <button className="tb-btn small danger-btn" onClick={props.onDelete}>Delete</button>
+          {canSaveToAsset(project, item, global) && (
+            <button className="tb-btn small" title={`Make this item’s changes the new defaults of ${def.name}, for everything placed from it`} onClick={() => onCommit(saveToAsset(project, item.id, global))}>
+              Save changes to {def.name}
+            </button>
+          )}
         </div>
-        {itemIssues.filter((i) => !i.message.startsWith('Play note')).map((i) => (
+        <LibraryUpdate key={item.id} project={project} item={item} global={global} name={def.name} onCommit={onCommit} />
+        {itemIssues.filter((i) => !i.message.startsWith('Play note') && !i.message.includes('; the library is at v')).map((i) => (
           <p key={i.message} className={`lvl-issue ${i.severity}`}>
             {i.message} <span className="muted">{i.export}</span>
           </p>
@@ -396,7 +405,10 @@ export const LevelInspector = (props: Props) => {
         {group(
           'narrative',
           !q || matches('links story scene') ? (
-            <Links project={project} links={item.links ?? []} onOpen={props.onOpenStory} onAdd={(id) => onCommit(linkItem(project, item.id, id))} onRemove={(id) => onCommit(unlinkItem(project, item.id, id))} hint="Scenes, plot points and Bible entries this is part of." />
+            <>
+              <Links project={project} links={item.links ?? []} onOpen={props.onOpenStory} onAdd={(id) => onCommit(linkItem(project, item.id, id))} onRemove={(id) => onCommit(unlinkItem(project, item.id, id))} hint="Scenes, plot points and Bible entries this is part of." />
+              <TimelineUses project={project} itemId={item.id} onOpen={props.onOpenStory} />
+            </>
           ) : null,
           item.links?.length,
         )}
@@ -563,6 +575,77 @@ const Rules = ({ project, item, items, levels, onChange }: { project: Project; i
       <button className="tb-btn small" onClick={() => onChange([...rules, { id: newId('rule'), on: item.assetId.startsWith('logic.trigger') || item.assetId.startsWith('pres.') ? 'enter' : 'interact' }])}>
         + Rule
       </button>
+    </div>
+  );
+};
+
+const shown = (v: unknown) => (v === undefined ? '' : typeof v === 'boolean' ? (v ? 'on' : 'off') : String(v));
+
+/**
+ * An item placed from an earlier version of its library asset (spec §4.3):
+ * what the new version changes for it, a choice to keep each inherited value
+ * it had, then Update. Nothing changes until then.
+ */
+const LibraryUpdate = ({ project, item, global, name, onCommit }: { project: Project; item: LevelItem; global: readonly AssetDefinition[]; name: string; onCommit: (p: Project) => void }) => {
+  const m = migrationFor(project, item, global);
+  const [keep, setKeep] = useState<string[]>([]);
+  if (!m) return null;
+  const others = outdatedItems(project, global).filter((x) => x.assetId === m.assetId).length;
+  const line = (c: Change) => {
+    switch (c.kind) {
+      case 'inherited':
+        return (
+          <label key={c.key} className="lvl-change">
+            <input type="checkbox" checked={keep.includes(c.key)} onChange={(e) => setKeep(e.target.checked ? [...keep, c.key] : keep.filter((k) => k !== c.key))} />
+            <span>
+              {c.label}: {c.key === 'outline' ? 'a new shape' : `${shown(c.from)} → ${shown(c.to)}`} <span className="muted">keep the old</span>
+            </span>
+          </label>
+        );
+      case 'redundant':
+        return <p key={c.key} className="lvl-change">{c.label}: its own {shown(c.from)} is now the library’s, so it inherits it.</p>;
+      case 'invalid':
+        return <p key={c.key} className="lvl-change">{c.label}: {shown(c.from)} no longer fits; back to {shown(c.to)}.</p>;
+      default:
+        return <p key={c.key} className="lvl-change">{c.label}: gone from the library; its {shown(c.from)} is dropped.</p>;
+    }
+  };
+  return (
+    <div className="lvl-update" role="group" aria-label="Library update">
+      <p>
+        <b>{name}</b> has changed since this was placed (v{m.from} → v{m.to}).{' '}
+        {m.known ? (m.changes.length ? 'Updating it:' : 'Nothing it has changes.') : 'What changed wasn’t recorded; updating takes the library’s current values.'}
+      </p>
+      {m.changes.map(line)}
+      <div className="lvl-btnrow">
+        <button className="tb-btn small primary" onClick={() => { onCommit(migrateItem(project, item.id, keep, global)); setKeep([]); }}>
+          Update to v{m.to}
+        </button>
+        {others > 1 && (
+          <button className="tb-btn small" title="Every item from an older version takes the library’s current values" onClick={() => onCommit(migrateAll(project, m.assetId, global))}>
+            Update all {others}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** Scene timeline events that happen here (spec §7.3), each opening its scene. */
+const TimelineUses = ({ project, itemId, onOpen }: { project: Project; itemId: string; onOpen: (sceneId: string) => void }) => {
+  const uses = eventsAt(project, itemId);
+  if (!uses.length) return null;
+  return (
+    <div className="lvl-uses" aria-label="On scene timelines">
+      <span className="lvl-sub">On scene timelines</span>
+      {uses.map((u) => {
+        const scene = project.objects[u.sceneId]!;
+        return (
+          <button key={`${u.event.id}:${u.role}`} className="use" onClick={() => onOpen(u.sceneId)} title={u.how === 'link' ? 'Found through its link to what the event stands for' : 'Placed here on the timeline'}>
+            {String(scene.data.code ?? scene.name)} · {u.role === 'to' ? 'moves here: ' : ''}{eventTitle(project, u.event)}
+          </button>
+        );
+      })}
     </div>
   );
 };

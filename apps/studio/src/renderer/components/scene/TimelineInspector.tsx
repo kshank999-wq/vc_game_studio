@@ -20,6 +20,7 @@ import type { Project, TimelineEvent } from '../../model/types';
 import { EffectsEditor, OptionBehaviourEditor, RuleEditor } from '../rules/RuleEditor';
 import { Symbol } from '../Symbol';
 import { KIND_SYMBOL } from './parts';
+import { placeOf, placeToOf } from '../../model/level/places';
 
 interface Props {
   project: Project;
@@ -310,6 +311,59 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
           </div>
         </div>
       )}
+
+      <InTheLevel project={project} event={event} onSave={save} />
     </section>
+  );
+};
+
+/**
+ * Where the event happens in the level (spec §7.3): chosen here, or found
+ * through the level's links to what it stands for. Locate opens the Level
+ * Designer on it.
+ */
+const InTheLevel = ({ project, event, onSave }: { project: Project; event: TimelineEvent; onSave: (patch: { place?: string; placeTo?: string }) => void }) => {
+  const nav = useNav();
+  const set = project.levels;
+  if (!set?.items.length) return null;
+  const at = placeOf(project, event);
+  const to = placeToOf(project, event);
+  const options = set.levels.flatMap((l) =>
+    set.items
+      .filter((i) => i.levelId === l.id && !i.host)
+      .map((i) => ({ id: i.id, label: `${i.name} · ${l.name}` })),
+  );
+  const picker = (label: string, value: string, onChange: (v: string) => void, empty: string) => (
+    <label className="fld">
+      <span>{label}</span>
+      <select className="inp" aria-label={label} value={value} onChange={(e) => onChange(e.currentTarget.value)}>
+        <option value="">{empty}</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  return (
+    <div className="in-level" role="group" aria-label="In the level">
+      {picker('Where in the level', event.place ?? '', (v) => onSave({ place: v || undefined }), at?.how === 'link' ? `Found by its link: ${at.item.name}` : 'Not placed')}
+      {event.kind === 'action' && picker('Moves to', event.placeTo ?? '', (v) => onSave({ placeTo: v || undefined }), 'Nowhere')}
+      {(at || to) && nav.openLevels && (
+        <div className="btn-row">
+          {at && (
+            <button className="tb-btn small" onClick={() => nav.openLevels!(at.item.id)} title="Open the Level Designer on it">
+              Locate {at.item.name}
+            </button>
+          )}
+          {to && (
+            <button className="tb-btn small" onClick={() => nav.openLevels!(to.id)}>
+              Locate {to.name}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 };

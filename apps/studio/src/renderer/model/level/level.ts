@@ -1,8 +1,9 @@
 import type { Project } from '../types';
 import { assetOf, boundsOf, corners, frameOf, nearestWall, openingOf, OUTLINED_KINDS, outlineOf, selfIntersects, sizeOf, tidyOutline, toLocal, toPlan, wallNearest, type Point } from './geometry';
 import { findAsset } from './library';
+import { forgetPlaces } from './places';
 import { defaultSettings } from './naming';
-import type { AssemblyPart, AssetDefinition, Floor, Level, LevelItem, LevelSet, LevelSettings, NamingClass, OutlinePoint, ParamValue, Size } from './types';
+import type { AssemblyPart, AssetDefinition, AssetSnapshot, Floor, Level, LevelItem, LevelSet, LevelSettings, NamingClass, OutlinePoint, ParamValue, Size } from './types';
 
 /**
  * Every change to levels (spec §3–§5). Each takes the project and returns a
@@ -51,7 +52,7 @@ export const levelsOf = (project: Project): LevelSet => {
   return out;
 };
 
-const withSet = (project: Project, set: LevelSet): Project => ({ ...project, levels: set });
+export const withSet = (project: Project, set: LevelSet): Project => ({ ...project, levels: set });
 
 const next = (set: LevelSet, cls: NamingClass): { serial: number; counters: LevelSet['counters'] } => {
   const serial = (set.counters[cls] ?? 0) + 1;
@@ -557,8 +558,9 @@ export const removeItems = (project: Project, ids: readonly string[]): Project =
   const gone = new Set(ids);
   for (const i of set.items) if (i.host && gone.has(i.host.id)) gone.add(i.id);
   if (!set.items.some((i) => gone.has(i.id))) return project;
-  // Rules elsewhere that act on a removed item are left to validation to point out.
-  return withSet(project, { ...set, items: set.items.filter((i) => !gone.has(i.id)) });
+  // Rules elsewhere that act on a removed item are left to validation to point out;
+  // timeline events that happened there lose the place.
+  return forgetPlaces(withSet(project, { ...set, items: set.items.filter((i) => !gone.has(i.id)) }), gone);
 };
 
 export const groupItems = (project: Project, ids: readonly string[]): Project => {
@@ -718,10 +720,28 @@ export const saveToLibrary = (project: Project, ids: readonly string[], name: st
   return { project: withSet(project, { ...set, assets: [...set.assets, asset] }), assetId: id };
 };
 
-/** Change a project asset's defaults. Instances keep what they changed; the rest follows (spec §4.3). */
-export const updateAsset = (project: Project, assetId: string, patch: Partial<Pick<AssetDefinition, 'name' | 'size' | 'params' | 'description'>>): Project => {
+/**
+ * Change a project asset's defaults. Instances keep what they changed; the
+ * rest follows (spec §4.3). What the version gave before is kept, so items
+ * placed from it can be shown what changed and keep what they had.
+ */
+export const updateAsset = (project: Project, assetId: string, patch: Partial<Pick<AssetDefinition, 'name' | 'size' | 'params' | 'description' | 'outline'>>): Project => {
   const set = levelsOf(project);
-  return withSet(project, { ...set, assets: set.assets.map((a) => (a.id === assetId ? { ...a, ...patch, version: a.version + 1 } : a)) });
+  const snapshot = (a: AssetDefinition): AssetSnapshot => ({
+    version: a.version,
+    size: { ...a.size },
+    defaults: Object.fromEntries(a.params.map((p) => [p.key, p.default])),
+    ...(a.outline ? { outline: a.outline.map((p) => ({ ...p })) } : {}),
+  });
+  return withSet(project, {
+    ...set,
+    assets: set.assets.map((a) => {
+      if (a.id !== assetId) return a;
+      const next: AssetDefinition = { ...a, ...patch, version: a.version + 1, history: [...(a.history ?? []), snapshot(a)].slice(-20) };
+      if ('outline' in patch && !patch.outline) delete next.outline;
+      return next;
+    }),
+  });
 };
 
 export const removeAsset = (project: Project, assetId: string): Project => {

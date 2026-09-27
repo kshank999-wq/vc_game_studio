@@ -193,7 +193,7 @@ export const addEvent = (
   return { project: renumber(next, sceneId, track, sequence), id: event.id };
 };
 
-export type EventPatch = Partial<Pick<TimelineEvent, 'label' | 'detail' | 'seconds' | 'shots' | 'endsWhen' | 'condition' | 'mainLabel' | 'mainAfter' | 'when' | 'ends' | 'effects'>>;
+export type EventPatch = Partial<Pick<TimelineEvent, 'label' | 'detail' | 'seconds' | 'shots' | 'endsWhen' | 'condition' | 'mainLabel' | 'mainAfter' | 'when' | 'ends' | 'effects' | 'place' | 'placeTo'>>;
 
 export const updateEvent = (project: Project, sceneId: string, id: string, patch: EventPatch): Project => {
   const event = findEvent(project, sceneId, id);

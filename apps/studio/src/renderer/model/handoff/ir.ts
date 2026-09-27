@@ -6,6 +6,8 @@ import { isEmpty, isRule, type Effect, type Rule } from '../rules';
 import { cinematicTiming, shotsOf } from '../shots';
 import type { ObjectType, Project, StoryObject } from '../types';
 import { buildLevels, type IrLevel } from './levels';
+import { paramOf } from '../level/geometry';
+import { placeOf, placeToOf } from '../level/places';
 
 /**
  * The engine-neutral handoff model. The project is flattened once into plain
@@ -197,6 +199,9 @@ export interface IrEvent {
   ends?: IrRule;
   /** What happens when it plays; for a choice, when its main option is picked. */
   effects?: IrEffect[];
+  /** The level item it happens at (its GUID), and where an actor moves to (spec §7.3). */
+  place?: string;
+  placeTo?: string;
 }
 
 export interface IrScene {
@@ -299,6 +304,12 @@ export const buildIR = (project: Project): HandoffIR => {
   const ruled = (w: IrRule | undefined, e: IrEffect[] | undefined) => ({ ...(w ? { when: w } : {}), ...(e ? { effects: e } : {}) });
   const sceneOf = (id: string) => project.connections.find((c) => c.kind === 'contains' && c.targetId === id)?.sourceId;
 
+  // A place goes to the engine only when its item does.
+  const exported = (item: { id: string; hidden?: boolean } | null | undefined): boolean => {
+    const set = project.levels;
+    const full = item && set?.items.find((i) => i.id === item.id);
+    return !!full && !full.hidden && paramOf(set!, full, 'export') !== false;
+  };
   const scenes: IrScene[] = of('scene').map((s) => {
     const tracks = sceneTimeline(project, s.id);
     const code = s.data.code ?? '';
@@ -317,6 +328,8 @@ export const buildIR = (project: Project): HandoffIR => {
         ...(e.kind === 'choice' && e.mainAfter ? { mainAfter: e.mainAfter } : {}),
         ...ruled(rule(both(both(e.when, line?.conditions), e.kind === 'choice' && e.refId ? (project.objects[e.refId]?.data.rule as Rule | undefined) : undefined)), effects(e.effects)),
         ...(rule(e.ends) ? { ends: rule(e.ends) } : {}),
+        ...(exported(placeOf(project, e)?.item) ? { place: placeOf(project, e)!.item.id } : {}),
+        ...(exported(placeToOf(project, e)) ? { placeTo: placeToOf(project, e)!.id } : {}),
       };
     };
     const main = tracks[0]!.events;

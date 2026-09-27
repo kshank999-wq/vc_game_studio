@@ -1,6 +1,7 @@
 import type { Project } from '../types';
 import { assetOf, corners, frameOf, openingOf, outlineOf, overlaps, paramOf, selfIntersects, wallsOf } from './geometry';
 import { referencesOf } from './links';
+import { migrationFor } from './migrate';
 import { engineSafe, exportNameOf, levelExportName } from './naming';
 import type { AssetDefinition, LevelItem } from './types';
 
@@ -124,6 +125,23 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
     if (def.kind === 'volume' && def.role === 'trigger' && !(item.rules ?? []).length) {
       add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} has no rules, so it does nothing.`, export: 'An empty trigger is exported. Add a rule under Logic.' });
     }
+  }
+
+  // Placed from an earlier version of a library asset: shown, never silently changed (spec §4.3).
+  for (const item of set.items) {
+    const m = migrationFor(project, item, global);
+    if (!m) continue;
+    const def = assetOf(set, item, global);
+    const inherited = m.changes.filter((c) => c.kind === 'inherited').length;
+    add({
+      id: item.id,
+      levelId: item.levelId,
+      severity: 'warning',
+      message: `${item.name} is from v${m.from} of ${def.name}; the library is at v${m.to}.`,
+      export: inherited
+        ? `It exports with the library's new values for ${inherited === 1 ? 'one setting' : `${inherited} settings`} it inherited. Review it in the inspector to keep the old ones.`
+        : 'It exports with the library’s current values. Update it in the inspector.',
+    });
   }
 
   // What the engine being exported to will make of it.
