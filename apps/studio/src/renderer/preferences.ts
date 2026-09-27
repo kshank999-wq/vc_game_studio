@@ -21,6 +21,8 @@ export interface Preferences {
   scriptSize: number;
   /** The VO status a new dialogue line starts with. */
   defaultVo: DialogueLine['vo'];
+  /** Mark a speaker's cue (CONT'D) when they speak again with only action in between. */
+  contd: boolean;
   /** Interface scale, in percent (desktop). */
   uiScale: number;
   /** Palette tools pinned to the top, on the graph and inside a scene (spec §4). */
@@ -48,6 +50,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   scenePreviews: true,
   scriptSize: 14,
   defaultVo: 'todo',
+  contd: true,
   uiScale: 100,
   pinned: { graph: [], scene: [] },
   paletteCollapsed: {},

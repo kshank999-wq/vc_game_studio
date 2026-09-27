@@ -2040,10 +2040,77 @@ a:hover {
   overflow: hidden;
 }
 
-.line-action textarea::placeholder,
-.line-dialogue textarea::placeholder,
-.line-direction::placeholder {
+/* ------------------------------------------------------------ script elements (VC Writer's editor) */
+
+.element {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.element .field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.element textarea {
+  width: 100%;
+  font-size: var(--script-size, 14px);
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+.element textarea::placeholder {
   color: #5d5540;
+}
+
+/* The line's style, in the margin: shown where the writer is. */
+.element-type {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  z-index: 2;
+  width: 96px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: #1f1b12;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.element:focus-within > .element-type,
+.element:hover > .element-type {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.element-shot textarea,
+.element-transition textarea,
+.element-character textarea {
+  text-transform: uppercase;
+}
+
+.element-transition .field {
+  justify-content: flex-end;
+}
+
+.element-transition textarea {
+  width: 240px;
+  text-align: right;
+}
+
+.element-transition .cue-suggest {
+  left: auto;
+  right: 0;
+  transform: none;
+  width: 220px;
 }
 
 .line-dialogue {
@@ -2061,13 +2128,22 @@ a:hover {
   outline: 1px solid #6b4a33;
 }
 
-.line-dialogue textarea {
+.line-dialogue .element {
+  width: 100%;
+  align-items: center;
+}
+
+.line-dialogue .element .field {
+  justify-content: center;
+}
+
+.element-dialogue textarea {
   width: 340px;
 }
 
 .line-meta {
   position: absolute;
-  right: 10px;
+  left: 10px;
   top: 8px;
   display: none;
   gap: 4px;
@@ -2085,29 +2161,19 @@ a:hover {
   display: flex;
 }
 
-.cue-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 /* The character cue: a name, in capitals, as screenplays set it. */
-.script input.line-cue {
-  width: 220px;
+.script textarea.line-cue {
+  max-width: 320px;
   height: 24px;
   padding: 0 6px;
   border: 1px solid transparent;
   border-radius: 6px;
   text-align: center;
-  text-transform: uppercase;
-  font-size: var(--script-size, 14px);
   letter-spacing: 0.02em;
 }
 
 .line-cue::placeholder {
   color: #5d5540;
-  text-transform: none;
 }
 
 .line-dialogue:focus-within .line-cue,
@@ -2116,8 +2182,9 @@ a:hover {
   background: #2a1d15;
 }
 
-.line-cue.missing:not(:focus):placeholder-shown {
-  border-color: #7a3336;
+/* A name that is nobody yet: it becomes a character when the writer leaves it. */
+.line-cue.unnamed:not(:focus) {
+  border-color: #7a6533;
 }
 
 .cue-suggest {
@@ -2163,11 +2230,80 @@ a:hover {
   color: var(--muted);
 }
 
-.line-direction {
+.script textarea.line-direction {
   width: 240px;
   text-align: center;
   font-size: calc(var(--script-size, 14px) - 1px);
-  color: #b5a985 !important;
+  color: #b5a985;
+}
+
+/* Which voice is this? VC Writer's extension menu, beside the cue. */
+.extension-menu {
+  position: absolute;
+  z-index: 60;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 90vw);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  background: #26221a;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  font-family: var(--font-ui);
+}
+
+.extension-menu h5 {
+  margin: 6px 4px 3px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--c-dialogue);
+}
+
+.extension-item {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  grid-template-areas: 'mark term' 'mark what';
+  gap: 0 8px;
+  width: 100%;
+  text-align: left;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.extension-item:hover,
+.extension-item:focus-visible {
+  border-color: #6b4a33;
+  background: #3a3222;
+  outline: none;
+}
+
+.extension-mark {
+  grid-area: mark;
+  align-self: center;
+  font-family: var(--font-script);
+  font-size: 12px;
+  color: var(--c-dialogue);
+}
+
+.extension-term {
+  grid-area: term;
+  font-size: 12px;
+}
+
+.extension-what {
+  grid-area: what;
+  font-size: 10.5px;
+  color: var(--muted);
 }
 
 .script-empty {
@@ -7358,4 +7494,14 @@ kbd {
   right: 0;
   transform: none;
   width: 220px;
+}
+
+/* A cue continuing its speaker's last line, beside the name. */
+.line-contd {
+  margin-left: -4px;
+  white-space: nowrap;
+  font-family: var(--font-script);
+  font-size: var(--script-size, 14px);
+  color: var(--text-soft);
+  pointer-events: none;
 }

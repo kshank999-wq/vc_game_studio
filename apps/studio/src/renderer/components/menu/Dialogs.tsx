@@ -98,6 +98,7 @@ export const PreferencesDialog = ({ onClose }: { onClose: () => void }) => {
           ]}
           onChange={(defaultVo) => set({ defaultVo })}
         />
+        <Toggle label="Mark (CONT’D) when a character speaks again" hint="Their cue says so when only action comes between their lines." on={p.contd} onChange={(contd) => set({ contd })} />
 
         <h3>Interface</h3>
         {desktop()?.setZoom ? (

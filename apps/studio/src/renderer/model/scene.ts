@@ -235,6 +235,8 @@ export const setDefaultVo = (vo: DialogueLine['vo']): void => {
   newLineVo = vo;
 };
 
+export const defaultVo = (): DialogueLine['vo'] => newLineVo;
+
 export const addLine = (
   project: Project,
   sceneId: string,
@@ -260,7 +262,7 @@ export const addLine = (
   return { project: next, id: line.id };
 };
 
-export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'kind' | 'vo' | 'notes' | 'conditions'>>;
+export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'kind' | 'vo' | 'notes' | 'conditions' | 'extension' | 'cue'>>;
 
 export const updateLine = (project: Project, id: string, patch: LinePatch): Project => {
   const line = project.lines.find((l) => l.id === id);
@@ -270,12 +272,16 @@ export const updateLine = (project: Project, id: string, patch: LinePatch): Proj
   if (next.kind !== 'dialogue') {
     next.speakerId = null;
     next.vo = 'none';
+    delete next.extension;
+    delete next.cue;
+    delete next.joined;
     if (next.kind === 'transition') next.direction = '';
   } else if (line.kind !== 'dialogue') {
     next.vo = 'todo';
   }
   if (JSON.stringify(next) === JSON.stringify(line)) return project;
   let result: Project = { ...project, lines: project.lines.map((l) => (l.id === id ? next : l)) };
+  if (next.speakerId && next.cue !== undefined) delete next.cue;
   if (next.speakerId && next.speakerId !== line.speakerId) result = useInScene(result, line.sceneId, next.speakerId);
   return result;
 };
@@ -454,4 +460,21 @@ export const setSceneHeading = (project: Project, sceneId: string, text: string)
     }
   }
   return Object.keys(patch).length ? setSceneData(next, sceneId, patch) : next;
+};
+
+/**
+ * Does this line continue its speaker's last one (a cue marked CONT'D)? True
+ * when the same character spoke last and only action came between: another
+ * speaker or a transition breaks the run.
+ */
+export const continues = (project: Project, lineId: string): boolean => {
+  const line = project.lines.find((l) => l.id === lineId);
+  if (!line || line.kind !== 'dialogue' || !line.speakerId) return false;
+  const lines = sceneLines(project, line.sceneId);
+  for (let i = lines.findIndex((l) => l.id === lineId) - 1; i >= 0; i--) {
+    const before = lines[i]!;
+    if (before.kind === 'action') continue;
+    return before.kind === 'dialogue' && before.speakerId === line.speakerId;
+  }
+  return false;
 };

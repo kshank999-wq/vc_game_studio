@@ -126,6 +126,14 @@ export interface DialogueLine {
   text: string;
   /** A parenthetical: (listening), (wading forward). */
   direction: string;
+  /** The cue's extension: (V.O.), (O.S.), (INTO PHONE). */
+  extension?: string;
+  /** A cue typed but not yet anyone: the name as written, until the writer leaves it. */
+  cue?: string;
+  /** Carries on the speech above, under its cue: the speech after a parenthetical in the middle of it. */
+  joined?: boolean;
+  /** An action line written as a shot (ANGLE ON, CLOSE ON). */
+  shot?: boolean;
   order: number;
   /** Spoken only when this holds. */
   conditions?: Rule;

@@ -36,14 +36,18 @@ const openScene = () => {
   return view;
 };
 
-const cue = (container: HTMLElement, n = -1) => [...container.querySelectorAll<HTMLInputElement>('input.line-cue')].at(n)!;
-const typeIn = (el: HTMLInputElement | HTMLTextAreaElement, value: string) => {
-  el.value = value;
-  fireEvent.input(el);
+const cue = (container: HTMLElement, n = -1) => [...container.querySelectorAll<HTMLTextAreaElement>('textarea.line-cue')].at(n)!;
+const typeIn = (el: HTMLElement, value: string) => {
+  if (el instanceof HTMLTextAreaElement) fireEvent.change(el, { target: { value } });
+  else {
+    (el as HTMLInputElement).value = value;
+    fireEvent.input(el);
+  }
 };
 const key = (el: Element, k: string, opts: Partial<KeyboardEventInit> = {}) => act(() => void fireEvent.keyDown(el, { key: k, ...opts }));
+const styles = (container: HTMLElement) => [...container.querySelectorAll<HTMLSelectElement>('select.element-type')].map((s) => s.value);
 
-describe('writing the script', () => {
+describe('writing the script (VC Writer’s editor)', () => {
   it('completes a character’s name as it is typed, the scene’s cast first', () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(setup()));
     const { container } = openScene();
@@ -56,15 +60,18 @@ describe('writing the script', () => {
     expect(options()).toEqual(['JONAHnot in this scene yet']);
     typeIn(cue(container), 'ma');
     key(cue(container), 'Enter');
-    // Mara speaks; the caret goes on to her line.
+    // Mara speaks; Return from a cue gives her dialogue.
     expect(cue(container).value).toBe('Mara');
     const text = screen.getByRole('textbox', { name: 'Line for Mara' }) as HTMLTextAreaElement;
     expect(document.activeElement).toBe(text);
     typeIn(text, 'There’s a lever somewhere.');
+    // Return after dialogue is back to action; Tab there makes it a cue.
     key(text, 'Enter');
-    // The next cue: empty, offering the other side of the exchange.
+    const action = screen.getByRole('textbox', { name: 'Action' });
+    expect(document.activeElement).toBe(action);
+    key(action, 'Tab');
     expect(document.activeElement).toBe(cue(container));
-    expect(cue(container).value).toBe('');
+    expect(styles(container)).toEqual(['character', 'dialogue', 'character']);
   });
 
   it('makes a new character from a name nobody has, who joins the scene’s cast with their dialogue', () => {
@@ -73,6 +80,7 @@ describe('writing the script', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start with a character' }));
     typeIn(cue(container), 'OLD FERRYMAN');
     key(cue(container), 'Enter');
+    expect(cue(container).value).toBe('Old Ferryman');
     const text = screen.getByRole('textbox', { name: 'Line for Old Ferryman' }) as HTMLTextAreaElement;
     typeIn(text, 'Mind the water.');
     fireEvent.blur(text);
@@ -85,27 +93,85 @@ describe('writing the script', () => {
     expect(screen.queryByRole('group', { name: 'Mara’s dialogue' })).toBeNull();
   });
 
-  it('turns an empty cue into action, and takes a parenthetical with Tab or “(”', () => {
+  it('re-types the line on Tab, as Final Draft does: a cue, its extension, a parenthetical', () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(setup()));
+    const { container } = openScene();
+    fireEvent.click(screen.getByRole('button', { name: 'Start with action' }));
+    const action = screen.getByRole('textbox', { name: 'Action' });
+    typeIn(action, 'Mara');
+    key(action, 'Tab');
+    expect(styles(container)).toEqual(['character']);
+    // Beside a name, Tab asks which voice it is.
+    key(cue(container), 'Tab');
+    fireEvent.click(within(screen.getByRole('menu', { name: 'Extension' })).getByText('Voiceover'));
+    expect(screen.queryByRole('menu', { name: 'Extension' })).toBeNull();
+    expect(cue(container).value).toBe('Mara (V.O.)');
+    key(cue(container), 'Enter');
+    // Tab in the speech reaches for a parenthetical, which arrives in its brackets.
+    key(screen.getByRole('textbox', { name: 'Line for Mara' }), 'Tab');
+    const paren = screen.getByRole('textbox', { name: 'Parenthetical' }) as HTMLTextAreaElement;
+    expect(paren.value).toBe('()');
+    expect(paren.selectionStart).toBe(1);
+    typeIn(paren, '(whispering');
+    fireEvent.blur(paren);
+    expect(paren.value).toBe('(whispering)');
+    key(paren, 'Enter');
+    typeIn(screen.getByRole('textbox', { name: 'Line for Mara' }), 'Quiet now.');
+    fireEvent.blur(screen.getByRole('textbox', { name: 'Line for Mara' }));
+    expect(styles(container)).toEqual(['character', 'parenthetical', 'dialogue']);
+    expect(screen.getByRole('group', { name: 'Mara’s dialogue' }).textContent).toContain('Quiet now.');
+    // Shift+Tab walks back, and takes the brackets off.
+    key(paren, 'Tab', { shiftKey: true });
+    expect(styles(container)).toEqual(['character', 'character', 'dialogue']);
+  });
+
+  it('marks (CONT’D) when a character speaks again with only action between', () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(setup()));
     const { container } = openScene();
     fireEvent.click(screen.getByRole('button', { name: 'Start with a character' }));
     typeIn(cue(container), 'Mara');
-    key(cue(container), 'Tab');
-    const text = screen.getByRole('textbox', { name: 'Line for Mara' });
-    key(text, '(');
-    const paren = screen.getByRole('textbox', { name: 'Parenthetical' }) as HTMLInputElement;
-    expect(document.activeElement).toBe(paren);
-    typeIn(paren, 'whispering');
-    key(paren, 'Enter');
-    expect(paren.value).toBe('(whispering)');
-    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Line for Mara' }));
-    key(screen.getByRole('textbox', { name: 'Line for Mara' }), 'Enter');
-    // Enter on the empty cue: this one is action.
     key(cue(container), 'Enter');
-    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Action' }));
-    // And Tab on an empty action line makes it a cue again.
+    typeIn(screen.getByRole('textbox', { name: 'Line for Mara' }), 'Hold the light.');
+    key(screen.getByRole('textbox', { name: 'Line for Mara' }), 'Enter');
+    typeIn(screen.getByRole('textbox', { name: 'Action' }), 'She wades in.');
     key(screen.getByRole('textbox', { name: 'Action' }), 'Tab');
-    expect(document.activeElement).toBe(cue(container));
+    typeIn(cue(container), 'Mara');
+    key(cue(container), 'Enter');
+    expect(container.querySelectorAll('.line-contd')).toHaveLength(1);
+    // Another voice between them breaks the run.
+    const last = screen.getAllByRole('textbox', { name: 'Line for Mara' }).at(-1)!;
+    key(last, 'Enter');
+    key(screen.getAllByRole('textbox', { name: 'Action' }).at(-1)!, 'Tab');
+    typeIn(cue(container), 'Jonah');
+    key(cue(container), 'Enter');
+    key(screen.getByRole('textbox', { name: 'Line for Jonah' }), 'Enter');
+    key(screen.getAllByRole('textbox', { name: 'Action' }).at(-1)!, 'Tab');
+    typeIn(cue(container), 'Mara');
+    key(cue(container), 'Enter');
+    expect(container.querySelectorAll('.line-contd')).toHaveLength(1);
+  });
+
+  it('reads a script pasted as text into cues, parentheticals and dialogue', () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(setup()));
+    const { container } = openScene();
+    fireEvent.click(screen.getByRole('button', { name: 'Start with action' }));
+    const action = screen.getByRole('textbox', { name: 'Action' });
+    fireEvent.paste(action, { clipboardData: { getData: () => 'Water pours in.\n\nMARA\nWe go now.\n\nJONAH\n(quietly)\nFine.' } });
+    expect(styles(container)).toEqual(['action', 'character', 'dialogue', 'character', 'parenthetical', 'dialogue']);
+    fireEvent.blur(document.activeElement!);
+    expect(screen.getByRole('group', { name: 'Jonah’s dialogue' }).textContent).toContain('Fine.');
+  });
+
+  it('removes an empty line on Backspace', () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(setup()));
+    const { container } = openScene();
+    fireEvent.click(screen.getByRole('button', { name: 'Start with action' }));
+    typeIn(screen.getByRole('textbox', { name: 'Action' }), 'The door groans.');
+    key(screen.getByRole('textbox', { name: 'Action' }), 'Enter');
+    expect(styles(container)).toEqual(['action', 'action']);
+    key(screen.getAllByRole('textbox', { name: 'Action' })[1]!, 'Backspace');
+    expect(styles(container)).toEqual(['action']);
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Action' }));
   });
 
   it('writes the scene heading as the first line, completing INT./EXT., the place and the time', () => {
@@ -151,12 +217,14 @@ describe('writing the script', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start with action' }));
     const action = screen.getByRole('textbox', { name: 'Action' }) as HTMLTextAreaElement;
     typeIn(action, 'CUT TO:');
-    key(action, 'Enter');
-    expect((screen.getByRole('textbox', { name: 'Transition' }) as HTMLInputElement).value).toBe('CUT TO:');
+    // The line is what it turns out to be.
+    const first = screen.getByRole('textbox', { name: 'Transition' }) as HTMLTextAreaElement;
+    expect(first.value).toBe('CUT TO:');
+    key(first, 'Enter');
     // Enter left a new action line: Ctrl+6 makes it a transition, which completes.
     const next = screen.getByRole('textbox', { name: 'Action' });
     key(next, '6', { ctrlKey: true });
-    const transitions = () => screen.getAllByRole('textbox', { name: 'Transition' }) as HTMLInputElement[];
+    const transitions = () => screen.getAllByRole('textbox', { name: 'Transition' }) as HTMLTextAreaElement[];
     const second = transitions()[1]!;
     expect(document.activeElement).toBe(second);
     typeIn(second, 'dis');
