@@ -590,7 +590,8 @@ namespace VCGS.EditorTools
                 foreach (var p in pieces)
                 {
                     var piece = D.Map(p);
-                    if (!D.Bool(piece, "collide") || D.Str(piece, "part") == "volume") continue;
+                    // A volume that collides is a state gate blocking the way: solid as well as a trigger.
+                    if (!D.Bool(piece, "collide")) continue;
                     var holder = Child(collision, D.Str(piece, "part") + "_" + (n++));
                     Place(holder, piece);
                     if (D.Str(piece, "shape") == "slab")

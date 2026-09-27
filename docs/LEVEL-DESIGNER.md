@@ -189,7 +189,7 @@ A freeform volume goes over as a `volume` piece of shape `slab`. Engine triggers
 - **Godot:** convex shapes under the volume's `Area3D`; Godot reports entering and leaving across all of them.
 - **Unity:** convex trigger `MeshCollider`s on the item. The item counts overlaps, so crossing from one prism to the next isn't an exit and an entry.
 - **Unreal:** the item keeps its outline as `Zones` and builds convex trigger collision on a `Zone` component; the director listens to it as it does to the box.
-- A blocking state gate is solid only in Godot and in Play Mode, as before: the Unity and Unreal builders don't yet make any gate solid, box or outline.
+- A blocking state gate is solid as well as a trigger, box or outline: Godot gets a static body, Unity a collider under the item's `Collision`, and Unreal an unseen solid piece or slab. It stops blocking once it leaves the level, like any item.
 
 **Who owns what.** VC Game Studio owns each item's place, name, collision,
 graybox and data. The Unity and Unreal builders never touch final art, or

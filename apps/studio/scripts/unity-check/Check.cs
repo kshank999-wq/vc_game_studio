@@ -155,6 +155,22 @@ static class Check
         var fewer = VCGS.EditorTools.VcgsLevelBuilder.Build(Serialize(data), path, false);
         if (!fewer.Exists(l => l.Contains("LGT_SiltCamp_CampEmbers_002 is no longer in the level")) || root.transform.Find("LGT_SiltCamp_CampEmbers_002") == null) Fail("a removed item should be reported and left in place");
 
+        // A volume that collides is a blocking state gate: solid as well as a trigger, for a box and for an outline.
+        foreach (var o in list)
+        {
+            var m = D.Map(o);
+            var n = D.Str(m, "export_name");
+            if (n != "TRG_VaultChamber_FloodedSeam_001" && n != "AUD_VaultChamber_DrippingEcho_001") continue;
+            foreach (var p in D.List(m, "pieces")) if (D.Str(D.Map(p), "part") == "volume") D.Map(p)["collide"] = true;
+            m["revision"] = "gate";
+        }
+        VCGS.EditorTools.VcgsLevelBuilder.Build(Serialize(data), path, false);
+        var seamSolid = root.transform.Find("TRG_VaultChamber_FloodedSeam_001").Find("Collision").GetComponentsInChildren<UnityEngine.BoxCollider>(true);
+        if (seamSolid.Length != 1 || seamSolid[0].isTrigger) Fail("a blocking box gate should get a solid box under Collision");
+        var echoGate = root.transform.Find("AUD_VaultChamber_DrippingEcho_001");
+        var echoSolid = echoGate.Find("Collision")?.GetComponentsInChildren<UnityEngine.MeshCollider>(true) ?? new UnityEngine.MeshCollider[0];
+        if (echoSolid.Length != 1 || echoSolid[0].isTrigger || echoGate.GetComponents<UnityEngine.MeshCollider>().Length != 6) Fail("a blocking outlined gate should get a solid mesh and keep its six trigger prisms");
+
         // VcgsLevel in the scene: items come and go with the story.
         var levelComponent = root.GetComponent<VcgsLevel>();
         levelComponent.level = new UnityEngine.TextAsset { text = json };

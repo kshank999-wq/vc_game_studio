@@ -920,7 +920,16 @@ def build():
         index = 0
         slabs = []
         for piece in item_data["pieces"]:
-            if piece["part"] == "volume" or piece["shape"] == "cone":
+            if piece["shape"] == "cone":
+                continue
+            if piece["part"] == "volume":
+                # A volume that collides is a state gate blocking the way: an unseen solid as well as its trigger.
+                if piece["collide"]:
+                    if piece["shape"] == "slab":
+                        slabs.append(slab_of(piece, False))
+                    else:
+                        place_piece(item, piece, index, False, report)
+                        index += 1
                 continue
             if not with_mesh and not piece["collide"]:
                 continue

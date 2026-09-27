@@ -102,5 +102,23 @@ fewer = build_level.build()
 if not any("LGT_SiltCamp_CampEmbers_002 is no longer in the level" in line for line in fewer) or "LGT_SiltCamp_CampEmbers_002" not in items():
     fail("a removed item should be reported and left in place")
 
+# A volume that collides is a blocking state gate: an unseen solid as well as its trigger.
+for i in data["items"]:
+    if i["export_name"] in ("TRG_VaultChamber_FloodedSeam_001", "AUD_VaultChamber_DrippingEcho_001"):
+        for p in i["pieces"]:
+            if p["part"] == "volume":
+                p["collide"] = True
+        i["revision"] = "gate"
+with open(os.path.join(work, "Content/VCGS/Generated/Levels/sunken_vault.json"), "w", encoding="utf-8") as f:
+    json.dump(data, f)
+build_level.build()
+now = items()
+seam_solid = [a for a in now["TRG_VaultChamber_FloodedSeam_001"].get_attached_actors() if a.actor_has_tag("vcgs_volume")]
+if len(seam_solid) != 1 or seam_solid[0].static_mesh_component.calls.get("set_collision_profile_name") != ("BlockAll",) or seam_solid[0].static_mesh_component.calls.get("set_visibility") != (False,):
+    fail("a blocking box gate should get an unseen BlockAll piece")
+gate_slabs = now["AUD_VaultChamber_DrippingEcho_001"].get_editor_property("slabs")
+if len(gate_slabs) != 1 or not gate_slabs[0].get_editor_property("collide") or gate_slabs[0].get_editor_property("visible") or len(now["AUD_VaultChamber_DrippingEcho_001"].get_editor_property("zones")) != 1:
+    fail("a blocking outlined gate should get an unseen colliding slab and keep its zone")
+
 print("build_level.py OK" if not failures else "%d FAILED" % len(failures))
 sys.exit(1 if failures else 0)
