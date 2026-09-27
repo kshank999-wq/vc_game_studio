@@ -70,7 +70,7 @@ export const openProjectFile = async (): Promise<Opened> => {
       return opened(await (await handle.getFile()).text(), { name: handle.name, handle });
     } catch (error) {
       if (isCancel(error)) return null;
-      throw error;
+      // Pickers can be refused (an embedded page, say): fall back to a plain file input.
     }
   }
   return pickWithInput();
@@ -119,7 +119,7 @@ export const saveProjectFile = async (project: Project, file: ProjectFile | null
       return { name: handle.name, handle };
     } catch (error) {
       if (isCancel(error)) return null;
-      throw error;
+      // Refused (an embedded page, say): download a copy instead.
     }
   }
   // No way to write back: download a copy each time.
