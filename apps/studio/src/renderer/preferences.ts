@@ -15,12 +15,18 @@ export interface Preferences {
   wheel: 'zoom' | 'pan';
   showMinimap: boolean;
   showGrid: boolean;
+  /** Resting the pointer on a scene card shows its summary and key flags. */
+  scenePreviews: boolean;
   /** Script text size, in pixels. */
   scriptSize: number;
   /** The VO status a new dialogue line starts with. */
   defaultVo: DialogueLine['vo'];
   /** Interface scale, in percent (desktop). */
   uiScale: number;
+  /** Palette tools pinned to the top, on the graph and inside a scene (spec §4). */
+  pinned: { graph: string[]; scene: string[] };
+  /** Palette groups folded away. */
+  paletteCollapsed: Record<string, boolean>;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -29,9 +35,12 @@ export const DEFAULT_PREFERENCES: Preferences = {
   wheel: 'zoom',
   showMinimap: true,
   showGrid: true,
+  scenePreviews: true,
   scriptSize: 14,
   defaultVo: 'todo',
   uiScale: 100,
+  pinned: { graph: [], scene: [] },
+  paletteCollapsed: {},
 };
 
 const KEY = 'vcgs.prefs.v1';

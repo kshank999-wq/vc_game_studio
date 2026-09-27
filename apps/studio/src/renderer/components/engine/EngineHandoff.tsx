@@ -37,7 +37,7 @@ const saveZip = (name: string, files: { path: string; content: string }[]) => {
  * The engine handoff (HANDOFF iteration 2, mockup 08): pick the engine you
  * work in, see what every element becomes there, read the code if you like
  * (it's generated, read-only, and hideable), and send it once the checks are
- * clear. Godot 4 is first; the others are set up and marked as coming.
+ * clear. Godot 4 and plain JSON are ready; the others are set up and marked as coming.
  */
 export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: Props) => {
   const plan = useMemo(() => planHandoff(project), [project]);
@@ -150,7 +150,8 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
             <span className="kv-value muted">Downloads as a .zip in the browser</span>
           )}
         </div>
-        {folderState && !folderState.engineProject && (
+        {folderState && !folderState.exists && adapter.id !== 'godot' && <p className="handoff-note warn">That folder isn’t there any more.</p>}
+        {folderState && !folderState.engineProject && adapter.id === 'godot' && (
           <p className="handoff-note warn">{folderState.exists ? `There’s no project.godot in that folder. Choose your ${engineName} project’s folder.` : 'That folder isn’t there any more.'}</p>
         )}
         <label className="kv">
@@ -291,7 +292,7 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           <div className="handoff-later">
             <h2>{adapter.name} is coming</h2>
             <p>{adapter.plan}</p>
-            <p>Everything it needs is already in the project. Pick Godot 4 to hand off today.</p>
+            <p>Everything it needs is already in the project. Pick Godot 4, or Any engine (JSON), to hand off today.</p>
           </div>
         )}
       </section>

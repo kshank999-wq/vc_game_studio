@@ -1,7 +1,7 @@
 import { laneSequence, spineSequence } from './layout';
 import { setterNames } from './details';
 import { brokenReferences } from './rules';
-import type { Project } from './types';
+import type { ObjectType, Project, StoryObject } from './types';
 
 /**
  * What needs a look (spec §25). Shown as a compact red "!" on the node until
@@ -11,6 +11,34 @@ export interface Issue {
   id: string;
   message: string;
 }
+
+/** What each kind of element needs in the Bible once a scene uses it, in words for the warning. */
+const CANONICAL: Partial<Record<ObjectType, string>> = {
+  character: 'has no role or description',
+  object: 'has no states, interactions or description',
+  environment: 'has no description',
+  inventory: 'has no description or use',
+  puzzle: 'has no solution or description',
+};
+
+const hasCanonicalData = (o: StoryObject): boolean => {
+  if (o.notes.trim()) return true;
+  const filled = (k: string) => String(o.data[k] ?? '').trim() !== '';
+  switch (o.type) {
+    case 'character':
+      return filled('role') || filled('arc');
+    case 'object':
+      return ((o.data.states as string[] | undefined) ?? []).length > 0 || ((o.data.interactions as unknown[] | undefined) ?? []).length > 0 || filled('location');
+    case 'environment':
+      return ['appearance', 'lighting', 'ambience', 'traversal'].some(filled);
+    case 'inventory':
+      return filled('use') || filled('persists');
+    case 'puzzle':
+      return filled('solution') || !!o.data.rule;
+    default:
+      return true;
+  }
+};
 
 export const findIssues = (project: Project): Issue[] => {
   const issues: Issue[] = [];
@@ -59,6 +87,41 @@ export const findIssues = (project: Project): Issue[] => {
   // A condition or effect that points at something deleted (spec §25).
   for (const b of brokenReferences(project)) {
     if (!issues.some((i) => i.id === b.owner)) issues.push({ id: b.owner, message: `A condition or effect in ${b.where} points at something that no longer exists.` });
+  }
+  // Scenes (spec §25: orphaned or incomplete scene).
+  for (const scene of Object.values(project.objects)) {
+    if (scene.type !== 'scene') continue;
+    if (!project.placements[scene.id]) {
+      issues.push({ id: scene.id, message: 'Not on the story graph: drag it onto the spine or a branch.' });
+      continue;
+    }
+    const written =
+      String(scene.data.summary ?? '').trim() ||
+      project.lines.some((l) => l.sceneId === scene.id && l.text.trim()) ||
+      project.events.some((e) => e.sceneId === scene.id) ||
+      project.connections.some((c) => c.kind === 'contains' && c.sourceId === scene.id);
+    if (!written && !issues.some((i) => i.id === scene.id)) issues.push({ id: scene.id, message: 'Nothing written yet: give it a summary or a first line.' });
+  }
+  // Something used in a scene with nothing about it in the Bible (spec §25: missing canonical data).
+  for (const object of Object.values(project.objects)) {
+    if (!CANONICAL[object.type] || issues.some((i) => i.id === object.id)) continue;
+    const scenes = project.connections.filter((c) => c.kind === 'contains' && c.targetId === object.id && project.objects[c.sourceId]);
+    if (!scenes.length || hasCanonicalData(object)) continue;
+    const where = project.objects[scenes[0]!.sourceId]!;
+    issues.push({ id: object.id, message: `Used in ${where.data.code ?? where.name} but ${CANONICAL[object.type]} in the Bible.` });
+  }
+  // Timeline choices and branches (spec §25: branch that cannot resolve, choice with no valid outcome).
+  for (const branch of project.branches) {
+    if (branch.rejoinEventId && !project.events.some((e) => e.id === branch.rejoinEventId) && !project.lines.some((l) => `dlg_${l.id}` === branch.rejoinEventId)) {
+      if (!issues.some((i) => i.id === branch.sceneId)) issues.push({ id: branch.sceneId, message: `The option “${branch.label}” reconnects to an event that is gone.` });
+    }
+  }
+  for (const event of project.events) {
+    if (event.kind !== 'choice' || !project.objects[event.sceneId]) continue;
+    const others = project.branches.filter((b) => b.choiceEventId === event.id).length;
+    if (!others && !issues.some((i) => i.id === event.sceneId)) {
+      issues.push({ id: event.sceneId, message: `The choice ${event.refId ? `“${project.objects[event.refId]?.name ?? ''}” ` : ''}on its timeline has only one option.` });
+    }
   }
   // A line nobody speaks (spec §25: dialogue speaker missing).
   for (const line of project.lines) {

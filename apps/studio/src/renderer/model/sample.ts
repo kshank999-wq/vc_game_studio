@@ -60,6 +60,16 @@ export const sunkenVault = (): Project => {
   link(c2, heavy, 'Pocket it');
   p = setOutcome(p, lost, 'gameOver');
   p = setOutcome(p, heavy, 'ending');
+  // The scenes still to write have at least what happens in them.
+  for (const [scene, summary] of [
+    [caveMouth, 'The explorer finds the way in; Mara will not go first.'],
+    [theKey, 'The key, half-buried in silt where the last expedition camped.'],
+    [squeeze, 'A crawl too tight for the lantern. Trust Mara, or force it.'],
+    [lost, 'The rock shifts. The way back is gone.'],
+    [heavy, 'The ring comes too, and the water rises with it.'],
+  ] as const) {
+    p = setSceneData(p, scene, { summary });
+  }
 
   // A subplot from The Key to the cinematic, and two character arcs.
   const sub = addLane(p, 'subplot');

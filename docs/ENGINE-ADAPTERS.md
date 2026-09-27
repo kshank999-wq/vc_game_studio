@@ -83,3 +83,16 @@ Nothing in the story model, the Bible or the handoff screen changes.
   the free play) and play the Vault Door scene through its branch; it loads
   every generated .tscn and plays the Vault Door's through its on-screen
   player to the ending. CI runs it.
+
+## The JSON adapter (any engine)
+
+Pick **Any engine (JSON)** on the handoff screen. It writes, under `vcgs/`:
+
+- `story.json`: the whole handoff model (the same IR the Godot adapter reads),
+  with `format: "vcgs-story"`, `version: 1` and stable snake_case keys.
+- `story.schema.json`: a JSON Schema (2020-12) for it. The sample's
+  `story.json` validates against it with Ajv in strict mode (with union types
+  allowed, which the schema uses for nullable fields).
+- `README.md`: how to play it: where the story starts, how nodes, scenes,
+  choices and options move on, how triggers and puzzles settle, and every
+  condition and effect kind.

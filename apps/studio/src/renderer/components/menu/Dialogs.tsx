@@ -79,6 +79,7 @@ export const PreferencesDialog = ({ onClose }: { onClose: () => void }) => {
         />
         <Toggle label="Show the minimap" on={p.showMinimap} onChange={(showMinimap) => set({ showMinimap })} />
         <Toggle label="Show the dot grid" on={p.showGrid} onChange={(showGrid) => set({ showGrid })} />
+        <Toggle label="Preview a scene when the pointer rests on it" on={p.scenePreviews} onChange={(scenePreviews) => set({ scenePreviews })} />
 
         <h3>Script</h3>
         <Choice<'scriptSize'>

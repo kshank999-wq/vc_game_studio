@@ -89,12 +89,12 @@ describe('export status', () => {
     expect(edited.rows.find((r) => r.label === 'Mara')!.status).toBe('ready');
   });
 
-  it('lists the engines to come, with Godot ready now', () => {
+  it('lists the engines to come, with Godot and JSON ready now', () => {
     expect(ENGINES.map((e) => [e.id, e.available])).toEqual([
       ['godot', true],
       ['unity', false],
       ['unreal', false],
-      ['custom', false],
+      ['custom', true],
     ]);
     const p = setTarget(sunkenVault(), { engine: 'unity' });
     expect(targetOf(p).outputPath).toBe('Assets/VCGS/Generated');
@@ -132,5 +132,20 @@ describe('Godot placeholder scenes', () => {
     expect(out.files.find((f) => f.path.endsWith('story_graph.gd'))!.content).toContain(`const START := "${ir.graph.find((n) => n.kind === 'begin')!.key}"`);
     const off = generateGodot(ir, 'res://vcgs/generated', { placeholderScenes: false });
     expect(off.files.some((f) => f.path.endsWith('.tscn'))).toBe(false);
+  });
+});
+
+describe('the JSON adapter', () => {
+  it('writes the story, its schema and how to play it, one row per element', async () => {
+    const { json, storySchema, JSON_FORMAT } = await import('../handoff/json');
+    const ir = buildIR(sunkenVault());
+    const out = json.generate!(ir, 'vcgs');
+    expect(out.files.map((f) => f.path)).toEqual(['vcgs/story.json', 'vcgs/story.schema.json', 'vcgs/README.md']);
+    const story = JSON.parse(out.files[0]!.content);
+    expect(story).toMatchObject({ ...JSON_FORMAT, $schema: './story.schema.json', project: { name: 'The Sunken Vault' } });
+    expect(story.scenes.find((s: { name: string }) => s.name === 'The Vault Door').main[4].ends).toEqual({ match: 'all', items: [{ kind: 'flag', ref: 'door_solved', op: 'is', value: 'yes' }] });
+    // Every top-level key the schema requires is there.
+    for (const key of storySchema().required) expect(story).toHaveProperty(key);
+    expect(out.elements.find((e) => e.label === 'Rusted Lever')!.files).toEqual(['vcgs/story.json']);
   });
 });

@@ -5622,3 +5622,192 @@ kbd {
   font-size: 10.5px;
   color: var(--muted);
 }
+
+/* ---------------------------------------------------------------- scene quick preview (spec §9) */
+
+.scene-preview {
+  position: absolute;
+  z-index: 28;
+  width: 280px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: #1b1811;
+  border: 1px solid var(--c-scene);
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.scene-preview p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.scene-preview-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.scene-preview-outcome {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--gold-lo);
+  font-size: 10px;
+  color: var(--gold-hi);
+}
+
+.scene-preview-slug {
+  font-family: var(--font-script);
+  font-size: 11px;
+  color: var(--c-scene);
+}
+
+.scene-preview-counts {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.scene-preview-flags {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ---------------------------------------------------------------- pinned palette tools (spec §4) */
+
+.node-button-wrap {
+  position: relative;
+}
+
+.pin-btn {
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  opacity: 0;
+}
+
+.node-button-wrap:hover .pin-btn,
+.pin-btn:focus-visible,
+.pin-btn.on {
+  opacity: 1;
+}
+
+.pin-btn.on {
+  color: var(--gold-hi);
+}
+
+.pin-btn:hover {
+  background: var(--node-raised);
+  color: var(--text);
+}
+
+.node-button-wrap:hover .node-button-kind {
+  visibility: hidden;
+}
+
+.palette-pinned .palette-group {
+  color: var(--gold-hi);
+}
+
+.rail-group.pinned {
+  border-bottom: 1px solid var(--gold-lo);
+}
+
+.node-button-wrap:has(.pin-btn.on) .node-button-kind {
+  visibility: hidden;
+}
+
+/* ---------------------------------------------------------------- mind map: second level (spec §11) */
+
+.exploded-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.exploded-legend .tb-btn {
+  pointer-events: auto;
+}
+
+.box-open {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--cat) 60%, transparent);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--cat);
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.box-open:hover,
+.box-open.on {
+  background: color-mix(in srgb, var(--cat) 25%, var(--panel));
+  color: var(--text);
+}
+
+.facet {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--cat) 45%, transparent);
+  border-left: 3px solid var(--cat);
+  border-radius: 5px;
+  background: var(--node);
+  font-size: 11.5px;
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.facet-label {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.facet-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-soft);
+}
+
+.facet-wire {
+  stroke-width: 1;
+  opacity: 0.55;
+}

@@ -30,6 +30,8 @@ export interface NodeProps {
   onPortDown: (e: React.PointerEvent) => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  /** The pointer came onto the card, or left it. */
+  onHover?: (on: boolean) => void;
   onRename: (name: string) => void;
   onCancelRename: () => void;
 }
@@ -81,6 +83,8 @@ export const NodeView = (props: NodeProps) => {
     'data-type': object.type,
     onPointerDown: props.onPointerDown,
     onContextMenu: props.onContextMenu,
+    onPointerEnter: () => props.onHover?.(true),
+    onPointerLeave: () => props.onHover?.(false),
     onDoubleClick: (e: React.MouseEvent) => {
       e.stopPropagation();
       props.onDoubleClick();

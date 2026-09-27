@@ -2,11 +2,12 @@ import { findIssues } from '../validate';
 import type { EngineId, EngineTarget, ExportRecord, Project } from '../types';
 import type { EngineAdapter, ElementOutput, EngineOutput } from './engines';
 import { godot } from './godot';
+import { json } from './json';
 import { buildIR } from './ir';
 
 /**
- * Every engine VC Game Studio will hand off to. Godot is first; the others
- * are listed with their plan so the picker, the target and the export record
+ * Every engine VC Game Studio will hand off to. Godot and plain JSON (for
+ * any other engine) are ready; Unity and Unreal are listed with their plan so the picker, the target and the export record
  * already work for them. Adding one is one adapter file.
  */
 export const ENGINES: readonly EngineAdapter[] = [
@@ -31,16 +32,7 @@ export const ENGINES: readonly EngineAdapter[] = [
     setup: [],
     plan: 'Data Assets and Data Tables, with Blueprint-callable functions for choices and rules.',
   },
-  {
-    id: 'custom',
-    name: 'Custom engine',
-    language: 'JSON + schema',
-    available: false,
-    defaultOutputPath: 'vcgs',
-    runtimeName: 'JSON schema',
-    setup: [],
-    plan: 'The handoff model itself as JSON, with a schema, for any engine to read.',
-  },
+  json,
 ];
 
 export const engineById = (id: EngineId): EngineAdapter => ENGINES.find((e) => e.id === id) ?? godot;

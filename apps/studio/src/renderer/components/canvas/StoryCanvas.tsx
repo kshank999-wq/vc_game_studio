@@ -27,6 +27,7 @@ import { EffectsEditor, OptionBehaviourEditor, RuleEditor } from '../rules/RuleE
 import { Minimap } from './Minimap';
 import { usePreferences } from '../../preferences';
 import { useNav } from '../../nav';
+import { scenePreview } from '../../model/scene-preview';
 import { NodeView, type PortState } from './NodeView';
 import { SubplotBand, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
 
@@ -142,6 +143,18 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
   const [menu, setMenu] = useState<Menu | null>(null);
   const [rulesFor, setRulesFor] = useState<Menu | null>(null);
   const preferences = usePreferences();
+  // The scene card under the pointer, once it has rested there a moment (spec §9: quick preview).
+  const [hovered, setHovered] = useState<string | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverScene = (id: string | null) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    if (!id) {
+      setHovered(null);
+      return;
+    }
+    hoverTimer.current = setTimeout(() => setHovered(id), 450);
+  };
+  useEffect(() => () => void (hoverTimer.current && clearTimeout(hoverTimer.current)), []);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -484,6 +497,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
               onPortDown={(e) => onPortDown(e, id)}
               onDoubleClick={() => (object.type === 'scene' ? props.onOpenScene(id, 'open') : setEditing(id))}
               onContextMenu={(e) => openMenu(e, 'node', id)}
+              onHover={object.type === 'scene' ? (on) => hoverScene(on ? id : null) : undefined}
               detail={object.type === 'scene' ? sceneDetail(shown, id) : undefined}
               onRename={(name) => {
                 setEditing(null);
@@ -550,6 +564,41 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
           {link.refusal}
         </div>
       )}
+
+      {hovered && preferences.scenePreviews && !menu && !link && !paletteDrag && !editing && (() => {
+        const info = scenePreview(project, hovered);
+        const box = nodeBox(shown, hovered, rows);
+        if (!info || !box) return null;
+        const left = (box.x + box.w) * view.zoom + view.panX + 12;
+        const top = box.y * view.zoom + view.panY;
+        return (
+          <div className="scene-preview" role="tooltip" style={{ left: Math.min(left, size.w - 300), top: Math.max(8, top) }}>
+            <div className="scene-preview-title">
+              {info.title}
+              {info.outcome && <span className="scene-preview-outcome">{info.outcome === 'gameOver' ? 'Game over' : 'Ending'}</span>}
+            </div>
+            <div className="scene-preview-slug">{info.slug}</div>
+            {info.summary && <p>{info.summary}</p>}
+            <div className="scene-preview-counts">{info.counts}</div>
+            {info.sets.length > 0 && (
+              <div className="scene-preview-flags">
+                <span className="rule-label">Changes</span>
+                {info.sets.map((s) => (
+                  <span key={s}>{s}</span>
+                ))}
+              </div>
+            )}
+            {info.needs.length > 0 && (
+              <div className="scene-preview-flags">
+                <span className="rule-label">Waits on</span>
+                {info.needs.map((s) => (
+                  <span key={s}>{s}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {menu && (
         <ContextMenu

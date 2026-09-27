@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { getPreferences, setPreferences, usePreferences } from '../preferences';
 import type { ObjectType } from '../model/types';
 import { TYPE_LABEL } from '../model/semantics';
 import { Symbol } from './Symbol';
@@ -60,9 +60,25 @@ interface Props {
   onToggleRail: () => void;
 }
 
+const PINNED = 'Pinned';
+
+/** Pin a tool to the top of the palette, or take it off again. Kept on this computer. */
+const togglePin = (mode: 'graph' | 'scene', type: ObjectType) => {
+  const pinned = getPreferences().pinned;
+  const list = pinned[mode];
+  setPreferences({ pinned: { ...pinned, [mode]: list.includes(type) ? list.filter((t) => t !== type) : [...list, type] } });
+};
+
 export const Palette = ({ active, onStart, mode, rail, onToggleRail }: Props) => {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const groups = mode === 'scene' ? SCENE_GROUPS : GROUPS;
+  const preferences = usePreferences();
+  const collapsed = preferences.paletteCollapsed;
+  const setCollapsed = (title: string) => setPreferences({ paletteCollapsed: { ...collapsed, [`${mode}:${title}`]: !collapsed[`${mode}:${title}`] } });
+  const isCollapsed = (title: string) => !!collapsed[`${mode}:${title}`];
+  const base = mode === 'scene' ? SCENE_GROUPS : GROUPS;
+  const available = base.flatMap((g) => g.items);
+  const pinnedItems = preferences.pinned[mode].map((t) => available.find((i) => i.type === t)).filter((i): i is (typeof available)[number] => !!i);
+  const groups = pinnedItems.length ? [{ title: PINNED, items: pinnedItems }, ...base] : base;
+  const pinned = new Set(pinnedItems.map((i) => i.type));
   if (rail) {
     return (
       <aside className="palette rail" aria-label="Add — drag an element">
@@ -72,7 +88,7 @@ export const Palette = ({ active, onStart, mode, rail, onToggleRail }: Props) =>
           </svg>
         </button>
         {groups.map((group) => (
-          <div key={group.title} className="rail-group">
+          <div key={group.title} className={`rail-group${group.title === PINNED ? ' pinned' : ''}`}>
             {group.items.map((item) => (
               <button
                 key={item.type}
@@ -105,32 +121,47 @@ export const Palette = ({ active, onStart, mode, rail, onToggleRail }: Props) =>
         </button>
       </div>
       {groups.map((group) => (
-        <section key={group.title}>
-          <button
-            className="palette-group"
-            aria-expanded={!collapsed[group.title]}
-            onClick={() => setCollapsed((c) => ({ ...c, [group.title]: !c[group.title] }))}
-          >
+        <section key={group.title} className={group.title === PINNED ? 'palette-pinned' : undefined}>
+          <button className="palette-group" aria-expanded={!isCollapsed(group.title)} onClick={() => setCollapsed(group.title)}>
             {group.title}
-            <span className="twisty">{collapsed[group.title] ? '▸' : '▾'}</span>
+            <span className="twisty">{isCollapsed(group.title) ? '▸' : '▾'}</span>
           </button>
-          {!collapsed[group.title] &&
+          {!isCollapsed(group.title) &&
             group.items.map((item) => (
-              <button
-                key={item.type}
-                className={`node-button${active === item.type ? ' active' : ''}`}
-                title={TIPS[item.type]}
-                onPointerDown={(e) => {
-                  if (e.button !== 0) return;
-                  e.preventDefault();
-                  onStart(item.type, e);
-                }}
-              >
-                <Symbol type={item.type} />
-                {TYPE_LABEL[item.type]}
-                {item.kind && <span className="node-button-kind">{item.kind}</span>}
-                <span className="port-ring" />
-              </button>
+              <div key={item.type} className="node-button-wrap">
+                <button
+                  className={`node-button${active === item.type ? ' active' : ''}`}
+                  title={TIPS[item.type]}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    onStart(item.type, e);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    togglePin(mode, item.type);
+                  }}
+                >
+                  <Symbol type={item.type} />
+                  {TYPE_LABEL[item.type]}
+                  {item.kind && <span className="node-button-kind">{item.kind}</span>}
+                  <span className="port-ring" />
+                </button>
+                {group.title !== PINNED || pinned.has(item.type) ? (
+                  <button
+                    className={`pin-btn${pinned.has(item.type) ? ' on' : ''}`}
+                    aria-label={`${pinned.has(item.type) ? 'Unpin' : 'Pin'} ${TYPE_LABEL[item.type]}`}
+                    aria-pressed={pinned.has(item.type)}
+                    title={pinned.has(item.type) ? 'Unpin from the top' : 'Pin to the top (or right-click the tool)'}
+                    onClick={() => togglePin(mode, item.type)}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill={pinned.has(item.type) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                      <path d="M6 2h4l-.6 4.2L12 9H4l2.6-2.8z" />
+                      <path d="M8 9v5" />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
             ))}
         </section>
       ))}

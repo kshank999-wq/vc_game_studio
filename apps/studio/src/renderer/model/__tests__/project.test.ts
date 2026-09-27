@@ -317,6 +317,9 @@ describe('branches', () => {
     p = made.project;
     expect(findIssues(p)).toEqual([{ id: branch.id, message: expect.stringMatching(/Dead end/) }]);
     p = setOutcome(p, branch.id, 'gameOver');
+    // It no longer dead-ends, but nothing is written in it yet.
+    expect(findIssues(p)).toEqual([{ id: branch.id, message: expect.stringMatching(/Nothing written yet/) }]);
+    p = { ...p, objects: { ...p.objects, [branch.id]: { ...p.objects[branch.id]!, data: { ...p.objects[branch.id]!.data, summary: 'The rock shifts.' } } } };
     expect(findIssues(p)).toEqual([]);
   });
 });

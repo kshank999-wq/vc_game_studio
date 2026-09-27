@@ -7,6 +7,7 @@ import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
 import { clampZoom, zoomAt, type View } from '../../view';
 import type { PaletteDrag } from '../canvas/StoryCanvas';
 import { Symbol } from '../Symbol';
+import { facetsOf, type Facet } from '../../model/facets';
 import { NameEdit, dropCategory, sceneRefusal, symbolColor } from './parts';
 import type { SceneSurface } from './SceneWorkspace';
 import { ElementDetail } from '../detail/ElementDetail';
@@ -114,10 +115,27 @@ interface Placed {
   category: Category;
   at: Point;
   object?: StoryObject;
+  /** The element opened a level further (spec §11): its facets, placed beyond it. */
+  facets?: { facet: Facet; at: Point }[];
 }
 
-/** Everything the scene holds, placed around its ports. Dialogue is one box for the whole script. */
-const layout = (project: Project, sceneId: string): Placed[] => {
+// A facet of an opened element: a line of words beyond its box.
+const LEAF_W = 190;
+const LEAF_H = 36;
+const LEAF_GAP = 6;
+const LEAF_REACH = 40;
+const stack = (n: number) => n * LEAF_H + Math.max(0, n - 1) * LEAF_GAP;
+
+/** Which elements are opened a level further, per scene, for as long as the studio is open (spec §24). */
+const opened = new Map<string, Set<string>>();
+const openIn = (sceneId: string) => opened.get(sceneId) ?? new Set<string>();
+
+/**
+ * Everything the scene holds, placed around its ports; dialogue is one box
+ * for the whole script. An opened element's facets sit beyond it, and the
+ * boxes further out on that side move out to make room.
+ */
+const layout = (project: Project, sceneId: string, open: ReadonlySet<string> = new Set()): Placed[] => {
   const placed: Placed[] = [];
   for (const c of CATEGORIES) {
     if (c.key === 'dialogue') {
@@ -125,9 +143,59 @@ const layout = (project: Project, sceneId: string): Placed[] => {
       continue;
     }
     const items = elementsIn(project, sceneId, c.key);
-    items.forEach((object, i) => placed.push({ id: object.id, category: c, at: boxAt(c, i, items.length), object }));
+    const facets = items.map((o) => (open.has(o.id) ? facetsOf(project, sceneId, o) : null));
+    if (c.side === 'bottom') {
+      // A row under the scene: an opened box takes a wider slot, its facets hang below it.
+      const widths = facets.map((f) => (f ? LEAF_W : BOX_W));
+      const total = widths.reduce((a, b) => a + b, 0) + (items.length - 1) * 20;
+      let x = portAt(c).x - total / 2;
+      items.forEach((object, i) => {
+        const at = { x: x + (widths[i]! - BOX_W) / 2, y: SCENE_H + REACH };
+        const list = facets[i];
+        placed.push({
+          id: object.id,
+          category: c,
+          at,
+          object,
+          ...(list ? { facets: list.map((facet, j) => ({ facet, at: { x: at.x + BOX_W / 2 - LEAF_W / 2, y: at.y + BOX_H + LEAF_REACH + j * (LEAF_H + LEAF_GAP) } })) } : {}),
+        });
+        x += widths[i]! + 20;
+      });
+      continue;
+    }
+    let extra = 0;
+    items.forEach((object, i) => {
+      const base = boxAt(c, i, items.length);
+      const at =
+        c.side === 'left' ? { x: base.x - extra, y: base.y } : c.side === 'right' ? { x: base.x + extra, y: base.y } : { x: base.x, y: base.y - extra };
+      const list = facets[i];
+      let leaves: Placed['facets'];
+      if (list) {
+        const h = stack(list.length);
+        if (c.side === 'top') {
+          leaves = list.map((facet, j) => ({ facet, at: { x: at.x + BOX_W / 2 - LEAF_W / 2, y: at.y - LEAF_REACH - h + j * (LEAF_H + LEAF_GAP) } }));
+          extra += LEAF_REACH + h + 20;
+        } else {
+          const x = c.side === 'left' ? at.x - LEAF_REACH - LEAF_W : at.x + BOX_W + LEAF_REACH;
+          leaves = list.map((facet, j) => ({ facet, at: { x, y: at.y + BOX_H / 2 - h / 2 + j * (LEAF_H + LEAF_GAP) } }));
+          extra += LEAF_REACH + LEAF_W + 20;
+        }
+      }
+      placed.push({ id: object.id, category: c, at, object, ...(leaves ? { facets: leaves } : {}) });
+    });
   }
   return placed;
+};
+
+/** A thin wire from a box's outer edge to one of its facets. */
+const facetWire = (c: Category, box: Point, leaf: Point): string => {
+  const from =
+    c.side === 'left' ? { x: box.x, y: box.y + BOX_H / 2 } : c.side === 'right' ? { x: box.x + BOX_W, y: box.y + BOX_H / 2 } : c.side === 'top' ? { x: box.x + BOX_W / 2, y: box.y } : { x: box.x + BOX_W / 2, y: box.y + BOX_H };
+  const to =
+    c.side === 'left' ? { x: leaf.x + LEAF_W, y: leaf.y + LEAF_H / 2 } : c.side === 'right' ? { x: leaf.x, y: leaf.y + LEAF_H / 2 } : c.side === 'top' ? { x: leaf.x + LEAF_W / 2, y: leaf.y + LEAF_H } : { x: leaf.x + LEAF_W / 2, y: leaf.y };
+  const horizontal = c.side === 'left' || c.side === 'right';
+  const mid = horizontal ? { x: (from.x + to.x) / 2, y: 0 } : { x: 0, y: (from.y + to.y) / 2 };
+  return horizontal ? `M${from.x} ${from.y} C${mid.x} ${from.y} ${mid.x} ${to.y} ${to.x} ${to.y}` : `M${from.x} ${from.y} C${from.x} ${mid.y} ${to.x} ${mid.y} ${to.x} ${to.y}`;
 };
 
 /**
@@ -144,6 +212,17 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
   const setView = useCallback((update: (v: View) => View) => setViewState(update), []);
   const [editing, setEditing] = useState<string | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
+  const [open, setOpenState] = useState<Set<string>>(() => openIn(sceneId));
+  const setOpen = (next: Set<string>) => {
+    opened.set(sceneId, next);
+    setOpenState(next);
+  };
+  const toggleOpen = (id: string) => {
+    const next = new Set(open);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setOpen(next);
+  };
   useWheelPanZoom(rootRef, setView);
   const onPanDown = useDragPan(view, setView, () => props.onSelect(null));
 
@@ -162,13 +241,14 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
   );
   const shown = preview?.project ?? project;
   const ghostId = preview ? (dragging?.type === 'dialogue' ? `dialogue:${sceneId}` : preview.id) : null;
-  const placed = layout(shown, sceneId);
+  const placed = layout(shown, sceneId, open);
+  const openable = placed.filter((p) => p.object).map((p) => p.id);
   const counts = categoryCounts(shown, sceneId);
 
   const fit = useCallback(() => {
     const root = rootRef.current;
     if (!root) return;
-    const all = layout(project, sceneId);
+    const all = layout(project, sceneId, openIn(sceneId));
     let minX = -REACH - BOX_W;
     let maxX = SCENE_W + REACH + BOX_W;
     let minY = -REACH - BOX_H;
@@ -178,6 +258,12 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
       maxX = Math.max(maxX, p.at.x + BOX_W);
       minY = Math.min(minY, p.at.y);
       maxY = Math.max(maxY, p.at.y + BOX_H);
+      for (const f of p.facets ?? []) {
+        minX = Math.min(minX, f.at.x);
+        maxX = Math.max(maxX, f.at.x + LEAF_W);
+        minY = Math.min(minY, f.at.y);
+        maxY = Math.max(maxY, f.at.y + LEAF_H);
+      }
     }
     const margin = props.panel ? 24 : 40;
     // The panel's header covers its top edge.
@@ -255,6 +341,9 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
                 d={wire(p.category, dotAt(p.category, p.at), portAt(p.category))}
               />
             ))}
+            {placed.flatMap((p) =>
+              (p.facets ?? []).map((f, j) => <path key={`${p.id}:${j}`} className="wire facet-wire" style={{ stroke: p.category.color }} d={facetWire(p.category, p.at, f.at)} />),
+            )}
           </g>
         </svg>
 
@@ -411,10 +500,45 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
                   !
                 </span>
               )}
+              <button
+                className={`box-open${open.has(object.id) ? ' on' : ''}`}
+                aria-expanded={open.has(object.id)}
+                aria-label={`${open.has(object.id) ? 'Close' : 'Open'} ${object.name}`}
+                title={open.has(object.id) ? 'Close it again' : 'Open it: what it holds, does and needs'}
+                onPointerDown={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onClick={() => toggleOpen(object.id)}
+              >
+                {open.has(object.id) ? '−' : '+'}
+              </button>
               <span className="box-dot" style={dotStyle} />
             </div>
           );
         })}
+
+        {placed.flatMap((p) =>
+          (p.facets ?? []).map((f, j) => (
+            <div
+              key={`${p.id}:${j}`}
+              className="facet"
+              style={{ left: f.at.x, top: f.at.y, width: LEAF_W, height: LEAF_H, '--cat': p.category.color } as React.CSSProperties}
+              title={[f.facet.label, f.facet.detail].filter(Boolean).join(': ')}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+                props.onSelect(p.id);
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (!props.panel) setDetail(p.id);
+              }}
+            >
+              {f.facet.symbol && <Symbol type={f.facet.symbol} size={9} />}
+              <span className="facet-label">{f.facet.label}</span>
+              {f.facet.detail && <span className="facet-detail">{f.facet.detail}</span>}
+            </div>
+          )),
+        )}
       </div>
 
       {detail && project.objects[detail] && !props.panel && (
@@ -456,7 +580,12 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
           </button>
         </div>
       ) : (
-        <div className="exploded-legend">Double-click a box for its detail · F2 renames · Delete removes it from the scene · wheel to zoom, drag to pan</div>
+        <div className="exploded-legend">
+          <button className="tb-btn small" disabled={!openable.length} onClick={() => setOpen(open.size ? new Set() : new Set(openable))}>
+            {open.size ? 'Close all' : 'Open all'}
+          </button>
+          <span>+ on a box opens it · double-click for its detail · F2 renames · Delete removes it from the scene · wheel to zoom, drag to pan</span>
+        </div>
       )}
     </div>
   );
