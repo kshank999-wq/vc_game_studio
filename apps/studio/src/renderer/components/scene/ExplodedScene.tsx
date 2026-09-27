@@ -33,6 +33,8 @@ interface Props {
   onOpenBible?: (id: string) => void;
   onOpenCode?: (id: string) => void;
   onNavigate?: (to: Destination) => void;
+  /** Take an element out of the scene (the app warns when that deletes it). */
+  onRemove?: (id: string) => void;
 }
 
 // World units (HANDOFF iteration 2: scene 560×400, element boxes 130×110).
@@ -396,7 +398,8 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
                   title="Remove from this scene"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => {
-                    props.onCommit(removeFromScene(project, sceneId, object.id));
+                    if (props.onRemove) props.onRemove(object.id);
+                    else props.onCommit(removeFromScene(project, sceneId, object.id));
                     props.onSelect(null);
                   }}
                 >

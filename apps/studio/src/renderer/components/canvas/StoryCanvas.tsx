@@ -54,6 +54,8 @@ export interface ConfirmRequest {
   onConfirm: () => void;
   /** A second way on, beside Cancel ("Don't save"). */
   alternate?: { label: string; onClick: () => void };
+  /** What else it affects, one point each. */
+  details?: string[];
   /** The confirm button is the safe choice (Save), not a destructive one. */
   safe?: boolean;
 }
@@ -75,6 +77,8 @@ interface Props {
   onSay: (message: string) => void;
   /** Open a scene to write it, or explode it into its mind map. */
   onOpenScene: (sceneId: string, mode: 'open' | 'exploded' | 'timeline') => void;
+  /** Play the story from a node. */
+  onPlayFrom?: (id: string) => void;
 }
 
 type Target = { ok: true; laneId: string | null; x: number; y: number } | { ok: false; reason: string };
@@ -556,6 +560,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
           onDelete={props.onDelete}
           onOpenScene={props.onOpenScene}
           onRules={() => setRulesFor(menu)}
+          onPlayFrom={props.onPlayFrom}
         />
       )}
 
@@ -745,7 +750,7 @@ const Pills = ({ project, rows, selection, editing, onSelect, onEdit, onMenu, on
 
 // ---------------------------------------------------------------- context menu
 
-const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onOpenScene, onRules }: {
+const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onOpenScene, onRules, onPlayFrom }: {
   menu: Menu;
   project: Project;
   onClose: () => void;
@@ -754,6 +759,7 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onO
   onDelete: (id: string) => void;
   onOpenScene: (id: string, mode: 'open' | 'exploded' | 'timeline') => void;
   onRules: () => void;
+  onPlayFrom?: (id: string) => void;
 }) => {
   const item = (label: string, action: () => void, className?: string, checked?: boolean) => (
     <button
@@ -788,6 +794,10 @@ const ContextMenu = ({ menu, project, onClose, onCommit, onRename, onDelete, onO
       items.push(item('Explode scene', () => onOpenScene(object.id, 'exploded')));
       items.push(item('Scene timeline', () => onOpenScene(object.id, 'timeline')));
       items.push(<div key="sep0" className="menu-sep" />);
+    }
+    if (onPlayFrom && object.type !== 'end') {
+      items.push(item(object.type === 'begin' ? 'Play the story' : 'Play from here', () => onPlayFrom(object.id)));
+      items.push(<div key="sep-play" className="menu-sep" />);
     }
     items.push(item('Rename', () => onRename(object.id)));
     if (placement.laneId === null && object.type !== 'choice') {

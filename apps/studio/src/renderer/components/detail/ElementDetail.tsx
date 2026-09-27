@@ -54,6 +54,8 @@ interface Props {
   onNavigate?: (to: Destination) => void;
   /** 'panel' floats beside a scene; 'bible' fills the Bible's detail pane. */
   variant: 'panel' | 'bible';
+  /** Delete it from the project (the app says what goes with it first). */
+  onDelete?: (id: string) => void;
 }
 
 /** A text field that saves on blur, keyed on its value so undo shows through. */
@@ -218,7 +220,7 @@ const Interactions = ({ object, project, onCommit }: { object: StoryObject; proj
  * production tags, and where else it is used. Edits change the one object,
  * so every view that shows it changes too.
  */
-export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenBible, onOpenCode, onNavigate, variant }: Props) => {
+export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenBible, onOpenCode, onNavigate, variant, onDelete }: Props) => {
   const object = project.objects[id];
   if (!object) return null;
   const allUses = variant === 'bible';
@@ -346,7 +348,7 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
         {!allUses && uses.length > shownUses.length && <span className="detail-text muted">+ {uses.length - shownUses.length} more in the Bible</span>}
       </section>
 
-      {(onOpenBible || onOpenCode) && (
+      {(onOpenBible || onOpenCode || onDelete) && (
         <div className="detail-actions">
           {onOpenBible && (
             <button className="tb-btn small" onClick={() => onOpenBible(id)}>
@@ -356,6 +358,11 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
           {onOpenCode && (
             <button className="tb-btn small" onClick={() => onOpenCode(id)}>
               &lt;/&gt; Code
+            </button>
+          )}
+          {onDelete && object.type !== 'begin' && object.type !== 'end' && (
+            <button className="tb-btn small danger-btn detail-delete" onClick={() => onDelete(id)}>
+              Delete…
             </button>
           )}
         </div>

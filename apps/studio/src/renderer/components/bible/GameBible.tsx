@@ -18,6 +18,7 @@ interface Props {
   focus?: string;
   onNavigate: (to: Destination) => void;
   onOpenCode?: (id: string) => void;
+  onDelete?: (id: string) => void;
   /** A production report to open straight away (File › Export). */
   report?: ReportKey;
 }
@@ -50,7 +51,7 @@ const viewFor = (project: Project, id: string | undefined): ViewKey => {
  * Every view reads the same objects the graph and scenes use, so an edit
  * here is an edit everywhere; where-used links go back to each place.
  */
-export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, report: initialReport }: Props) => {
+export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, onDelete, report: initialReport }: Props) => {
   const [view, setView] = useState<ViewKey>(() => viewFor(project, focus));
   const [selected, setSelected] = useState<string | null>(focus ?? null);
   const [query, setQuery] = useState('');
@@ -222,7 +223,7 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, re
             <LineDetail project={project} lineId={line.id} onCommit={onCommit} onNavigate={onNavigate} />
           ) : selection && project.objects[selection] ? (
             <>
-              <ElementDetail project={project} id={selection} onCommit={onCommit} onNavigate={onNavigate} onOpenCode={onOpenCode} variant="bible" />
+              <ElementDetail project={project} id={selection} onCommit={onCommit} onNavigate={onNavigate} onOpenCode={onOpenCode} onDelete={onDelete} variant="bible" />
               {project.objects[selection]!.type === 'character' && <VoMeter project={project} id={selection} />}
               {project.objects[selection]!.type === 'scene' && (
                 <div className="detail-actions">

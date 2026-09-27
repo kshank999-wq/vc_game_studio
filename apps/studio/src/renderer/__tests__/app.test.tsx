@@ -74,7 +74,7 @@ describe('deleting', () => {
     fireEvent.pointerUp(window);
     fireEvent.keyDown(window, { key: 'Delete' });
     const dialog = screen.getByRole('alertdialog');
-    expect(dialog.textContent).toContain('“Subplot 1” branches off or rejoins the spine here');
+    expect(dialog.textContent).toContain('“Subplot 1” will branch off or rejoin at the neighbouring spine node.');
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(container.querySelector('[data-type="plotPoint"]')).toBeNull();
     expect(container.querySelectorAll('.span-handle')).toHaveLength(2);

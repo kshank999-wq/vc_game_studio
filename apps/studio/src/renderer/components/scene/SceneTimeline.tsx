@@ -31,6 +31,7 @@ interface Props {
   onSay: (message: string) => void;
   onOpen: () => void;
   onFullView: () => void;
+  onRemove?: (id: string) => void;
 }
 
 // Layout in pixels (mockup 05).
@@ -487,6 +488,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
             onOpen={props.onOpen}
             panel={{ onFullView: props.onFullView }}
             highlight={highlight}
+            onRemove={props.onRemove}
           />
         </div>
         <TimelineInspector

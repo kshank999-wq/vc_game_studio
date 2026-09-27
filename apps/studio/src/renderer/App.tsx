@@ -20,6 +20,7 @@ import { findIssues } from './model/validate';
 import { TYPE_LABEL } from './model/semantics';
 import type { ObjectType } from './model/types';
 import { useStudio, isBlank } from './use-studio';
+import { deletionImpact, removalImpact } from './model/impact';
 import type { Menu, MenuItem } from './components/menu/MenuBar';
 import { AboutDialog, PreferencesDialog, PreviewSaveDialog, ShortcutsDialog } from './components/menu/Dialogs';
 import { openProjectFile, openRecent, recentFiles, clearRecent, type Opened, type Recent } from './files';
@@ -28,6 +29,7 @@ import { REPORTS, type ReportKey } from './model/reports';
 import { isPreview, PURCHASE_URL } from './edition';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
+import { PlayView } from './components/play/PlayView';
 import type { SearchResult } from './model/search';
 import { isMainClosed, isPanel, listen, openWindow, parseView, post, role, subscribeShared, type Command, type PanelView } from './windows';
 import { fitView, spineView, zoomAt, type View } from './view';
@@ -41,20 +43,25 @@ type PlaceRoute = { view: 'graph' } | { view: 'scene'; sceneId: string; mode: Sc
 export type Route =
   | PlaceRoute
   | { view: 'bible'; focus?: string; report?: ReportKey; back: PlaceRoute }
-  | { view: 'engine'; focus?: string; back: PlaceRoute };
+  | { view: 'engine'; focus?: string; back: PlaceRoute }
+  | { view: 'play'; from?: string; back: PlaceRoute };
+
+/** Views that stand aside from the graph and scenes, with a way back to where they were opened. */
+const isAside = (r: Route): r is Extract<Route, { back: PlaceRoute }> => 'back' in r;
 
 /** Where a window opens: the main window on the story graph, another on the view it was opened for. */
 const routeFor = (view: PanelView): Route => {
   if (view.view === 'bible') return { view: 'bible', focus: view.focus, back: { view: 'graph' } };
   if (view.view === 'engine') return { view: 'engine', back: { view: 'graph' } };
+  if (view.view === 'play') return { view: 'play', back: { view: 'graph' } };
   if (view.view === 'scene') return view;
   return { view: 'graph' };
 };
 
 const viewOf = (route: Route): PanelView =>
-  route.view === 'bible' ? { view: 'bible', focus: route.focus } : route.view === 'engine' ? { view: 'engine' } : route.view === 'scene' ? { view: 'scene', sceneId: route.sceneId, mode: route.mode } : { view: 'graph' };
+  route.view === 'bible' ? { view: 'bible', focus: route.focus } : route.view === 'engine' ? { view: 'engine' } : route.view === 'play' ? { view: 'play' } : route.view === 'scene' ? { view: 'scene', sceneId: route.sceneId, mode: route.mode } : { view: 'graph' };
 
-const WINDOW_LABEL: Record<PanelView['view'], string> = { graph: 'Graph window', bible: 'Bible window', engine: 'Handoff window', scene: 'Scene window' };
+const WINDOW_LABEL: Record<PanelView['view'], string> = { graph: 'Graph window', bible: 'Bible window', engine: 'Handoff window', scene: 'Scene window', play: 'Play window' };
 
 const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -117,7 +124,8 @@ export const App = () => {
     setLineFocus(null);
   };
   const [sceneSelection, setSceneSelection] = useState<string | null>(null);
-  const placeOf = (r: Route): PlaceRoute => (r.view === 'bible' || r.view === 'engine' ? r.back : r);
+  const placeOf = (r: Route): PlaceRoute => (isAside(r) ? r.back : r);
+  const openPlay = (from?: string) => setRoute((r) => ({ view: 'play', from, back: placeOf(r) }));
   const openBible = (focus?: string, report?: ReportKey) => setRoute((r) => ({ view: 'bible', focus, report, back: placeOf(r) }));
   const openEngine = (focus?: string) => setRoute((r) => ({ view: 'engine', focus, back: placeOf(r) }));
 
@@ -272,17 +280,39 @@ export const App = () => {
     const remove = () => {
       commit(removeObject(project, id));
       setSelection(null);
+      setSceneSelection(null);
     };
-    const dependents = spanDependents(project, id);
-    if (dependents.length === 0) {
+    const impact = deletionImpact(project, id);
+    if (impact.length === 0) {
       remove();
       return;
     }
-    const names = dependents.map((l) => `“${l.name}”`).join(', ');
     setAsk({
       title: `Delete “${project.objects[id]!.name}”?`,
-      message: `${names} ${dependents.length === 1 ? 'branches off or rejoins' : 'branch off or rejoin'} the spine here. It will move to the neighbouring spine node.`,
+      message: 'This also changes other parts of the project:',
+      details: impact,
       confirmLabel: 'Delete',
+      onConfirm: remove,
+    });
+  };
+
+  /** Take an element out of a scene, saying first if that deletes it or breaks something. */
+  const removeFromSceneAsking = (sceneId: string, id: string) => {
+    const { deletes, impact } = removalImpact(project, sceneId, id);
+    const remove = () => {
+      commit(removeFromScene(project, sceneId, id));
+      setSceneSelection(null);
+    };
+    if (impact.length === 0) {
+      remove();
+      return;
+    }
+    const name = project.objects[id]?.name ?? '';
+    setAsk({
+      title: deletes ? `Delete “${name}”?` : `Take “${name}” out of the scene?`,
+      message: deletes ? 'Only this scene uses it, so it leaves the project too. That also changes:' : 'This also changes:',
+      details: impact,
+      confirmLabel: deletes ? 'Delete' : 'Take it out',
       onConfirm: remove,
     });
   };
@@ -435,6 +465,13 @@ export const App = () => {
       } else if (e.shiftKey && e.code === 'Digit2' && !mod && !isTyping(e.target) && route.view === 'graph' && selection) {
         e.preventDefault();
         zoomTo(selection);
+      } else if (e.key === 'F5') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          const from = route.view === 'scene' ? route.sceneId : route.view === 'graph' && selection && project.placements[selection] ? selection : null;
+          if (from) openPlay(from);
+        } else if (route.view === 'play') setRoute(route.back);
+        else openPlay();
       } else if (mod && key === 's') {
         e.preventDefault();
         void save(e.shiftKey);
@@ -486,7 +523,7 @@ export const App = () => {
       if (isTyping(e.target)) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
-      if (route.view === 'bible' || route.view === 'engine') {
+      if (isAside(route)) {
         // The Bible edits in its own fields; only undo and redo reach the app.
         if (mod && key === 'z') {
           e.preventDefault();
@@ -514,8 +551,7 @@ export const App = () => {
           surface.current?.remove?.();
         } else if ((e.key === 'Delete' || e.key === 'Backspace') && sceneSelection && inScene(project, route.sceneId, sceneSelection)) {
           e.preventDefault();
-          commit(removeFromScene(project, route.sceneId, sceneSelection));
-          setSceneSelection(null);
+          removeFromSceneAsking(route.sceneId, sceneSelection);
         } else if ((e.key === 'F2' || e.key === 'Enter') && sceneSelection) {
           e.preventDefault();
           surface.current?.rename(sceneSelection);
@@ -558,6 +594,8 @@ export const App = () => {
   const canRename = !!selected && !!project.objects[selected];
   const canDelete = onGraph ? !!selection : route.view === 'scene' && !!sceneSelection && inScene(project, route.sceneId, sceneSelection);
   const sep: MenuItem = { kind: 'separator' };
+  /** Where "Play from here" starts: the scene you are in, or the node selected on the graph. */
+  const playFrom = route.view === 'scene' ? route.sceneId : onGraph && selection && project.placements[selection] ? selection : null;
   const menus: Menu[] = [
     {
       label: 'File',
@@ -613,8 +651,7 @@ export const App = () => {
           onClick: () => {
             if (onGraph) deleteItem(selection);
             else if (route.view === 'scene' && sceneSelection) {
-              commit(removeFromScene(project, route.sceneId, sceneSelection));
-              setSceneSelection(null);
+              removeFromSceneAsking(route.sceneId, sceneSelection);
             }
           },
         },
@@ -627,6 +664,14 @@ export const App = () => {
         { label: 'Story graph', checked: onGraph, onClick: () => setRoute({ view: 'graph' }) },
         { label: 'Game Bible', shortcut: 'Mod+B', checked: route.view === 'bible', onClick: () => openBible() },
         { label: 'Engine handoff', shortcut: 'Mod+E', checked: route.view === 'engine', onClick: () => openEngine() },
+        { label: 'Play-through', shortcut: 'F5', checked: route.view === 'play', onClick: () => openPlay() },
+        {
+          label: 'Play from here',
+          shortcut: 'Shift+F5',
+          disabled: !playFrom,
+          hint: 'Play from the selected scene, or the scene you are in, with a fresh world.',
+          onClick: () => playFrom && openPlay(playFrom),
+        },
         ...(route.view === 'scene'
           ? [
               sep,
@@ -647,7 +692,7 @@ export const App = () => {
         {
           label: 'Palette as a rail',
           checked: railOn,
-          disabled: route.view === 'bible' || route.view === 'engine',
+          disabled: isAside(route),
           onClick: () => setRail((r) => (inSceneView ? { ...r, scene: !r.scene } : { ...r, graph: !r.graph })),
         },
       ],
@@ -675,6 +720,7 @@ export const App = () => {
           submenu: [
             { label: 'Game Bible', onClick: () => popOut({ view: 'bible' }) },
             { label: 'Engine handoff', onClick: () => popOut({ view: 'engine' }) },
+            { label: 'Play-through', onClick: () => popOut({ view: 'play' }) },
             { label: 'Story graph', onClick: () => popOut({ view: 'graph' }) },
             ...(route.view === 'scene' ? [{ label: `This scene (${project.objects[route.sceneId]?.name ?? ''})`, onClick: () => popOut(viewOf(route)) }] : []),
           ],
@@ -760,9 +806,13 @@ export const App = () => {
     return `${o?.data.code ?? ''} ${o?.name ?? ''}${r.mode === 'timeline' ? ' · Timeline' : r.mode === 'exploded' ? ' · Mind map' : ''}`.trim();
   };
   const bibleCrumbs: Crumb[] | undefined =
-    route.view === 'bible' ? [{ label: 'GAME BIBLE' }] : route.view === 'engine' ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Engine Handoff' }] : undefined;
+    route.view === 'bible' ? [{ label: 'GAME BIBLE' }] : route.view === 'engine'
+        ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Engine Handoff' }]
+        : route.view === 'play'
+          ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Play-through' }]
+          : undefined;
   const bibleControls =
-    route.view === 'bible' || route.view === 'engine' ? (
+    isAside(route) ? (
       <button className="tb-btn back-btn" onClick={() => setRoute(route.back)}>
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
           <path d="M10 3L5 8l5 5" />
@@ -773,7 +823,7 @@ export const App = () => {
 
   return (
     <div
-      className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${route.view === 'bible' || route.view === 'engine' ? ' no-palette' : ''}${preferences.showGrid ? '' : ' no-grid'}`}
+      className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${isAside(route) ? ' no-palette' : ''}${preferences.showGrid ? '' : ' no-grid'}`}
       style={{ '--script-size': `${preferences.scriptSize}px` } as React.CSSProperties}
     >
       <TopBar
@@ -796,8 +846,9 @@ export const App = () => {
         issueCount={route.view === 'graph' ? issues.length : 0}
         onIssues={showNextIssue}
         onSearch={() => setSearching(true)}
+        onPlay={() => (route.view === 'play' ? setRoute(route.back) : openPlay())}
       />
-      {route.view !== 'bible' && route.view !== 'engine' && <Palette
+      {!isAside(route) && <Palette
         active={drag?.placing ? drag.type : null}
         onStart={startPaletteDrag}
         mode={inSceneView ? 'scene' : 'graph'}
@@ -822,6 +873,7 @@ export const App = () => {
               issues={issueMap}
               onSay={say}
               onOpenScene={openScene}
+              onPlayFrom={openPlay}
             />
             <BottomBar
               lanes={project.lanes}
@@ -861,6 +913,7 @@ export const App = () => {
             paletteDrag={showGhost ? drag : null}
             onSay={say}
             onOpen={() => openScene(route.sceneId, 'open')}
+            onRemove={(id) => removeFromSceneAsking(route.sceneId, id)}
             onFullView={() => openScene(route.sceneId, 'exploded')}
           />
         )}
@@ -880,11 +933,13 @@ export const App = () => {
             onOpenBible={openBible}
             onOpenCode={openEngine}
             onNavigate={navigate}
+            onRemove={(id) => removeFromSceneAsking(route.sceneId, id)}
           />
         )}
         {route.view === 'bible' && (
-          <GameBible key={route.report ?? 'bible'} project={project} onCommit={commit} focus={route.focus} report={route.report} onNavigate={navigate} onOpenCode={openEngine} />
+          <GameBible key={route.report ?? 'bible'} project={project} onCommit={commit} focus={route.focus} report={route.report} onNavigate={navigate} onOpenCode={openEngine} onDelete={deleteItem} />
         )}
+        {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} />}
         {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} />}
         {route.view === 'graph' && Object.keys(project.objects).length <= 3 && (
           <div className="sample-card">
@@ -914,6 +969,13 @@ export const App = () => {
           >
             <h2 id="confirm-title">{ask.title}</h2>
             <p id="confirm-message">{ask.message}</p>
+            {ask.details && (
+              <ul className="dialog-list">
+                {ask.details.map((d) => (
+                  <li key={d}>{d}</li>
+                ))}
+              </ul>
+            )}
             <div className="dialog-actions">
               <button className="tb-btn" onClick={() => setAsk(null)}>
                 Cancel

@@ -121,3 +121,38 @@ describe('other windows', () => {
     other.close();
   });
 });
+
+describe('deleting from the Bible', () => {
+  it('says what goes with a character before deleting her', () => {
+    render(<App />);
+    openMenu('File');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    fireEvent.click(screen.getAllByText('Mara')[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete…' }));
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog.textContent).toContain('Delete “Mara”?');
+    expect(dialog.textContent).toContain('The arc lane “Mara” stays');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete…' })).toBeNull();
+  });
+});
+
+describe('play-through', () => {
+  it('opens with F5, plays to a choice, and takes it', () => {
+    const { container } = render(<App />);
+    openMenu('File');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
+    act(() => {
+      fireEvent.keyDown(window, { key: 'F5' });
+    });
+    expect(container.querySelector('.play-view')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /To the next decision/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Carry on/ }));
+    fireEvent.click(screen.getByRole('button', { name: /To the next decision/ }));
+    expect(container.querySelector('.play-free')?.textContent).toContain('Rusted Lever');
+    fireEvent.click(screen.getByRole('button', { name: 'Pull' }));
+    expect(container.querySelector('.play-transcript')?.textContent).toContain('Seam drains fires');
+  });
+});

@@ -156,5 +156,10 @@ export const sunkenVault = (): Project => {
   const lastLine = sceneTimeline(p, vaultDoor)[0]!.events.filter((e) => e.kind === 'dialogue').at(-1)!;
   p = moveEvent(p, vaultDoor, lastLine.id, force.id, 0);
   p = addEvent(p, vaultDoor, 'action', { track: force.id, label: 'Water rises' })!.project;
+
+  // The key is found in the scene named for it, and carried on to the door.
+  p = useInScene(p, theKey, key);
+  const found = addEvent(p, theKey, 'action', { label: 'Find the key in the silt' })!;
+  p = updateEvent(found.project, theKey, found.id, { effects: [{ kind: 'give', ref: key }] });
   return p;
 };

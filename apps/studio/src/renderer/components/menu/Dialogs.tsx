@@ -173,6 +173,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
     keys: [
       ['Mod+B', 'Game Bible'],
       ['Mod+E', 'Engine handoff'],
+      ['F5', 'Play-through (Shift+F5: from the selected scene)'],
       ['Mod+K', 'Search the project (also Mod+F)'],
       ['Shift+2', 'Zoom to the selection'],
       ['?', 'This list'],

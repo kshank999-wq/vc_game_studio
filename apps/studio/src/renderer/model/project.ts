@@ -376,9 +376,23 @@ export const removeObject = (project: Project, id: string): Project => {
       else if (at > 0) startRef = s[at - 1]!;
     }
     return startRef === lane.span.startRef && endRef === lane.span.endRef ? lane : { ...lane, span: { startRef, endRef } };
+  }).map((lane) => {
+    // An arc lane stays when its character goes, no longer tied to it.
+    if (lane.characterId !== id) return lane;
+    const next = { ...lane };
+    delete next.characterId;
+    return next;
   });
   const objects = { ...project.objects };
   delete objects[id];
+  // Scenes set in a deleted location have no location.
+  for (const o of Object.values(objects)) {
+    if (o.data.locationId === id) {
+      const data = { ...o.data };
+      delete data.locationId;
+      objects[o.id] = { ...o, data };
+    }
+  }
   const placements = { ...project.placements };
   delete placements[id];
   return settle({
