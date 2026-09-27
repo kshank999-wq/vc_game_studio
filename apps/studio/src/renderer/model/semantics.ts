@@ -24,8 +24,8 @@ export const COLORS = {
 export const CHARACTER_COLORS = ['#D9607A', '#E8E0C8', '#8FB0A0', '#D98E4F', '#B07FD9', '#6FB7D9'] as const;
 
 export const TYPE_LABEL: Record<ObjectType, string> = {
-  begin: 'Begin',
-  end: 'End',
+  begin: 'Plot Point · Beginning',
+  end: 'Plot Point · Ending',
   plotPoint: 'Plot Point',
   scene: 'Scene',
   cinematic: 'Cinematic',

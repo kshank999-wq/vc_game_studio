@@ -74,10 +74,10 @@ describe('placing on the spine', () => {
 
   it('numbers codes from the highest one in use, so a code is never reused', () => {
     let p = createProject();
-    const first = place(p, 'scene', spineId(p), 100);
-    p = place(first.project, 'scene', spineId(p), 200).project;
+    const first = place(p, 'scene', spineId(p), 300);
+    p = place(first.project, 'scene', spineId(p), 400).project;
     p = removeObject(p, first.id);
-    p = place(p, 'scene', spineId(p), 250).project;
+    p = place(p, 'scene', spineId(p), 450).project;
     expect(codes(p).filter((c) => c.startsWith('SC-'))).toEqual(['SC-02', 'SC-03']);
   });
 

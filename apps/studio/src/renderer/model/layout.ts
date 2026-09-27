@@ -26,13 +26,13 @@ export interface Size {
 
 export const nodeSize = (type: ObjectType, laneKind: Lane['kind'] = 'spine'): Size => {
   switch (type) {
-    case 'begin':
-    case 'end':
-      return { w: 86, h: 36 };
     case 'choice':
       return { w: 32, h: 32 };
     case 'arcEvent':
       return { w: 100, h: 34 };
+    // The Beginning and the Ending are plot points like the rest.
+    case 'begin':
+    case 'end':
     case 'plotPoint':
       return laneKind === 'subplot' ? { w: 120, h: 56 } : { w: 100, h: 64 };
     default:

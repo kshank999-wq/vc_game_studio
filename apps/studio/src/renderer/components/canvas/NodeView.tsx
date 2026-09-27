@@ -1,5 +1,4 @@
 import type { Lane, ObjectType, StoryObject } from '../../model/types';
-import { LockIcon } from '../Symbol';
 
 const KICKER: Partial<Record<ObjectType, string>> = {
   plotPoint: 'Plot point',
@@ -36,12 +35,13 @@ export interface NodeProps {
   onCancelRename: () => void;
 }
 
-const NameField = ({ object, editing, onRename, onCancelRename, className }: Pick<NodeProps, 'object' | 'editing' | 'onRename' | 'onCancelRename'> & { className: string }) =>
+const NameField = ({ object, editing, onRename, onCancelRename, className, prompt }: Pick<NodeProps, 'object' | 'editing' | 'onRename' | 'onCancelRename'> & { className: string; prompt?: string }) =>
   editing ? (
     <input
       className={`node-input ${className}`}
       aria-label="Name"
-      defaultValue={object.name}
+      defaultValue={prompt ? '' : object.name}
+      placeholder={prompt}
       autoFocus
       onFocus={(e) => e.currentTarget.select()}
       onPointerDown={(e) => e.stopPropagation()}
@@ -52,6 +52,8 @@ const NameField = ({ object, editing, onRename, onCancelRename, className }: Pic
         if (e.key === 'Escape') onCancelRename();
       }}
     />
+  ) : prompt ? (
+    <span className={`${className} placeholder`}>{prompt}</span>
   ) : (
     <span className={className}>{object.name}</span>
   );
@@ -91,15 +93,22 @@ export const NodeView = (props: NodeProps) => {
     },
   };
 
+  // The Beginning and the Ending are the spine's first and last plot points: the same card, with what
+  // the story starts from and comes to written in them. They can't be deleted, and nothing follows the Ending.
   if (object.type === 'begin' || object.type === 'end') {
-    const defaultName = object.type === 'begin' ? 'Beginning' : 'Ending';
+    const begin = object.type === 'begin';
+    const unwritten = object.name === (begin ? 'Beginning' : 'Ending');
     return (
-      <div className={`node pill${state}`} style={style} title={`${object.name} — protected`} {...common}>
-        {object.type === 'begin' && <span className="start-tag">START</span>}
-        {(object.name !== defaultName || props.editing) && <NameField {...props} className="pill-name" />}
-        <LockIcon size={9} color="var(--ground)" />
-        {object.type === 'begin' ? 'BEGIN' : 'END'}
-        {object.type === 'begin' && <Port onPortDown={props.onPortDown} />}
+      <div className={`node card card-plotPoint card-${object.type}${state}`} style={style} title={begin ? 'Where the story begins. Double-click to write it.' : 'Where the story ends. Double-click to write it.'} {...common}>
+        <span className="card-kicker">
+          <i />
+          Plot point
+        </span>
+        <NameField {...props} className="card-name" prompt={unwritten ? 'Name it…' : undefined} />
+        {/* Where other plot points show their code. */}
+        <span className="card-sub">{begin ? 'Beginning' : 'Ending'}</span>
+        {begin && <Port onPortDown={props.onPortDown} />}
+        <Badge issue={props.issue} />
       </div>
     );
   }

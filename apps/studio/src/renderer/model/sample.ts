@@ -46,6 +46,7 @@ export const sunkenVault = (): Project => {
   const vaultDoor = onSpine('scene', 'The Vault Door', 600);
   const vaultOpens = onSpine('cinematic', 'The Vault Opens', 740);
   const c2 = onSpine('choice', 'Pocket the ring', 880);
+  p = renameObject(p, byName('Beginning'), 'The flooded vault');
   p = renameObject(p, byName('Ending'), 'Shared Light');
 
   // Branches above it.
