@@ -45,6 +45,8 @@ interface Props {
   onOpenBible?: (id: string) => void;
   onOpenCode?: (id: string) => void;
   onNavigate?: (to: Destination) => void;
+  /** Open with this script line in focus (a search result). */
+  focusLine?: string | null;
 }
 
 // The scene box and the perimeter around it, in stage units (mockup 03).
@@ -108,7 +110,13 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   const [adding, setAdding] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]>('Script');
-  const [focusLine, setFocusLine] = useState<string | null>(null);
+  const [focusLine, setFocusLine] = useState<string | null>(props.focusLine ?? null);
+  useEffect(() => {
+    if (props.focusLine) {
+      setTab('Script');
+      setFocusLine(props.focusLine);
+    }
+  }, [props.focusLine]);
   const [editingName, setEditingName] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
 

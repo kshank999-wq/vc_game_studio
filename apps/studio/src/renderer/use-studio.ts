@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { desktop } from './desktop';
 import { canWriteBack, rememberRecent, saveProjectFile, type ProjectFile } from './files';
 import { commit, redo, startHistory, undo, type History } from './model/history';
@@ -6,6 +6,7 @@ import { createProject } from './model/project';
 import { canSave, loadProject, saveProject } from './model/storage';
 import type { Project } from './model/types';
 import { getPreferences, usePreferences } from './preferences';
+import { getShared, isPanel, listen, post, setSharedProject, subscribeShared, type Command } from './windows';
 
 type Action =
   | { type: 'commit'; project: Project }
@@ -67,7 +68,7 @@ const BLANK = Object.keys(createProject().objects).length;
 export const isBlank = (project: Project): boolean => Object.keys(project.objects).length <= BLANK && project.lines.length === 0;
 
 /** The open project, its undo history, its file, and the local working copy (off in the preview edition). */
-export const useStudio = () => {
+const useMainStudio = () => {
   const [history, dispatch] = useReducer(reduce, undefined, () =>
     startHistory((getPreferences().reopenLast && loadProject()) || createProject()),
   );
@@ -134,15 +135,43 @@ export const useStudio = () => {
   }, [present, dirty, file, preferences.autosave, writeTo]);
 
   const saveState: SaveState = !canSave() ? 'off' : busy ?? (!file ? 'draft' : dirty ? 'edited' : 'saved');
+  const unsaved = canSave() && (file ? dirty : !isBlank(present));
+
+  // Other windows: send them the project whenever it changes, and take their edits.
+  const shared = { project: present, canUndo: history.past.length > 0, canRedo: history.future.length > 0, saveState, fileName: file?.name, unsaved };
+  const sharedRef = useRef(shared);
+  sharedRef.current = shared;
+  useEffect(() => {
+    post({ t: 'state', ...shared });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [present, shared.canUndo, shared.canRedo, saveState, file, unsaved]);
+  useEffect(() => {
+    const stop = listen((m) => {
+      if (m.t === 'hello') post({ t: 'state', ...sharedRef.current });
+      else if (m.t === 'commit') dispatch({ type: 'commit', project: m.project });
+      else if (m.t === 'replace') dispatch({ type: 'replace', project: m.project });
+      else if (m.t === 'undo') dispatch({ type: 'undo' });
+      else if (m.t === 'redo') dispatch({ type: 'redo' });
+    });
+    const closed = () => post({ t: 'closed' });
+    window.addEventListener('pagehide', closed);
+    return () => {
+      stop();
+      window.removeEventListener('pagehide', closed);
+    };
+  }, []);
 
   return {
+    isPanel: false as boolean,
+    /** A panel window asks the main window to run a file command. */
+    forward: (_name: Command, _arg?: string) => {},
     project: present,
     canUndo: history.past.length > 0,
     canRedo: history.future.length > 0,
     saveState,
     file,
     /** Changes not in a file yet (for a draft, anything worth keeping: it lives only in this browser). */
-    unsaved: canSave() && (file ? dirty : !isBlank(present)),
+    unsaved,
     commit: useCallback((project: Project) => dispatch({ type: 'commit', project }), []),
     undo: useCallback(() => dispatch({ type: 'undo' }), []),
     redo: useCallback(() => dispatch({ type: 'redo' }), []),
@@ -161,3 +190,38 @@ export const useStudio = () => {
     saveAs: useCallback(() => writeTo(present, file, true), [present, file, writeTo]),
   };
 };
+
+/**
+ * A window beside the main one: it shows the main window's project and sends
+ * every edit, undo and file command there (see windows.ts).
+ */
+const usePanelStudio = (): ReturnType<typeof useMainStudio> => {
+  const shared = useSyncExternalStore(subscribeShared, getShared, getShared)!;
+  const noFile = useCallback(async () => false, []);
+  return {
+    isPanel: true,
+    forward: (name: Command, arg?: string) => post({ t: 'command', name, arg }),
+    project: shared.project,
+    canUndo: shared.canUndo,
+    canRedo: shared.canRedo,
+    saveState: shared.saveState as SaveState,
+    file: shared.fileName ? { name: shared.fileName } : null,
+    unsaved: shared.unsaved,
+    commit: useCallback((project: Project) => {
+      setSharedProject(project);
+      post({ t: 'commit', project });
+    }, []),
+    undo: useCallback(() => post({ t: 'undo' }), []),
+    redo: useCallback(() => post({ t: 'redo' }), []),
+    replace: useCallback((project: Project) => {
+      setSharedProject(project);
+      post({ t: 'replace', project });
+    }, []),
+    load: useCallback(() => {}, []),
+    save: noFile,
+    saveAs: noFile,
+  };
+};
+
+/** The main window owns the project; any other window works on its copy. */
+export const useStudio = isPanel ? usePanelStudio : useMainStudio;

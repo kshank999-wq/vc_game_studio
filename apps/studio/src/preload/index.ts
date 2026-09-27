@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron';
 
-/** What the renderer may ask of its host: project files, and the engine handoff's writes. */
+/** What the renderer may ask of its host: project files, windows across monitors, and the engine handoff's writes. */
 contextBridge.exposeInMainWorld('vcgs', {
   platform: process.platform,
   desktop: true,
@@ -15,6 +15,16 @@ contextBridge.exposeInMainWorld('vcgs', {
   setDirty: (dirty: boolean): void => ipcRenderer.send('vcgs:set-dirty', dirty),
   close: (): void => ipcRenderer.send('vcgs:close'),
   setZoom: (factor: number): void => webFrame.setZoomFactor(Math.min(2, Math.max(0.5, factor))),
+  openWindow: (query: string, side: 'left' | 'right'): Promise<void> => ipcRenderer.invoke('vcgs:open-window', query, side),
+  arrangeWindows: (): Promise<{ displays: number; windows: number }> => ipcRenderer.invoke('vcgs:arrange-windows'),
+  displayCount: (): Promise<number> => ipcRenderer.invoke('vcgs:display-count'),
+  focusMain: (): void => ipcRenderer.send('vcgs:focus-main'),
+  postBus: (message: unknown): void => ipcRenderer.send('vcgs:bus', message),
+  onBus: (listener: (message: unknown) => void): (() => void) => {
+    const handler = (_e: unknown, message: unknown) => listener(message);
+    ipcRenderer.on('vcgs:bus', handler);
+    return () => ipcRenderer.removeListener('vcgs:bus', handler);
+  },
   onCommand: (listener: (command: string) => void): (() => void) => {
     const handler = (_e: unknown, command: string) => listener(command);
     ipcRenderer.on('vcgs:command', handler);

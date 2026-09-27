@@ -13,6 +13,14 @@ export interface DesktopBridge {
   setZoom?: (factor: number) => void;
   /** Commands from the native menu and the close dialog. */
   onCommand?: (listener: (command: string) => void) => () => void;
+  /** Windows: open a view in its own window, on the monitor to that side of the main one. */
+  openWindow?: (query: string, side: 'left' | 'right') => Promise<void>;
+  /** Put the main window on the middle monitor and the others beside it. */
+  arrangeWindows?: () => Promise<{ displays: number; windows: number }>;
+  focusMain?: () => void;
+  displayCount?: () => Promise<number>;
+  postBus?: (message: unknown) => void;
+  onBus?: (listener: (message: unknown) => void) => () => void;
 }
 
 export const desktop = (): DesktopBridge | undefined => (globalThis as { vcgs?: DesktopBridge }).vcgs;

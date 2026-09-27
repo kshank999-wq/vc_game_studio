@@ -1,4 +1,4 @@
-import { dialog, ipcMain, type BrowserWindow, type OpenDialogOptions } from 'electron';
+import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -22,8 +22,9 @@ const inside = (root: string, path: string): string | null => {
 };
 
 export const registerHandoff = (getWindow: () => BrowserWindow | null): void => {
-  ipcMain.handle('vcgs:pick-folder', async () => {
-    const window = getWindow();
+  ipcMain.handle('vcgs:pick-folder', async (e) => {
+    // The dialog belongs to the window that asked (the handoff may be in a window of its own).
+    const window = BrowserWindow.fromWebContents(e.sender) ?? getWindow();
     const options: OpenDialogOptions = { title: 'Choose your engine project folder', properties: ['openDirectory', 'createDirectory'] };
     const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
     return result.canceled ? null : (result.filePaths[0] ?? null);

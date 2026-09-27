@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BottomBar } from './components/BottomBar';
 import { Palette } from './components/Palette';
 import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } from './components/canvas/StoryCanvas';
@@ -27,6 +27,9 @@ import { createProject } from './model/project';
 import { REPORTS, type ReportKey } from './model/reports';
 import { isPreview, PURCHASE_URL } from './edition';
 import { setPreferences, usePreferences } from './preferences';
+import { SearchPalette } from './components/search/SearchPalette';
+import type { SearchResult } from './model/search';
+import { isMainClosed, isPanel, listen, openWindow, parseView, post, role, subscribeShared, type Command, type PanelView } from './windows';
 import { fitView, spineView, zoomAt, type View } from './view';
 
 const BOTTOM_BAR = 52;
@@ -40,6 +43,19 @@ export type Route =
   | { view: 'bible'; focus?: string; report?: ReportKey; back: PlaceRoute }
   | { view: 'engine'; focus?: string; back: PlaceRoute };
 
+/** Where a window opens: the main window on the story graph, another on the view it was opened for. */
+const routeFor = (view: PanelView): Route => {
+  if (view.view === 'bible') return { view: 'bible', focus: view.focus, back: { view: 'graph' } };
+  if (view.view === 'engine') return { view: 'engine', back: { view: 'graph' } };
+  if (view.view === 'scene') return view;
+  return { view: 'graph' };
+};
+
+const viewOf = (route: Route): PanelView =>
+  route.view === 'bible' ? { view: 'bible', focus: route.focus } : route.view === 'engine' ? { view: 'engine' } : route.view === 'scene' ? { view: 'scene', sceneId: route.sceneId, mode: route.mode } : { view: 'graph' };
+
+const WINDOW_LABEL: Record<PanelView['view'], string> = { graph: 'Graph window', bible: 'Bible window', engine: 'Handoff window', scene: 'Scene window' };
+
 const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
@@ -48,7 +64,7 @@ export const App = () => {
   const { project, commit } = studio;
   const canvas = useRef<CanvasApi>(null);
   const surface = useRef<SceneSurface>(null);
-  const [route, setRoute] = useState<Route>({ view: 'graph' });
+  const [route, setRoute] = useState<Route>(() => (role.kind === 'panel' ? routeFor(role.start) : { view: 'graph' }));
   // The legend is a full palette on the graph and a rail inside a scene, until the user says otherwise.
   const [rail, setRail] = useState({ graph: false, scene: true });
   const inSceneView = route.view === 'scene';
@@ -65,6 +81,8 @@ export const App = () => {
   const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | null>(null);
   const [recent, setRecent] = useState<Recent[]>(() => recentFiles());
   const [renameRequest, setRenameRequest] = useState(0);
+  const [searching, setSearching] = useState(false);
+  const [lineFocus, setLineFocus] = useState<string | null>(null);
   const preferences = usePreferences();
 
   routeRef.current = route;
@@ -96,6 +114,7 @@ export const App = () => {
   const openScene = (sceneId: string, mode: SceneMode) => {
     setRoute({ view: 'scene', sceneId, mode });
     setSceneSelection(null);
+    setLineFocus(null);
   };
   const [sceneSelection, setSceneSelection] = useState<string | null>(null);
   const placeOf = (r: Route): PlaceRoute => (r.view === 'bible' || r.view === 'engine' ? r.back : r);
@@ -121,6 +140,12 @@ export const App = () => {
 
   /** Go to a place a where-used link names: a scene view, or a node on the graph brought into view. */
   const navigate = (to: Destination) => {
+    // Beside the main window, a node is shown on the main window's graph: the spine stays in the middle.
+    if (isPanel && to.kind === 'graph' && routeRef.current.view !== 'graph') {
+      post({ t: 'navigate', to });
+      say('Shown on the story graph in the main window.');
+      return;
+    }
     if (to.kind === 'scene') {
       openScene(to.sceneId, to.mode);
       return;
@@ -131,6 +156,34 @@ export const App = () => {
     if (!box) return;
     const { w, h } = canvasSize();
     setViewState((v) => ({ ...v, panX: (w + 130) / 2 - (box.x + box.w / 2) * v.zoom, panY: h / 2 - (box.y + box.h / 2) * v.zoom }));
+  };
+
+  /** Frame a node: centred, and big enough to read (Zoom to selection). */
+  const zoomTo = (id: string) => {
+    const box = nodeBox(project, id);
+    if (!box) return;
+    const { w, h } = canvasSize();
+    setViewState((v) => {
+      const zoom = Math.min(1.5, Math.max(0.6, Math.min((w - 130) / (box.w * 4), h / (box.h * 5))));
+      return { zoom, panX: (w + 130) / 2 - (box.x + box.w / 2) * zoom, panY: h / 2 - (box.y + box.h / 2) * zoom };
+    });
+  };
+
+  /** Go to a search result: its node on the graph, the scene that holds it, or its line in the script. */
+  const goToResult = (result: SearchResult) => {
+    if (result.to.kind === 'graph' && isPanel && route.view !== 'graph') {
+      navigate(result.to);
+      return;
+    }
+    if (result.to.kind === 'graph') {
+      setRoute({ view: 'graph' });
+      setSelection(result.id);
+      zoomTo(result.id);
+      return;
+    }
+    openScene(result.to.sceneId, result.to.mode);
+    if (result.kind === 'line') setLineFocus(result.id);
+    else setSceneSelection(result.id);
   };
 
   const backToGraph = () => {
@@ -265,7 +318,20 @@ export const App = () => {
     setViewState(spineView(next, w, h));
   };
 
+  /** A window beside the main one hands file commands to it (it owns the file). */
+  const toMain = (name: Command, arg?: string) => {
+    studio.forward(name, arg);
+    desktop()?.focusMain?.();
+    if (!desktop()) say('Carry on in the main window.');
+  };
+
   const save = async (as = false): Promise<boolean> => {
+    if (studio.isPanel) {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      await new Promise((r) => setTimeout(r, 0));
+      studio.forward(as ? 'saveAs' : 'save');
+      return true;
+    }
     if (isPreview()) {
       setDialog('previewSave');
       return false;
@@ -307,14 +373,43 @@ export const App = () => {
     if ('error' in result) say(result.error);
     else showProject(result.project, result.file);
   };
-  const newProject = (sample = false) => leaveProject(() => showProject(sample ? sunkenVault() : createProject(), null));
+  const newProject = (sample = false) =>
+    studio.isPanel ? toMain(sample ? 'newSample' : 'new') : leaveProject(() => showProject(sample ? sunkenVault() : createProject(), null));
   const open = () =>
-    leaveProject(() => {
+    studio.isPanel ? toMain('open') : leaveProject(() => {
       openProjectFile()
         .then(afterOpen)
         .catch(() => say('That file could not be opened.'));
     });
-  const reopen = (path: string) => leaveProject(() => void openRecent(path).then(afterOpen));
+  const reopen = (path: string) => (studio.isPanel ? toMain('openRecent', path) : leaveProject(() => void openRecent(path).then(afterOpen)));
+
+  // The main window runs what other windows ask of it.
+  const fromPanels = useRef<(m: Parameters<Parameters<typeof listen>[0]>[0]) => void>(() => {});
+  fromPanels.current = (m) => {
+    if (m.t === 'navigate') navigate(m.to);
+    if (m.t !== 'command') return;
+    if (m.name === 'save') void save();
+    if (m.name === 'saveAs') void save(true);
+    if (m.name === 'new') newProject();
+    if (m.name === 'newSample') newProject(true);
+    if (m.name === 'open') open();
+    if (m.name === 'openRecent' && m.arg) reopen(m.arg);
+    if (m.name === 'preferences') setDialog('preferences');
+  };
+  useEffect(() => (isPanel ? undefined : listen((m) => fromPanels.current(m))), []);
+
+  const mainClosed = useSyncExternalStore(subscribeShared, isMainClosed, isMainClosed);
+
+  /** Open a view in a window of its own, on the monitor beside this one. */
+  const popOut = (view: PanelView, moveHere = false) => {
+    void openWindow(view).catch(() => say('The browser blocked the new window. Allow pop-ups for the studio.'));
+    // The main window keeps the spine; the view it sent away comes back to the graph.
+    if (moveHere && route.view !== 'graph') setRoute(route.view === 'scene' ? { view: 'graph' } : route.back);
+  };
+  const [displays, setDisplays] = useState(1);
+  useEffect(() => {
+    void desktop()?.displayCount?.().then(setDisplays);
+  }, []);
 
   // Commands from the desktop's native menu and its close dialog.
   useEffect(() => {
@@ -323,6 +418,7 @@ export const App = () => {
       if (command === 'preferences') setDialog('preferences');
       if (command === 'about') setDialog('about');
       if (command === 'save-then-close') void save().then((ok) => ok && bridge.close?.());
+      if (command.startsWith('route:')) setRoute(routeFor(parseView(new URLSearchParams(command.slice(6)))));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -332,8 +428,14 @@ export const App = () => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
-      if (ask || dialog) return;
-      if (mod && key === 's') {
+      if (ask || dialog || searching) return;
+      if (mod && (key === 'k' || key === 'f')) {
+        e.preventDefault();
+        setSearching(true);
+      } else if (e.shiftKey && e.code === 'Digit2' && !mod && !isTyping(e.target) && route.view === 'graph' && selection) {
+        e.preventDefault();
+        zoomTo(selection);
+      } else if (mod && key === 's') {
         e.preventDefault();
         void save(e.shiftKey);
       } else if (mod && key === 'o') {
@@ -372,6 +474,7 @@ export const App = () => {
         if (e.key === 'Escape') setDialog(null);
         return;
       }
+      if (searching) return;
       if (e.key === 'Escape') {
         setDrag(null);
         if (!isTyping(e.target)) {
@@ -492,6 +595,8 @@ export const App = () => {
     {
       label: 'Edit',
       items: [
+        { label: 'Search…', shortcut: 'Mod+K', onClick: () => setSearching(true) },
+        sep,
         { label: 'Undo', shortcut: 'Mod+Z', onClick: studio.undo, disabled: !studio.canUndo },
         { label: 'Redo', shortcut: 'Mod+Shift+Z', onClick: studio.redo, disabled: !studio.canRedo },
         sep,
@@ -535,6 +640,7 @@ export const App = () => {
         { label: 'Zoom out', shortcut: '−', disabled: !onGraph, onClick: () => zoomBy(1 / 1.2) },
         { label: 'Zoom to fit', shortcut: 'Mod+0', disabled: !fitsHere, onClick: () => (onGraph ? fit() : surface.current?.fit?.()) },
         { label: 'Zoom to the spine', disabled: !onGraph, onClick: toSpine },
+        { label: 'Zoom to selection', shortcut: 'Shift+2', disabled: !onGraph || !selection || !project.objects[selection] || !project.placements[selection], onClick: () => selection && zoomTo(selection) },
         sep,
         { label: 'Minimap', checked: preferences.showMinimap, onClick: () => setPreferences({ showMinimap: !preferences.showMinimap }) },
         { label: 'Dot grid', checked: preferences.showGrid, onClick: () => setPreferences({ showGrid: !preferences.showGrid }) },
@@ -559,6 +665,36 @@ export const App = () => {
           disabled: !issues.length || !onGraph,
           onClick: showNextIssue,
         },
+      ],
+    },
+    {
+      label: 'Window',
+      items: [
+        {
+          label: 'Open in a new window',
+          submenu: [
+            { label: 'Game Bible', onClick: () => popOut({ view: 'bible' }) },
+            { label: 'Engine handoff', onClick: () => popOut({ view: 'engine' }) },
+            { label: 'Story graph', onClick: () => popOut({ view: 'graph' }) },
+            ...(route.view === 'scene' ? [{ label: `This scene (${project.objects[route.sceneId]?.name ?? ''})`, onClick: () => popOut(viewOf(route)) }] : []),
+          ],
+        },
+        {
+          label: 'Move this view to another monitor',
+          hint: 'Opens this view in its own window beside this one; this window goes back to the story graph.',
+          disabled: route.view === 'graph' || isPanel,
+          onClick: () => popOut(viewOf(route), true),
+        },
+        ...(desktop()?.arrangeWindows
+          ? [
+              {
+                label: displays > 1 ? `Arrange across ${displays} monitors` : 'Arrange windows',
+                hint: 'The story graph on the middle monitor, the Bible to its left, the other windows to its right.',
+                onClick: () => void desktop()!.arrangeWindows!(),
+              },
+            ]
+          : []),
+        ...(isPanel ? [sep, { label: 'Go to the main window', onClick: () => (desktop()?.focusMain ? desktop()!.focusMain!() : window.opener?.focus()) }] : []),
       ],
     },
     {
@@ -642,6 +778,7 @@ export const App = () => {
     >
       <TopBar
         menus={menus}
+        windowLabel={role.kind === 'panel' ? WINDOW_LABEL[role.start.view] : undefined}
         projectName={project.name}
         fileName={studio.file?.name}
         renameRequest={renameRequest}
@@ -658,6 +795,7 @@ export const App = () => {
         saveState={studio.saveState}
         issueCount={route.view === 'graph' ? issues.length : 0}
         onIssues={showNextIssue}
+        onSearch={() => setSearching(true)}
       />
       {route.view !== 'bible' && route.view !== 'engine' && <Palette
         active={drag?.placing ? drag.type : null}
@@ -710,6 +848,7 @@ export const App = () => {
             onOpenBible={openBible}
             onOpenCode={openEngine}
             onNavigate={navigate}
+            focusLine={lineFocus}
           />
         )}
         {route.view === 'scene' && scene && route.mode === 'timeline' && (
@@ -803,6 +942,22 @@ export const App = () => {
             </div>
           </div>
         </div>
+      )}
+      {mainClosed && (
+        <div className="dialog-backdrop">
+          <div className="dialog" role="alertdialog" aria-labelledby="closed-title">
+            <h2 id="closed-title">The main window has closed</h2>
+            <p>This window worked on the main window’s project. Open the studio again to carry on.</p>
+            <div className="dialog-actions">
+              <button className="tb-btn primary" onClick={() => window.close()}>
+                Close this window
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {searching && (
+        <SearchPalette project={project} onGo={goToResult} onBible={(r) => openBible(r.id)} onClose={() => setSearching(false)} />
       )}
       {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
       {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}

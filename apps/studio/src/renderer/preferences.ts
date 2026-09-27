@@ -59,6 +59,14 @@ const applySideEffects = (p: Preferences) => {
 };
 applySideEffects(current);
 
+// Another window changed them: take them up here too.
+globalThis.addEventListener?.('storage', (e: StorageEvent) => {
+  if (e.key !== KEY) return;
+  current = read();
+  applySideEffects(current);
+  for (const l of listeners) l();
+});
+
 export const getPreferences = (): Preferences => current;
 
 export const setPreferences = (patch: Partial<Preferences>): void => {

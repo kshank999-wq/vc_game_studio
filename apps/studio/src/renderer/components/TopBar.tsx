@@ -3,7 +3,7 @@ import type { ObjectType } from '../model/types';
 import { Symbol } from './Symbol';
 import type { SaveState } from '../use-studio';
 import { PURCHASE_URL } from '../edition';
-import { MenuBar, type Menu } from './menu/MenuBar';
+import { MenuBar, shortcutLabel, type Menu } from './menu/MenuBar';
 
 export interface Crumb {
   label: string;
@@ -13,6 +13,8 @@ export interface Crumb {
 
 interface Props {
   menus: Menu[];
+  /** In a window beside the main one: what it is for. */
+  windowLabel?: string;
   projectName: string;
   /** The project file's name, when it has one. */
   fileName?: string;
@@ -33,6 +35,7 @@ interface Props {
   saveState: SaveState;
   issueCount: number;
   onIssues: () => void;
+  onSearch: () => void;
 }
 
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -59,6 +62,11 @@ export const TopBar = (props: Props) => {
     <header className="topbar">
       <div className="brand">VC GAME STUDIO</div>
       <MenuBar menus={props.menus} />
+      {props.windowLabel && (
+        <span className="window-chip" title="Works on the main window’s project; saving happens there">
+          {props.windowLabel}
+        </span>
+      )}
       {props.crumbs ? (
         <nav className="crumbs" aria-label="Breadcrumb">
           <span className="crumb-project">{props.projectName}</span>
@@ -104,6 +112,14 @@ export const TopBar = (props: Props) => {
         </button>
       )}
       <div className="grow" />
+      <button className="tb-btn search-btn" title="Search the project" onClick={props.onSearch}>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="M10.5 10.5L14 14" />
+        </svg>
+        Search
+        <kbd>{shortcutLabel('Mod+K')}</kbd>
+      </button>
       {props.viewControls}
       {props.saveState === 'off' ? (
         <div className="preview-badge">
