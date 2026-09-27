@@ -111,7 +111,8 @@ a:hover {
   padding: 0 12px 0 16px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
-  z-index: 5;
+  /* Above the canvas, so the menus open over it. */
+  z-index: 40;
 }
 
 .brand {
@@ -2032,7 +2033,7 @@ a:hover {
 
 .line textarea {
   width: 100%;
-  font-size: 14px;
+  font-size: var(--script-size, 14px);
   line-height: 1.5;
   overflow: hidden;
 }
@@ -2093,7 +2094,7 @@ a:hover {
   border-radius: 6px;
   background: none;
   font-family: var(--font-script);
-  font-size: 14px;
+  font-size: var(--script-size, 14px);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2114,7 +2115,7 @@ a:hover {
 .line-direction {
   width: 240px;
   text-align: center;
-  font-size: 13px;
+  font-size: calc(var(--script-size, 14px) - 1px);
   color: #b5a985 !important;
 }
 
@@ -4423,4 +4424,373 @@ a.send-btn:hover {
   margin-right: 4px;
   color: var(--gold-hi);
   font-size: 10px;
+}
+
+/* ---------------------------------------------------------------- menu bar */
+
+.menubar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 4px;
+}
+
+.menu-root {
+  position: relative;
+}
+
+.menu-title {
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.menu-title:hover,
+.menu-title.open {
+  background: var(--node-raised);
+  color: var(--text);
+}
+
+.menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+}
+
+.menu-list {
+  min-width: 232px;
+  padding: 4px;
+  background: #26221a;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-list.submenu {
+  position: absolute;
+  top: -5px;
+  left: calc(100% + 2px);
+}
+
+.menu-entry {
+  position: relative;
+}
+
+.menu-list button {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.menu-list button:hover:not(:disabled),
+.menu-list button:focus-visible,
+.menu-list button[aria-expanded='true'] {
+  background: var(--node-raised);
+  outline: none;
+}
+
+.menu-list button:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.menu-list .menu-check {
+  width: 14px;
+  color: var(--gold-hi);
+  text-align: center;
+  flex: none;
+}
+
+.menu-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-shortcut {
+  margin-left: 18px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.menu-arrow {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.menu-list .menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+.menu-list .menu-heading {
+  padding: 6px 8px 2px 24px;
+  font-family: var(--font-label);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+}
+
+.save-edited .save-dot,
+.save-draft .save-dot {
+  background: var(--gold);
+}
+
+.save-state[title] {
+  cursor: help;
+}
+
+/* ---------------------------------------------------------------- dialogs: preferences, shortcuts, about */
+
+.dialog.wide {
+  width: min(680px, calc(100% - 32px));
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dialog-actions .grow {
+  flex: 1;
+}
+
+.tb-btn.primary {
+  border-color: var(--gold-lo);
+  color: var(--gold-hi);
+}
+
+a.tb-btn {
+  text-decoration: none;
+}
+
+.dialog-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.prefs {
+  display: flex;
+  flex-direction: column;
+  max-height: min(64vh, 560px);
+  overflow: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.prefs h3,
+.shortcuts h3 {
+  margin: 12px 0 4px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.prefs h3:first-child {
+  margin-top: 2px;
+}
+
+.pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.pref-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pref-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.pref-select {
+  width: auto;
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 2px 8px;
+  font-size: 12.5px;
+}
+
+.pref-switch {
+  appearance: none;
+  flex: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--border-strong);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pref-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-soft);
+  transition: transform 0.15s;
+}
+
+.pref-switch:checked {
+  background: var(--gold-lo);
+}
+
+.pref-switch:checked::after {
+  transform: translateX(14px);
+  background: var(--gold-hi);
+}
+
+.pref-switch:focus-visible {
+  outline: 2px solid var(--gold-hi);
+  outline-offset: 2px;
+}
+
+.shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 4px 24px;
+  max-height: min(66vh, 600px);
+  overflow: auto;
+}
+
+.shortcuts dl {
+  margin: 0;
+}
+
+.shortcut-row {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.shortcut-row dt {
+  flex: 0 0 118px;
+}
+
+.shortcut-row dd {
+  margin: 0;
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--node);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.about-brand {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.22em;
+  color: var(--gold);
+}
+
+.about a {
+  color: var(--gold-hi);
+}
+
+/* Preferences that change the canvas. */
+.app.no-grid .canvas,
+.app.no-grid .exploded,
+.app.no-grid .timeline {
+  background-image: none;
+}
+
+/* With the menu bar in the top bar, the breadcrumbs give way first; controls keep their size. */
+.topbar > :not(.crumbs):not(.grow) {
+  flex-shrink: 0;
+}
+
+.view-toggle button,
+.save-state,
+.menu-title {
+  white-space: nowrap;
+}
+
+.crumbs {
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+/* Only the project name and the last step shrink, each to an ellipsis. */
+.crumb {
+  flex-shrink: 0;
+}
+
+.crumb-project,
+.crumb:last-child {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crumb-project {
+  min-width: 40px;
+}
+
+.crumb:last-child .crumb-here,
+.crumb:last-child .crumb-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+@media (max-width: 1360px) {
+  .topbar .brand {
+    display: none;
+  }
 }

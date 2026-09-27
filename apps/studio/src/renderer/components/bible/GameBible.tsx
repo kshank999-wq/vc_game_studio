@@ -18,6 +18,8 @@ interface Props {
   focus?: string;
   onNavigate: (to: Destination) => void;
   onOpenCode?: (id: string) => void;
+  /** A production report to open straight away (File › Export). */
+  report?: ReportKey;
 }
 
 /** Views whose list can add a new canonical element straight from the Bible. */
@@ -48,13 +50,13 @@ const viewFor = (project: Project, id: string | undefined): ViewKey => {
  * Every view reads the same objects the graph and scenes use, so an edit
  * here is an edit everywhere; where-used links go back to each place.
  */
-export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode }: Props) => {
+export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, report: initialReport }: Props) => {
   const [view, setView] = useState<ViewKey>(() => viewFor(project, focus));
   const [selected, setSelected] = useState<string | null>(focus ?? null);
   const [query, setQuery] = useState('');
   const [layout, setLayout] = useState<'grouped' | 'list'>('grouped');
   const [exportOpen, setExportOpen] = useState(false);
-  const [report, setReport] = useState<ReportKey | null>(null);
+  const [report, setReport] = useState<ReportKey | null>(initialReport ?? null);
 
   useEffect(() => {
     if (focus) {

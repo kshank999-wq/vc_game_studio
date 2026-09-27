@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { zoomAt, type View } from './view';
+import { getPreferences } from './preferences';
 
 /**
  * Is this wheel event a mouse wheel (zoom) or a trackpad scroll (pan)? A mouse
@@ -36,7 +37,7 @@ export const useWheelPanZoom = (
         setView((v) => zoomAt(v, factor, sx, sy));
       } else if (e.shiftKey) {
         setView((v) => ({ ...v, panX: v.panX - (dx || dy) }));
-      } else if (isMouseWheel(e)) {
+      } else if (isMouseWheel(e) && getPreferences().wheel === 'zoom') {
         setView((v) => zoomAt(v, Math.exp(-dy * 0.0018), sx, sy));
       } else {
         setView((v) => ({ ...v, panX: v.panX - dx, panY: v.panY - dy }));

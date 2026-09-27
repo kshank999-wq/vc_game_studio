@@ -224,6 +224,13 @@ const renumber = (lines: DialogueLine[], sceneId: string): DialogueLine[] => {
 };
 
 /** Add a block to the script, after `afterId` or at the end. A speaker not yet in the scene joins it. */
+let newLineVo: DialogueLine['vo'] = 'todo';
+
+/** The VO status new dialogue lines start with (a preference). */
+export const setDefaultVo = (vo: DialogueLine['vo']): void => {
+  newLineVo = vo;
+};
+
 export const addLine = (
   project: Project,
   sceneId: string,
@@ -241,7 +248,7 @@ export const addLine = (
     text: '',
     direction: '',
     order: (after?.order ?? 0) + 0.5,
-    vo: kind === 'dialogue' ? 'todo' : 'none',
+    vo: kind === 'dialogue' ? newLineVo : 'none',
     notes: '',
   };
   let next: Project = { ...project, lines: renumber([...project.lines, line], sceneId) };

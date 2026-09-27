@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -15,7 +16,7 @@ export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
   base: './',
   plugins: [react()],
-  define: { __EDITION__: JSON.stringify(edition) },
+  define: { __EDITION__: JSON.stringify(edition), __APP_VERSION__: JSON.stringify((JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string }).version) },
   build: {
     outDir: resolve(__dirname, edition === 'preview' ? 'out/preview' : 'out/web'),
     emptyOutDir: true,

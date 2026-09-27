@@ -1,8 +1,9 @@
 import type { Project } from './types';
 
 /**
- * Autosave for the browser build. The desktop app will write project files
- * instead; the preview edition never saves at all.
+ * The working copy, kept in local storage so nothing is lost between
+ * sessions. Saving for real writes a project file (.vcgs, see files.ts);
+ * the preview edition saves neither.
  */
 
 const KEY = 'vcgs.project.v1';
@@ -22,16 +23,20 @@ const isProject = (value: unknown): value is Project => {
   );
 };
 
+/** A project from parsed JSON, or null when it isn't one. Older projects gain what they lack. */
+export const readProject = (parsed: unknown): Project | null => {
+  // Projects saved before scenes had scripts have no lines yet.
+  if (!isProject(parsed)) return null;
+  const list = <T,>(value: T[] | undefined): T[] => (Array.isArray(value) ? value : []);
+  return { ...parsed, lines: list(parsed.lines), events: list(parsed.events), branches: list(parsed.branches) };
+};
+
 export const loadProject = (): Project | null => {
   if (!canSave()) return null;
   try {
     const raw = globalThis.localStorage?.getItem(KEY);
     if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    // Projects saved before scenes had scripts have no lines yet.
-    if (!isProject(parsed)) return null;
-    const list = <T,>(value: T[] | undefined): T[] => (Array.isArray(value) ? value : []);
-    return { ...parsed, lines: list(parsed.lines), events: list(parsed.events), branches: list(parsed.branches) };
+    return readProject(JSON.parse(raw));
   } catch {
     return null;
   }

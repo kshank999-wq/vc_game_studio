@@ -19,7 +19,14 @@ import { addLane, isProtected, removeConnection, removeObject, renameProject, sp
 import { findIssues } from './model/validate';
 import { TYPE_LABEL } from './model/semantics';
 import type { ObjectType } from './model/types';
-import { useStudio } from './use-studio';
+import { useStudio, isBlank } from './use-studio';
+import type { Menu, MenuItem } from './components/menu/MenuBar';
+import { AboutDialog, PreferencesDialog, PreviewSaveDialog, ShortcutsDialog } from './components/menu/Dialogs';
+import { openProjectFile, openRecent, recentFiles, clearRecent, type Opened, type Recent } from './files';
+import { createProject } from './model/project';
+import { REPORTS, type ReportKey } from './model/reports';
+import { isPreview, PURCHASE_URL } from './edition';
+import { setPreferences, usePreferences } from './preferences';
 import { fitView, spineView, zoomAt, type View } from './view';
 
 const BOTTOM_BAR = 52;
@@ -30,7 +37,7 @@ type PlaceRoute = { view: 'graph' } | { view: 'scene'; sceneId: string; mode: Sc
 /** The Bible remembers where it was opened from, to go back there (spec §24). */
 export type Route =
   | PlaceRoute
-  | { view: 'bible'; focus?: string; back: PlaceRoute }
+  | { view: 'bible'; focus?: string; report?: ReportKey; back: PlaceRoute }
   | { view: 'engine'; focus?: string; back: PlaceRoute };
 
 const isTyping = (target: EventTarget | null): boolean =>
@@ -55,6 +62,10 @@ export const App = () => {
   const routeRef = useRef<Route>({ view: 'graph' });
   const [toast, setToast] = useState<string | null>(null);
   const [ask, setAsk] = useState<ConfirmRequest | null>(null);
+  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | null>(null);
+  const [recent, setRecent] = useState<Recent[]>(() => recentFiles());
+  const [renameRequest, setRenameRequest] = useState(0);
+  const preferences = usePreferences();
 
   routeRef.current = route;
   const say = useCallback((message: string) => setToast(message), []);
@@ -88,7 +99,7 @@ export const App = () => {
   };
   const [sceneSelection, setSceneSelection] = useState<string | null>(null);
   const placeOf = (r: Route): PlaceRoute => (r.view === 'bible' || r.view === 'engine' ? r.back : r);
-  const openBible = (focus?: string) => setRoute((r) => ({ view: 'bible', focus, back: placeOf(r) }));
+  const openBible = (focus?: string, report?: ReportKey) => setRoute((r) => ({ view: 'bible', focus, report, back: placeOf(r) }));
   const openEngine = (focus?: string) => setRoute((r) => ({ view: 'engine', focus, back: placeOf(r) }));
 
   // Export on save (desktop): once edits settle, send what changed to the engine project.
@@ -241,10 +252,124 @@ export const App = () => {
     if (lane) commit(updateLane(project, laneId, { visible: !lane.visible }));
   };
 
+  // ------------------------------------------------------------ files
+
+  /** Start on another project, back on the story graph at its spine. */
+  const showProject = (next: Parameters<typeof studio.load>[0], file: Parameters<typeof studio.load>[1]) => {
+    studio.load(next, file);
+    setRoute({ view: 'graph' });
+    setSelection(null);
+    setSceneSelection(null);
+    setRecent(recentFiles());
+    const { w, h } = canvasSize();
+    setViewState(spineView(next, w, h));
+  };
+
+  const save = async (as = false): Promise<boolean> => {
+    if (isPreview()) {
+      setDialog('previewSave');
+      return false;
+    }
+    // A field being typed in saves when it loses focus: let it land first.
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    await new Promise((r) => setTimeout(r, 0));
+    const ok = await (as ? latest.current.saveAs() : latest.current.save());
+    setRecent(recentFiles());
+    if (ok) say(`Saved ${latest.current.file?.name ?? ''}`.trim());
+    else if (latest.current.saveState === 'failed') say('That did not save. Try File › Save As.');
+    return ok;
+  };
+  const latest = useRef(studio);
+  latest.current = studio;
+
+  /** Before leaving this project: offer to save what isn't in a file yet. */
+  const leaveProject = (then: () => void) => {
+    if (isPreview() && !isBlank(project)) {
+      setAsk({ title: 'Leave this project?', message: 'The preview edition does not save, so this project will be cleared.', confirmLabel: 'Clear it', onConfirm: then });
+      return;
+    }
+    if (!studio.unsaved) {
+      then();
+      return;
+    }
+    setAsk({
+      title: `Save “${project.name}” first?`,
+      message: studio.file ? `Your changes to ${studio.file.name} are not saved.` : 'This project is not in a file yet; it only lives in this window.',
+      confirmLabel: 'Save',
+      safe: true,
+      onConfirm: () => void save().then((ok) => ok && then()),
+      alternate: { label: 'Don’t save', onClick: then },
+    });
+  };
+
+  const afterOpen = (result: Opened) => {
+    if (!result) return;
+    if ('error' in result) say(result.error);
+    else showProject(result.project, result.file);
+  };
+  const newProject = (sample = false) => leaveProject(() => showProject(sample ? sunkenVault() : createProject(), null));
+  const open = () =>
+    leaveProject(() => {
+      openProjectFile()
+        .then(afterOpen)
+        .catch(() => say('That file could not be opened.'));
+    });
+  const reopen = (path: string) => leaveProject(() => void openRecent(path).then(afterOpen));
+
+  // Commands from the desktop's native menu and its close dialog.
+  useEffect(() => {
+    const bridge = desktop();
+    return bridge?.onCommand?.((command) => {
+      if (command === 'preferences') setDialog('preferences');
+      if (command === 'about') setDialog('about');
+      if (command === 'save-then-close') void save().then((ok) => ok && bridge.close?.());
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // File and view shortcuts work everywhere, even while typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (ask || dialog) return;
+      if (mod && key === 's') {
+        e.preventDefault();
+        void save(e.shiftKey);
+      } else if (mod && key === 'o') {
+        e.preventDefault();
+        open();
+      } else if (mod && key === 'n') {
+        e.preventDefault();
+        newProject();
+      } else if (mod && e.key === ',') {
+        e.preventDefault();
+        setDialog('preferences');
+      } else if (mod && key === 'b' && !isTyping(e.target)) {
+        e.preventDefault();
+        if (route.view === 'bible') setRoute(route.back);
+        else openBible();
+      } else if (mod && key === 'e' && !isTyping(e.target)) {
+        e.preventDefault();
+        if (route.view === 'engine') setRoute(route.back);
+        else openEngine();
+      } else if (e.key === '?' && !mod && !isTyping(e.target)) {
+        e.preventDefault();
+        setDialog('shortcuts');
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (ask) {
         if (e.key === 'Escape') setAsk(null);
+        return;
+      }
+      if (dialog) {
+        if (e.key === 'Escape') setDialog(null);
         return;
       }
       if (e.key === 'Escape') {
@@ -320,6 +445,132 @@ export const App = () => {
   });
 
   const showGhost = drag && (drag.moved || drag.placing);
+  const railOn = inSceneView ? rail.scene : rail.graph;
+
+  // ------------------------------------------------------------ the menu bar
+
+  const onGraph = route.view === 'graph';
+  const fitsHere = onGraph || (route.view === 'scene' && route.mode !== 'open');
+  const selected = onGraph ? selection : route.view === 'scene' ? sceneSelection : null;
+  const canRename = !!selected && !!project.objects[selected];
+  const canDelete = onGraph ? !!selection : route.view === 'scene' && !!sceneSelection && inScene(project, route.sceneId, sceneSelection);
+  const sep: MenuItem = { kind: 'separator' };
+  const menus: Menu[] = [
+    {
+      label: 'File',
+      items: [
+        { label: 'New project', shortcut: 'Mod+N', onClick: () => newProject() },
+        { label: 'New from the sample (The Sunken Vault)', onClick: () => newProject(true) },
+        { label: 'Open…', shortcut: 'Mod+O', onClick: open },
+        {
+          label: 'Open recent',
+          hint: desktop() ? undefined : 'Recent files are listed in the desktop app.',
+          submenu: recent.length
+            ? [
+                ...recent.map((r): MenuItem => ({ label: r.name, hint: r.path, onClick: () => reopen(r.path) })),
+                sep,
+                { label: 'Clear the list', onClick: () => (clearRecent(), setRecent([])) },
+              ]
+            : [],
+        },
+        sep,
+        { label: isPreview() ? 'Save (full edition)' : 'Save', shortcut: 'Mod+S', onClick: () => void save() },
+        { label: 'Save As…', shortcut: 'Mod+Shift+S', onClick: () => void save(true), disabled: isPreview() },
+        sep,
+        {
+          label: 'Export',
+          submenu: [
+            { label: 'Engine handoff…', shortcut: 'Mod+E', onClick: () => openEngine() },
+            { kind: 'heading', label: 'PRODUCTION REPORTS' },
+            ...REPORTS.map((r): MenuItem => ({ label: r.label, onClick: () => openBible(undefined, r.key) })),
+          ],
+        },
+        sep,
+        { label: 'Preferences…', shortcut: 'Mod+,', onClick: () => setDialog('preferences') },
+      ],
+    },
+    {
+      label: 'Edit',
+      items: [
+        { label: 'Undo', shortcut: 'Mod+Z', onClick: studio.undo, disabled: !studio.canUndo },
+        { label: 'Redo', shortcut: 'Mod+Shift+Z', onClick: studio.redo, disabled: !studio.canRedo },
+        sep,
+        {
+          label: 'Rename',
+          shortcut: 'F2',
+          disabled: !canRename,
+          onClick: () => (onGraph ? canvas.current?.rename(selection!) : surface.current?.rename(sceneSelection!)),
+        },
+        {
+          label: 'Delete',
+          shortcut: 'Delete',
+          disabled: !canDelete,
+          onClick: () => {
+            if (onGraph) deleteItem(selection);
+            else if (route.view === 'scene' && sceneSelection) {
+              commit(removeFromScene(project, route.sceneId, sceneSelection));
+              setSceneSelection(null);
+            }
+          },
+        },
+        { label: 'Deselect', shortcut: 'Esc', disabled: !selected, onClick: () => (setSelection(null), setSceneSelection(null)) },
+      ],
+    },
+    {
+      label: 'View',
+      items: [
+        { label: 'Story graph', checked: onGraph, onClick: () => setRoute({ view: 'graph' }) },
+        { label: 'Game Bible', shortcut: 'Mod+B', checked: route.view === 'bible', onClick: () => openBible() },
+        { label: 'Engine handoff', shortcut: 'Mod+E', checked: route.view === 'engine', onClick: () => openEngine() },
+        ...(route.view === 'scene'
+          ? [
+              sep,
+              { label: 'Scene', checked: route.mode === 'open', onClick: () => openScene(route.sceneId, 'open') },
+              { label: 'Mind map', checked: route.mode === 'exploded', onClick: () => openScene(route.sceneId, 'exploded') },
+              { label: 'Timeline', checked: route.mode === 'timeline', onClick: () => openScene(route.sceneId, 'timeline') },
+            ]
+          : []),
+        sep,
+        { label: 'Zoom in', shortcut: '+', disabled: !onGraph, onClick: () => zoomBy(1.2) },
+        { label: 'Zoom out', shortcut: '−', disabled: !onGraph, onClick: () => zoomBy(1 / 1.2) },
+        { label: 'Zoom to fit', shortcut: 'Mod+0', disabled: !fitsHere, onClick: () => (onGraph ? fit() : surface.current?.fit?.()) },
+        { label: 'Zoom to the spine', disabled: !onGraph, onClick: toSpine },
+        sep,
+        { label: 'Minimap', checked: preferences.showMinimap, onClick: () => setPreferences({ showMinimap: !preferences.showMinimap }) },
+        { label: 'Dot grid', checked: preferences.showGrid, onClick: () => setPreferences({ showGrid: !preferences.showGrid }) },
+        {
+          label: 'Palette as a rail',
+          checked: railOn,
+          disabled: route.view === 'bible' || route.view === 'engine',
+          onClick: () => setRail((r) => (inSceneView ? { ...r, scene: !r.scene } : { ...r, graph: !r.graph })),
+        },
+      ],
+    },
+    {
+      label: 'Project',
+      items: [
+        { label: 'Rename project…', onClick: () => (setRoute({ view: 'graph' }), setRenameRequest((n) => n + 1)) },
+        sep,
+        { label: 'Add a subplot lane', disabled: !onGraph, onClick: () => onAddLane('subplot') },
+        { label: 'Add a character arc lane', disabled: !onGraph, onClick: () => onAddLane('character') },
+        sep,
+        {
+          label: issues.length ? `Next thing to look at (${issues.length})` : 'Nothing to look at',
+          disabled: !issues.length || !onGraph,
+          onClick: showNextIssue,
+        },
+      ],
+    },
+    {
+      label: 'Help',
+      items: [
+        { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setDialog('shortcuts') },
+        { label: 'About VC Game Studio', onClick: () => setDialog('about') },
+        sep,
+        { label: isPreview() ? 'Buy or subscribe…' : 'vc-writer.com', onClick: () => window.open(PURCHASE_URL, '_blank', 'noreferrer') },
+      ],
+    },
+  ];
 
   const scene = route.view === 'scene' ? project.objects[route.sceneId] : undefined;
   const crumbs: Crumb[] | undefined =
@@ -367,7 +618,6 @@ export const App = () => {
         )}
       </>
     ) : null;
-  const railOn = inSceneView ? rail.scene : rail.graph;
   const backLabel = (r: PlaceRoute): string => {
     if (r.view === 'graph') return 'Story Graph';
     const o = project.objects[r.sceneId];
@@ -386,9 +636,15 @@ export const App = () => {
     ) : null;
 
   return (
-    <div className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${route.view === 'bible' || route.view === 'engine' ? ' no-palette' : ''}`}>
+    <div
+      className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${route.view === 'bible' || route.view === 'engine' ? ' no-palette' : ''}${preferences.showGrid ? '' : ' no-grid'}`}
+      style={{ '--script-size': `${preferences.scriptSize}px` } as React.CSSProperties}
+    >
       <TopBar
+        menus={menus}
         projectName={project.name}
+        fileName={studio.file?.name}
+        renameRequest={renameRequest}
         crumbs={crumbs ?? bibleCrumbs}
         viewControls={sceneControls ?? bibleControls}
         onRename={(name) => commit(renameProject(project, name))}
@@ -487,12 +743,14 @@ export const App = () => {
             onNavigate={navigate}
           />
         )}
-        {route.view === 'bible' && <GameBible project={project} onCommit={commit} focus={route.focus} onNavigate={navigate} onOpenCode={openEngine} />}
+        {route.view === 'bible' && (
+          <GameBible key={route.report ?? 'bible'} project={project} onCommit={commit} focus={route.focus} report={route.report} onNavigate={navigate} onOpenCode={openEngine} />
+        )}
         {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} />}
         {route.view === 'graph' && Object.keys(project.objects).length <= 3 && (
           <div className="sample-card">
             <span>New here? Open the sample from the mockups to see every part working.</span>
-            <button className="tb-btn small" onClick={() => commit({ ...sunkenVault(), id: project.id })}>
+            <button className="tb-btn small" onClick={() => showProject(sunkenVault(), null)}>
               Open “The Sunken Vault”
             </button>
           </div>
@@ -521,8 +779,19 @@ export const App = () => {
               <button className="tb-btn" onClick={() => setAsk(null)}>
                 Cancel
               </button>
+              {ask.alternate && (
+                <button
+                  className="tb-btn danger-btn"
+                  onClick={() => {
+                    ask.alternate!.onClick();
+                    setAsk(null);
+                  }}
+                >
+                  {ask.alternate.label}
+                </button>
+              )}
               <button
-                className="tb-btn danger-btn"
+                className={`tb-btn ${ask.safe ? 'primary' : 'danger-btn'}`}
                 autoFocus
                 onClick={() => {
                   ask.onConfirm();
@@ -535,6 +804,10 @@ export const App = () => {
           </div>
         </div>
       )}
+      {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
+      {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
+      {dialog === 'previewSave' && <PreviewSaveDialog onClose={() => setDialog(null)} />}
       {toast && (
         <div className="toast" role="status">
           {toast}

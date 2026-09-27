@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { ObjectType } from '../model/types';
 import { Symbol } from './Symbol';
 import type { SaveState } from '../use-studio';
 import { PURCHASE_URL } from '../edition';
+import { MenuBar, type Menu } from './menu/MenuBar';
 
 export interface Crumb {
   label: string;
@@ -11,12 +12,17 @@ export interface Crumb {
 }
 
 interface Props {
+  menus: Menu[];
   projectName: string;
+  /** The project file's name, when it has one. */
+  fileName?: string;
   /** Inside a scene: where you are, each step back a link. On the story graph: none. */
   crumbs?: Crumb[];
   /** Controls for the current view (Scene / Mind map, Expand all). */
   viewControls?: ReactNode;
   onRename: (name: string) => void;
+  /** Bumped by Project › Rename to start renaming. */
+  renameRequest?: number;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -31,16 +37,28 @@ interface Props {
 
 const SAVE_LABEL: Record<SaveState, string> = {
   saved: 'Saved',
+  edited: 'Edited',
   saving: 'Saving…',
   failed: 'Not saved',
+  draft: 'Not saved',
   off: 'Saving is off',
+};
+
+const SAVE_HINT: Partial<Record<SaveState, string>> = {
+  edited: 'Changes since the last save. File › Save (Ctrl+S)',
+  failed: 'The last save did not work. Try File › Save As.',
+  draft: 'Kept in this browser only. File › Save to keep it in a project file.',
 };
 
 export const TopBar = (props: Props) => {
   const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (props.renameRequest) setEditing(true);
+  }, [props.renameRequest]);
   return (
     <header className="topbar">
       <div className="brand">VC GAME STUDIO</div>
+      <MenuBar menus={props.menus} />
       {props.crumbs ? (
         <nav className="crumbs" aria-label="Breadcrumb">
           <span className="crumb-project">{props.projectName}</span>
@@ -96,7 +114,7 @@ export const TopBar = (props: Props) => {
           </a>
         </div>
       ) : (
-        <div className={`save-state save-${props.saveState}`}>
+        <div className={`save-state save-${props.saveState}`} title={[props.fileName, SAVE_HINT[props.saveState]].filter(Boolean).join(' · ') || undefined}>
           <span className="save-dot" />
           {SAVE_LABEL[props.saveState]}
         </div>

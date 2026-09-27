@@ -1,17 +1,19 @@
 import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'node:path';
 import { registerHandoff } from './handoff';
+import { guardClose, registerProjectFiles, setNativeMenu } from './project-files';
 
 /**
  * Electron main process for VC Game Studio.
  *
- * The renderer is the whole app; this process only owns the window. File
- * open/save arrives with project files (see docs/ui/HANDOFF.md build order).
+ * The renderer is the whole app; this process owns the window, the file
+ * dialogs and the few disk writes the renderer may ask for.
  */
 
 const isDevelopment = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 registerHandoff(() => mainWindow);
+registerProjectFiles(() => mainWindow);
 
 const createWindow = (): void => {
   const window = new BrowserWindow({
@@ -32,6 +34,7 @@ const createWindow = (): void => {
   });
 
   mainWindow = window;
+  guardClose(window);
   window.on('ready-to-show', () => window.show());
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null;
@@ -52,6 +55,7 @@ const createWindow = (): void => {
 };
 
 void app.whenReady().then(() => {
+  setNativeMenu(() => mainWindow);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

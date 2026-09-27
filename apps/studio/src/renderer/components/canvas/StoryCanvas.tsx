@@ -25,6 +25,7 @@ import { HEADER_W, type View } from '../../view';
 import { connectionCurve, draftCurve, subplotPath, type Point } from './geometry';
 import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
 import { Minimap } from './Minimap';
+import { usePreferences } from '../../preferences';
 import { NodeView, type PortState } from './NodeView';
 import { SubplotBand, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
 
@@ -51,6 +52,10 @@ export interface ConfirmRequest {
   message: string;
   confirmLabel: string;
   onConfirm: () => void;
+  /** A second way on, beside Cancel ("Don't save"). */
+  alternate?: { label: string; onClick: () => void };
+  /** The confirm button is the safe choice (Save), not a destructive one. */
+  safe?: boolean;
 }
 
 interface Props {
@@ -131,6 +136,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
   const [laneMenu, setLaneMenu] = useState<string | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [rulesFor, setRulesFor] = useState<Menu | null>(null);
+  const preferences = usePreferences();
 
   useEffect(() => {
     const root = rootRef.current;
@@ -574,7 +580,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
         );
       })()}
 
-      <Minimap
+      {preferences.showMinimap && <Minimap
         project={shown}
         view={view}
         width={size.w}
@@ -582,7 +588,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
         onJump={(x, y) =>
           props.setView((v) => ({ ...v, panX: (size.w + HEADER_W) / 2 - x * v.zoom, panY: (size.h - props.bottomInset) / 2 - y * v.zoom }))
         }
-      />
+      />}
     </div>
   );
 });

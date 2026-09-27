@@ -48,16 +48,26 @@ Nothing in the story model, the Bible or the handoff screen changes.
 
 - **Runtime** (`addons/vcgs_runtime/`, the same for every project):
   `game_state.gd` (the GameState autoload), `scene_flow.gd` (plays a scene's
-  timeline and emits a signal for each event), `interactable.gd`, and
+  timeline and emits a signal for each event), `interactable.gd`,
+  `rule_engine.gd` (conditions and effects), and
   Resource classes for characters, items, locations, cinematics and puzzles.
 - **Generated** (`res://vcgs/generated/` by default): a flow controller per
   scene, a `.tres` per character / item / location / cinematic / puzzle, an
   interactable script per object, `logic/rules.gd` (flags, triggers, gates),
   a script per choice, the dialogue table, the story graph, a VO cue list
   (under a `.gdignore`), a README and a manifest.
-- **Conditions** (a trigger's "fires when", a gate's "needs") are plain words
-  in VC Game Studio today. They are carried into the code as comments and the
-  checks pass, until conditions become structured rules.
+- **Conditions and effects** are structured rules in VC Game Studio, never
+  code. The IR carries them as plain data with engine keys:
+  `{ "match": "all", "items": [{ "kind": "flag", "ref": "door_solved", "op": "is", "value": "yes" }] }`
+  and effects such as `{ "kind": "take", "ref": "vault_key" }`. Condition
+  kinds are flag, item, object, choice, arc, puzzle and visited; effect kinds
+  are setFlag, give, take, setObject, arc, solve and fire. An adapter only
+  has to read them: in Godot, `rule_engine.gd` checks and applies them;
+  triggers fire and puzzles solve themselves after each GameState change;
+  events whose `when` fails are skipped; a free play ends when its `ends`
+  rule holds; choices and scene exits offer only what their conditions allow.
+  The words a writer typed beside a rule travel too, as documentation.
 - **Checked against Godot 4.3**: `GODOT=/path/to/godot apps/studio/scripts/check-godot.sh`
   exports the sample project and has Godot load every script and resource,
-  pull the lever and play the Vault Door scene through its branch. CI runs it.
+  pull the lever (which fires the trigger, which solves the door, which ends
+  the free play) and play the Vault Door scene through its branch. CI runs it.
