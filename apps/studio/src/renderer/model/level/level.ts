@@ -1,8 +1,8 @@
 import type { Project } from '../types';
-import { assetOf, boundsOf, corners, frameOf, nearestWall, openingOf, sizeOf, type Point } from './geometry';
+import { assetOf, boundsOf, corners, frameOf, nearestWall, openingOf, outlineOf, selfIntersects, sizeOf, tidyOutline, toLocal, toPlan, wallNearest, type Point } from './geometry';
 import { findAsset } from './library';
 import { defaultSettings } from './naming';
-import type { AssemblyPart, AssetDefinition, Floor, Level, LevelItem, LevelSet, LevelSettings, NamingClass, ParamValue, Size } from './types';
+import type { AssemblyPart, AssetDefinition, Floor, Level, LevelItem, LevelSet, LevelSettings, NamingClass, OutlinePoint, ParamValue, Size } from './types';
 
 /**
  * Every change to levels (spec §3–§5). Each takes the project and returns a
@@ -184,6 +184,7 @@ export const placeAsset = (
         groupId,
         ...(part.size ? { size: part.size } : {}),
         ...(part.params ? { params: part.params } : {}),
+        ...(part.outline ? { outline: part.outline } : {}),
       };
       made.push(item);
       ids.push(item.id);
@@ -268,7 +269,12 @@ export const resizeItem = (project: Project, id: string, size: Partial<Size>, gl
   const set = levelsOf(project);
   const item = set.items.find((i) => i.id === id);
   if (!item) return project;
-  const def = assetOf(set, item, global);
+  const changed = mapItems(set, [id], (i) => withSize(i, assetOf(set, i, global), size));
+  return withSet(project, revalidate(changed, [id], global));
+};
+
+/** An item with a new size, storing only what differs from its definition. */
+const withSize = (item: LevelItem, def: AssetDefinition, size: Partial<Size>): LevelItem => {
   const clean: Partial<Size> = {};
   for (const axis of ['w', 'd', 'h'] as const) {
     const v = size[axis] ?? item.size?.[axis];
@@ -276,13 +282,116 @@ export const resizeItem = (project: Project, id: string, size: Partial<Size>, gl
     const value = Math.max(0.01, Math.round(v * 1000) / 1000);
     if (value !== def.size[axis]) clean[axis] = value;
   }
+  const n = { ...item };
+  if (Object.keys(clean).length) n.size = clean;
+  else delete n.size;
+  return n;
+};
+
+// ---------------------------------------------------------------- freeform outlines (spec §3.1)
+
+const RECTANGLE: OutlinePoint[] = [
+  { x: -0.5, y: -0.5 },
+  { x: 0.5, y: -0.5 },
+  { x: 0.5, y: 0.5 },
+  { x: -0.5, y: 0.5 },
+];
+
+/** Doors and windows of these spaces, and where each stands now: to put them back after the outline changes. */
+const openingsIn = (set: LevelSet, hostIds: ReadonlySet<string>, global?: readonly AssetDefinition[]) =>
+  set.items.filter((i) => i.host && hostIds.has(i.host.id)).map((i) => ({ id: i.id, hostId: i.host!.id, at: frameOf(set, i, global) as Point }));
+
+/** Each opening goes into its space's wall nearest where it stood. */
+const rehostOpenings = (set: LevelSet, openings: { id: string; hostId: string; at: Point }[], global?: readonly AssetDefinition[]): LevelSet => {
+  let out = set;
+  for (const o of openings) {
+    const host = out.items.find((i) => i.id === o.hostId);
+    if (!host) continue;
+    const near = wallNearest(frameOf(out, host, global), o.at);
+    if (near) out = mapItems(out, [o.id], (i) => ({ ...i, host: { id: o.hostId, wall: near.wall, along: Math.round(near.along * 1000) / 1000 } }));
+  }
+  return revalidate(out, [...new Set(openings.map((o) => o.hostId))], global);
+};
+
+/**
+ * Give a space the outline through these plan corners. Its centre and size
+ * become the outline's bounds, its facing stays, and its doors and windows go
+ * into the nearest of its new walls. Refused (no change) when the corners
+ * don't make a shape that can be walled: fewer than three, or edges crossing.
+ */
+export const setOutline = (project: Project, id: string, points: readonly Point[], global?: readonly AssetDefinition[]): Project => {
+  const set = levelsOf(project);
+  const item = set.items.find((i) => i.id === id);
+  if (!item || item.locked || assetOf(set, item, global).kind !== 'space') return project;
+  const f = frameOf(set, item, global);
+  const local = tidyOutline(points.map((p) => toLocal(f, p)));
+  if (local.length < 3 || selfIntersects(local)) return project;
+  const b = boundsOf(local);
+  const w = b.maxX - b.minX;
+  const d = b.maxY - b.minY;
+  if (w < 0.1 || d < 0.1) return project;
+  const c = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+  const centre = toPlan(f, c.x, c.y);
+  const r = (n: number) => Math.round(n * 1e6) / 1e6;
+  const outline = local.map((p) => ({ x: r((p.x - c.x) / w), y: r((p.y - c.y) / d) }));
+  const openings = openingsIn(set, new Set([id]), global);
+  const changed = mapItems(set, [id], (i) => ({
+    ...withSize(i, assetOf(set, i, global), { w, d }),
+    x: Math.round(centre.x * 1000) / 1000,
+    y: Math.round(centre.y * 1000) / 1000,
+    outline,
+  }));
+  return withSet(project, rehostOpenings(changed, openings, global));
+};
+
+/** A space's corners on the plan: its outline, or its rectangle's four. */
+export const outlineCorners = (project: Project, id: string, global?: readonly AssetDefinition[]): Point[] => {
+  const set = levelsOf(project);
+  const item = set.items.find((i) => i.id === id);
+  return item ? corners(frameOf(set, item, global)) : [];
+};
+
+const snapped = (set: LevelSet, p: Point): Point => ({ x: snap(set, p.x), y: snap(set, p.y) });
+
+/** Drag one corner of a space's outline (a rectangle becomes an outline). */
+export const moveCorner = (project: Project, id: string, index: number, to: Point, global?: readonly AssetDefinition[]): Project => {
+  const points = outlineCorners(project, id, global);
+  if (!points[index]) return project;
+  points[index] = snapped(levelsOf(project), to);
+  return setOutline(project, id, points, global);
+};
+
+/** Add a corner in a wall of a space's outline, at a plan point. */
+export const insertCorner = (project: Project, id: string, wall: number, at: Point, global?: readonly AssetDefinition[]): Project => {
+  const points = outlineCorners(project, id, global);
+  if (wall < 0 || wall >= points.length) return project;
+  points.splice(wall + 1, 0, snapped(levelsOf(project), at));
+  return setOutline(project, id, points, global);
+};
+
+/** Take a corner out of a space's outline (three is the fewest). */
+export const removeCorner = (project: Project, id: string, index: number, global?: readonly AssetDefinition[]): Project => {
+  const points = outlineCorners(project, id, global);
+  if (points.length <= 3 || !points[index]) return project;
+  points.splice(index, 1);
+  return setOutline(project, id, points, global);
+};
+
+/** Back to a plain rectangle of the same bounds; doors go into its nearest walls. */
+export const makeRectangular = (project: Project, id: string, global?: readonly AssetDefinition[]): Project => {
+  const set = levelsOf(project);
+  const item = set.items.find((i) => i.id === id);
+  if (!item || !outlineOf(set, item, global)) return project;
+  const def = assetOf(set, item, global);
+  const openings = openingsIn(set, new Set([id]), global);
   const changed = mapItems(set, [id], (i) => {
     const n = { ...i };
-    if (Object.keys(clean).length) n.size = clean;
-    else delete n.size;
+    // A space whose definition has an outline keeps an explicit rectangle.
+    if (def.outline) n.outline = RECTANGLE.map((p) => ({ ...p }));
+    else delete n.outline;
     return n;
   });
-  return withSet(project, revalidate(changed, [id], global));
+  return withSet(project, rehostOpenings(changed, openings, global));
 };
 
 /**
@@ -346,23 +455,29 @@ export const mirrorItems = (project: Project, ids: readonly string[], axis: 'x' 
   const cx = (b.minX + b.maxX) / 2;
   const cy = (b.minY + b.maxY) / 2;
   const flipped = new Set(free.map((i) => i.id));
+  // Openings in outlined spaces go back into the wall nearest their mirrored place.
+  const outlined = new Set(free.filter((i) => outlineOf(set, i)).map((i) => i.id));
+  const reopen = openingsIn(set, outlined).map((o) => ({ ...o, at: axis === 'x' ? { x: 2 * cx - o.at.x, y: o.at.y } : { x: o.at.x, y: 2 * cy - o.at.y } }));
   const items = set.items.map((i) => {
     if (flipped.has(i.id)) {
-      return axis === 'x'
-        ? { ...i, x: 2 * cx - i.x, rotation: (360 - i.rotation) % 360 }
-        : { ...i, y: 2 * cy - i.y, rotation: (360 - i.rotation) % 360 };
+      const moved = axis === 'x' ? { ...i, x: 2 * cx - i.x, rotation: (360 - i.rotation) % 360 } : { ...i, y: 2 * cy - i.y, rotation: (360 - i.rotation) % 360 };
+      const outline = outlineOf(set, i);
+      // Flipping the plan flips the outline in the space's own frame; it is put back clockwise.
+      if (outline) moved.outline = tidyOutline(outline.map((p) => (axis === 'x' ? { x: -p.x, y: p.y } : { x: p.x, y: -p.y })));
+      return moved;
     }
+    if (i.host && outlined.has(i.host.id)) return i;
     if (i.host && flipped.has(i.host.id)) {
       // Mirroring east–west swaps the east and west walls and reverses north and south along their length.
       const w = i.host.wall;
       const across = axis === 'x' ? w === 1 || w === 3 : w === 0 || w === 2;
-      const wall = (across ? (w + 2) % 4 : w) as 0 | 1 | 2 | 3;
+      const wall = across ? (w + 2) % 4 : w;
       const along = across ? i.host.along : 1 - i.host.along;
       return { ...i, host: { ...i.host, wall, along } };
     }
     return i;
   });
-  return withSet(project, { ...set, items });
+  return withSet(project, reopen.length ? rehostOpenings({ ...set, items }, reopen) : { ...set, items });
 };
 
 export type Alignment = 'left' | 'centre' | 'right' | 'top' | 'middle' | 'bottom';
@@ -559,6 +674,7 @@ export const saveToLibrary = (project: Project, ids: readonly string[], name: st
       source: 'project',
       version: 1,
       size: sizeOf(set, item, global),
+      ...(outlineOf(set, item, global) ? { outline: outlineOf(set, item, global) } : {}),
       params: def.params.map((p) => (item.params && p.key in item.params ? { ...p, default: item.params[p.key]! } : p)),
       description: `Saved from ${item.name} (${def.name}).`,
     };
@@ -578,6 +694,7 @@ export const saveToLibrary = (project: Project, ids: readonly string[], name: st
         rotation: i.host ? 0 : i.rotation,
         ...(i.size ? { size: i.size } : {}),
         ...(i.params ? { params: i.params } : {}),
+        ...(i.outline ? { outline: i.outline } : {}),
       };
     });
     const tallest = Math.max(...items.map((i) => sizeOf(set, i, global).h));

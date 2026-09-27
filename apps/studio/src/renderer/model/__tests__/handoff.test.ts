@@ -264,6 +264,25 @@ describe('level export', () => {
     expect(engineEdits(planHandoff(overwritten), overwritten.handoff!.last, onDisk)).toEqual([]);
   });
 
+  it('sends a freeform space as its outline, with slab floors that every engine builds', () => {
+    const plan = planHandoff(sunkenVault());
+    const chamber = plan.levels[0]!.items.find((i) => i.name === 'Vault Chamber')!;
+    expect(chamber.outline).toHaveLength(8);
+    const floor = chamber.pieces.find((p) => p.part === 'floor')!;
+    expect(floor).toMatchObject({ shape: 'slab', turn: 0 });
+    expect(floor.outline).toHaveLength(8);
+    expect(floor.triangles).toHaveLength(6 * 3);
+    // Eight walls, one per edge (the doors' walls in more than one piece).
+    expect(new Set(chamber.pieces.filter((p) => p.part === 'wall').map((p) => p.turn)).size).toBeGreaterThanOrEqual(4);
+    const tscn = plan.output!.files.find((f) => f.path.endsWith('levels/sunken_vault.tscn'))!.content;
+    expect(tscn).toContain('type="CSGPolygon3D"');
+    expect(tscn).toContain('[sub_resource type="ConcavePolygonShape3D"');
+    const unreal = planHandoff(setTarget(sunkenVault(), { engine: 'unreal' })).output!.files;
+    expect(JSON.parse(unreal.find((f) => f.path === 'Plugins/VCGS/VCGS.uplugin')!.content).Plugins).toEqual([{ Name: 'ProceduralMeshComponent', Enabled: true }]);
+    const schema = JSON.parse(planHandoff(setTarget(sunkenVault(), { engine: 'custom' })).output!.files.find((f) => f.path.endsWith('story.schema.json'))!.content);
+    expect(schema.$defs.piece.properties.shape.enum).toContain('slab');
+  });
+
   it('flags engine-specific preflight on the level row', () => {
     const unreal = planHandoff(setTarget(sunkenVault(), { engine: 'unreal' }));
     const godot = planHandoff(sunkenVault());

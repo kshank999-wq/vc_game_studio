@@ -1,5 +1,5 @@
 import type { Project } from '../types';
-import { addLevel, linkItem, placeAsset, resizeItem, setParam, updateItem, updateLevel } from './level';
+import { addLevel, linkItem, placeAsset, resizeItem, setOutline, setParam, updateItem, updateLevel } from './level';
 import type { LevelItem } from './types';
 
 /**
@@ -34,6 +34,9 @@ export const sampleLevel = (
   const squeeze = put('space.hall', 'The Squeeze', 0, -7.5, { w: 12, d: 3, h: 2.2 });
   const camp = put('space.room', 'Silt Camp', 10, -9, { w: 8, d: 6, h: 3 });
   const vault = put('space.room', 'Vault Chamber', 10, -16, { w: 10, d: 8, h: 4.5 });
+  // The cave mouth is open ground of no particular shape; the chamber has its corners cut.
+  p = setOutline(p, cave, [{ x: -8, y: -6 }, { x: 8, y: -6 }, { x: 8, y: 2 }, { x: 5, y: 6 }, { x: -4, y: 6 }, { x: -8, y: 3 }]);
+  p = setOutline(p, vault, [{ x: 6.5, y: -20 }, { x: 13.5, y: -20 }, { x: 15, y: -18.5 }, { x: 15, y: -13.5 }, { x: 13.5, y: -12 }, { x: 6.5, y: -12 }, { x: 5, y: -13.5 }, { x: 5, y: -18.5 }]);
   p = linkItem(p, cave, refs.caveMouth);
   p = linkItem(p, squeeze, refs.squeeze);
   p = linkItem(p, camp, refs.theKey);

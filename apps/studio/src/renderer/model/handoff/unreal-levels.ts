@@ -351,6 +351,29 @@ namespace vcgs
 #include "VcgsLevelItem.generated.h"
 
 class UBoxComponent;
+class UProceduralMeshComponent;
+
+/**
+ * A freeform floor or ceiling (an outline raised to its thickness), kept as
+ * data on its item and built into a mesh whenever the item is constructed,
+ * so it is there in the editor and in the game without a saved mesh asset.
+ */
+USTRUCT(BlueprintType)
+struct VCGS_API FVcgsSlab
+{
+    GENERATED_BODY()
+
+    /** Corners around Center in centimetres (X north, Y east), clockwise seen from above. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") TArray<FVector2D> Outline;
+    /** Three corner indices per triangle, covering the outline. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") TArray<int32> Triangles;
+    /** Its middle, relative to the item. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") FVector Center = FVector(0, 0, 0);
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") float Thickness = 10;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") bool bCollide = true;
+    /** Off once there is final art: it still collides, unseen. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") bool bVisible = true;
+};
 
 /**
  * One level item from VC Game Studio, placed by build_level.py. Its GUID never
@@ -377,6 +400,12 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "VCGS") bool bExported = false;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VCGS") UBoxComponent* Box = nullptr;
+
+    /** Its freeform floors and ceilings; build_level.py sets them. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") TArray<FVcgsSlab> Slabs;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VCGS") UProceduralMeshComponent* SlabMesh = nullptr;
+
+    virtual void OnConstruction(const FTransform& Transform) override;
 };
 `,
 
@@ -384,6 +413,7 @@ public:
 #include "VcgsLevelItem.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
+#include "ProceduralMeshComponent.h"
 
 AVcgsLevelItem::AVcgsLevelItem()
 {
@@ -393,6 +423,72 @@ AVcgsLevelItem::AVcgsLevelItem()
     // build_level.py sizes it and turns on overlap events for volumes.
     Box->SetGenerateOverlapEvents(false);
     Box->SetCollisionProfileName(TEXT("NoCollision"));
+    SlabMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Slabs"));
+    SlabMesh->SetupAttachment(RootComponent);
+    SlabMesh->bUseComplexAsSimpleCollision = true;
+    SlabMesh->SetCollisionProfileName(TEXT("BlockAll"));
+}
+
+namespace
+{
+    /** One face, seen from both sides: each side has its own corners and normal, so either way up it shows and lights. */
+    void AddFace(TArray<FVector>& Vertices, TArray<int32>& Triangles, TArray<FVector>& Normals, const FVector* Corners, int32 Count, const FVector& Normal)
+    {
+        for (int32 Side = 0; Side < 2; Side++)
+        {
+            const int32 Start = Vertices.Num();
+            const FVector N = Side == 0 ? Normal : FVector(-Normal.X, -Normal.Y, -Normal.Z);
+            for (int32 i = 0; i < Count; i++)
+            {
+                Vertices.Add(Corners[i]);
+                Normals.Add(N);
+            }
+            for (int32 i = 1; i + 1 < Count; i++)
+            {
+                Triangles.Add(Start);
+                Triangles.Add(Start + (Side == 0 ? i : i + 1));
+                Triangles.Add(Start + (Side == 0 ? i + 1 : i));
+            }
+        }
+    }
+}
+
+void AVcgsLevelItem::OnConstruction(const FTransform& Transform)
+{
+    Super::OnConstruction(Transform);
+    if (!SlabMesh) return;
+    SlabMesh->ClearAllMeshSections();
+    for (int32 Index = 0; Index < Slabs.Num(); Index++)
+    {
+        FVcgsSlab& Slab = Slabs[Index];
+        const int32 Count = Slab.Outline.Num();
+        if (Count < 3) continue;
+        const double Half = Slab.Thickness / 2;
+        TArray<FVector> Vertices;
+        TArray<int32> Triangles;
+        TArray<FVector> Normals;
+        auto Corner = [&](int32 i, double Z) { return FVector(Slab.Center.X + Slab.Outline[i].X, Slab.Center.Y + Slab.Outline[i].Y, Slab.Center.Z + Z); };
+        for (int32 k = 0; k + 2 < Slab.Triangles.Num(); k += 3)
+        {
+            const int32 A = Slab.Triangles[k], B = Slab.Triangles[k + 1], C = Slab.Triangles[k + 2];
+            if (A < 0 || B < 0 || C < 0 || A >= Count || B >= Count || C >= Count) continue;
+            const FVector Top[3] = {Corner(A, Half), Corner(B, Half), Corner(C, Half)};
+            const FVector Bottom[3] = {Corner(A, -Half), Corner(C, -Half), Corner(B, -Half)};
+            AddFace(Vertices, Triangles, Normals, Top, 3, FVector(0, 0, 1));
+            AddFace(Vertices, Triangles, Normals, Bottom, 3, FVector(0, 0, -1));
+        }
+        for (int32 i = 0; i < Count; i++)
+        {
+            const int32 j = (i + 1) % Count;
+            const FVector Quad[4] = {Corner(j, Half), Corner(i, Half), Corner(i, -Half), Corner(j, -Half)};
+            const double DX = Slab.Outline[j].X - Slab.Outline[i].X;
+            const double DY = Slab.Outline[j].Y - Slab.Outline[i].Y;
+            const double Length = DX * DX + DY * DY > 0 ? FMath::Sqrt(DX * DX + DY * DY) : 1;
+            AddFace(Vertices, Triangles, Normals, Quad, 4, FVector(DY / Length, -DX / Length, 0));
+        }
+        SlabMesh->CreateMeshSection_LinearColor(Index, Vertices, Triangles, Normals, TArray<FVector2D>(), TArray<FLinearColor>(), TArray<FProcMeshTangent>(), Slab.bCollide);
+        SlabMesh->SetMeshSectionVisible(Index, Slab.bVisible);
+    }
 }
 `,
 
@@ -670,6 +766,23 @@ def color_of(hex_color):
     return unreal.LinearColor(((n >> 16) & 255) / 255.0, ((n >> 8) & 255) / 255.0, (n & 255) / 255.0, 1.0)
 
 
+def slab_of(piece, with_mesh):
+    """A freeform floor or ceiling, as data for the item to build (AVcgsLevelItem::OnConstruction)."""
+    yaw = math.radians(yaw_of(piece["turn"]))
+    outline = []
+    for x, z in piece["outline"]:
+        px, py = -z * 100.0, x * 100.0
+        outline.append(unreal.Vector2D(px * math.cos(yaw) - py * math.sin(yaw), px * math.sin(yaw) + py * math.cos(yaw)))
+    slab = unreal.VcgsSlab()
+    slab.set_editor_property("outline", outline)
+    slab.set_editor_property("triangles", list(piece["triangles"]))
+    slab.set_editor_property("center", to_unreal(piece["at"]))
+    slab.set_editor_property("thickness", piece["size"][1] * 100.0)
+    slab.set_editor_property("collide", piece["collide"])
+    slab.set_editor_property("visible", with_mesh)
+    return slab
+
+
 def place_piece(item, piece, index, with_mesh, report):
     shape = piece["shape"]
     at = to_unreal(piece["at"])
@@ -755,10 +868,14 @@ def build():
         clear_pieces(item)
         with_mesh = not item_data["final_asset"] and not item_data["replacement_locked"]
         index = 0
+        slabs = []
         for piece in item_data["pieces"]:
             if piece["part"] == "volume" or piece["shape"] == "cone":
                 continue
             if not with_mesh and not piece["collide"]:
+                continue
+            if piece["shape"] == "slab":
+                slabs.append(slab_of(piece, with_mesh))
                 continue
             place_piece(item, piece, index, with_mesh, report)
             index += 1
@@ -773,6 +890,8 @@ def build():
                 component.set_light_color(color_of(light["color"]), True)
                 component.set_intensity(light["intensity"] * 5000.0)
                 component.set_attenuation_radius(light["range"] * 100.0)
+        item.set_editor_property("slabs", slabs)
+        item.rerun_construction_scripts()
         if item_data["final_asset"] and not any(c.actor_has_tag("vcgs_art") for c in item.get_attached_actors()):
             asset = unreal.EditorAssetLibrary.load_asset(item_data["final_asset"])
             if asset is None:

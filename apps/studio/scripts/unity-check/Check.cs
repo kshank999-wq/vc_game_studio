@@ -115,6 +115,21 @@ static class Check
         if (camp == null || camp.localPosition != new UnityEngine.Vector3(10, 0, 9)) Fail("the silt camp should be at (10, 0, 9) in Unity (north is +Z)");
         var chamber = root.transform.Find("RM_SunkenVault_VaultChamber_004");
         if (chamber == null || chamber.Find("Proxy").childCount < 5 || chamber.Find("Collision").childCount < 4) Fail("the chamber should have its proxy and collision");
+        // The chamber's outlined floor is a mesh of its own, faces up, and collides by its shape.
+        UnityEngine.Mesh floor = null;
+        foreach (var f in chamber.Find("Proxy").GetComponentsInChildren<UnityEngine.MeshFilter>(true))
+            if (f.gameObject.name.StartsWith("floor") && f.sharedMesh != null && f.sharedMesh.name.Contains("floor")) floor = f.sharedMesh;
+        var floorCollider = chamber.Find("Collision").GetComponentsInChildren<UnityEngine.MeshCollider>(true);
+        if (floor == null || floorCollider.Length == 0) Fail("the chamber's outlined floor should be a mesh with a mesh collider");
+        else
+        {
+            var v = floor.vertices;
+            var t = floor.triangles;
+            var n = v.Length / 6;
+            if (n < 5 || t.Length != (n - 2) * 6 + n * 6) Fail("the floor mesh should have a top, a bottom and a side per wall, got " + v.Length + " corners, " + t.Length / 3 + " triangles");
+            var up = UnityEngine.Vector3.Cross(v[t[1]] - v[t[0]], v[t[2]] - v[t[0]]);
+            if (up.y <= 0) Fail("the floor's top should face up");
+        }
         var crane = root.transform.Find("CAM_VaultChamber_ChamberCrane_001");
         if (crane == null || Math.Abs(crane.localEulerAngles.y - 315) > 0.01) Fail("the camera marker should turn 315° in Unity, got " + crane?.localEulerAngles.y);
         var trig = root.transform.Find("TRG_VaultChamber_DoorInTheDarkTrigger_002").GetComponent<UnityEngine.BoxCollider>();

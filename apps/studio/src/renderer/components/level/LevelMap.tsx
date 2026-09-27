@@ -1,6 +1,6 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { assetOf, boundsOf, CATEGORY_COLOR, corners, frameOf, INVALID_COLOR, meshesFor, num, paramOf, toLocal, toPlan, type Frame, type Point } from '../../model/level/geometry';
-import { levelsOf, moveItems, placeAsset, placeAt, resizeItem, snap, withGroups } from '../../model/level/level';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { areaOf, assetOf, boundsOf, CATEGORY_COLOR, contains, corners, frameOf, INVALID_COLOR, meshesFor, num, outlineOf, paramOf, selfIntersects, toLocal, toPlan, triangulate, type Frame, type Point } from '../../model/level/geometry';
+import { insertCorner, levelsOf, moveCorner, moveItems, placeAsset, placeAt, removeCorner, resizeItem, setOutline, snap, withGroups } from '../../model/level/level';
 import type { AssetCategory, AssetDefinition, LevelItem, LevelSet } from '../../model/level/types';
 import { spineSequence } from '../../model/layout';
 import type { Project } from '../../model/types';
@@ -18,7 +18,8 @@ export interface MapApi {
   frame: (ids?: readonly string[]) => void;
 }
 
-export type MapTool = 'select' | 'draw';
+/** Select and move; drag out a rectangle; or click the corners of a freeform outline. */
+export type MapTool = 'select' | 'draw' | 'outline';
 
 interface Props {
   project: Project;
@@ -48,6 +49,8 @@ type Drag =
   | { kind: 'resize'; id: string; handle: string; start: Point; frame: Frame }
   | { kind: 'rotate'; id: string; frame: Frame }
   | { kind: 'draw'; start: Point; at: Point }
+  | { kind: 'corner'; id: string; index: number; moved: boolean }
+  | { kind: 'insert'; id: string; wall: number; at: Point; moved: boolean }
   | { kind: 'marquee'; start: Point; at: Point; base: string[] };
 
 const HANDLES: { key: string; lx: number; ly: number }[] = [
@@ -84,6 +87,20 @@ const ROLE_GLYPH: Partial<Record<string, string>> = {
 
 const pointsAttr = (points: Point[]) => points.map((p) => `${p.x},${p.y}`).join(' ');
 
+/** Where a space's name goes: its middle, or inside it when the middle isn't (an L's corner). */
+const labelPoint = (f: Frame): Point => {
+  if (!f.outline || contains(f, f)) return f;
+  const c = corners(f);
+  const t = triangulate(c);
+  let best = { x: f.x, y: f.y, area: -1 };
+  for (let i = 0; i < t.length; i += 3) {
+    const [a, b, d] = [c[t[i]!]!, c[t[i + 1]!]!, c[t[i + 2]!]!];
+    const area = Math.abs((b.x - a.x) * (d.y - a.y) - (b.y - a.y) * (d.x - a.x));
+    if (area > best.area) best = { x: (a.x + b.x + d.x) / 3, y: (a.y + b.y + d.y) / 3, area };
+  }
+  return best;
+};
+
 /**
  * The top-down map (spec §3): the floor's spaces with their walls cut by
  * doors and windows, everything placed in them, and handles to move, resize
@@ -104,6 +121,9 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     previewRef.current = p;
     setPreviewState(p);
   };
+  // The outline being drawn: the corners clicked so far, and where the pointer is.
+  const [draftCorners, setDraftCorners] = useState<Point[]>([]);
+  const [pointer, setPointer] = useState<Point | null>(null);
   const shown = preview ?? project;
   const set = levelsOf(shown);
   const level = set.levels.find((l) => l.id === levelId);
@@ -182,6 +202,12 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
         // The opposite edge stays where it is.
         const shift = toPlan({ ...f, x: 0, y: 0 }, (h.lx * (w - f.w)) / 2, (h.ly * (dd - f.d)) / 2);
         setPreview(placeAt(resizeItem(project, cur.id, { w, d: dd }, global), cur.id, { x: Math.round((f.x + shift.x) * 1000) / 1000, y: Math.round((f.y + shift.y) * 1000) / 1000 }));
+      } else if (cur.kind === 'corner') {
+        setPreview(moveCorner(project, cur.id, cur.index, at, global));
+        if (!cur.moved) setDrag({ ...cur, moved: true });
+      } else if (cur.kind === 'insert') {
+        setPreview(insertCorner(project, cur.id, cur.wall, at, global));
+        if (!cur.moved) setDrag({ ...cur, moved: true });
       } else if (cur.kind === 'rotate') {
         let deg = (Math.atan2(at.y - cur.frame.y, at.x - cur.frame.x) * 180) / Math.PI + 90;
         if (!e.shiftKey) deg = Math.round(deg / 15) * 15;
@@ -227,6 +253,12 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
         }
         return;
       }
+      // A click on a wall's middle handle adds a corner there.
+      if (cur?.kind === 'insert' && !cur.moved) {
+        const added = insertCorner(project, cur.id, cur.wall, cur.at, global);
+        if (added !== project) props.onCommit(added);
+        return;
+      }
       if (done) props.onCommit(done);
     };
     window.addEventListener('pointermove', move);
@@ -245,6 +277,10 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       beginWindowDrag({ kind: 'draw', start: at, at });
       return;
     }
+    if (e.button === 0 && props.tool === 'outline') {
+      addDraftCorner(at, e.clientX, e.clientY);
+      return;
+    }
     if (e.button === 0 && e.shiftKey) {
       beginWindowDrag({ kind: 'marquee', start: at, at, base: [...selection] });
       return;
@@ -254,7 +290,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
 
   const onItemDown = (e: React.PointerEvent, item: LevelItem) => {
     if (e.button !== 0) return;
-    if (props.placing || props.tool === 'draw') {
+    if (props.placing || props.tool !== 'select') {
       onBackgroundDown(e);
       return;
     }
@@ -279,6 +315,78 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     const f = frameOf(levelsOf(project), item, global);
     if (handle === 'rotate') beginWindowDrag({ kind: 'rotate', id: item.id, frame: f });
     else beginWindowDrag({ kind: 'resize', id: item.id, handle, start: toWorld(e.clientX, e.clientY), frame: f });
+  };
+
+  // ------------------------------------------------------------ drawing an outline
+
+  const snapPoint = (p: Point): Point => {
+    const s = levelsOf(project);
+    return { x: snap(s, p.x), y: snap(s, p.y) };
+  };
+
+  const finishOutline = (points: Point[]) => {
+    setDraftCorners([]);
+    if (points.length < 3) return;
+    const b = boundsOf(points);
+    const centre = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+    const placed = placeAsset(project, levelId, floorId, props.drawAsset, centre, { global });
+    const id = placed.ids[0];
+    if (!id) return;
+    const outlined = setOutline(placed.project, id, points, global);
+    // An outline that can't be walled (edges crossing, no area) is not made.
+    if (outlined === placed.project) return;
+    props.onCommit(outlined);
+    props.onSelect([id]);
+  };
+
+  const addDraftCorner = (at: Point, clientX: number, clientY: number) => {
+    const p = snapPoint(at);
+    const first = draftCorners[0];
+    // Clicking the first corner again closes the outline.
+    if (first && draftCorners.length >= 3) {
+      const r = root.current!.getBoundingClientRect();
+      const fx = first.x * scale + view.panX + r.left;
+      const fy = first.y * scale + view.panY + r.top;
+      if (Math.hypot(clientX - fx, clientY - fy) <= 10) {
+        finishOutline(draftCorners);
+        return;
+      }
+    }
+    const last = draftCorners[draftCorners.length - 1];
+    if (last && Math.hypot(last.x - p.x, last.y - p.y) < 1e-6) return;
+    setDraftCorners([...draftCorners, p]);
+  };
+
+  // While an outline is being drawn: Enter closes it, Backspace takes back a corner, Escape drops it.
+  useEffect(() => {
+    if (props.tool !== 'outline') {
+      if (draftCorners.length) setDraftCorners([]);
+      return;
+    }
+    if (!draftCorners.length) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') finishOutline(draftCorners);
+      else if (e.key === 'Backspace' || e.key === 'Delete') setDraftCorners(draftCorners.slice(0, -1));
+      else if (e.key === 'Escape') setDraftCorners([]);
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    // Captured before the designer's own keys, which would delete the selection.
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
+
+  const onCornerDown = (e: React.PointerEvent, item: LevelItem, index: number) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    beginWindowDrag({ kind: 'corner', id: item.id, index, moved: false });
+  };
+
+  const onInsertDown = (e: React.PointerEvent, item: LevelItem, wall: number, at: Point) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    beginWindowDrag({ kind: 'insert', id: item.id, wall, at, moved: false });
   };
 
   // ------------------------------------------------------------ drawing
@@ -321,15 +429,22 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       return (
         <g key={item.id} {...common}>
           <polygon points={poly} className="lvl-space" fill={def.role === 'zone' ? 'rgba(111,174,94,0.07)' : 'rgba(201,164,92,0.05)'} stroke={color} strokeOpacity={0.35} strokeWidth={px(1)} strokeDasharray={def.role === 'zone' ? `${px(6)} ${px(4)}` : undefined} />
-          {!faint && label(item.name, { x: f.x, y: f.y - px(7) }, 12, 'var(--text)')}
-          {!faint && label(`${formatLength(f.w, units)} × ${formatLength(f.d, units)}`, { x: f.x, y: f.y + px(8) }, 10, 'var(--muted)')}
+          {!faint && label(item.name, { x: labelPoint(f).x, y: labelPoint(f).y - px(7) }, 12, 'var(--text)')}
+          {!faint &&
+            label(
+              f.outline ? `${Math.round(areaOf(f) * (units === 'ft' ? 10.7639 : 1) * 10) / 10} ${units === 'ft' ? 'sq ft' : 'm²'}` : `${formatLength(f.w, units)} × ${formatLength(f.d, units)}`,
+              { x: labelPoint(f).x, y: labelPoint(f).y + px(8) },
+              10,
+              'var(--muted)',
+            )}
         </g>
       );
     }
     if (def.kind === 'hosted') {
       const swing = String(paramOf(set, item, 'swing', global) ?? 'in');
-      // Local +y points into the room from the north and east walls, out of it from the south and west.
-      const inward = item.host && item.host.wall < 2 ? 1 : -1;
+      // Which side of the wall is the room's: a point just off it on the door's own +y side, inside its host or not.
+      const host = item.host && set.items.find((i) => i.id === item.host!.id);
+      const inward = host && contains(frameOf(set, host, global), toPlan(f, 0, 0.3)) ? 1 : -1;
       const side = swing === 'out' ? -inward : inward;
       const hinge = toPlan(f, -f.w / 2, 0);
       const into = toPlan(f, -f.w / 2, f.w * side);
@@ -424,6 +539,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     const def = assetOf(set, item, global);
     return !item.host && !item.locked && def.kind !== 'marker' && def.kind !== 'assembly';
   };
+  const outlined = (item: LevelItem) => !!outlineOf(set, item, global);
 
   const dims = (item: LevelItem) => {
     const f = frameOf(set, item, global);
@@ -448,10 +564,18 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   return (
     <div
       ref={root}
-      className={`lvl-map${props.tool === 'draw' || props.placing ? ' is-drawing' : ''}`}
+      className={`lvl-map${props.tool !== 'select' || props.placing ? ' is-drawing' : ''}`}
       onPointerDown={onBackgroundDown}
-      onPointerMove={(e) => props.onHover(toWorld(e.clientX, e.clientY))}
-      onPointerLeave={() => props.onHover(null)}
+      onPointerMove={(e) => {
+        const at = toWorld(e.clientX, e.clientY);
+        props.onHover(at);
+        if (props.tool === 'outline') setPointer(at);
+      }}
+      onPointerLeave={() => {
+        props.onHover(null);
+        setPointer(null);
+      }}
+      onDoubleClick={() => props.tool === 'outline' && draftCorners.length >= 3 && finishOutline(draftCorners)}
       aria-label="Level map"
       role="application"
     >
@@ -507,7 +631,58 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
           {single && props.overlays.dims && !single.host && single.levelId === levelId && single.floorId === floorId && dims(single)}
           {single && single.levelId === levelId && single.floorId === floorId && resizable(single) && drag?.kind !== 'move' && (
             <g className="lvl-handles">
-              {HANDLES.map((h) => {
+              {outlined(single) &&
+                (() => {
+                  const f = frameOf(set, single, global);
+                  const c = corners(f);
+                  return (
+                    <>
+                      {c.map((p, i) => {
+                        const q = c[(i + 1) % c.length]!;
+                        const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+                        return (
+                          <circle
+                            key={`add${i}`}
+                            data-handle={`add-${i}`}
+                            cx={mid.x}
+                            cy={mid.y}
+                            r={px(4)}
+                            className="lvl-handle add"
+                            fill="var(--gold)"
+                            fillOpacity={0.55}
+                            onPointerDown={(e) => onInsertDown(e, single, i, mid)}
+                          >
+                            <title>Drag or click to add a corner</title>
+                          </circle>
+                        );
+                      })}
+                      {c.map((p, i) => (
+                        <rect
+                          key={`corner${i}`}
+                          data-handle={`corner-${i}`}
+                          x={p.x - px(5)}
+                          y={p.y - px(5)}
+                          width={px(10)}
+                          height={px(10)}
+                          transform={`rotate(45 ${p.x} ${p.y})`}
+                          className="lvl-handle corner"
+                          fill="var(--ground)"
+                          stroke="var(--gold-hi)"
+                          strokeWidth={px(1.5)}
+                          onPointerDown={(e) => onCornerDown(e, single, i)}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            const fewer = removeCorner(project, single.id, i, global);
+                            if (fewer !== project) props.onCommit(fewer);
+                          }}
+                        >
+                          <title>Drag to move this corner; double-click to take it out</title>
+                        </rect>
+                      ))}
+                    </>
+                  );
+                })()}
+              {!outlined(single) && HANDLES.map((h) => {
                 const f = frameOf(set, single, global);
                 const p = toPlan(f, (h.lx * f.w) / 2, (h.ly * f.d) / 2);
                 return (
@@ -545,6 +720,29 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
               <text x={(draft.minX + draft.maxX) / 2} y={(draft.minY + draft.maxY) / 2} fontSize={px(11)} fill="var(--gold-hi)" textAnchor="middle" dominantBaseline="middle">
                 {formatLength(draft.maxX - draft.minX, units)} × {formatLength(draft.maxY - draft.minY, units)}
               </text>
+            </g>
+          )}
+          {draftCorners.length > 0 && (
+            <g pointerEvents="none" className="lvl-outline-draft">
+              {(() => {
+                const ahead = pointer ? [...draftCorners, snapPoint(pointer)] : draftCorners;
+                const bad = ahead.length >= 3 && selfIntersects(ahead);
+                return (
+                  <>
+                    <polygon points={pointsAttr(ahead)} fill={bad ? 'rgba(229,72,77,0.08)' : 'rgba(201,164,92,0.1)'} stroke="none" />
+                    <polyline points={pointsAttr(ahead)} fill="none" stroke={bad ? INVALID_COLOR : 'var(--gold-hi)'} strokeWidth={px(1.5)} />
+                    {ahead.length >= 3 && <line x1={ahead[ahead.length - 1]!.x} y1={ahead[ahead.length - 1]!.y} x2={ahead[0]!.x} y2={ahead[0]!.y} stroke="var(--gold-hi)" strokeOpacity={0.4} strokeWidth={px(1)} strokeDasharray={`${px(4)} ${px(3)}`} />}
+                    {draftCorners.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r={px(i === 0 ? 6 : 3.5)} fill={i === 0 ? 'none' : 'var(--gold-hi)'} stroke="var(--gold-hi)" strokeWidth={px(1.5)} />
+                    ))}
+                    {pointer && draftCorners.length > 0 && (
+                      <text x={snapPoint(pointer).x + px(10)} y={snapPoint(pointer).y - px(10)} fontSize={px(11)} fill="var(--gold-hi)">
+                        {formatLength(Math.hypot(snapPoint(pointer).x - draftCorners[draftCorners.length - 1]!.x, snapPoint(pointer).y - draftCorners[draftCorners.length - 1]!.y), units)}
+                      </text>
+                    )}
+                  </>
+                );
+              })()}
             </g>
           )}
           {marquee && <rect x={marquee.minX} y={marquee.minY} width={marquee.maxX - marquee.minX} height={marquee.maxY - marquee.minY} fill="rgba(232,200,114,0.06)" stroke="var(--gold)" strokeWidth={px(1)} strokeDasharray={`${px(4)} ${px(3)}`} pointerEvents="none" />}

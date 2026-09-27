@@ -1,4 +1,4 @@
-import type { AssetCategory, AssetDefinition, AssetKind, AssetRole, EngineMapping, NamingClass, ParamDef, ProxyShape, Size } from './types';
+import type { AssetCategory, AssetDefinition, AssetKind, AssetRole, EngineMapping, NamingClass, OutlinePoint, ParamDef, ProxyShape, Size } from './types';
 
 /**
  * The starter library (spec §4.2): templates for every category, each with a
@@ -100,6 +100,7 @@ interface Spec {
   params?: ParamDef[];
   engine: EngineMapping;
   description: string;
+  outline?: OutlinePoint[];
 }
 
 const group = (category: AssetCategory, specs: Spec[]): AssetDefinition[] =>
@@ -124,6 +125,7 @@ const group = (category: AssetCategory, specs: Spec[]): AssetDefinition[] =>
       description: s.description,
       source: 'starter',
       version: 1,
+      ...(s.outline ? { outline: s.outline } : {}),
     };
   });
 
@@ -143,6 +145,11 @@ const MARKER = E('Marker3D', 'Empty GameObject', 'ATargetPoint');
 export const STARTER: readonly AssetDefinition[] = [
   ...group('spaces', [
     { id: 'space.room', name: 'Room', kind: 'space', role: 'room', naming: 'room', size: [8, 6, 3], proxy: 'room', params: room(), engine: ROOM, description: 'Four walls, a floor and a ceiling. Doors and windows snap into its walls.' },
+    {
+      id: 'space.irregular', name: 'Irregular room', kind: 'space', role: 'room', naming: 'room', size: [10, 8, 3], proxy: 'room', params: room(), engine: ROOM,
+      description: 'A room of any shape. Drag its corners; click a wall’s middle to add a corner.',
+      outline: [{ x: -0.5, y: -0.5 }, { x: 0.1, y: -0.5 }, { x: 0.1, y: 0 }, { x: 0.5, y: 0 }, { x: 0.5, y: 0.5 }, { x: -0.5, y: 0.5 }],
+    },
     { id: 'space.hall', name: 'Hallway', kind: 'space', role: 'corridor', naming: 'room', size: [12, 2.5, 3], proxy: 'room', params: room(), engine: ROOM, description: 'A long, narrow room.' },
     { id: 'space.stairwell', name: 'Stairwell', kind: 'space', role: 'stairwell', naming: 'room', size: [4, 6, 6], proxy: 'room', params: room(true, false), engine: ROOM, description: 'A tall room between floors. Put stairs in it.' },
     { id: 'space.exterior', name: 'Exterior zone', kind: 'space', role: 'zone', naming: 'room', size: [20, 20, 6], proxy: 'room', params: room(false, false), engine: ROOM, description: 'Open ground: a floor, no walls or ceiling.' },

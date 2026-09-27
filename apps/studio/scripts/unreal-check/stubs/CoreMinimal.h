@@ -2,6 +2,7 @@
 // (syntax and types) outside the engine. The reflection macros are empty:
 // this is not Unreal Header Tool, only a check that the C++ is sound.
 #pragma once
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -112,3 +113,17 @@ struct FVector
 };
 
 struct FHitResult {};
+
+struct FVector2D
+{
+    double X = 0, Y = 0;
+    FVector2D() {}
+    FVector2D(double x, double y) : X(x), Y(y) {}
+};
+
+struct FTransform {};
+
+struct FMath
+{
+    static double Sqrt(double v) { return std::sqrt(v); }
+};

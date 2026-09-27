@@ -63,6 +63,68 @@ describe('the Level Designer', () => {
     expect(container.querySelector('.lvl-map')!.textContent).toContain('12 m × 6 m');
   });
 
+  it('outlines a space of any shape corner by corner, then edits its corners', async () => {
+    const { container } = render(<App />);
+    await openLevels();
+    fireEvent.click(screen.getByRole('button', { name: '+ Create the first level' }));
+    const map = screen.getByRole('application', { name: 'Level map' });
+    fireEvent.click(screen.getByRole('button', { name: 'Outline' }));
+    // An L: six corners, then the first one again to close it.
+    for (const [x, y] of [[96, 96], [240, 96], [240, 192], [336, 192], [336, 288], [96, 288], [97, 97]] as const) {
+      fireEvent.pointerDown(map, { button: 0, clientX: x, clientY: y });
+    }
+    const shape = () => container.querySelector('.lvl-shape')!.textContent!;
+    expect(shape()).toContain('6 corners');
+    expect(shape()).toContain('64 m²');
+    expect(container.querySelector('.lvl-map')!.textContent).toContain('64 m²');
+
+    // Drag the notch's inner corner 2 m south: its east wall slants, and the room loses 4 m².
+    fireEvent.pointerDown(container.querySelector('[data-handle="corner-2"]')!, { button: 0, clientX: 240, clientY: 192 });
+    act(() => {
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: 240, clientY: 240 }));
+      window.dispatchEvent(new PointerEvent('pointerup', { clientX: 240, clientY: 240 }));
+    });
+    expect(shape()).toContain('60 m²');
+
+    // Click a wall's middle to add a corner there; double-click a corner to take it out.
+    fireEvent.pointerDown(container.querySelector('[data-handle="add-0"]')!, { button: 0 });
+    act(() => {
+      window.dispatchEvent(new PointerEvent('pointerup', {}));
+    });
+    expect(shape()).toContain('7 corners');
+    fireEvent.doubleClick(container.querySelector('[data-handle="corner-1"]')!);
+    expect(shape()).toContain('6 corners');
+
+    // Back to a rectangle of the same bounds, and one undo step brings the outline back.
+    fireEvent.click(screen.getByRole('button', { name: 'Make rectangular' }));
+    expect(shape()).toContain('Rectangle');
+    act(() => {
+      fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    });
+    expect(shape()).toContain('6 corners');
+  });
+
+  it('takes back a corner with Backspace while outlining, and Escape drops the outline', async () => {
+    const { container } = render(<App />);
+    await openLevels();
+    fireEvent.click(screen.getByRole('button', { name: '+ Create the first level' }));
+    const map = screen.getByRole('application', { name: 'Level map' });
+    fireEvent.keyDown(window, { key: 'o' });
+    for (const [x, y] of [[96, 96], [240, 96], [240, 240]] as const) fireEvent.pointerDown(map, { button: 0, clientX: x, clientY: y });
+    expect(container.querySelectorAll('.lvl-outline-draft circle')).toHaveLength(3);
+    fireEvent.keyDown(window, { key: 'Backspace' });
+    expect(container.querySelectorAll('.lvl-outline-draft circle')).toHaveLength(2);
+    fireEvent.pointerDown(map, { button: 0, clientX: 96, clientY: 240 });
+    fireEvent.pointerDown(map, { button: 0, clientX: 48, clientY: 168 });
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(container.querySelector('.lvl-shape')!.textContent).toContain('4 corners');
+    fireEvent.pointerDown(map, { button: 0, clientX: 400, clientY: 400 });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(container.querySelector('.lvl-outline-draft')).toBeNull();
+    // Still just the one space.
+    expect(container.querySelectorAll('.lvl-space')).toHaveLength(1);
+  });
+
   it('says so when the graybox cannot use WebGL', async () => {
     const p = sunkenVault();
     localStorage.setItem('vcgs.project.v1', JSON.stringify(p));

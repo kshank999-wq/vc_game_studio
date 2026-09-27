@@ -485,6 +485,7 @@ namespace VCGS.EditorTools
     public static class VcgsLevelBuilder
     {
         const string Materials = "Assets/VCGS/Generated/Levels/Materials";
+        const string Meshes = "Assets/VCGS/Generated/Levels/Meshes";
 
         [MenuItem("VCGS/Update level from data…")]
         static void UpdateKeepingEdits() => Pick(false);
@@ -585,10 +586,16 @@ namespace VCGS.EditorTools
                 {
                     var piece = D.Map(p);
                     if (!D.Bool(piece, "collide") || D.Str(piece, "part") == "volume") continue;
-                    var box = Child(collision, D.Str(piece, "part") + "_" + (n++)).gameObject.AddComponent<BoxCollider>();
-                    Place(box.transform, piece);
+                    var holder = Child(collision, D.Str(piece, "part") + "_" + (n++));
+                    Place(holder, piece);
+                    if (D.Str(piece, "shape") == "slab")
+                    {
+                        // A freeform floor or ceiling collides by its own shape.
+                        holder.gameObject.AddComponent<MeshCollider>().sharedMesh = Slab(piece, exportName + "_" + holder.name);
+                        continue;
+                    }
+                    var box = holder.gameObject.AddComponent<BoxCollider>();
                     box.size = Size(piece);
-                    box.transform.localScale = Vector3.one;
                 }
                 // A volume notices the player in its box; a blocking gate is solid too.
                 if (D.Str(data_, "kind") == "volume")
@@ -624,6 +631,14 @@ namespace VCGS.EditorTools
                         var piece = D.Map(p);
                         var shape = D.Str(piece, "shape");
                         if (D.Str(piece, "part") == "volume" || shape == "cone") continue;
+                        if (shape == "slab")
+                        {
+                            var slab = Child(proxy, D.Str(piece, "part") + "_" + (m++)).gameObject;
+                            Place(slab.transform, piece);
+                            slab.AddComponent<MeshFilter>().sharedMesh = Slab(piece, exportName + "_" + slab.name);
+                            slab.AddComponent<MeshRenderer>().sharedMaterial = MaterialFor(D.Str(piece, "color"), (float)D.Num(piece, "opacity", 1));
+                            continue;
+                        }
                         var go = shape == "sphere" ? GameObject.CreatePrimitive(PrimitiveType.Sphere)
                             : shape == "cylinder" ? GameObject.CreatePrimitive(PrimitiveType.Cylinder)
                             : GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -704,6 +719,56 @@ namespace VCGS.EditorTools
             material.color = ColorOf(hex, alpha);
             AssetDatabase.CreateAsset(material, path);
             return material;
+        }
+
+        /// <summary>
+        /// A slab: its outline (x, z in VC Game Studio's frame, clockwise seen
+        /// from above) raised to its thickness about its centre, saved as an
+        /// asset so the scene keeps it. Unity's z is VC Game Studio's −z; seen
+        /// from above both are the same map, so clockwise stays clockwise.
+        /// </summary>
+        static Mesh Slab(Dictionary<string, object> piece, string name)
+        {
+            var outline = D.List(piece, "outline");
+            var triangles = D.List(piece, "triangles");
+            var h = (float)D.Num(D.List(piece, "size")[1], 0.1) / 2;
+            var n = outline.Count;
+            var corner = new Vector3[n];
+            for (var i = 0; i < n; i++)
+            {
+                var p = D.List(outline[i]);
+                corner[i] = new Vector3((float)D.Num(p[0], 0), 0, -(float)D.Num(p[1], 0));
+            }
+            var vertices = new List<Vector3>();
+            var tris = new List<int>();
+            // Top and bottom: their own corners, so each face gets its own normals.
+            for (var i = 0; i < n; i++) vertices.Add(corner[i] + new Vector3(0, h, 0));
+            for (var i = 0; i < n; i++) vertices.Add(corner[i] - new Vector3(0, h, 0));
+            for (var k = 0; k + 2 < triangles.Count; k += 3)
+            {
+                int a = (int)D.Num(triangles[k], 0), b = (int)D.Num(triangles[k + 1], 0), c = (int)D.Num(triangles[k + 2], 0);
+                tris.AddRange(new[] { a, b, c });
+                tris.AddRange(new[] { n + a, n + c, n + b });
+            }
+            // Sides: a quad per edge, facing out.
+            for (var i = 0; i < n; i++)
+            {
+                var j = (i + 1) % n;
+                var s = vertices.Count;
+                vertices.Add(corner[j] + new Vector3(0, h, 0));
+                vertices.Add(corner[i] + new Vector3(0, h, 0));
+                vertices.Add(corner[i] - new Vector3(0, h, 0));
+                vertices.Add(corner[j] - new Vector3(0, h, 0));
+                tris.AddRange(new[] { s, s + 1, s + 2, s, s + 2, s + 3 });
+            }
+            var mesh = new Mesh { name = name };
+            mesh.vertices = vertices.ToArray();
+            mesh.triangles = tris.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            Folder(Meshes);
+            AssetDatabase.CreateAsset(mesh, Meshes + "/" + name + ".asset");
+            return mesh;
         }
 
         /// <summary>A unit wedge rising to the north, saved as an asset.</summary>

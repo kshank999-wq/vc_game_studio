@@ -1,5 +1,5 @@
 import { findAsset, MISSING_ASSET } from './library';
-import type { AssetDefinition, HostRef, LevelItem, LevelSet, ParamValue, Size } from './types';
+import type { AssetDefinition, HostRef, LevelItem, LevelSet, OutlinePoint, ParamValue, Size } from './types';
 
 /**
  * Where things are and what shape they take, worked out from the model every
@@ -19,6 +19,8 @@ export interface Frame extends Point {
   w: number;
   d: number;
   h: number;
+  /** A freeform space's corners in its own frame, in metres, clockwise seen from above. */
+  outline?: Point[];
 }
 
 // ---------------------------------------------------------------- definitions, sizes and parameters
@@ -33,6 +35,159 @@ export const paramOf = (set: LevelSet, item: LevelItem, key: string, global?: re
 
 export const num = (v: ParamValue | undefined, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 export const bool = (v: ParamValue | undefined, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
+
+// ---------------------------------------------------------------- polygons
+
+/**
+ * Twice the signed area. Positive when the corners run clockwise seen from
+ * above (x east, y south): the order outlines are kept in.
+ */
+export const signedArea = (points: readonly Point[]): number => {
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]!;
+    const b = points[(i + 1) % points.length]!;
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return sum;
+};
+
+export const polygonArea = (points: readonly Point[]): number => Math.abs(signedArea(points)) / 2;
+
+export const perimeterOf = (points: readonly Point[]): number => points.reduce((sum, p, i) => sum + Math.hypot(points[(i + 1) % points.length]!.x - p.x, points[(i + 1) % points.length]!.y - p.y), 0);
+
+export const pointInPolygon = (p: Point, points: readonly Point[]): boolean => {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i]!;
+    const b = points[j]!;
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+};
+
+const cross = (o: Point, a: Point, b: Point) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+
+/** Do two segments meet (touching counts)? */
+const segmentsMeet = (a: Point, b: Point, c: Point, d: Point): boolean => {
+  const d1 = cross(c, d, a);
+  const d2 = cross(c, d, b);
+  const d3 = cross(a, b, c);
+  const d4 = cross(a, b, d);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+  const on = (p: Point, q: Point, r: Point) => Math.abs(cross(p, q, r)) < 1e-9 && Math.min(p.x, q.x) - 1e-9 <= r.x && r.x <= Math.max(p.x, q.x) + 1e-9 && Math.min(p.y, q.y) - 1e-9 <= r.y && r.y <= Math.max(p.y, q.y) + 1e-9;
+  return on(c, d, a) || on(c, d, b) || on(a, b, c) || on(a, b, d);
+};
+
+/** An outline whose edges cross each other (or fold back) can't be walled. */
+export const selfIntersects = (points: readonly Point[]): boolean => {
+  const n = points.length;
+  if (n < 3) return true;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const adjacent = j === i + 1 || (i === 0 && j === n - 1);
+      const a = points[i]!;
+      const b = points[(i + 1) % n]!;
+      const c = points[j]!;
+      const d = points[(j + 1) % n]!;
+      if (!adjacent) {
+        if (segmentsMeet(a, b, c, d)) return true;
+      } else {
+        // Neighbours share a corner; they only clash by doubling back along each other.
+        const [p, q, r] = j === i + 1 ? [a, b, d] : [c, a, b];
+        if (Math.abs(cross(p, q, r)) < 1e-9 && (r.x - q.x) * (p.x - q.x) + (r.y - q.y) * (p.y - q.y) > 0) return true;
+      }
+    }
+  }
+  return false;
+};
+
+/**
+ * The same corners, clockwise seen from above, without repeats. A corner in
+ * the middle of a straight wall stays: it was just added, to be dragged.
+ */
+export const tidyOutline = <P extends Point>(points: readonly P[]): P[] => {
+  const out = points.filter((p, i) => {
+    const q = points[(i + 1) % points.length]!;
+    return Math.hypot(q.x - p.x, q.y - p.y) > 1e-6;
+  });
+  return signedArea(out) < 0 ? out.reverse() : out;
+};
+
+/**
+ * Triangles covering a clockwise outline, as index triples into it, each
+ * clockwise seen from above (ear clipping).
+ */
+export const triangulate = (points: readonly Point[]): number[] => {
+  const left = points.map((_, i) => i);
+  const out: number[] = [];
+  const inTriangle = (p: Point, a: Point, b: Point, c: Point) => cross(a, b, p) >= -1e-12 && cross(b, c, p) >= -1e-12 && cross(c, a, p) >= -1e-12;
+  let guard = 0;
+  while (left.length > 3 && guard++ < 10000) {
+    let clipped = false;
+    for (let k = 0; k < left.length; k++) {
+      const ia = left[(k - 1 + left.length) % left.length]!;
+      const ib = left[k]!;
+      const ic = left[(k + 1) % left.length]!;
+      const a = points[ia]!;
+      const b = points[ib]!;
+      const c = points[ic]!;
+      if (cross(a, b, c) <= 1e-12) continue;
+      if (left.some((j) => j !== ia && j !== ib && j !== ic && inTriangle(points[j]!, a, b, c))) continue;
+      out.push(ia, ib, ic);
+      left.splice(k, 1);
+      clipped = true;
+      break;
+    }
+    // Nothing left to clip cleanly (a degenerate outline): fan the rest.
+    if (!clipped) break;
+  }
+  for (let k = 1; k + 1 < left.length; k++) out.push(left[0]!, left[k]!, left[k + 1]!);
+  return out;
+};
+
+/** An outline pushed outward by a distance (mitred corners, kept short at sharp ones). */
+export const offsetOutline = (points: readonly Point[], by: number): Point[] =>
+  points.map((p, i) => {
+    const a = points[(i - 1 + points.length) % points.length]!;
+    const b = points[(i + 1) % points.length]!;
+    const n = (u: Point, v: Point) => {
+      const len = Math.hypot(v.x - u.x, v.y - u.y) || 1;
+      return { x: (v.y - u.y) / len, y: -(v.x - u.x) / len };
+    };
+    const n1 = n(a, p);
+    const n2 = n(p, b);
+    const k = Math.min(3, 1 / Math.max(1e-3, (1 + n1.x * n2.x + n1.y * n2.y) / 2));
+    return { x: p.x + ((n1.x + n2.x) / 2) * by * k, y: p.y + ((n1.y + n2.y) / 2) * by * k };
+  });
+
+const distanceToBoundary = (p: Point, points: readonly Point[]): number =>
+  Math.min(...points.map((a, i) => distanceToSegment(p, a, points[(i + 1) % points.length]!).d));
+
+/** Do two plan outlines overlap by more than a sliver? Shared and touching walls don't count. */
+export const polygonsOverlap = (a: readonly Point[], b: readonly Point[], tolerance = 0.05): boolean => {
+  for (let i = 0; i < a.length; i++) {
+    const p = a[i]!;
+    const q = a[(i + 1) % a.length]!;
+    for (let j = 0; j < b.length; j++) {
+      const r = b[j]!;
+      const s = b[(j + 1) % b.length]!;
+      const side = (o: Point, u: Point, v: Point) => cross(o, u, v) / (Math.hypot(u.x - o.x, u.y - o.y) || 1);
+      const d1 = side(r, s, p);
+      const d2 = side(r, s, q);
+      const d3 = side(p, q, r);
+      const d4 = side(p, q, s);
+      if (Math.abs(d1) > tolerance && Math.abs(d2) > tolerance && Math.abs(d3) > tolerance && Math.abs(d4) > tolerance && d1 * d2 < 0 && d3 * d4 < 0) return true;
+    }
+  }
+  const deepIn = (p: Point, poly: readonly Point[]) => pointInPolygon(p, poly) && distanceToBoundary(p, poly) > tolerance;
+  const inner = (poly: readonly Point[]) => {
+    const t = triangulate(poly);
+    const [i, j, k] = [t[0] ?? 0, t[1] ?? 0, t[2] ?? 0];
+    return { x: (poly[i]!.x + poly[j]!.x + poly[k]!.x) / 3, y: (poly[i]!.y + poly[j]!.y + poly[k]!.y) / 3 };
+  };
+  return a.some((p) => deepIn(p, b)) || b.some((p) => deepIn(p, a)) || deepIn(inner(a), b) || deepIn(inner(b), a);
+};
 
 // ---------------------------------------------------------------- plan maths
 
@@ -54,7 +209,7 @@ export const toLocal = (f: Frame, p: Point): Point => {
   return { x: dx * c + dy * s, y: -dx * s + dy * c };
 };
 
-export const corners = (f: Frame): Point[] => [
+export const corners = (f: Frame): Point[] => f.outline ? f.outline.map((p) => toPlan(f, p.x, p.y)) : [
   toPlan(f, -f.w / 2, -f.d / 2),
   toPlan(f, f.w / 2, -f.d / 2),
   toPlan(f, f.w / 2, f.d / 2),
@@ -63,6 +218,7 @@ export const corners = (f: Frame): Point[] => [
 
 export const contains = (f: Frame, p: Point): boolean => {
   const l = toLocal(f, p);
+  if (f.outline) return pointInPolygon(l, f.outline) || distanceToBoundary(l, f.outline) <= 1e-6;
   return Math.abs(l.x) <= f.w / 2 + 1e-6 && Math.abs(l.y) <= f.d / 2 + 1e-6;
 };
 
@@ -79,8 +235,12 @@ export const boundsOf = (points: Point[]): Bounds =>
     { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
   );
 
-/** Do two rectangles overlap by more than a sliver? (Separating axes.) */
+/** A space's floor area. */
+export const areaOf = (f: Frame): number => (f.outline ? polygonArea(f.outline) : f.w * f.d);
+
+/** Do two outlines overlap by more than a sliver? (Separating axes for rectangles.) */
 export const overlaps = (a: Frame, b: Frame, tolerance = 0.05): boolean => {
+  if (a.outline || b.outline) return polygonsOverlap(corners(a), corners(b), tolerance);
   const ca = corners(a);
   const cb = corners(b);
   for (const f of [a, b]) {
@@ -97,9 +257,12 @@ export const overlaps = (a: Frame, b: Frame, tolerance = 0.05): boolean => {
 
 // ---------------------------------------------------------------- walls and hosted items
 
-/** One wall of a space: from `a` to `b` on the plan, in the space's own order (0 north, 1 east, 2 south, 3 west). */
+/**
+ * One wall of a space: from `a` to `b` on the plan. A rectangle's are 0 north,
+ * 1 east, 2 south, 3 west; an outline's wall n runs from corner n to the next.
+ */
 export interface Wall {
-  index: 0 | 1 | 2 | 3;
+  index: number;
   a: Point;
   b: Point;
   length: number;
@@ -107,6 +270,13 @@ export interface Wall {
 
 /** A space's four wall centre lines. North and south run west to east; east and west run north to south. */
 export const wallsOf = (f: Frame): Wall[] => {
+  if (f.outline) {
+    const c = corners(f);
+    return c.map((a, index) => {
+      const b = c[(index + 1) % c.length]!;
+      return { index, a, b, length: Math.hypot(b.x - a.x, b.y - a.y) };
+    });
+  }
   const [nw, ne, se, sw] = corners(f) as [Point, Point, Point, Point];
   return [
     { index: 0, a: nw, b: ne, length: f.w },
@@ -116,29 +286,44 @@ export const wallsOf = (f: Frame): Wall[] => {
   ];
 };
 
-const hostFrame = (set: LevelSet, host: LevelItem, global?: readonly AssetDefinition[]): Frame => {
-  const size = sizeOf(set, host, global);
-  return { x: host.x, y: host.y, z: host.z, rotation: host.rotation, ...size };
+/** A space's outline, when it has one: its own, or its definition's. */
+export const outlineOf = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): OutlinePoint[] | undefined => {
+  const def = assetOf(set, item, global);
+  if (def.kind !== 'space') return undefined;
+  const o = item.outline ?? def.outline;
+  return o && o.length >= 3 ? o : undefined;
 };
+
+const plainFrame = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): Frame => {
+  const size = sizeOf(set, item, global);
+  const outline = outlineOf(set, item, global);
+  return { x: item.x, y: item.y, z: item.z, rotation: item.rotation, ...size, ...(outline ? { outline: outline.map((p) => ({ x: p.x * size.w, y: p.y * size.d })) } : {}) };
+};
+
+const hostFrame = plainFrame;
 
 /** Where an item is. A door or window is wherever its wall says, so it follows the room when the room moves or changes size. */
 export const frameOf = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): Frame => {
-  const size = sizeOf(set, item, global);
   const host = item.host && set.items.find((i) => i.id === item.host!.id);
-  if (!item.host || !host) return { x: item.x, y: item.y, z: item.z, rotation: item.rotation, ...size };
+  if (!item.host || !host) return plainFrame(set, item, global);
+  const size = sizeOf(set, item, global);
   const hf = hostFrame(set, host, global);
-  const wall = wallsOf(hf)[item.host.wall]!;
+  const wall = wallsOf(hf)[item.host.wall];
+  if (!wall) return plainFrame(set, item, global);
   const t = Math.min(1, Math.max(0, item.host.along));
   const at = { x: wall.a.x + (wall.b.x - wall.a.x) * t, y: wall.a.y + (wall.b.y - wall.a.y) * t };
   const thickness = num(paramOf(set, host, 'wallThickness', global), 0.2);
-  return { x: at.x, y: at.y, z: hf.z + item.z, rotation: hf.rotation + (item.host.wall % 2 === 1 ? 90 : 0), w: size.w, d: thickness, h: size.h };
+  // An outline's wall turns the opening with it.
+  const rotation = hf.outline ? (((Math.round(((Math.atan2(wall.b.y - wall.a.y, wall.b.x - wall.a.x) * 180) / Math.PI) * 1e6) / 1e6) % 360) + 360) % 360 : hf.rotation + (item.host.wall % 2 === 1 ? 90 : 0);
+  return { x: at.x, y: at.y, z: hf.z + item.z, rotation, w: size.w, d: thickness, h: size.h };
 };
 
 /** A hosted item's opening along its wall, from the wall's start: [from, to], and whether it fits. */
 export const openingOf = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): { from: number; to: number; fits: boolean } | null => {
   const host = item.host && set.items.find((i) => i.id === item.host!.id);
   if (!item.host || !host) return null;
-  const wall = wallsOf(hostFrame(set, host, global))[item.host.wall]!;
+  const wall = wallsOf(hostFrame(set, host, global))[item.host.wall];
+  if (!wall) return { from: 0, to: 0, fits: false };
   const w = sizeOf(set, item, global).w;
   const centre = item.host.along * wall.length;
   const from = centre - w / 2;
@@ -171,20 +356,31 @@ export const nearestWall = (set: LevelSet, levelId: string, floorId: string, p: 
   return best?.host ?? null;
 };
 
+/** The wall of one space nearest a point: where a door in it goes when the space's outline changes. */
+export const wallNearest = (f: Frame, p: Point): { wall: number; along: number; d: number } | null => {
+  let best: { wall: number; along: number; d: number } | null = null;
+  for (const wall of wallsOf(f)) {
+    const { d, t } = distanceToSegment(p, wall.a, wall.b);
+    if (!best || d < best.d) best = { wall: wall.index, along: t, d };
+  }
+  return best;
+};
+
 /** The smallest space on this floor that holds a point: what an object is "in", for naming and links. */
 export const spaceAt = (set: LevelSet, levelId: string, floorId: string, p: Point, global?: readonly AssetDefinition[]): LevelItem | undefined => {
   let best: { item: LevelItem; area: number } | undefined;
   for (const item of set.items) {
     if (item.levelId !== levelId || item.floorId !== floorId || assetOf(set, item, global).kind !== 'space') continue;
     const f = frameOf(set, item, global);
-    if (contains(f, p) && (!best || f.w * f.d < best.area)) best = { item, area: f.w * f.d };
+    if (contains(f, p) && (!best || areaOf(f) < best.area)) best = { item, area: areaOf(f) };
   }
   return best?.item;
 };
 
 // ---------------------------------------------------------------- 3D meshes
 
-export type MeshShape = 'box' | 'cylinder' | 'sphere' | 'wedge' | 'cone';
+/** A slab is an outline (a freeform floor or ceiling) raised to its height. */
+export type MeshShape = 'box' | 'cylinder' | 'sphere' | 'wedge' | 'cone' | 'slab';
 export type MeshPart = 'floor' | 'wall' | 'ceiling' | 'solid' | 'volume' | 'marker' | 'light' | 'door';
 
 /** One piece of the graybox. Coordinates are 3D: x east, y up, z south; a centre, a size, and a turn about y (radians). */
@@ -204,6 +400,9 @@ export interface Mesh {
   opacity: number;
   /** Something the player bumps into and stands on in Play Mode. */
   collide: boolean;
+  /** A slab's corners around its centre, in its own frame (x, z), clockwise seen from above, and its triangles. */
+  outline?: { x: number; z: number }[];
+  triangles?: number[];
   /** A light this proxy stands for. */
   light?: { kind: 'point' | 'spot' | 'area'; color: string; intensity: number; range: number; angle?: number };
 }
@@ -274,16 +473,25 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
     if (def.kind === 'space') {
       const t = num(paramOf(set, item, 'wallThickness', g), 0.2);
       const y0 = base + f.z;
+      // A freeform space's floor and ceiling follow its outline, out to the walls' outer faces.
+      const slab = f.outline ? offsetOutline(f.outline, t / 2) : null;
+      const slabShape = slab
+        ? (() => {
+            const b = boundsOf(slab);
+            return { shape: 'slab' as const, sx: b.maxX - b.minX, sz: b.maxY - b.minY, outline: slab.map((p) => ({ x: p.x, z: p.y })), triangles: triangulate(slab) };
+          })()
+        : { shape: 'box' as const, sx: f.w + t, sz: f.d + t };
       if (bool(paramOf(set, item, 'floorSlab', g), true)) {
-        push({ key: `${item.id}:floor`, collide: true, part: 'floor', shape: 'box', x: f.x, y: y0 - 0.05, z: f.y, sx: f.w + t, sy: 0.1, sz: f.d + t, color: '#3d3727', opacity: 1 });
+        push({ key: `${item.id}:floor`, collide: true, part: 'floor', x: f.x, y: y0 - 0.05, z: f.y, sy: 0.1, color: '#3d3727', opacity: 1, ...slabShape });
       }
       if (bool(paramOf(set, item, 'ceiling', g), true) && options.ceilings) {
-        push({ key: `${item.id}:ceiling`, collide: true, part: 'ceiling', shape: 'box', x: f.x, y: y0 + f.h + 0.05, z: f.y, sx: f.w + t, sy: 0.1, sz: f.d + t, color: '#5d5848', opacity: 1 });
+        push({ key: `${item.id}:ceiling`, collide: true, part: 'ceiling', x: f.x, y: y0 + f.h + 0.05, z: f.y, sy: 0.1, color: '#5d5848', opacity: 1, ...slabShape });
       }
       if (bool(paramOf(set, item, 'walls', g), true)) {
         for (const wall of wallsOf(f)) {
           // North and south walls run the full width plus the corners; east and west fit between them.
-          const long = wall.index % 2 === 0;
+          // An outline's walls each run half a thickness past both corners, so every corner is closed.
+          const long = !!f.outline || wall.index % 2 === 0;
           const length = long ? wall.length + t : Math.max(0, wall.length - t);
           const shift = long ? t / 2 : -t / 2;
           const dir = { x: (wall.b.x - wall.a.x) / (wall.length || 1), y: (wall.b.y - wall.a.y) / (wall.length || 1) };

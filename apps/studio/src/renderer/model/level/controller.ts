@@ -19,6 +19,8 @@ export interface Collider {
   rot: number;
   bottom: number;
   top: number;
+  /** A freeform slab's corners on the plan, instead of the box's footprint. */
+  poly?: { x: number; y: number }[];
 }
 
 export interface Body {
@@ -51,7 +53,38 @@ export const BODY = { radius: 0.32, height: 1.75, eye: 1.62, walk: 3.6, run: 6.4
 export const collidersFrom = (meshes: readonly Mesh[]): Collider[] =>
   meshes
     .filter((m) => m.collide)
-    .map((m) => ({ itemId: m.itemId, x: m.x, y: m.z, hw: m.sx / 2, hd: m.sz / 2, rot: -m.rotY, bottom: m.y - m.sy / 2, top: m.y + m.sy / 2 }));
+    .map((m) => {
+      const c: Collider = { itemId: m.itemId, x: m.x, y: m.z, hw: m.sx / 2, hd: m.sz / 2, rot: -m.rotY, bottom: m.y - m.sy / 2, top: m.y + m.sy / 2 };
+      if (m.shape === 'slab' && m.outline) c.poly = m.outline.map((p) => world(c, p.x, p.z));
+      return c;
+    });
+
+const inPoly = (poly: readonly { x: number; y: number }[], x: number, y: number) => {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+};
+
+/** The point on a slab's edge nearest a plan point, and how far it is. */
+const nearestEdge = (poly: readonly { x: number; y: number }[], x: number, y: number) => {
+  let best = { x, y, d: Infinity };
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+    const px = a.x + dx * t;
+    const py = a.y + dy * t;
+    const d = Math.hypot(x - px, y - py);
+    if (d < best.d) best = { x: px, y: py, d };
+  }
+  return best;
+};
 
 const local = (c: Collider, x: number, y: number) => {
   const cos = Math.cos(c.rot);
@@ -69,6 +102,7 @@ const world = (c: Collider, lx: number, ly: number) => {
 
 /** Is this plan point over the collider's top (inside its footprint)? */
 const over = (c: Collider, x: number, y: number, margin = 0) => {
+  if (c.poly) return inPoly(c.poly, x, y) || nearestEdge(c.poly, x, y).d <= margin;
   const l = local(c, x, y);
   return Math.abs(l.x) <= c.hw + margin && Math.abs(l.y) <= c.hd + margin;
 };
@@ -91,6 +125,19 @@ const resolve = (colliders: readonly Collider[], x: number, y: number, feet: num
     for (const c of colliders) {
       // A step low enough to climb, or something above the head, is not in the way.
       if (c.top <= feet + BODY.stepUp || c.bottom >= head) continue;
+      if (c.poly) {
+        // A slab in the way: out by its nearest edge.
+        const inside = inPoly(c.poly, px, py);
+        const e = nearestEdge(c.poly, px, py);
+        if (!inside && e.d >= BODY.radius) continue;
+        const ux = e.d > 1e-6 ? (px - e.x) / e.d : 1;
+        const uy = e.d > 1e-6 ? (py - e.y) / e.d : 0;
+        const dir = inside ? -1 : 1;
+        px = e.x + ux * dir * BODY.radius;
+        py = e.y + uy * dir * BODY.radius;
+        moved = true;
+        continue;
+      }
       const l = local(c, px, py);
       const cx = Math.max(-c.hw, Math.min(c.hw, l.x));
       const cy = Math.max(-c.hd, Math.min(c.hd, l.y));

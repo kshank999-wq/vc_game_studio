@@ -35,6 +35,8 @@ export const PLUGIN_FILES: Record<string, string> = {
       CreatedBy: 'VC Game Studio',
       CanContainContent: true,
       Modules: [{ Name: 'VCGS', Type: 'Runtime', LoadingPhase: 'Default' }],
+      // Freeform floors and ceilings are procedural meshes.
+      Plugins: [{ Name: 'ProceduralMeshComponent', Enabled: true }],
     },
     null,
     2,
@@ -48,7 +50,7 @@ public class VCGS : ModuleRules
     public VCGS(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
+        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "ProceduralMeshComponent" });
     }
 }
 `,

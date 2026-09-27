@@ -171,6 +171,15 @@ Each adapter maps the axes:
 | Unity | (x, y, −z) | yaw −turn |
 | Unreal | (−z, x, y) × 100 cm | yaw −turn |
 
+A freeform space has an `outline`: its corners [x, z] around its position,
+clockwise seen from above. A door's `host.wall` is then the outline's wall n,
+from corner n to the next. Its floor and ceiling are `slab` pieces: an
+`outline` around the piece's centre, raised to `size[1]`, and `triangles` for
+the top, each clockwise from above. That winding faces up in Godot and Unity
+alike, since both see the same map from above. `slabFaces` gives the closed
+solid for collision. Unreal gets both sides of every face, so it shows
+whichever way it is wound.
+
 The export record keeps each item's revision (`levelItems`), so the handoff
 can say what changed. It also keeps a hash of each generated file
 (`fileHashes`); `engineEdits` uses these to find files changed in the engine

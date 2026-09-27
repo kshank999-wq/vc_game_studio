@@ -18,7 +18,7 @@ import type { IrEffect, IrRule } from './ir';
 /** One piece of an item's graybox, in the item's own frame. */
 export interface IrPiece {
   part: string;
-  shape: 'box' | 'cylinder' | 'sphere' | 'wedge' | 'cone';
+  shape: 'box' | 'cylinder' | 'sphere' | 'wedge' | 'cone' | 'slab';
   /** Centre, relative to the item. */
   at: [number, number, number];
   size: [number, number, number];
@@ -28,6 +28,13 @@ export interface IrPiece {
   opacity: number;
   collide: boolean;
   light?: { kind: 'point' | 'spot' | 'area'; color: string; intensity: number; range: number; angle?: number };
+  /**
+   * A slab's corners [x, z] around its centre, in its own frame, clockwise
+   * seen from above; `size` is their bounds and its thickness. `triangles`
+   * cover the outline, three indices each, also clockwise from above.
+   */
+  outline?: [number, number][];
+  triangles?: number[];
 }
 
 export interface IrLevelAction {
@@ -65,7 +72,10 @@ export interface IrLevelItem {
   links: string[];
   /** The scenes among them: a character here starts the first when talked to. */
   scenes: string[];
+  /** A door or window's space and wall: 0–3 north, east, south, west, or the outline's wall n (corner n to the next). */
   host?: { guid: string; wall: number };
+  /** A freeform space's corners [x, z] in metres around its position, in its own frame, clockwise seen from above. */
+  outline?: [number, number][];
   active_when?: IrRule;
   rules: IrLevelRule[];
   /** Where each engine's exporter puts it, unless the item names a template of its own. */
@@ -139,6 +149,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
             opacity: m.opacity,
             collide: m.collide,
             ...(m.light ? { light: m.light } : {}),
+            ...(m.outline ? { outline: m.outline.map((q): [number, number] => [round(q.x), round(q.z)]), triangles: m.triangles ?? [] } : {}),
           };
         });
         const params: Record<string, ParamValue> = {};
@@ -175,6 +186,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
           links: (item.links ?? []).map((l) => story.key(l)).filter((k): k is string => !!k),
           scenes: (item.links ?? []).filter((l) => project.objects[l]?.type === 'scene').map((l) => story.key(l)!).filter(Boolean),
           ...(item.host && itemsById.has(item.host.id) ? { host: { guid: item.host.id, wall: item.host.wall } } : {}),
+          ...(f.outline ? { outline: f.outline.map((q): [number, number] => [round(q.x), round(q.y)]) } : {}),
           ...(story.rule(item.activeWhen) ? { active_when: story.rule(item.activeWhen) } : {}),
           rules,
           engine: { ...def.engine, template: String(params.template ?? '') },
@@ -228,6 +240,28 @@ export const levelItemFor = (levels: readonly IrLevel[], guid: string): { level:
     if (item) return { level, item };
   }
   return null;
+};
+
+/**
+ * A slab as a closed solid: its top, bottom and sides as triangles of
+ * [x, y, z] corners around its centre, each clockwise seen from outside.
+ */
+export const slabFaces = (piece: IrPiece): [number, number, number][][] => {
+  const o = piece.outline ?? [];
+  const t = piece.triangles ?? [];
+  const h = piece.size[1] / 2;
+  const top = (i: number): [number, number, number] => [o[i]![0], h, o[i]![1]];
+  const bottom = (i: number): [number, number, number] => [o[i]![0], -h, o[i]![1]];
+  const out: [number, number, number][][] = [];
+  for (let k = 0; k + 2 < t.length; k += 3) {
+    out.push([top(t[k]!), top(t[k + 1]!), top(t[k + 2]!)]);
+    out.push([bottom(t[k]!), bottom(t[k + 2]!), bottom(t[k + 1]!)]);
+  }
+  for (let i = 0; i < o.length; i++) {
+    const j = (i + 1) % o.length;
+    out.push([top(j), top(i), bottom(i)], [top(j), bottom(i), bottom(j)]);
+  }
+  return out;
 };
 
 export type { LevelItem };

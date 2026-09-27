@@ -52,6 +52,7 @@ export const storySchema = () => ({
   },
   $defs: {
     vec3: { type: 'array', items: num, minItems: 3, maxItems: 3, description: 'Metres, y up: x east, y up, z south.' },
+    corner: { type: 'array', items: num, minItems: 2, maxItems: 2, description: 'A point on the plan [x, z], in metres.' },
     level: {
       ...obj(
         {
@@ -86,7 +87,8 @@ export const storySchema = () => ({
           params: { type: 'object', additionalProperties: { type: ['string', 'number', 'boolean'] } },
           links: strings,
           scenes: strings,
-          host: obj({ guid: str, wall: num }),
+          host: { ...obj({ guid: str, wall: num }), description: 'A door or window’s space and wall: 0–3 north, east, south, west, or an outlined space’s wall n (corner n to the next).' },
+          outline: { type: 'array', items: ref('corner'), minItems: 3, description: 'A freeform space’s corners around its position, in its own frame, clockwise seen from above.' },
           active_when: ref('rule'),
           rules: { type: 'array', items: ref('levelRule') },
           engine: obj({ godot: str, unity: str, unreal: str, template: str }),
@@ -102,7 +104,7 @@ export const storySchema = () => ({
     piece: obj(
       {
         part: str,
-        shape: { enum: ['box', 'cylinder', 'sphere', 'wedge', 'cone'] },
+        shape: { enum: ['box', 'cylinder', 'sphere', 'wedge', 'cone', 'slab'] },
         at: { ...ref('vec3'), description: 'Centre, relative to the item (turned with it).' },
         size: ref('vec3'),
         turn: num,
@@ -110,6 +112,8 @@ export const storySchema = () => ({
         opacity: num,
         collide: { type: 'boolean' },
         light: obj({ kind: { enum: ['point', 'spot', 'area'] }, color: str, intensity: num, range: num, angle: num }, ['kind', 'color', 'intensity', 'range']),
+        outline: { type: 'array', items: ref('corner'), minItems: 3, description: 'A slab’s corners around its centre, in its own frame, clockwise seen from above. Raise them to size[1].' },
+        triangles: { type: 'array', items: { type: 'integer', minimum: 0 }, description: 'A slab’s top as triangles: three outline indices each, clockwise seen from above.' },
       },
       ['part', 'shape', 'at', 'size', 'turn', 'color', 'opacity', 'collide'],
     ),
@@ -254,7 +258,10 @@ changes (find what you placed last time by it), an \`export_name\`, a
 \`position\` and \`turn\` (metres, y up, z south; degrees counter-clockwise from
 above), a \`size\`, its settings in \`params\` (story references as story keys)
 and its graybox \`pieces\` relative to it. Build the pieces as you like; those
-with \`collide\` are in the player's way.
+with \`collide\` are in the player's way. A \`slab\` piece is a freeform floor or
+ceiling: its \`outline\` corners raised to \`size[1]\`, with \`triangles\` for its
+top. A freeform space also has its \`outline\`, and a door's \`host.wall\` counts
+its walls from corner 0.
 
 1. An item is in the level only while \`active_when\` holds.
 2. **Interact**: a \`door\` opens and shuts; a locked one (\`params.locked\`) needs

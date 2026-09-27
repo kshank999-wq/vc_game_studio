@@ -1,5 +1,5 @@
 import type { Project } from '../types';
-import { assetOf, frameOf, openingOf, overlaps, paramOf } from './geometry';
+import { assetOf, corners, frameOf, openingOf, outlineOf, overlaps, paramOf, selfIntersects, wallsOf } from './geometry';
 import { referencesOf } from './links';
 import { engineSafe, exportNameOf, levelExportName } from './naming';
 import type { AssetDefinition, LevelItem } from './types';
@@ -101,6 +101,14 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
       add({ id: item.id, levelId: item.levelId, severity: 'error', message: `${item.name} refers to ${missing.length === 1 ? 'something' : `${missing.length} things`} no longer in the project.`, export: 'Those references are dropped from the export. Pick another, or remove them.' });
     }
 
+    if (outlineOf(set, item, global)) {
+      const f = frameOf(set, item, global);
+      if (selfIntersects(corners(f))) {
+        add({ id: item.id, levelId: item.levelId, severity: 'error', message: `${item.name}’s outline crosses itself.`, export: 'Its walls and floor can’t be built as drawn. Drag a corner so no two walls cross.' });
+      } else if (wallsOf(f).some((w) => w.length < 0.25)) {
+        add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} has a wall shorter than 25 cm.`, export: 'It exports, but the corners pile up there. Take out a corner.' });
+      }
+    }
     if (def.role === 'spawn' && !String(paramOf(set, item, 'actor', global) ?? '')) {
       add({ id: item.id, levelId: item.levelId, severity: 'error', message: `${item.name} has nothing to spawn.`, export: 'The spawner is exported empty. Choose who or what it spawns.' });
     }

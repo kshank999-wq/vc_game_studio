@@ -44,6 +44,7 @@ namespace UnityEngine
         public float magnitude => (float)Math.Sqrt(sqrMagnitude);
         public Vector3 normalized => magnitude > 1e-6f ? this * (1 / magnitude) : zero;
         public static float Dot(Vector3 a, Vector3 b) => a.x * b.x + a.y * b.y + a.z * b.z;
+        public static Vector3 Cross(Vector3 a, Vector3 b) => new Vector3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
         public static Vector3 operator +(Vector3 a, Vector3 b) => new Vector3(a.x + b.x, a.y + b.y, a.z + b.z);
         public static Vector3 operator -(Vector3 a, Vector3 b) => new Vector3(a.x - b.x, a.y - b.y, a.z - b.z);
         public static Vector3 operator *(Vector3 a, float k) => new Vector3(a.x * k, a.y * k, a.z * k);
@@ -185,6 +186,11 @@ namespace UnityEngine
     public sealed class SphereCollider : Collider { }
 
     public sealed class CapsuleCollider : Collider { }
+
+    public sealed class MeshCollider : Collider
+    {
+        public Mesh sharedMesh;
+    }
 
     public sealed class Mesh : Object
     {

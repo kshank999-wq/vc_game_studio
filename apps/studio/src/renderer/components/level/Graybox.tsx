@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { meshesFor, type Point } from '../../model/level/geometry';
-import { buildPiece } from './three-pieces';
+import { buildPiece, disposePiece } from './three-pieces';
 import { levelsOf, moveItems, withGroups } from '../../model/level/level';
 import type { AssetDefinition } from '../../model/level/types';
 import type { Project } from '../../model/types';
@@ -128,9 +128,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     if (!t) return;
     for (const child of [...t.content.children]) {
       t.content.remove(child);
-      child.traverse((o) => {
-        if (o instanceof THREE.Light) o.dispose();
-      });
+      disposePiece(child);
     }
     const selected = new Set(props.selection);
     let lights = 0;

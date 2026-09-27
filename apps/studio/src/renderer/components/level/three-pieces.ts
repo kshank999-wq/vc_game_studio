@@ -55,24 +55,34 @@ export const materialFor = (color: string, opacity: number, emissive = false): T
 const EDGE_DIM = new THREE.LineBasicMaterial({ color: '#0b0a07', transparent: true, opacity: 0.45 });
 const EDGE_ON = new THREE.LineBasicMaterial({ color: '#e8c872' });
 
+/** A freeform floor or ceiling: its outline raised to its thickness, centred on its height. Made to size, not scaled. */
+const slabGeometry = (m: Mesh): THREE.BufferGeometry => {
+  const shape = new THREE.Shape((m.outline ?? []).map((p) => new THREE.Vector2(p.x, p.z)));
+  // The outline is drawn in x–y and pushed along z; turning it about x lays it flat with its depth downward.
+  return new THREE.ExtrudeGeometry(shape, { depth: m.sy, bevelEnabled: false }).rotateX(Math.PI / 2).translate(0, m.sy / 2, 0);
+};
+
 export const buildPiece = (m: Mesh, selected: boolean): THREE.Object3D => {
   const holder = new THREE.Group();
   holder.position.set(m.x, m.y, m.z);
   holder.rotation.y = m.rotY;
-  const geometry = UNIT[m.shape];
+  const slab = m.shape === 'slab' ? slabGeometry(m) : null;
+  const geometry = slab ?? UNIT[m.shape as keyof typeof UNIT];
   const mesh = new THREE.Mesh(geometry, materialFor(m.color, m.opacity, m.part === 'light'));
-  mesh.scale.set(m.sx, m.sy, m.sz);
+  if (!slab) mesh.scale.set(m.sx, m.sy, m.sz);
   mesh.castShadow = m.opacity >= 1 && m.part !== 'light';
   mesh.receiveShadow = m.part === 'floor' || m.part === 'wall';
   mesh.userData = { itemId: m.itemId };
   holder.add(mesh);
-  const edges = m.shape === 'box' ? EDGES.box : m.shape === 'wedge' ? EDGES.wedge : null;
+  const edges = m.shape === 'box' ? EDGES.box : m.shape === 'wedge' ? EDGES.wedge : slab ? new THREE.EdgesGeometry(slab) : null;
+  // A slab's geometry is its own, not shared: freed with the piece.
+  if (slab) holder.userData.owned = [slab, edges];
   if (edges && (selected || m.part !== 'floor')) {
     const line = new THREE.LineSegments(edges, selected ? EDGE_ON : EDGE_DIM);
     line.scale.copy(mesh.scale);
     line.raycast = () => {};
     holder.add(line);
-  } else if (selected) {
+  } else if (selected && !slab) {
     const box = new THREE.LineSegments(EDGES.box, EDGE_ON);
     box.scale.copy(mesh.scale);
     box.raycast = () => {};
@@ -81,3 +91,11 @@ export const buildPiece = (m: Mesh, selected: boolean): THREE.Object3D => {
   return holder;
 };
 
+
+/** Take a piece down, freeing what it made for itself (a slab's geometry, a light). */
+export const disposePiece = (piece: THREE.Object3D) => {
+  for (const g of (piece.userData.owned ?? []) as THREE.BufferGeometry[]) g.dispose();
+  piece.traverse((o) => {
+    if (o instanceof THREE.Light) o.dispose();
+  });
+};

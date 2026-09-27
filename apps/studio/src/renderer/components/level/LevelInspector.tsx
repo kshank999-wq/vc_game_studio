@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { assetOf, frameOf, num, paramOf, sizeOf } from '../../model/level/geometry';
+import { areaOf, assetOf, corners, frameOf, num, outlineOf, paramOf, perimeterOf, sizeOf } from '../../model/level/geometry';
 import { GROUPS } from '../../model/level/library';
 import {
   addFloor,
@@ -9,13 +9,16 @@ import {
   isOverridden,
   levelsOf,
   linkItem,
+  makeRectangular,
   mirrorItems,
+  outlineCorners,
   placeAt,
   removeFloor,
   resetParam,
   resetSize,
   resizeItem,
   rotateItems,
+  setOutline,
   setParam,
   ungroupItems,
   unlinkItem,
@@ -315,7 +318,7 @@ export const LevelInspector = (props: Props) => {
           <Section title="Transform" open={!closed.has('transform') || !!q} onToggle={() => toggle('transform')}>
             {host ? (
               <>
-                <div className="lvl-kv"><span>In</span><span>{host.name} · {['north', 'east', 'south', 'west'][item.host!.wall]} wall</span></div>
+                <div className="lvl-kv"><span>In</span><span>{host.name} · {outlineOf(set, host, global) ? `wall ${item.host!.wall + 1}` : `${['north', 'east', 'south', 'west'][item.host!.wall]} wall`}</span></div>
                 <NumberField label="Along the wall" unit="percent" value={Math.round(item.host!.along * 1000) / 10} min={0} max={100} step={1} onCommit={(v) => onCommit(updateItem(project, item.id, { host: { ...item.host!, along: v / 100 } }, global))} />
                 <NumberField label="Above the floor" unit="length" units={units} value={item.z} step={0.05} min={0} onCommit={(v) => onCommit(updateItem(project, item.id, { z: v }, global))} />
               </>
@@ -336,7 +339,27 @@ export const LevelInspector = (props: Props) => {
         )}
         {group(
           'dimensions',
-          def.kind !== 'marker' && (!q || matches('width depth height')) ? (
+          def.kind !== 'marker' && (!q || matches('width depth height shape outline corners')) ? (
+            <>
+            {def.kind === 'space' && (
+              <>
+                <div className="lvl-kv lvl-shape">
+                  <span>Shape</span>
+                  <span>{outlineOf(set, item, global) ? `${corners(f).length} corners · ${Math.round(areaOf(f) * 10) / 10} m² · ${Math.round(perimeterOf(corners(f)) * 10) / 10} m around` : 'Rectangle'}</span>
+                </div>
+                <div className="lvl-btnrow">
+                  {outlineOf(set, item, global) ? (
+                    <button className="tb-btn small" disabled={item.locked} onClick={() => onCommit(makeRectangular(project, item.id, global))} title="Back to a rectangle of the same bounds">
+                      Make rectangular
+                    </button>
+                  ) : (
+                    <button className="tb-btn small" disabled={item.locked} onClick={() => onCommit(setOutline(project, item.id, outlineCorners(project, item.id, global), global))} title="Drag its corners on the map, and add corners in its walls">
+                      Edit corners
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
             <div className="lvl-grid3">
               {(item.host ? (['w', 'h'] as const) : (['w', 'd', 'h'] as const)).map((axis) => (
                 <NumberField
@@ -353,6 +376,7 @@ export const LevelInspector = (props: Props) => {
                 />
               ))}
             </div>
+            </>
           ) : null,
         )}
         {group('appearance')}

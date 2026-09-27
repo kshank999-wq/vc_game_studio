@@ -30,6 +30,19 @@ items linked to what you had selected.
 - **Sizes** labels the selected item's width and depth in the project's units (metres or feet).
 - **Story** badges every space linked to a scene with its code (SC-01…) and joins them in story order.
 
+**Spaces of any shape (spec §3.1).**
+- **Outline** (O) draws a space corner by corner, snapped to the grid. Close it by clicking the first corner, double-clicking, or pressing Enter. Backspace takes back the last corner; Escape drops the outline. An outline whose edges would cross is not made.
+- The picker beside the tools says which space it makes: a room, hallway, stairwell, exterior zone or arena. **Irregular room** in the library starts as an L.
+- A selected outlined space shows a diamond on each corner and a dot in the middle of each wall:
+  - Drag a corner to move it.
+  - Drag or click a wall's dot to add a corner there.
+  - Double-click a corner to take it out (three is the fewest).
+- **Edit corners** in the inspector turns a rectangle into an outline; **Make rectangular** turns it back, keeping its bounds. The inspector shows the corner count, the floor area and the length around.
+- Width and depth still work: they scale the outline. So do turning, mirroring and duplicating.
+- Every wall is one edge of the outline. The floor and ceiling follow the outline out to the walls' outer faces. The 3D graybox, Play Mode and every export use the same shape.
+- Doors and windows stay where they stood when corners move. Each goes into the nearest wall of the new outline.
+- Preflight flags an outline that crosses itself (from a hand-edited file), a wall shorter than 25 cm, and spaces whose outlines overlap. Spaces overlapping only in their bounds, such as a room in an L's corner, are fine.
+
 **Walls, doors and windows (spec §5.3).**
 - A door or window dropped near a room goes into its nearest wall.
 - Dragging a door slides it along its wall, or moves it to another wall.
@@ -165,6 +178,12 @@ finds what it placed last time and updates it.
   (**Tools › Execute Python Script**). Positions are in centimetres, X forward.
 - **JSON:** `story.json` gains `levels`, described in `story.schema.json`.
 
+A freeform space's floor and ceiling go over as a **slab**: the outline raised to its thickness, with its triangles.
+- **Godot:** a `CSGPolygon3D`, colliding through a `ConcavePolygonShape3D` of its faces.
+- **Unity:** a mesh saved under `Levels/Meshes`, with a `MeshCollider`.
+- **Unreal:** the item keeps its slabs as data (`FVcgsSlab`) and builds them into a procedural mesh whenever it is constructed. The plugin now depends on Unreal's ProceduralMeshComponent plugin.
+- **JSON:** a `slab` piece with `outline` and `triangles`, and the space's own `outline`.
+
 **Who owns what.** VC Game Studio owns each item's place, name, collision,
 graybox and data. The Unity and Unreal builders never touch final art, or
 anything else you added in the engine:
@@ -184,7 +203,7 @@ silently. If you keep a file, it is pointed out again next time.
 ## The sample
 
 *The Sunken Vault* (**File › New from the sample**) includes a level:
-- **Spaces:** the Cave Mouth, the Squeeze, the Silt Camp and the Vault Chamber, each linked to its scene.
+- **Spaces:** the Cave Mouth, the Squeeze, the Silt Camp and the Vault Chamber, each linked to its scene. The Cave Mouth is open ground with an irregular outline, and the Vault Chamber has its corners cut.
 - **The Bronze Door:** needs the Vault Key and stays until the puzzle is solved.
 - **The Vault Key:** a pickup that gives the story's key.
 - **The Rusted Lever:** an interaction that sets the lever up.
@@ -217,7 +236,7 @@ clockwise seen from above.
 | Spec | Status |
 | --- | --- |
 | §2 Workspace | Done. |
-| §3 2D map | Done: spaces, grid, snap, align, distribute, rotate, duplicate, mirror, groups, layers, hide and lock, floors with a ghosted floor below, units, dimension labels, symbols. **Freeform (non-rectangular) boundaries are not done yet**: spaces are rectangles. |
+| §3 2D map | Done: spaces as rectangles or freeform outlines, grid, snap, align, distribute, rotate, duplicate, mirror, groups, layers, hide and lock, floors with a ghosted floor below, units, dimension labels, symbols. Outlines are for spaces; volumes (triggers, zones) are still boxes. |
 | §4 Asset library | Done: every category, definitions and instances, overrides with reset, project assets, assemblies, my library. The migration step that applies a changed definition to old instances is recorded (versions) but not yet offered in the UI. |
 | §5 3D graybox | Box, plane, cylinder, sphere, wedge, stairs and ramps; walls with openings; move, rotate and scale, and hosted assets that follow their wall. Moving in 3D is done. **Not yet:** resize handles in 3D, pivot editing, extrude, and collision or navigation preview beyond showing the volumes. |
 | §6 Inspector | Done, including search and "More" for advanced fields. |

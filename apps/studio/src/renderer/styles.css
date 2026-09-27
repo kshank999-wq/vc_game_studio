@@ -5843,7 +5843,7 @@ kbd {
   inset: 0;
   display: grid;
   grid-template-columns: 250px minmax(0, 1fr) 320px;
-  grid-template-rows: 46px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
     'bar bar bar'
     'left centre right';
@@ -5860,18 +5860,24 @@ kbd {
 .lvl-bar {
   grid-area: bar;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 8px 12px;
+  min-height: 46px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   min-width: 0;
-  overflow-x: auto;
 }
 
 .lvl-bar .view-toggle button {
   height: 28px;
   white-space: nowrap;
+}
+
+/* Nothing in the bar squeezes; in a narrow window it wraps onto a second row. */
+.lvl-bar > * {
+  flex-shrink: 0;
 }
 
 .lvl-pick {
@@ -6626,7 +6632,7 @@ kbd {
 }
 
 .lvl-play .lvl-pick {
-  max-width: 150px;
+  max-width: 124px;
 }
 
 .lvl-playing {

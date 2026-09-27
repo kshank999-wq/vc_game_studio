@@ -176,6 +176,7 @@ export const SHORTCUTS: { group: string; keys: [string, string][] }[] = [
       ['3', '3D graybox'],
       ['V', 'Select and move'],
       ['D', 'Draw a space'],
+      ['O', 'Outline a space of any shape'],
       ['R', 'Rotate 90° (Shift+R: back)'],
       ['Mod+D', 'Duplicate'],
       ['Mod+G', 'Group (Mod+Shift+G: ungroup)'],

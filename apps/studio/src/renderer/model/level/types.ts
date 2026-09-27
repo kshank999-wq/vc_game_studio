@@ -111,6 +111,7 @@ export interface AssemblyPart {
   rotation: number;
   size?: Partial<Size>;
   params?: Record<string, ParamValue>;
+  outline?: OutlinePoint[];
 }
 
 /** A library template (spec §4.3): the defaults every placed instance inherits. */
@@ -132,6 +133,8 @@ export interface AssetDefinition {
   /** Bumped whenever the definition changes, so instances can say which version they came from. */
   version: number;
   parts?: AssemblyPart[];
+  /** A space's shape when it isn't a rectangle (an irregular room). */
+  outline?: OutlinePoint[];
 }
 
 /** The classes export names are prefixed by (spec §10.2); the prefixes themselves are project settings. */
@@ -179,11 +182,21 @@ export interface LevelRule {
   actions?: LevelAction[];
 }
 
-/** A door or window's place in a space's wall: which wall (0 north, 1 east, 2 south, 3 west) and where along it (0–1). */
+/**
+ * A door or window's place in a space's wall, and where along it (0–1). A
+ * rectangular space's walls are 0 north, 1 east, 2 south, 3 west; an outlined
+ * space's wall n runs from its corner n to the next.
+ */
 export interface HostRef {
   id: string;
-  wall: 0 | 1 | 2 | 3;
+  wall: number;
   along: number;
+}
+
+/** A corner of a space's outline, in its own frame as a fraction of its width (x) and depth (y): −0.5 to 0.5. */
+export interface OutlinePoint {
+  x: number;
+  y: number;
 }
 
 /** A placed asset (spec §4.3, "Asset Instance"). */
@@ -211,6 +224,12 @@ export interface LevelItem {
   /** What differs from the definition's parameters. */
   params?: Record<string, ParamValue>;
   host?: HostRef;
+  /**
+   * A space drawn freeform (spec §3.1): its corners, clockwise seen from
+   * above. Without one a space is the rectangle of its size (or its
+   * definition's outline).
+   */
+  outline?: OutlinePoint[];
   groupId?: string;
   hidden?: boolean;
   locked?: boolean;

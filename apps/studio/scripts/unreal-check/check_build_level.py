@@ -46,6 +46,24 @@ if abs(crane.get_actor_rotation().yaw - 315) > 0.01:
 chamber = placed["RM_SunkenVault_VaultChamber_004"]
 if len(chamber.get_attached_actors()) < 5:
     fail("the chamber should have its floor and walls attached")
+# A freeform space's floor and ceiling go to the item as slabs, built on construction.
+cave = placed["RM_SunkenVault_CaveMouth_001"]
+cave_data = next(i for i in data["items"] if i["export_name"] == "RM_SunkenVault_CaveMouth_001")
+slabs = chamber.get_editor_property("slabs")
+chamber_data = next(i for i in data["items"] if i["export_name"] == "RM_SunkenVault_VaultChamber_004")
+chamber_slabs = [p for p in chamber_data["pieces"] if p["shape"] == "slab"]
+if not chamber_slabs or len(slabs) != len(chamber_slabs) or not chamber.get_editor_property("constructed"):
+    fail("the chamber's outlined floor should be set as slabs and built, got %r" % slabs)
+else:
+    s0 = slabs[0]
+    outline = s0.get_editor_property("outline")
+    x, z = chamber_slabs[0]["outline"][0]
+    if len(outline) != len(chamber_slabs[0]["outline"]) or abs(outline[0].x - -z * 100) > 0.01 or abs(outline[0].y - x * 100) > 0.01:
+        fail("a slab's corners should be in Unreal's axes, in cm")
+    if s0.get_editor_property("triangles") != chamber_slabs[0]["triangles"] or not s0.get_editor_property("collide"):
+        fail("a slab keeps its triangles and collides")
+if not any(p["shape"] == "slab" for p in cave_data["pieces"]) or not cave.get_editor_property("slabs"):
+    fail("the cave mouth's outlined ground should be a slab")
 trigger = placed["TRG_VaultChamber_DoorInTheDarkTrigger_002"]
 if trigger.get_editor_property("box").calls.get("set_collision_profile_name") != ("Trigger",):
     fail("a volume's box should be a trigger")

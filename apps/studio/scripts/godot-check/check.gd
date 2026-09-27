@@ -203,6 +203,26 @@ func check_level(game: Node) -> void:
 	var chamber: Node = level.get_node_or_null("RM_SunkenVault_VaultChamber_004")
 	if chamber == null or chamber.get_node("Collision").get_child_count() < 4 or chamber.get_node("Proxy").get_child_count() < 5:
 		fail("the vault chamber should have its floor and walls, as meshes and collision")
+	# Its corners are cut: the floor is a CSG polygon laid flat, its top at the floor, inside the chamber's bounds.
+	var slab: CSGPolygon3D = null
+	for child in chamber.get_node("Proxy").get_children():
+		if child is CSGPolygon3D and str(child.name).begins_with("floor"):
+			slab = child
+	if slab == null or slab.polygon.size() != 8:
+		fail("the chamber's outlined floor should be a CSGPolygon3D with its 8 corners")
+	else:
+		var to_level: Transform3D = chamber.transform * chamber.get_node("Proxy").transform * slab.transform
+		for p in slab.polygon:
+			var top: Vector3 = to_level * Vector3(p.x, p.y, -slab.depth)
+			if absf(top.y) > 0.001 or top.x < 4.79 or top.x > 15.21 or top.z < -20.21 or top.z > -11.79:
+				fail("the chamber floor's corner " + str(p) + " should be at floor height inside the chamber, got " + str(top))
+				break
+	var shape: ConcavePolygonShape3D = null
+	for child in chamber.get_node("Collision").get_children():
+		if child is CollisionShape3D and child.shape is ConcavePolygonShape3D:
+			shape = child.shape
+	if shape == null or shape.get_faces().size() != ((8 - 2) * 2 + 8 * 2) * 3 or not shape.backface_collision:
+		fail("the chamber's floor should collide by its outline")
 	var crane: Node3D = level.get_node_or_null("CAM_VaultChamber_ChamberCrane_001")
 	if crane == null or not (crane is Camera3D) or absf(wrapf(crane.rotation.y, -PI, PI) - deg_to_rad(45.0)) > 0.01:
 		fail("the camera marker should be a Camera3D turned to face north-west, got " + str(crane.rotation if crane else null))

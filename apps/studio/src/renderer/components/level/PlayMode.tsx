@@ -12,7 +12,7 @@ import type { Project } from '../../model/types';
 import { usePreferences } from '../../preferences';
 import { actionOfKey, controlsOf, keyLabel, padLabel, readPad, type Action } from './input';
 import { PlayInspect } from './PlayInspect';
-import { buildPiece } from './three-pieces';
+import { buildPiece, disposePiece } from './three-pieces';
 
 /**
  * Play Mode (spec §9): walk the graybox as the player, first person, third
@@ -195,7 +195,10 @@ export const PlayMode = (props: Props) => {
   useEffect(() => {
     const t = three.current;
     if (!t) return;
-    for (const child of [...t.content.children]) t.content.remove(child);
+    for (const child of [...t.content.children]) {
+      t.content.remove(child);
+      disposePiece(child);
+    }
     let lights = 0;
     for (const m of scene.visible) {
       t.content.add(buildPiece(m, false));

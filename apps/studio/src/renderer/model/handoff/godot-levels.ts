@@ -1,5 +1,5 @@
 import type { GeneratedFile } from './engines';
-import type { IrLevel, IrLevelItem, IrPiece } from './levels';
+import { slabFaces, type IrLevel, type IrLevelItem, type IrPiece } from './levels';
 
 /**
  * Levels for Godot 4 (spec §11.2): a scene per level whose nodes are the
@@ -562,6 +562,8 @@ class Tscn {
   }
 }
 
+const slabMaterial = (t: Tscn, p: IrPiece): string => t.sub('StandardMaterial3D', { albedo_color: color(p.color, p.opacity), ...(p.opacity < 1 ? { transparency: '1' } : {}) });
+
 /** A piece's mesh (sized, not scaled) and its turn about the item's up axis. */
 const pieceMesh = (t: Tscn, p: IrPiece): { mesh: string; basis: M3 } => {
   const [sx, sy, sz] = p.size;
@@ -628,6 +630,16 @@ export const levelTscn = (level: IrLevel, root: string): string => {
     } else if (!item.replacement_locked && visuals.length && item.kind !== 'volume') {
       t.node('Proxy', 'Node3D', at);
       visuals.forEach((p, n) => {
+        if (p.shape === 'slab' && p.outline) {
+          // A freeform floor or ceiling: its outline (drawn in x–y) turned flat and raised by its thickness from its underside.
+          t.node(`${p.part}_${n}`, 'CSGPolygon3D', `${at}/Proxy`, {
+            transform: transform(mul(rotY(p.turn), rotX(90)), [p.at[0], p.at[1] - p.size[1] / 2, p.at[2]]),
+            polygon: `PackedVector2Array(${p.outline.flat().map(f).join(', ')})`,
+            depth: f(p.size[1]),
+            material: slabMaterial(t, p),
+          });
+          return;
+        }
         const { mesh, basis } = pieceMesh(t, p);
         t.node(`${p.part}_${n}`, 'MeshInstance3D', `${at}/Proxy`, { transform: transform(basis, p.at), mesh });
       });
@@ -637,10 +649,14 @@ export const levelTscn = (level: IrLevel, root: string): string => {
     if (solid.length) {
       t.node('Collision', 'StaticBody3D', at);
       solid.forEach((p, n) => {
-        const size = p.shape === 'cylinder' || p.shape === 'sphere' ? p.size : p.size;
+        const size = p.size;
         t.node(`${p.part}_${n}`, 'CollisionShape3D', `${at}/Collision`, {
           transform: transform(rotY(p.turn), p.at),
-          shape: t.sub('BoxShape3D', { size: `Vector3(${f(size[0])}, ${f(Math.max(0.01, size[1]))}, ${f(size[2])})` }),
+          // A slab collides by its own faces (both sides, so nothing falls through from below).
+          shape:
+            p.shape === 'slab' && p.outline
+              ? t.sub('ConcavePolygonShape3D', { data: `PackedVector3Array(${slabFaces(p).flat(2).map(f).join(', ')})`, backface_collision: 'true' })
+              : t.sub('BoxShape3D', { size: `Vector3(${f(size[0])}, ${f(Math.max(0.01, size[1]))}, ${f(size[2])})` }),
         });
       });
     }

@@ -30,6 +30,24 @@ class Vector:
         return "Vector(%g, %g, %g)" % (self.x, self.y, self.z)
 
 
+class Vector2D:
+    def __init__(self, x=0.0, y=0.0):
+        self.x, self.y = float(x), float(y)
+
+
+class VcgsSlab:
+    """A struct: its properties by name, as set_editor_property sets them."""
+
+    def __init__(self):
+        self._props = {}
+
+    def set_editor_property(self, name, value):
+        self._props[name] = value
+
+    def get_editor_property(self, name):
+        return self._props[name]
+
+
 class Rotator:
     def __init__(self, roll=0.0, pitch=0.0, yaw=0.0):
         self.roll, self.pitch, self.yaw = float(roll), float(pitch), float(yaw)
@@ -114,6 +132,9 @@ class Actor:
 
     def set_actor_relative_scale3d(self, s):
         self.relative["scale"] = s
+
+    def rerun_construction_scripts(self):
+        self._props["constructed"] = self._props.get("constructed", 0) + 1
 
 
 class VcgsLevelItem(Actor):
