@@ -146,19 +146,19 @@ export const sunkenVault = (): Project => {
   for (const [kind, speaker, text, direction] of [
     ['action', null, 'Ankle-deep water. The vault door is a slab of green bronze, its seam weeping.', ''],
     ['dialogue', mara, 'Water’s holding it shut. There’s a lever somewhere.', 'listening'],
+    // He talks over her (dual dialogue); she leans on the word.
     ['dialogue', explorer, 'Stand back. I’ll find it.', 'wading forward'],
-    // Mara talks over him (dual dialogue), and leans on the word.
     ['dialogue', mara, '*Not* like that.', ''],
   ] as const) {
     const line = addLine(p, vaultDoor, kind, last, speaker);
-    p = updateLine(line.project, line.id, { text, direction, ...(text.startsWith('*Not*') ? { dual: true } : {}) });
+    p = updateLine(line.project, line.id, { text, direction, ...(speaker === explorer ? { dual: true } : {}) });
     last = line.id;
   }
 
-  // The timeline: entry cinematic, the exchange, an action, free play, the choice and its branch.
+  // The timeline: entry cinematic, the exchange (spoken at once), an action, free play, the choice and its branch.
   const entry = addEvent(p, vaultDoor, 'cinematic', { refId: cinematic, index: 0 })!;
   p = updateEvent(entry.project, vaultDoor, entry.id, { seconds: 6, shots: 1 });
-  const echo = addEvent(p, vaultDoor, 'action', { index: 2, label: 'Echo cue' })!;
+  const echo = addEvent(p, vaultDoor, 'action', { index: 3, label: 'Echo cue' })!;
   p = echo.project;
   const free = addEvent(p, vaultDoor, 'freePlay', { index: 4, label: 'Search the chamber' })!;
   p = updateEvent(free.project, vaultDoor, free.id, { endsWhen: 'the seam drains', ends: { match: 'all', items: [is('flag', solved, 'yes')] } });

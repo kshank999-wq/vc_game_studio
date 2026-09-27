@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
-import { advance, choose, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld } from '../../model/play';
+import { advance, choose, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { Symbol } from '../Symbol';
 import { Inline } from '../Inline';
@@ -15,6 +15,14 @@ interface Props {
 
 const isTyping = (target: EventTarget | null) => target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 
+const VoiceView = ({ voice }: { voice: Voice }) => (
+  <div className="play-line">
+    <div className="play-speaker">{voice.speaker?.toUpperCase() ?? 'NO SPEAKER'}</div>
+    {voice.direction && <div className="play-direction">({voice.direction})</div>}
+    <div className="play-said">{voice.text ? <Inline text={voice.text} /> : '…'}</div>
+  </div>
+);
+
 const EntryView = ({ entry }: { entry: Entry }) => {
   switch (entry.kind) {
     case 'heading':
@@ -25,12 +33,14 @@ const EntryView = ({ entry }: { entry: Entry }) => {
         </div>
       );
     case 'line':
-      return (
-        <div className="play-line">
-          <div className="play-speaker">{entry.speaker?.toUpperCase() ?? 'NO SPEAKER'}</div>
-          {entry.direction && <div className="play-direction">({entry.direction})</div>}
-          <div className="play-said">{entry.text ? <Inline text={entry.text} /> : '…'}</div>
+      // Dual dialogue: both voices at once, side by side as the script sets them.
+      return entry.with ? (
+        <div className="play-dual" role="group" aria-label="Spoken at the same time">
+          <VoiceView voice={entry} />
+          <VoiceView voice={entry.with} />
         </div>
+      ) : (
+        <VoiceView voice={entry} />
       );
     case 'action':
       return (

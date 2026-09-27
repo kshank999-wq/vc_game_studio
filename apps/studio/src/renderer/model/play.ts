@@ -1,10 +1,10 @@
 import { initialState, interactionsOf, statesOf } from './details';
 import { spineSequence } from './layout';
 import { apply, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type Rule } from './rules';
-import { elementsIn } from './scene';
+import { dualWith, elementsIn, speechOf, spokenTogether } from './scene';
 import { cinematicTiming, describeShot, shotsOf } from './shots';
 import { eventLine, eventTitle, MAIN, sceneTimeline } from './timeline';
-import type { OptionBehaviour, Project, StoryObject, TimelineEvent } from './types';
+import type { DialogueLine, OptionBehaviour, Project, StoryObject, TimelineEvent } from './types';
 
 /**
  * Play the story inside the studio, the way the generated engine code plays
@@ -22,9 +22,17 @@ export interface PlayWorld extends PlayState {
   picked: Record<string, number>;
 }
 
+/** A second voice on a line: dual dialogue, spoken at the same time. */
+export interface Voice {
+  speaker: string | null;
+  text: string;
+  direction?: string;
+  lineId: string;
+}
+
 export type Entry =
   | { kind: 'heading'; text: string; sub?: string; id: string }
-  | { kind: 'line'; speaker: string | null; text: string; direction?: string; sceneId: string; lineId: string }
+  | { kind: 'line'; speaker: string | null; text: string; direction?: string; sceneId: string; lineId: string; with?: Voice }
   | { kind: 'action'; text: string; detail?: string }
   | { kind: 'cinematic'; text: string; detail?: string; shots?: string[]; skippable?: boolean }
   | { kind: 'picked'; text: string }
@@ -276,8 +284,20 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
     switch (event.kind) {
       case 'dialogue': {
         const line = eventLine(project, event);
-        if (line) d.log.push({ kind: 'line', speaker: line.speakerId ? name(project, line.speakerId) : null, text: line.text, direction: line.direction || undefined, sceneId: line.sceneId, lineId: line.id });
-        next = line ? { at: 'wait', next: onward } : onward;
+        if (!line) {
+          next = onward;
+          break;
+        }
+        // Dual dialogue: the next event, if it is the speech set beside this one
+        // (and may be spoken), is spoken at the same time — one beat, two voices.
+        const after = events[cursor.index + 1];
+        const other = after?.kind === 'dialogue' ? eventLine(project, after) : undefined;
+        const together = !!other && spokenTogether(project, line.id, other.id) && evaluate(eventRule(project, after!), d.world);
+        const voice = (l: DialogueLine): Voice => ({ speaker: l.speakerId ? name(project, l.speakerId) : null, text: l.text, direction: l.direction || undefined, lineId: l.id });
+        // The speech on the left of the pair (the one the other is beside) reads first.
+        const [first, second] = together && dualWith(project, speechOf(project, line.id)!.id) ? [other!, line] : [line, other];
+        d.log.push({ kind: 'line', ...voice(first), sceneId: first.sceneId, ...(together ? { with: voice(second!) } : {}) });
+        next = { at: 'wait', next: together ? { ...cursor, index: cursor.index + 2 } : onward };
         break;
       }
       case 'trigger':

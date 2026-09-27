@@ -126,3 +126,38 @@ describe('options once picked', () => {
     expect(offered.kind === 'choice' && offered.options.map((o) => o.label)).toEqual(['Turn the key']);
   });
 });
+
+describe('dual dialogue in the preview', () => {
+  const vault = id(p, 'The Vault Door', 'scene');
+  const lineEntries = (project: Project) => playThrough(project).log.filter((e) => e.kind === 'line' && e.sceneId === vault);
+
+  it('speaks a dual speech at the same time as the one it is beside: one beat, two voices', () => {
+    const lines = lineEntries(p);
+    const pair = lines.find((e) => e.kind === 'line' && e.with)!;
+    expect(pair).toMatchObject({ speaker: 'Mara', text: 'Water’s holding it shut. There’s a lever somewhere.', with: { speaker: 'The Explorer', text: 'Stand back. I’ll find it.' } });
+    // His line isn't played again on its own.
+    expect(lines.filter((e) => e.text === 'Stand back. I’ll find it.')).toHaveLength(0);
+    expect(lines.filter((e) => e.kind === 'line' && e.with)).toHaveLength(1);
+  });
+
+  it('pairs them whichever comes first on the timeline, the left-hand speech reading first', async () => {
+    const { sceneTimeline, moveEvent } = await import('../timeline');
+    const events = sceneTimeline(p, vault)[0]!.events;
+    const mara = events.find((e) => e.kind === 'dialogue' && p.lines.find((l) => l.id === e.refId)?.dual)!;
+    const at = events.indexOf(mara);
+    const swapped = moveEvent(p, vault, mara.id, 'main', at - 1);
+    expect(lineEntries(swapped).find((e) => e.kind === 'line' && e.with)).toMatchObject({ speaker: 'Mara', with: { speaker: 'The Explorer' } });
+  });
+
+  it('plays a dual speech on its own when it may not be spoken with its partner', async () => {
+    const { updateLine } = await import('../scene');
+    const dual = p.lines.find((l) => l.dual)!;
+    // Only once the puzzle is solved, which is after this exchange.
+    const never = updateLine(p, dual.id, { conditions: { match: 'all', items: [{ kind: 'puzzle', ref: id(p, 'The Vault Door', 'puzzle'), op: 'solved' }] } });
+    const lines = lineEntries(never);
+    // Mara speaks alone; his line waits for its own condition, which never holds.
+    expect(lines.some((e) => e.kind === 'line' && e.with)).toBe(false);
+    expect(lines.map((e) => e.text)).toContain('Water’s holding it shut. There’s a lever somewhere.');
+    expect(lines.map((e) => e.text)).not.toContain('Stand back. I’ll find it.');
+  });
+});

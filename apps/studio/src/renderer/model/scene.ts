@@ -496,3 +496,26 @@ export const dualWith = (project: Project, lineId: string): DialogueLine | undef
   // A pair is two speeches: the one before must not be the right half of another.
   return cue.dual && dualWith(project, cue.id) ? undefined : cue;
 };
+
+/** The line a speech starts on: its cue's, walking back over the lines that carry it on. */
+export const speechOf = (project: Project, lineId: string): DialogueLine | undefined => {
+  const line = project.lines.find((l) => l.id === lineId);
+  if (!line?.joined) return line;
+  const lines = sceneLines(project, line.sceneId);
+  let i = lines.findIndex((l) => l.id === lineId);
+  while (i > 0 && lines[i]!.joined) i--;
+  return lines[i];
+};
+
+/**
+ * Whether two lines are spoken at once: one is in a dual speech and the other
+ * in the speech it is set beside. Either order, so a timeline that puts the
+ * dual one first still plays them together.
+ */
+export const spokenTogether = (project: Project, a: string, b: string): boolean => {
+  const pair = (x: string, y: string) => {
+    const partner = dualWith(project, speechOf(project, y)?.id ?? y);
+    return !!partner && partner.id === speechOf(project, x)?.id;
+  };
+  return a !== b && (pair(a, b) || pair(b, a));
+};

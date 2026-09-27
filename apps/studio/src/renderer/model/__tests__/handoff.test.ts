@@ -26,7 +26,7 @@ describe('the handoff model', () => {
     const ir = buildIR(sunkenVault());
     expect(ir.spine.map((n) => n.kind)).toEqual(['begin', 'scene', 'choice', 'plotPoint', 'scene', 'scene', 'cinematic', 'choice', 'end']);
     const door = ir.scenes.find((s) => s.name === 'The Vault Door')!;
-    expect(door.main.map((e) => e.kind)).toEqual(['cinematic', 'dialogue', 'action', 'dialogue', 'freePlay', 'choice']);
+    expect(door.main.map((e) => e.kind)).toEqual(['cinematic', 'dialogue', 'dialogue', 'action', 'freePlay', 'choice']);
     expect(door.branches).toEqual([expect.objectContaining({ label: 'Force it', from: 5, rejoin: 4 })]);
     expect(ir.objects.find((o) => o.name === 'Rusted Lever')!.interactions).toEqual([
       { verb: 'Pull', when: 'down', becomes: 'up' },

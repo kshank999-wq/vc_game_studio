@@ -5285,6 +5285,18 @@ kbd {
   font-weight: 700;
 }
 
+/* Two voices at once (dual dialogue), side by side. */
+.play-dual {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  padding: 0 6%;
+}
+
+.play-dual .play-line {
+  padding: 0;
+}
+
 .play-direction {
   color: var(--text-soft);
   font-size: 0.92em;
@@ -7144,7 +7156,8 @@ kbd {
   color: var(--c-inventory);
 }
 
-.play-cinematic {
+/* Play Mode's cinematic, over the level (not the play-through's cinematic entry). */
+.play-cine-overlay {
   position: absolute;
   inset: 0;
   display: flex;

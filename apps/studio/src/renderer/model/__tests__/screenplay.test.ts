@@ -128,13 +128,13 @@ describe('emphasis and dual dialogue in the handoff', () => {
     const { unity } = await import('../handoff/unity');
     const { unreal } = await import('../handoff/unreal');
     const ir = buildIR(sunkenVault());
-    const not = ir.lines.find((l) => l.styled)!;
-    expect(not).toMatchObject({ text: 'Not like that.', styled: '*Not* like that.' });
-    const partner = ir.lines.find((l) => l.id === not.dual)!;
-    expect(partner.text).toBe('Stand back. I’ll find it.');
+    expect(ir.lines.find((l) => l.styled)).toMatchObject({ text: 'Not like that.', styled: '*Not* like that.' });
+    const dual = ir.lines.find((l) => l.dual)!;
+    expect(dual.text).toBe('Stand back. I’ll find it.');
+    expect(ir.lines.find((l) => l.id === dual.dual)!.text).toBe('Water’s holding it shut. There’s a lever somewhere.');
     const all = (e: typeof godot) => e.generate!(ir, e.defaultOutputPath).files.map((f) => f.content).join('\n');
     expect(all(godot)).toContain('[i]Not[/i] like that.');
-    expect(all(godot)).toContain(`"dual_with": "${not.dual}"`);
+    expect(all(godot)).toContain(`"dual_with": "${dual.dual}"`);
     expect(all(unity)).toContain('"rich": "<i>Not</i> like that."');
     expect(all(unreal)).toContain(`<Italic>Not</> like that.`);
   });

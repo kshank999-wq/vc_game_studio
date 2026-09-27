@@ -467,7 +467,7 @@ export const PlayMode = (props: Props) => {
         </div>
       )}
       {hud.cinematic && (
-        <div className="play-cinematic" role="dialog" aria-label="Cinematic">
+        <div className="play-cine-overlay" role="dialog" aria-label="Cinematic">
           <div className="play-bars" />
           <div className="play-cine-body">
             <span className="play-kicker">CINEMATIC</span>
