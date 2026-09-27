@@ -7309,3 +7309,53 @@ kbd {
 .stage-fan.dialogue-fan {
   stroke: var(--c-dialogue);
 }
+
+/* ------------------------------------------------------------ scene heading and transitions */
+
+.line-heading-wrap,
+.line-transition {
+  position: relative;
+}
+
+.script input.line-heading {
+  width: 100%;
+  height: 26px;
+  font-size: var(--script-size, 14px);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.script input.line-heading::placeholder {
+  color: #5d5540;
+  font-weight: 400;
+}
+
+.line-heading-wrap .cue-suggest {
+  left: 0;
+  transform: none;
+  width: 320px;
+}
+
+.line-transition {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.script input.line-transition-text {
+  width: 240px;
+  text-align: right;
+  text-transform: uppercase;
+  font-size: var(--script-size, 14px);
+}
+
+.line-transition-text::placeholder {
+  color: #5d5540;
+}
+
+.line-transition .cue-suggest {
+  left: auto;
+  right: 0;
+  transform: none;
+  width: 220px;
+}

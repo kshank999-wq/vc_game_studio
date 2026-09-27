@@ -120,7 +120,8 @@ export interface Placement {
 export interface DialogueLine {
   id: string;
   sceneId: string;
-  kind: 'dialogue' | 'action';
+  /** A transition (CUT TO:) is a line of its own, set to the right. */
+  kind: 'dialogue' | 'action' | 'transition';
   speakerId: string | null;
   text: string;
   /** A parenthetical: (listening), (wading forward). */

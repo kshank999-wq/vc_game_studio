@@ -38,3 +38,31 @@ describe('speakers typed in the script', () => {
     expect(mc.project.objects[mc.speakerId!]!.name).toBe('McAllister');
   });
 });
+
+describe('scene headings and transitions', () => {
+  it('read a heading in its usual forms', async () => {
+    const { parseHeading } = await import('../scene');
+    expect(parseHeading('INT. VAULT CHAMBER — NIGHT')).toEqual({ intExt: 'INT.', place: 'VAULT CHAMBER', time: 'NIGHT' });
+    expect(parseHeading('ext lighthouse - dusk')).toEqual({ intExt: 'EXT.', place: 'lighthouse', time: 'DUSK' });
+    expect(parseHeading('INT./EXT. CAR – MOVING')).toEqual({ intExt: 'INT./EXT.', place: 'CAR', time: 'MOVING' });
+    expect(parseHeading('I/E SEA-SIDE HUT')).toEqual({ intExt: 'INT./EXT.', place: 'SEA-SIDE HUT' });
+  });
+
+  it('set the scene’s place and time, making a new place when the heading names one', async () => {
+    const { sceneHeading, setSceneHeading, elementsIn } = await import('../scene');
+    const { p, sceneId } = setup();
+    const q = setSceneHeading(p, sceneId, 'ext. lighthouse cliff - dusk');
+    expect(sceneHeading(q, sceneId)).toBe('EXT. LIGHTHOUSE CLIFF — DUSK');
+    expect(elementsIn(q, sceneId, 'environment').map((o) => o.name)).toEqual(['Lighthouse Cliff']);
+    // The same place again is the same place.
+    const r = setSceneHeading(q, sceneId, 'INT. LIGHTHOUSE CLIFF — NIGHT');
+    expect(Object.values(r.objects).filter((o) => o.type === 'environment')).toHaveLength(1);
+    expect(sceneHeading(r, sceneId)).toBe('INT. LIGHTHOUSE CLIFF — NIGHT');
+  });
+
+  it('know a transition typed as action', async () => {
+    const { looksLikeTransition, transitionSuggestions } = await import('../scene');
+    expect(['CUT TO:', 'SMASH CUT TO:', 'FADE OUT.', 'Cut to:', 'She turns.'].map(looksLikeTransition)).toEqual([true, true, true, false, false]);
+    expect(transitionSuggestions('fade')).toEqual(['FADE TO BLACK.', 'FADE OUT.', 'FADE IN:']);
+  });
+});

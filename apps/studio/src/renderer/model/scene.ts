@@ -266,10 +266,12 @@ export const updateLine = (project: Project, id: string, patch: LinePatch): Proj
   const line = project.lines.find((l) => l.id === id);
   if (!line) return project;
   const next: DialogueLine = { ...line, ...patch };
-  if (next.kind === 'action') {
+  // Only dialogue has a speaker, a parenthetical and a voice to record.
+  if (next.kind !== 'dialogue') {
     next.speakerId = null;
     next.vo = 'none';
-  } else if (line.kind === 'action') {
+    if (next.kind === 'transition') next.direction = '';
+  } else if (line.kind !== 'dialogue') {
     next.vo = 'todo';
   }
   if (JSON.stringify(next) === JSON.stringify(line)) return project;
@@ -355,4 +357,101 @@ export const setSpeakerByName = (project: Project, lineId: string, typed: string
   const made = newCharacter(project, line.sceneId, asName(typed));
   if (!made) return { project, speakerId: line.speakerId, created: false };
   return { project: updateLine(made.project, lineId, { speakerId: made.id, kind: 'dialogue' }), speakerId: made.id, created: true };
+};
+
+// ---------------------------------------------------------------- scene headings and transitions
+
+/** Transitions a script writer reaches for, in the order offered. */
+export const TRANSITIONS = ['CUT TO:', 'DISSOLVE TO:', 'SMASH CUT TO:', 'MATCH CUT TO:', 'JUMP CUT TO:', 'FADE TO BLACK.', 'FADE OUT.', 'FADE IN:'] as const;
+
+/** Transitions starting with what is typed. */
+export const transitionSuggestions = (typed: string): string[] => {
+  const q = typed.trim().toUpperCase();
+  return q ? TRANSITIONS.filter((t) => t.startsWith(q) && t !== q) : [];
+};
+
+/** An action line that is really a transition: "CUT TO:", "DISSOLVE TO:", "FADE OUT." and so on, as typed. */
+export const looksLikeTransition = (text: string): boolean => {
+  const t = text.trim();
+  return !!t && t === t.toUpperCase() && (/^[A-Z][A-Z .'’-]* TO:$/.test(t) || (TRANSITIONS as readonly string[]).includes(t));
+};
+
+const INT_EXT = ['INT.', 'EXT.', 'INT./EXT.'] as const;
+const TIMES = ['DAY', 'NIGHT', 'DAWN', 'DUSK', 'MORNING', 'EVENING', 'CONTINUOUS', 'LATER', 'MOMENTS LATER'] as const;
+/** The dash between a heading's place and its time. */
+const DASH = ' — ';
+
+/** A scene's heading as a script shows it: INT. VAULT CHAMBER — NIGHT. */
+export const sceneHeading = (project: Project, sceneId: string): string => {
+  const scene = project.objects[sceneId];
+  if (!scene) return '';
+  const location = scene.data.locationId ? project.objects[scene.data.locationId as string] : undefined;
+  if (!location && !scene.data.intExt && !scene.data.time) return '';
+  return `${(scene.data.intExt as string) ?? 'INT.'} ${location?.name.toUpperCase() ?? ''}${scene.data.time ? `${DASH}${scene.data.time as string}` : ''}`.replace(/\s+/g, ' ').trim();
+};
+
+/** A typed heading in its parts. INT, I/E and the rest are read as their usual forms. */
+export const parseHeading = (text: string): { intExt?: (typeof INT_EXT)[number]; place: string; time?: string } => {
+  const m = /^\s*(int\.?\s*\/\s*ext\.?|i\/e\.?|int\.?|ext\.?)(?=\s|$)\s*(.*)$/i.exec(text);
+  const prefix = m?.[1]?.toLowerCase().replace(/\s+/g, '');
+  const intExt = !prefix ? undefined : prefix.startsWith('int.') && prefix.includes('ext') ? 'INT./EXT.' : prefix.startsWith('int/') || prefix.startsWith('i/e') ? 'INT./EXT.' : prefix.startsWith('int') ? 'INT.' : 'EXT.';
+  const rest = (m ? m[2]! : text).trim();
+  const [place, ...time] = rest.split(/\s+[-–—]+\s*|\s*[-–—]+\s+/);
+  const when = time.join(' ').trim().toUpperCase();
+  return { ...(intExt ? { intExt } : {}), place: (place ?? '').trim(), ...(when ? { time: when } : {}) };
+};
+
+/**
+ * Completions for a heading being typed, each the whole heading so far:
+ * INT./EXT. first, then the project's places (the scene's own first), then
+ * the time of day.
+ */
+export const headingSuggestions = (project: Project, sceneId: string, typed: string): string[] => {
+  const t = typed.replace(/^\s+/, '');
+  if (!t) return [...INT_EXT].map((p) => `${p} `);
+  const parsed = parseHeading(t);
+  if (!parsed.intExt) return INT_EXT.filter((p) => p.startsWith(t.toUpperCase())).map((p) => `${p} `);
+  const prefix = parsed.intExt;
+  // "ext" becomes "EXT. " before any place is offered.
+  if (!parsed.place && !/\s$/.test(t)) return [`${prefix} `];
+  // Past the place once a dash (with a space beside it) is typed.
+  const dashed = /\s[-–—]|[-–—]\s|[-–—]$/.test(t);
+  if (!dashed) {
+    const q = parsed.place.toLowerCase();
+    const places = Object.values(project.objects)
+      .filter((o) => o.type === 'environment' && o.name.toLowerCase().startsWith(q) && o.name.toLowerCase() !== q)
+      .sort((a, b) => Number(inScene(project, sceneId, b.id)) - Number(inScene(project, sceneId, a.id)) || a.name.localeCompare(b.name));
+    return places.map((o) => `${prefix} ${o.name.toUpperCase()}${DASH}`);
+  }
+  const q = (parsed.time ?? '').toUpperCase();
+  return TIMES.filter((w) => w.startsWith(q) && w !== q).map((w) => `${prefix} ${parsed.place.toUpperCase()}${DASH}${w}`);
+};
+
+const titleCase = (s: string) => s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
+
+/**
+ * Set a scene's heading from what was typed: interior or exterior, the place
+ * (one of the project's, or a new one, which the scene then holds) and the
+ * time of day. What the heading leaves out stays as it was.
+ */
+export const setSceneHeading = (project: Project, sceneId: string, text: string): Project => {
+  if (!text.trim() || !isScene(project, sceneId)) return project;
+  const { intExt, place, time } = parseHeading(text);
+  let next = project;
+  const patch: Record<string, unknown> = {};
+  if (intExt) patch.intExt = intExt;
+  if (time) patch.time = time;
+  if (place) {
+    const want = place.toLowerCase();
+    const existing = Object.values(next.objects).find((o) => o.type === 'environment' && o.name.toLowerCase() === want);
+    if (existing) patch.locationId = existing.id;
+    else {
+      const made = addElement(next, sceneId, 'environment', place === place.toUpperCase() || place === place.toLowerCase() ? titleCase(place) : place);
+      if (made) {
+        next = made.project;
+        patch.locationId = made.id;
+      }
+    }
+  }
+  return Object.keys(patch).length ? setSceneData(next, sceneId, patch) : next;
 };

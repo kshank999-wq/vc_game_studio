@@ -107,4 +107,64 @@ describe('writing the script', () => {
     key(screen.getByRole('textbox', { name: 'Action' }), 'Tab');
     expect(document.activeElement).toBe(cue(container));
   });
+
+  it('writes the scene heading as the first line, completing INT./EXT., the place and the time', () => {
+    const project = setup();
+    const vault = makeObject('environment', 'Vault Chamber', new Date().toISOString());
+    localStorage.setItem('vcgs.project.v1', JSON.stringify({ ...project, objects: { ...project.objects, [vault.id]: vault } }));
+    openScene();
+    const heading = screen.getByRole('textbox', { name: 'Scene heading' }) as HTMLInputElement;
+    fireEvent.focus(heading);
+    const options = () => within(screen.getByRole('listbox', { name: 'Heading' })).getAllByRole('option').map((o) => o.textContent);
+    expect(options()).toEqual(['INT.', 'EXT.', 'INT./EXT.']);
+    typeIn(heading, 'int');
+    key(heading, 'Tab');
+    expect(heading.value).toBe('INT. ');
+    typeIn(heading, 'INT. va');
+    expect(options()).toEqual(['INT. VAULT CHAMBER —']);
+    key(heading, 'Enter');
+    expect(heading.value).toBe('INT. VAULT CHAMBER — ');
+    typeIn(heading, 'INT. VAULT CHAMBER — ni');
+    key(heading, 'Enter');
+    // The scene is set there, at night: the pickers above say so, and the caret is in the script.
+    expect((screen.getByRole('combobox', { name: 'Location' }) as HTMLSelectElement).selectedOptions[0]!.textContent).toBe('Vault Chamber');
+    expect((screen.getByRole('combobox', { name: 'Time of day' }) as HTMLSelectElement).value).toBe('NIGHT');
+    expect((screen.getByRole('textbox', { name: 'Scene heading' }) as HTMLInputElement).value).toBe('INT. VAULT CHAMBER — NIGHT');
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Action' }));
+  });
+
+  it('makes a new place from a heading nobody has, and picks it up in the Environment node', () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(setup()));
+    const { container } = openScene();
+    const heading = screen.getByRole('textbox', { name: 'Scene heading' }) as HTMLInputElement;
+    fireEvent.focus(heading);
+    typeIn(heading, 'ext. lighthouse cliff - dusk');
+    key(heading, 'Enter');
+    expect((screen.getByRole('textbox', { name: 'Scene heading' }) as HTMLInputElement).value).toBe('EXT. LIGHTHOUSE CLIFF — DUSK');
+    const environment = [...container.querySelectorAll('.perimeter')].find((b) => b.textContent!.startsWith('Environment'))!;
+    expect(environment.textContent).toBe('Environment1');
+  });
+
+  it('writes transitions on the right, from Ctrl+6 or an action typed as one', () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(setup()));
+    const { container } = openScene();
+    fireEvent.click(screen.getByRole('button', { name: 'Start with action' }));
+    const action = screen.getByRole('textbox', { name: 'Action' }) as HTMLTextAreaElement;
+    typeIn(action, 'CUT TO:');
+    key(action, 'Enter');
+    expect((screen.getByRole('textbox', { name: 'Transition' }) as HTMLInputElement).value).toBe('CUT TO:');
+    // Enter left a new action line: Ctrl+6 makes it a transition, which completes.
+    const next = screen.getByRole('textbox', { name: 'Action' });
+    key(next, '6', { ctrlKey: true });
+    const transitions = () => screen.getAllByRole('textbox', { name: 'Transition' }) as HTMLInputElement[];
+    const second = transitions()[1]!;
+    expect(document.activeElement).toBe(second);
+    typeIn(second, 'dis');
+    expect(within(screen.getByRole('listbox', { name: 'Transitions' })).getAllByRole('option').map((o) => o.textContent)).toEqual(['DISSOLVE TO:']);
+    key(second, 'Enter');
+    expect(transitions().map((t) => t.value)).toEqual(['CUT TO:', 'DISSOLVE TO:']);
+    // And Ctrl+3 makes the next line a character cue.
+    key(screen.getByRole('textbox', { name: 'Action' }), '3', { ctrlKey: true });
+    expect(document.activeElement).toBe(cue(container));
+  });
 });

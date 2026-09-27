@@ -104,7 +104,7 @@ export const search = (project: Project, query: string, limit = 40): SearchResul
       kind: 'line',
       type: l.kind === 'dialogue' ? 'dialogue' : 'scene',
       label: speaker ? `${speaker.toUpperCase()}: ${l.text}` : l.text,
-      detail: `${l.kind === 'dialogue' ? 'Line' : 'Action'} · ${sceneName(l.sceneId)}`,
+      detail: `${l.kind === 'dialogue' ? 'Line' : l.kind === 'transition' ? 'Transition' : 'Action'} · ${sceneName(l.sceneId)}`,
       score,
       to: { kind: 'scene', sceneId: l.sceneId, mode: 'open' },
       inBible: false,

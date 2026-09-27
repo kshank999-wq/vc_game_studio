@@ -419,7 +419,8 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                 value={(scene.data.time as string) ?? 'DAY'}
                 onChange={(e) => props.onCommit(setSceneData(project, sceneId, { time: e.currentTarget.value }))}
               >
-                {['DAY', 'NIGHT', 'DAWN', 'DUSK', 'CONTINUOUS', 'LATER'].map((v) => (
+                {/* The script's heading can set any time; it shows here too. */}
+                {[...new Set(['DAY', 'NIGHT', 'DAWN', 'DUSK', 'MORNING', 'EVENING', 'CONTINUOUS', 'LATER', 'MOMENTS LATER', ...(scene.data.time ? [scene.data.time as string] : [])])].map((v) => (
                   <option key={v}>{v}</option>
                 ))}
               </select>

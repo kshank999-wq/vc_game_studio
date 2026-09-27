@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { addLine, inScene, nextSpeaker, removeLine, sceneLines, setSpeakerByName, speakerSuggestions, speakers, updateLine } from '../../model/scene';
+import { addLine, headingSuggestions, inScene, looksLikeTransition, nextSpeaker, removeLine, sceneHeading, sceneLines, setSceneHeading, setSpeakerByName, speakerSuggestions, speakers, transitionSuggestions, updateLine } from '../../model/scene';
 import type { DialogueLine, Project, StoryObject } from '../../model/types';
 import { Symbol } from '../Symbol';
 
@@ -22,7 +22,7 @@ const characterColor = (project: Project, id: string | null): string =>
   (id && (project.objects[id]?.data.color as string | undefined)) || 'var(--c-character)';
 
 /** Which part of a block to put the caret in. */
-type Field = 'text' | 'cue' | 'paren';
+type Field = 'text' | 'cue' | 'paren' | 'heading';
 type Focus = { id: string; field: Field; select?: boolean };
 
 /** The cue being typed: its line, what is typed, and the highlighted suggestion. */
@@ -44,6 +44,14 @@ interface Typing {
  * - In dialogue, Tab or an opening "(" adds a parenthetical; Shift+Enter is a
  *   new paragraph. Tab on an empty action line makes it a cue. Backspace on
  *   an empty part steps back, and removes an empty block.
+ * - The scene heading (INT. VAULT CHAMBER — NIGHT) is the script's first line:
+ *   it completes INT./EXT., the project's places and the time of day, and
+ *   sets the scene's own, as the pickers above do.
+ * - A Transition (CUT TO:) sits on the right, completing the usual ones. An
+ *   action line typed as one ("CUT TO:") becomes one on Enter; Tab on an empty
+ *   cue with no one to offer makes one too.
+ * - As in Final Draft, Ctrl/Cmd+1 to 6 make the block a Scene heading, Action,
+ *   Character, Parenthetical, Dialogue or Transition.
  */
 export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) => {
   const lines = sceneLines(project, sceneId);
@@ -64,8 +72,8 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
   useLayoutEffect(() => {
     root.current?.querySelectorAll('textarea').forEach((t) => fit(t));
     if (!pending) return;
-    const selector = pending.field === 'cue' ? 'input.line-cue' : pending.field === 'paren' ? 'input.line-direction' : '.line-text';
-    const el = root.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-line="${pending.id}"] ${selector}`);
+    const selector = pending.field === 'cue' ? 'input.line-cue' : pending.field === 'paren' ? 'input.line-direction' : pending.field === 'heading' ? 'input.line-heading' : '.line-text';
+    const el = root.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(pending.field === 'heading' ? selector : `[data-line="${pending.id}"] ${selector}`);
     if (el) {
       el.focus();
       if (pending.select) el.select();
@@ -96,13 +104,134 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
     commit(removeLine(latest.current, line.id), previous ? { id: previous.id, field: 'text' } : undefined);
   };
 
+  // ------------------------------------------------------------ element shortcuts (Final Draft's Ctrl/Cmd+1…6)
+
+  /** Make the block another element; true when the key was one of the shortcuts. */
+  const shortcut = (e: React.KeyboardEvent, line: DialogueLine): boolean => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || !/^[1-6]$/.test(e.key)) return false;
+    e.preventDefault();
+    const current = withText(latest.current, line);
+    switch (e.key) {
+      case '1':
+        commit(current, { id: 'heading', field: 'heading' });
+        break;
+      case '2':
+        commit(updateLine(current, line.id, { kind: 'action' }), { id: line.id, field: 'text' });
+        break;
+      case '3':
+        commit(updateLine(current, line.id, { kind: 'dialogue' }), { id: line.id, field: 'cue' });
+        break;
+      case '4':
+        commit(updateLine(current, line.id, { kind: 'dialogue' }));
+        setParen(line.id);
+        setPending({ id: line.id, field: 'paren' });
+        break;
+      case '5':
+        commit(updateLine(current, line.id, { kind: 'dialogue' }), { id: line.id, field: line.speakerId || line.kind === 'dialogue' ? 'text' : 'cue' });
+        break;
+      case '6':
+        commit(updateLine(current, line.id, { kind: 'transition', text: line.text.toUpperCase() }), { id: line.id, field: 'text' });
+        break;
+    }
+    return true;
+  };
+
+  // ------------------------------------------------------------ the scene heading
+
+  const [heading, setHeading] = useState<{ query: string; index: number } | null>(null);
+  const headingList = heading ? headingSuggestions(latest.current, sceneId, heading.query).slice(0, 8) : [];
+
+  /** The heading as typed becomes the scene's; the caret goes on to the first line. */
+  const commitHeading = (el: HTMLInputElement, go: boolean) => {
+    setHeading(null);
+    const typed = el.value.trim();
+    let next = latest.current;
+    if (typed && typed !== sceneHeading(next, sceneId)) next = setSceneHeading(next, sceneId, typed);
+    el.value = sceneHeading(next, sceneId);
+    if (!go) {
+      if (next !== latest.current) onCommit(next);
+      return;
+    }
+    const first = sceneLines(next, sceneId)[0];
+    if (first) commit(next, { id: first.id, field: first.kind === 'dialogue' ? 'cue' : 'text' });
+    else {
+      const added = addLine(next, sceneId, 'action');
+      commit(added.project, { id: added.id, field: 'text' });
+    }
+  };
+
+  const onHeadingKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const el = e.currentTarget;
+    const list = headingList;
+    const index = Math.min(heading?.index ?? 0, Math.max(0, list.length - 1));
+    if ((e.ctrlKey || e.metaKey) && /^[2-6]$/.test(e.key)) {
+      // From the heading, an element shortcut goes to the first line.
+      e.preventDefault();
+      commitHeading(el, true);
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!list.length) return;
+      e.preventDefault();
+      setHeading({ query: el.value, index: (index + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length });
+    } else if (e.key === 'Escape') {
+      setHeading(null);
+    } else if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+      e.preventDefault();
+      const pick = list[index];
+      // A place or a prefix: keep writing the heading. A whole heading: on to the script.
+      if (pick && (e.key === 'Tab' || /\s$/.test(pick))) {
+        el.value = pick;
+        el.setSelectionRange(pick.length, pick.length);
+        if (/\s$/.test(pick)) setHeading({ query: pick, index: 0 });
+        else commitHeading(el, e.key === 'Enter');
+        return;
+      }
+      if (pick) el.value = pick;
+      commitHeading(el, true);
+    }
+  };
+
+  // ------------------------------------------------------------ transitions
+
+  const onTransitionKey = (e: React.KeyboardEvent<HTMLInputElement>, line: DialogueLine) => {
+    if (shortcut(e, line)) return;
+    const el = e.currentTarget;
+    const list = typing?.id === line.id ? transitionSuggestions(typing.query) : [];
+    const index = typing?.id === line.id ? Math.min(typing.index, Math.max(0, list.length - 1)) : 0;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!list.length) return;
+      e.preventDefault();
+      setTyping({ id: line.id, query: el.value, index: (index + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length });
+    } else if (e.key === 'Escape') {
+      setTyping(null);
+    } else if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+      e.preventDefault();
+      setTyping(null);
+      if (!el.value.trim() && e.key === 'Tab') {
+        commit(updateLine(latest.current, line.id, { kind: 'action' }), { id: line.id, field: 'text' });
+        return;
+      }
+      const text = (list[index] ?? el.value).trim().toUpperCase();
+      el.value = text;
+      // After a transition, what happens next.
+      const added = addLine(updateLine(latest.current, line.id, { text }), sceneId, 'action', line.id);
+      commit(added.project, { id: added.id, field: 'text' });
+    } else if (e.key === 'Backspace' && el.value === '') {
+      e.preventDefault();
+      setTyping(null);
+      removeBlock(line);
+    }
+  };
+
   // ------------------------------------------------------------ action
 
   const onActionKey = (e: React.KeyboardEvent<HTMLTextAreaElement>, line: DialogueLine) => {
+    if (shortcut(e, line)) return;
     const el = e.currentTarget;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      const current = withText(latest.current, line);
+      let current = withText(latest.current, line);
+      // "CUT TO:" typed as action is a transition.
+      if (looksLikeTransition(el.value)) current = updateLine(current, line.id, { kind: 'transition', text: el.value.trim() });
       const added = addLine(current, sceneId, 'action', line.id);
       commit(added.project, { id: added.id, field: 'text' });
     } else if (e.key === 'Tab' && !e.shiftKey && el.value === '') {
@@ -139,6 +268,7 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
   };
 
   const onCueKey = (e: React.KeyboardEvent<HTMLInputElement>, line: DialogueLine) => {
+    if (shortcut(e, line)) return;
     const el = e.currentTarget;
     const list = suggestionsFor(line);
     const index = typing?.id === line.id ? Math.min(typing.index, Math.max(0, list.length - 1)) : 0;
@@ -156,6 +286,8 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
       else if (e.key === 'Tab') {
         const ghost = ghostFor(line);
         if (ghost) takeCue(line, ghost.name);
+        // Nobody to offer: an empty cue on Tab is a transition.
+        else commit(updateLine(latest.current, line.id, { kind: 'transition' }), { id: line.id, field: 'text' });
       } else {
         // Enter on an empty cue: this block is action after all.
         setTyping(null);
@@ -171,6 +303,7 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
   // ------------------------------------------------------------ dialogue and parentheticals
 
   const onTextKey = (e: React.KeyboardEvent<HTMLTextAreaElement>, line: DialogueLine) => {
+    if (shortcut(e, line)) return;
     const el = e.currentTarget;
     if (e.key === 'Enter' && !e.shiftKey) {
       // The next cue, empty: type who speaks, Tab for the other side of the exchange, Enter for action.
@@ -197,6 +330,7 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
   };
 
   const onParenKey = (e: React.KeyboardEvent<HTMLInputElement>, line: DialogueLine) => {
+    if (shortcut(e, line)) return;
     const el = e.currentTarget;
     if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
       e.preventDefault();
@@ -213,6 +347,36 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
 
   return (
     <div className="script" ref={root}>
+      <div className="line line-heading-wrap">
+        <input
+          key={sceneHeading(project, sceneId)}
+          className="line-heading"
+          aria-label="Scene heading"
+          aria-autocomplete="list"
+          defaultValue={sceneHeading(project, sceneId)}
+          placeholder="INT. PLACE — DAY"
+          spellCheck={false}
+          autoComplete="off"
+          onFocus={(e) => setHeading({ query: e.currentTarget.value, index: 0 })}
+          onInput={(e) => setHeading({ query: e.currentTarget.value, index: 0 })}
+          onKeyDown={onHeadingKey}
+          onBlur={(e) => commitHeading(e.currentTarget, false)}
+        />
+        {headingList.length > 0 && (
+          <Suggestions
+            label="Heading"
+            items={headingList.map((h) => ({ key: h, label: h.trim() }))}
+            index={Math.min(heading?.index ?? 0, headingList.length - 1)}
+            onPick={(h) => {
+              const el = root.current?.querySelector<HTMLInputElement>('input.line-heading');
+              if (!el) return;
+              el.value = h;
+              if (/\s$/.test(h)) setHeading({ query: h, index: 0 });
+              else commitHeading(el, true);
+            }}
+          />
+        )}
+      </div>
       {lines.length === 0 && (
         <div className="script-empty">
           <p>Write what happens: the setting, what the player sees, then who speaks.</p>
@@ -227,6 +391,42 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
         </div>
       )}
       {lines.map((line) => {
+        if (line.kind === 'transition') {
+          const list = typing?.id === line.id ? transitionSuggestions(typing.query) : [];
+          return (
+            <div key={line.id} className="line line-transition" data-line={line.id}>
+              <input
+                key={line.text}
+                className="line-text line-transition-text"
+                aria-label="Transition"
+                aria-autocomplete="list"
+                defaultValue={line.text}
+                placeholder="CUT TO:"
+                spellCheck={false}
+                autoComplete="off"
+                onInput={(e) => setTyping({ id: line.id, query: e.currentTarget.value, index: 0 })}
+                onKeyDown={(e) => onTransitionKey(e, line)}
+                onBlur={(e) => {
+                  setTyping(null);
+                  const text = e.currentTarget.value.trim().toUpperCase();
+                  if (text !== line.text) onCommit(updateLine(latest.current, line.id, { text }));
+                }}
+              />
+              {list.length > 0 && (
+                <Suggestions
+                  label="Transitions"
+                  items={list.map((t) => ({ key: t, label: t }))}
+                  index={Math.min(typing?.index ?? 0, list.length - 1)}
+                  onPick={(t) => {
+                    setTyping(null);
+                    const added = addLine(updateLine(latest.current, line.id, { text: t }), sceneId, 'action', line.id);
+                    commit(added.project, { id: added.id, field: 'text' });
+                  }}
+                />
+              )}
+            </div>
+          );
+        }
         if (line.kind === 'action') {
           return (
             <div key={line.id} className="line line-action" data-line={line.id}>
@@ -355,12 +555,33 @@ export const ScriptFooter = ({ project, sceneId, onCommit }: Props) => {
       <span>Next:</span>
       <button onClick={addDialogue}>Character</button>
       <button onClick={() => onCommit(addLine(project, sceneId, 'action', last?.id).project)}>Action</button>
+      <button onClick={() => onCommit(addLine(project, sceneId, 'transition', last?.id).project)}>Transition</button>
       <span
         className="script-keys mono"
-        title="In a cue: type a name, Tab or Enter takes the suggestion · after dialogue, Enter starts the next cue · Enter on an empty cue: action · Tab in dialogue: (parenthetical) · Tab on an empty action line: a cue"
+        title="In a cue: type a name, Tab or Enter takes the suggestion · after dialogue, Enter starts the next cue · Enter on an empty cue: action · Tab in dialogue: (parenthetical) · Tab on an empty action line: a cue · Ctrl/Cmd+1–6: heading, action, character, parenthetical, dialogue, transition"
       >
         Enter next · Tab switches
       </span>
     </div>
   );
 };
+
+/** A list of completions under what is being typed; a click takes one without losing the caret. */
+const Suggestions = ({ label, items, index, onPick }: { label: string; items: { key: string; label: string }[]; index: number; onPick: (key: string) => void }) => (
+  <ul className="cue-suggest" role="listbox" aria-label={label} ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })}>
+    {items.map((item, i) => (
+      <li
+        key={item.key}
+        role="option"
+        aria-selected={i === index}
+        className={i === index ? 'on' : ''}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          onPick(item.key);
+        }}
+      >
+        {item.label}
+      </li>
+    ))}
+  </ul>
+);
