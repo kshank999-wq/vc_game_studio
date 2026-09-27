@@ -1,10 +1,13 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { fileNameFor, parse, serialize } from '../files';
 import { sunkenVault } from '../model/sample';
 import { getPreferences, resetPreferences, setPreferences } from '../preferences';
+
+/** The Bible, play-through, shot list and handoff load on first use; wait for the one just opened. */
+const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull());
 
 beforeAll(() => {
   globalThis.PointerEvent ??= class extends MouseEvent {} as unknown as typeof PointerEvent;
@@ -123,11 +126,12 @@ describe('other windows', () => {
 });
 
 describe('deleting from the Bible', () => {
-  it('says what goes with a character before deleting her', () => {
+  it('says what goes with a character before deleting her', async () => {
     render(<App />);
     openMenu('File');
     fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
     fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    await opened();
     fireEvent.click(screen.getAllByText('Mara')[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Delete…' }));
     const dialog = screen.getByRole('alertdialog');
@@ -140,13 +144,14 @@ describe('deleting from the Bible', () => {
 });
 
 describe('play-through', () => {
-  it('opens with F5, plays to a choice, and takes it', () => {
+  it('opens with F5, plays to a choice, and takes it', async () => {
     const { container } = render(<App />);
     openMenu('File');
     fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
     act(() => {
       fireEvent.keyDown(window, { key: 'F5' });
     });
+    await opened();
     expect(container.querySelector('.play-view')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /To the next decision/ }));
     fireEvent.click(screen.getByRole('button', { name: /Carry on/ }));
@@ -158,13 +163,15 @@ describe('play-through', () => {
 });
 
 describe('the shot list', () => {
-  it('opens from a cinematic in the Bible, adds a shot and edits it', () => {
+  it('opens from a cinematic in the Bible, adds a shot and edits it', async () => {
     const { container } = render(<App />);
     openMenu('File');
     fireEvent.click(screen.getByRole('menuitem', { name: 'New from the sample (The Sunken Vault)' }));
     fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    await opened();
     fireEvent.click(screen.getAllByText('Door in the dark')[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Open the shot list' }));
+    await opened();
     expect(container.querySelectorAll('.shot-card')).toHaveLength(3);
     expect(container.querySelector('.shotlist-sum')?.textContent).toBe('3 shots · 7.5s');
     fireEvent.click(screen.getByRole('button', { name: '+ Add a shot at the end' }));

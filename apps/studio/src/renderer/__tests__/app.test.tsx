@@ -1,10 +1,13 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { spineLane } from '../model/layout';
 import { createProject, placeNew } from '../model/project';
 import { addElement, addLine, updateLine } from '../model/scene';
+
+/** The Bible, play-through, shot list and handoff load on first use; wait for the one just opened. */
+const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull());
 
 beforeAll(() => {
   // jsdom has no PointerEvent; a MouseEvent carries the button the handlers read.
@@ -165,7 +168,7 @@ describe('the scene timeline', () => {
 });
 
 describe('the Game Bible', () => {
-  it('opens on the selected element, edits it for every view, and goes back', () => {
+  it('opens on the selected element, edits it for every view, and goes back', async () => {
     let project = createProject('The Sunken Vault');
     const placed = placeNew(project, 'scene', spineLane(project).id, 400)!;
     project = addElement(placed.project, placed.id, 'character', 'Mara')!.project;
@@ -176,6 +179,7 @@ describe('the Game Bible', () => {
     fireEvent.pointerDown(card, { button: 0 });
     fireEvent.pointerUp(window);
     fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    await opened();
 
     // Opened on the selected scene, in the Scenes view.
     expect(container.querySelector('.bible-view.on')!.textContent).toContain('Scenes');

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { chunkFileNames, vendorChunks } from './chunks';
 
 /**
  * The renderer built by plain Vite, with no Electron in the process.
@@ -20,5 +21,6 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, edition === 'preview' ? 'out/preview' : 'out/web'),
     emptyOutDir: true,
+    rollupOptions: { output: { manualChunks: vendorChunks, chunkFileNames } },
   },
 });

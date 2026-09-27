@@ -24,6 +24,8 @@ jobs:
           npm run build -w @vcgs/studio
           npm run build:web -w @vcgs/studio
           VCGS_EDITION=preview npm run build:web -w @vcgs/studio
+      - name: Check the web bundles stay split
+        run: node apps/studio/scripts/check-bundle.mjs
       - name: Validate example projects
         run: |
           for f in examples/*.game.json; do

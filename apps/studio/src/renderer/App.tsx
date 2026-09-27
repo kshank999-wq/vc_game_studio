@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BottomBar } from './components/BottomBar';
 import { Palette } from './components/Palette';
 import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } from './components/canvas/StoryCanvas';
@@ -7,9 +7,6 @@ import { TopBar, type Crumb } from './components/TopBar';
 import { ExplodedScene } from './components/scene/ExplodedScene';
 import { SceneWorkspace, type SceneSurface } from './components/scene/SceneWorkspace';
 import { SceneTimeline } from './components/scene/SceneTimeline';
-import { GameBible } from './components/bible/GameBible';
-import { EngineHandoff } from './components/engine/EngineHandoff';
-import { planHandoff, recordExport, targetOf } from './model/handoff';
 import { sunkenVault } from './model/sample';
 import { desktop } from './desktop';
 import type { Destination } from './model/details';
@@ -29,8 +26,7 @@ import { REPORTS, type ReportKey } from './model/reports';
 import { isPreview, PURCHASE_URL } from './edition';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
-import { PlayView } from './components/play/PlayView';
-import { ShotList } from './components/cinematic/ShotList';
+import { EngineHandoff, GameBible, loadHandoff, PlayView, preloadViews, ShotList } from './views';
 import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
 import { isMainClosed, isPanel, listen, openWindow, parseView, post, role, subscribeShared, type Command, type PanelView } from './windows';
@@ -108,6 +104,9 @@ export const App = () => {
   const toSpine = () => setViewState(spineView(project, canvasSize().w, canvasSize().h));
   const zoomBy = (factor: number) => setViewState((v) => zoomAt(v, factor, canvasSize().w / 2, canvasSize().h / 2));
 
+  // The Bible, play-through and handoff load on first use; fetch them once the graph is up.
+  useEffect(() => preloadViews(), []);
+
   // Open on the spine, the way a new project looks (mockup 01).
   useLayoutEffect(() => {
     toSpine();
@@ -137,17 +136,22 @@ export const App = () => {
   // Export on save (desktop): once edits settle, send what changed to the engine project.
   useEffect(() => {
     const bridge = desktop();
-    const target = targetOf(project);
-    if (!bridge || !target.exportOnSave || !target.projectFolder || __EDITION__ !== 'full') return;
+    const target = project.handoff?.target;
+    if (!bridge || !target?.exportOnSave || !target.projectFolder || __EDITION__ !== 'full') return;
+    let live = true;
     const timer = setTimeout(() => {
-      const plan = planHandoff(project);
-      if (!plan.output || plan.changed === 0 || plan.blocking.length) return;
-      void bridge
-        .writeFiles(target.projectFolder, plan.output.files)
-        .then(() => studio.replace(recordExport(project, plan)))
+      void loadHandoff()
+        .then(({ planHandoff, recordExport }) => {
+          const plan = planHandoff(project);
+          if (!live || !plan.output || plan.changed === 0 || plan.blocking.length) return;
+          return bridge.writeFiles(target.projectFolder, plan.output.files).then(() => studio.replace(recordExport(project, plan)));
+        })
         .catch((error: unknown) => say(error instanceof Error ? error.message : 'Export on save failed.'));
     }, 1200);
-    return () => clearTimeout(timer);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);
 
@@ -948,14 +952,16 @@ export const App = () => {
               onRemove={(id) => removeFromSceneAsking(route.sceneId, id)}
             />
           )}
-          {route.view === 'bible' && (
-            <GameBible key={route.report ?? 'bible'} project={project} onCommit={commit} focus={route.focus} report={route.report} onNavigate={navigate} onOpenCode={openEngine} onDelete={deleteItem} />
-          )}
-          {route.view === 'cinematic' && (
-            <ShotList key={route.id} project={project} id={route.id} onCommit={commit} onNavigate={navigate} onOpenBible={openBible} onOpenCode={openEngine} />
-          )}
-          {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} />}
-          {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} />}
+          <Suspense fallback={<div className="view-loading" role="status">Opening…</div>}>
+            {route.view === 'bible' && (
+              <GameBible key={route.report ?? 'bible'} project={project} onCommit={commit} focus={route.focus} report={route.report} onNavigate={navigate} onOpenCode={openEngine} onDelete={deleteItem} />
+            )}
+            {route.view === 'cinematic' && (
+              <ShotList key={route.id} project={project} id={route.id} onCommit={commit} onNavigate={navigate} onOpenBible={openBible} onOpenCode={openEngine} />
+            )}
+            {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} />}
+            {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} />}
+          </Suspense>
           {route.view === 'graph' && Object.keys(project.objects).length <= 3 && (
             <div className="sample-card">
               <span>New here? Open the sample from the mockups to see every part working.</span>

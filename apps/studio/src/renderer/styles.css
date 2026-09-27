@@ -5811,3 +5811,15 @@ kbd {
   stroke-width: 1;
   opacity: 0.55;
 }
+
+/* While an aside view's code loads (a moment, the first time only). */
+.view-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 500 12px var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

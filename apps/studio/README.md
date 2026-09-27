@@ -10,6 +10,7 @@ npm run dev:web -w @vcgs/studio      # the same app in a browser
 npm run build:web -w @vcgs/studio    # browser build → out/web
 VCGS_EDITION=preview npm run build:web -w @vcgs/studio   # the no-save teaser → out/preview
 npm test -w @vcgs/studio
+node apps/studio/scripts/check-bundle.mjs   # after the web builds: the first load stays small
 ```
 
 ## Editions
@@ -30,7 +31,8 @@ npm test -w @vcgs/studio
 | `src/renderer/model/details.ts` | Element detail: fields per type, states and interactions, scene use, where used. |
 | `src/renderer/model/bible.ts`, `reports.ts` | The Game Bible's views and the production reports. |
 | `src/renderer/components/detail/`, `components/bible/` | The detail editor (scene panel and Bible pane), the Bible, report preview. |
-| `src/renderer/model/handoff/` | The engine handoff: the neutral model, adapters (Godot 4), statuses, zip. |
+| `src/renderer/model/handoff/` | The engine handoff: the neutral model, adapters (Godot, Unity, Unreal, JSON), statuses, zip. |
+| `src/renderer/views.ts`, `chunks.ts` | How the bundle splits: the Bible, shot list, play-through and handoff (with every engine's runtime source) load on first use and are fetched once the graph is idle; React sits in its own chunk. |
 | `src/renderer/model/sample.ts` | “The Sunken Vault”, the mockups’ sample, built with the app’s own operations. |
 | `scripts/check-godot.sh` | Runs the sample’s generated Godot code in a real Godot 4. |
 | `src/renderer/model/validate.ts` | What needs a look (dead ends, choices without options, untied arc events). |
