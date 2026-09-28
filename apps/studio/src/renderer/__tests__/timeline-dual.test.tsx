@@ -97,4 +97,66 @@ describe('dual dialogue on the scene timeline', () => {
     expect(box.classList.contains('apart')).toBe(true);
     expect(within(box).getByText(/apart on the timeline/)).toBeTruthy();
   });
+
+  it('sets a dual line side by side with its partner in both speakers’ dialogue boxes', () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    const view = render(<App />);
+    const node = [...view.container.querySelectorAll('[data-type="scene"]')].find((n) => n.textContent!.includes('The Vault Door'))!;
+    fireEvent.doubleClick(node);
+    const halves = (who: string) =>
+      [...screen.getByRole('group', { name: `${who}’s dialogue` }).querySelectorAll('.dlg-dual .dlg-half')].map((h) => [
+        h.querySelector('.dlg-half-who')!.textContent,
+        h.classList.contains('own'),
+      ]);
+    // The same pair in both boxes, as the script sets it; each box's own half in full.
+    expect(halves('Mara')).toEqual([
+      ['MARA', true],
+      ['THE EXPLORER', false],
+    ]);
+    expect(halves('The Explorer')).toEqual([
+      ['MARA', false],
+      ['THE EXPLORER', true],
+    ]);
+    // Mara's other line is an ordinary row.
+    const mara = screen.getByRole('group', { name: 'Mara’s dialogue' });
+    expect(mara.querySelectorAll('.dlg-row:not(.dlg-dual)')).toHaveLength(1);
+    // The row still goes to the line in the script.
+    fireEvent.click(within(screen.getByRole('group', { name: 'The Explorer’s dialogue' })).getByRole('button', { name: /#3, spoken at the same time as MARA/ }));
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Line for The Explorer' }));
+  });
+
+  it('keeps the exploded scene’s dialogue box to its room when dual rows would overflow it', async () => {
+    const { addElement, sceneLines } = await import('../model/scene');
+    const { fromElements } = await import('../model/script-elements');
+    const { createProject, placeNew } = await import('../model/project');
+    const { spineLane } = await import('../model/layout');
+    let project = createProject('Duet');
+    const placed = placeNew(project, 'scene', spineLane(project).id, 400)!;
+    project = addElement(placed.project, placed.id, 'character', 'Mara')!.project;
+    project = addElement(project, placed.id, 'character', 'Jonah')!.project;
+    project = fromElements(project, placed.id, [
+      { id: 'line_a', type: 'character', text: 'MARA' },
+      { id: 'line_a:text', type: 'dialogue', text: 'One.' },
+      { id: 'line_b', type: 'character', text: 'JONAH', dual: true },
+      { id: 'line_b:text', type: 'dialogue', text: 'Two.' },
+      { id: 'line_c', type: 'character', text: 'MARA' },
+      { id: 'line_c:text', type: 'dialogue', text: 'Three.' },
+      { id: 'line_d', type: 'character', text: 'JONAH', dual: true },
+      { id: 'line_d:text', type: 'dialogue', text: 'Four.' },
+      { id: 'line_e', type: 'character', text: 'MARA' },
+      { id: 'line_e:text', type: 'dialogue', text: 'Five.' },
+    ]);
+    expect(sceneLines(project, placed.id)).toHaveLength(5);
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
+    const view = render(<App />);
+    fireEvent.doubleClick(view.container.querySelector('[data-type="scene"]')!);
+    // The workspace box has room: all three of Mara's lines, two of them dual.
+    const workspace = screen.getByRole('group', { name: 'Mara’s dialogue' });
+    expect(workspace.querySelectorAll('.dlg-row')).toHaveLength(3);
+    expect(workspace.querySelectorAll('.dlg-dual')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /SCENE TIMELINE/ }));
+    const exploded = view.container.querySelector('.exploded [aria-label="Mara’s dialogue"]')!;
+    expect(exploded.querySelectorAll('.dlg-row')).toHaveLength(1);
+    expect(exploded.querySelector('.dlg-more')!.textContent).toBe('+ 2 more');
+  });
 });

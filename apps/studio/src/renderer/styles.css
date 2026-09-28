@@ -7569,6 +7569,63 @@ kbd {
   text-overflow: ellipsis;
 }
 
+/* A dual line in a character's dialogue box: the two speakers side by side, two lines high. */
+.dlg-row.dlg-dual {
+  height: 36px;
+  align-items: stretch;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.dlg-row.dlg-dual > .mono {
+  align-self: center;
+}
+
+.dlg-pair {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+
+.dlg-pair-mark {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--c-dialogue);
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 12px;
+}
+
+.dlg-half {
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 15px;
+  opacity: 0.55;
+}
+
+.dlg-half.own {
+  opacity: 1;
+}
+
+.dlg-half-who {
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dlg-row.dlg-dual.apart .dlg-pair-mark {
+  opacity: 0.4;
+}
+
 /* Dual dialogue in the exploded scene: a box over its two speakers, their lines side by side. */
 .dual-box {
   position: absolute;

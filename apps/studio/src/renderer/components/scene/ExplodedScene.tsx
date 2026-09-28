@@ -15,6 +15,7 @@ import type { Destination } from '../../model/details';
 import { findIssues } from '../../model/validate';
 import { Inline } from '../Inline';
 import { dualPairs, type DualPair } from '../../model/timeline';
+import { DialogueRow, dualRowsShown, dualsIn } from './DialogueRows';
 
 interface Props {
   project: Project;
@@ -136,7 +137,20 @@ const openIn = (sceneId: string) => opened.get(sceneId) ?? new Set<string>();
 const DLG_ROWS = 2;
 const DLG_ROW = 18;
 const DLG_GAP = 14;
-const dialogueHeight = (n: number) => 22 + Math.min(n, DLG_ROWS) * DLG_ROW + (n > DLG_ROWS ? DLG_ROW : 0) + 6;
+// A dual line's row is two lines high: the two speakers' halves, side by side.
+// The box keeps to the room under its character (the boxes below don't move),
+// so it shows as many rows as fit in DLG_LINES and says how many more.
+const DLG_LINES = DLG_ROWS + 1;
+const rowsShown = (lines: readonly DialogueLine[], duals: ReadonlyMap<string, DualPair>): number => {
+  for (let n = Math.min(lines.length, DLG_ROWS); n > 0; n--) {
+    if (n + dualRowsShown(lines, n, duals) + (lines.length > n ? 1 : 0) <= DLG_LINES) return n;
+  }
+  return Math.min(lines.length, 1);
+};
+const dialogueHeight = (lines: readonly DialogueLine[], duals: ReadonlyMap<string, DualPair>) => {
+  const n = rowsShown(lines, duals);
+  return 22 + (n + dualRowsShown(lines, n, duals)) * DLG_ROW + (lines.length > n ? DLG_ROW : 0) + 6;
+};
 
 // A dual pair: a box above its two speakers, their lines side by side.
 const DUAL_H = 64;
@@ -288,6 +302,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
   const ghostId = preview && dragging?.type !== 'dialogue' ? preview.id : null;
   const placed = layout(shown, sceneId, open);
   const duals = dualBoxes(shown, sceneId, placed);
+  const dualLines = dualsIn(shown, sceneId);
   const openable = placed.filter((p) => p.object).map((p) => p.id);
   const counts = categoryCounts(shown, sceneId);
 
@@ -296,16 +311,18 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
     if (!root) return;
     const all = layout(project, sceneId, openIn(sceneId));
     const pairs = dualBoxes(project, sceneId, all);
+    const duals = dualsIn(project, sceneId);
     let minX = -REACH - BOX_W;
     let maxX = SCENE_W + REACH + BOX_W;
     let minY = -REACH - BOX_H;
     let maxY = SCENE_H + REACH + BOX_H;
     for (const p of all) {
-      const said = p.object?.type === 'character' ? linesOf(project, sceneId, p.object.id).length : 0;
+      const lines = p.object?.type === 'character' ? linesOf(project, sceneId, p.object.id) : [];
+      const said = lines.length;
       minX = Math.min(minX, p.at.x);
       maxX = Math.max(maxX, p.at.x + BOX_W);
       minY = Math.min(minY, p.at.y);
-      maxY = Math.max(maxY, p.at.y + BOX_H + (said ? DLG_GAP + dialogueHeight(said) : 0));
+      maxY = Math.max(maxY, p.at.y + BOX_H + (said ? DLG_GAP + dialogueHeight(lines, duals) : 0));
       for (const f of p.facets ?? []) {
         minX = Math.min(minX, f.at.x);
         maxX = Math.max(maxX, f.at.x + LEAF_W);
@@ -580,13 +597,10 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
                 <Symbol type="dialogue" size={11} />
                 Dialogue · {said.length}
               </span>
-              {said.slice(0, DLG_ROWS).map((l) => (
-                <span key={l.id} className="dlg-row">
-                  <span className="mono">#{l.order}</span>
-                  <span className="dlg-text">{l.text ? <Inline text={l.text} /> : '…'}</span>
-                </span>
+              {said.slice(0, rowsShown(said, dualLines)).map((l) => (
+                <DialogueRow key={l.id} project={shown} line={l} pair={dualLines.get(l.id)} />
               ))}
-              {said.length > DLG_ROWS && <span className="dlg-more">+ {said.length - DLG_ROWS} more</span>}
+              {said.length > rowsShown(said, dualLines) && <span className="dlg-more">+ {said.length - rowsShown(said, dualLines)} more</span>}
             </div>
           );
         })}

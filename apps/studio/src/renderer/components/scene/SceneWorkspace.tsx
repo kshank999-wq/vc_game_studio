@@ -20,7 +20,7 @@ import { ScriptEditor, ScriptFooter } from './ScriptEditor';
 import { timelineSummary } from '../../model/timeline';
 import { ElementDetail } from '../detail/ElementDetail';
 import type { Destination } from '../../model/details';
-import { Inline } from '../Inline';
+import { DialogueRow, dualRowsShown, dualsIn } from './DialogueRows';
 
 /** The collapsed timeline under the writing box. */
 const STRIP_H = 52;
@@ -94,7 +94,8 @@ const chipPosition = (c: Category, index: number, count: number): { x: number; y
 const DLG_W = 230;
 const DLG_ROWS = 3;
 const DLG_ROW = 18;
-const dialogueHeight = (n: number) => (n ? 22 + Math.min(n, DLG_ROWS) * DLG_ROW + (n > DLG_ROWS ? DLG_ROW : 0) + 6 : 0);
+// A dual line's row is two lines high: the two speakers' halves, side by side.
+const dialogueHeight = (n: number, duals = 0) => (n ? 22 + (Math.min(n, DLG_ROWS) + duals) * DLG_ROW + (n > DLG_ROWS ? DLG_ROW : 0) + 6 : 0);
 
 /**
  * The cast down the left: each character, and its dialogue box beside it when
@@ -155,6 +156,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   }, []);
 
   const counts = categoryCounts(project, sceneId);
+  const dualLines = dualsIn(project, sceneId);
   const lines = sceneLines(project, sceneId);
   const dragCategory = props.paletteDrag ? dropCategory(props.paletteDrag.type) : undefined;
 
@@ -166,7 +168,11 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   const slotsOf = (c: Category, n: number) => {
     if (c.key !== 'characters') return Array.from({ length: n }, (_, i) => ({ chip: chipPosition(c, i, n), dialogue: null as { x: number; y: number } | null }));
     const cast = itemsOf(c);
-    const heights = Array.from({ length: n }, (_, i) => (cast[i] ? dialogueHeight(linesOf(project, sceneId, cast[i]!.id).length) : 0));
+    const duals = dualsIn(project, sceneId);
+    const heights = Array.from({ length: n }, (_, i) => {
+      const said = cast[i] ? linesOf(project, sceneId, cast[i]!.id) : [];
+      return dialogueHeight(said.length, dualRowsShown(said, DLG_ROWS, duals));
+    });
     return castPositions(c, heights).map((p, i) => ({ chip: p.chip, dialogue: heights[i] ? p.dialogue : null }));
   };
 
@@ -313,18 +319,16 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                         Dialogue · {said.length}
                       </span>
                       {said.slice(0, DLG_ROWS).map((l) => (
-                        <button
+                        <DialogueRow
                           key={l.id}
-                          className="dlg-row"
-                          title="Go to this line in the script"
-                          onClick={() => {
+                          project={project}
+                          line={l}
+                          pair={dualLines.get(l.id)}
+                          onPick={() => {
                             setTab('Script');
                             setFocusLine(l.id);
                           }}
-                        >
-                          <span className="mono">#{l.order}</span>
-                          <span className="dlg-text">{l.text ? <Inline text={l.text} /> : '…'}</span>
-                        </button>
+                        />
                       ))}
                       {said.length > DLG_ROWS && <span className="dlg-more">+ {said.length - DLG_ROWS} more</span>}
                     </div>
