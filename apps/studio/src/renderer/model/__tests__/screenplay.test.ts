@@ -139,3 +139,35 @@ describe('emphasis and dual dialogue in the handoff', () => {
     expect(all(unreal)).toContain(`<Italic>Not</> like that.`);
   });
 });
+
+describe('the dual partner, as the preview and the engines pair lines', () => {
+  it('is the line directly before: the last part of a speech carried on past a parenthetical', async () => {
+    const { dualWith, spokenTogether } = await import('../scene');
+    const { p, sceneId } = setup();
+    const a = addLine(p, sceneId, 'action');
+    const written = fromElements(a.project, sceneId, [
+      { id: a.id, type: 'character', text: 'MARA' },
+      { id: 'line_m1', type: 'dialogue', text: 'Down here.' },
+      { id: 'line_m2', type: 'parenthetical', text: '(beat)' },
+      { id: 'line_m3', type: 'dialogue', text: 'Hurry.' },
+      { id: 'line_j', type: 'character', text: 'JONAH', dual: true },
+      { id: 'line_j1', type: 'dialogue', text: 'Coming!' },
+    ]);
+    const [first, rest, jonah] = sceneLines(written, sceneId);
+    expect(dualWith(written, jonah!.id)?.id).toBe(rest!.id);
+    expect(spokenTogether(written, rest!.id, jonah!.id)).toBe(true);
+    expect(spokenTogether(written, jonah!.id, rest!.id)).toBe(true);
+    // Her speech's first line comes before the parenthetical: not the one beside him.
+    expect(spokenTogether(written, first!.id, jonah!.id)).toBe(false);
+  });
+
+  it('travels on the timeline’s events, for the runtimes to pair them', async () => {
+    const { sunkenVault } = await import('../sample');
+    const { buildIR } = await import('../handoff/ir');
+    const ir = buildIR(sunkenVault());
+    const door = ir.scenes.find((s) => s.name === 'The Vault Door')!;
+    const [mara, explorer] = door.main.filter((e) => e.kind === 'dialogue');
+    expect(explorer!.dual).toBe(mara!.line);
+    expect(mara!.dual).toBeUndefined();
+  });
+});

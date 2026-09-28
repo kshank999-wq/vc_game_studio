@@ -122,7 +122,7 @@ project.
    give it \`${root}/story.json\`. It stays loaded between scenes.
 2. For a story scene, add **VcgsSceneFlow** with the scene's key
    (\`VCGS.Keys.Scenes\`), then connect to \`Player\`'s events
-   (\`DialogueRequested\`, \`CinematicRequested\`, \`FreePlayStarted\`,
+   (\`DialogueRequested\` — or \`DualRequested\` for two lines at once —, \`CinematicRequested\`, \`FreePlayStarted\`,
    \`ChoiceRequested\`, \`SceneFinished\`) and call \`Player.Advance()\` or
    \`Player.Choose(i)\`.
 3. For an object, add **VcgsInteractable** with its key (\`VCGS.Keys.Objects\`)

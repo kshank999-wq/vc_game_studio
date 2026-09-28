@@ -170,6 +170,7 @@ export const storySchema = () => ({
           kind: { enum: ['cinematic', 'dialogue', 'action', 'interaction', 'trigger', 'choice', 'freePlay'] },
           ref: str,
           line: str,
+          dual: { type: 'string', description: 'Dual dialogue: the line this one is spoken at the same time as. When the next event is that line (or names this one), the two play as one beat.' },
           label: str,
           seconds: num,
           shots: num,

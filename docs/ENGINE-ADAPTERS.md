@@ -151,6 +151,18 @@ Pick **Unreal Engine 5**. It writes a plugin and the story's data:
   the import script and compiles `VCGS.Build.cs`. CI runs it. Unreal Header
   Tool and the editor have not run on it.
 
+**Dual dialogue.** A dialogue event whose line is dual carries `dual`, the
+line it is spoken at the same time as: the line directly before it in the
+script, the last part of the speech it is set beside. When a runtime reaches
+a dialogue event and the next event on the track is its partner (either way
+round) and may be spoken, the two play as one beat: the left-hand speech
+first, both effects applied, and one `Advance()` for the pair. A game starts
+both voices from a hook of its own, asked instead of the single-line one —
+Godot `VCGSSceneFlow.dual_requested(line_id, with_line_id)`, Unity
+`ScenePlayer.DualRequested`, Unreal `vcgs::ScenePlayer::OnDual` and the
+component's Blueprint event `OnDualDialogue` (both lines' speaker, text and
+direction). The Play-through preview pairs lines by the same rule.
+
 ## Levels
 
 `buildIR` carries the Level Designer's levels as `levels`

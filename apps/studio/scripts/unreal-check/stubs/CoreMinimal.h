@@ -73,6 +73,7 @@ static FLogCategory LogTemp;
 #define DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(Name, T1, P1, T2, P2, T3, P3, T4, P4) VCGS_DECLARE_DELEGATE(Name)
 
 #define DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(Name, T1, P1, T2, P2, T3, P3) VCGS_DECLARE_DELEGATE(Name)
+#define DECLARE_DYNAMIC_MULTICAST_DELEGATE_EightParams(Name, T1, P1, T2, P2, T3, P3, T4, P4, T5, P5, T6, P6, T7, P7, T8, P8) VCGS_DECLARE_DELEGATE(Name)
 
 template <typename K, typename V>
 struct TPair

@@ -194,6 +194,12 @@ export interface IrEvent {
   endsWhen?: string;
   condition?: string;
   line?: string;
+  /**
+   * Dual dialogue: the line this event's line is spoken at the same time as.
+   * When the next event on the track is that line (or names this one), the two
+   * play as one beat — the runtimes all do this.
+   */
+  dual?: string;
   /** A choice's option that carries on along the main track. */
   mainLabel?: string;
   /** What that option does once picked: disappears ('gone') or locks. */
@@ -324,6 +330,7 @@ export const buildIR = (project: Project): HandoffIR => {
         kind: e.kind,
         ...(e.refId && e.kind !== 'dialogue' ? { ref: key(e.refId)! } : {}),
         ...(line ? { line: lineId(code, line.order) } : {}),
+        ...((partner) => (partner ? { dual: lineId(code, partner.order) } : {}))(line && dualWith(project, line.id)),
         label: eventTitle(project, e),
         ...(e.seconds !== undefined ? { seconds: e.seconds } : {}),
         ...(e.shots !== undefined ? { shots: e.shots } : {}),

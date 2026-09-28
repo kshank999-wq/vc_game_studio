@@ -569,6 +569,12 @@ namespace VCGS
     {
         public event Action<Dictionary<string, object>> EventStarted;
         public event Action<string> DialogueRequested;
+        /// <summary>
+        /// Dual dialogue: two lines spoken at the same time, as one beat. Start both
+        /// voices together, then call Advance() once. The left-hand speech of the
+        /// script comes first. A pair asks for this instead of DialogueRequested.
+        /// </summary>
+        public event Action<string, string> DualRequested;
         public event Action<string> CinematicRequested;
         public event Action<string> FreePlayStarted;
         public event Action<string, List<string>> ChoiceRequested;
@@ -635,6 +641,22 @@ namespace VCGS
                 Advance();
                 return;
             }
+            // Dual dialogue: this line and the next event's are spoken at once.
+            var other = DualAt(index);
+            if (other != null)
+            {
+                index++;
+                var line = D.Str(ev, "line");
+                var otherLine = D.Str(other, "line");
+                var first = D.Str(ev, "dual") == otherLine ? otherLine : line;
+                var second = first == line ? otherLine : line;
+                var both = new Dictionary<string, object>(ev) { ["line"] = first, ["with"] = second };
+                EventStarted?.Invoke(both);
+                Rules.Apply(D.Get(ev, "effects"), game);
+                Rules.Apply(D.Get(other, "effects"), game);
+                DualRequested?.Invoke(first, second);
+                return;
+            }
             EventStarted?.Invoke(ev);
             var kind = D.Str(ev, "kind");
             if (kind != "choice") Rules.Apply(D.Get(ev, "effects"), game);
@@ -654,6 +676,17 @@ namespace VCGS
                     Advance();
                     break;
             }
+        }
+
+        /// <summary>The event after this one, when the two are a dual pair (either way round) and it may be spoken now.</summary>
+        Dictionary<string, object> DualAt(int at)
+        {
+            if (at + 1 >= track.Count) return null;
+            var a = D.Map(track[at]);
+            var b = D.Map(track[at + 1]);
+            if (D.Str(a, "kind") != "dialogue" || D.Str(b, "kind") != "dialogue") return null;
+            var paired = (D.Str(b, "dual") != "" && D.Str(b, "dual") == D.Str(a, "line")) || (D.Str(a, "dual") != "" && D.Str(a, "dual") == D.Str(b, "line"));
+            return paired && Rules.Check(D.Get(b, "when"), game) ? b : null;
         }
 
         /// <summary>Call with the option the player picked, as offered: 0 is the first.</summary>

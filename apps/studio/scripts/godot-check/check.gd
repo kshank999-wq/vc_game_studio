@@ -75,11 +75,24 @@ func _initialize() -> void:
 	flow.choice_requested.connect(func(_key: String, options: Array) -> void: choices.append(options))
 	var finished: Array = []
 	flow.scene_finished.connect(func(next: String) -> void: finished.append(next))
+	var duals: Array = []
+	flow.dual_requested.connect(func(a: String, b: String) -> void: duals.append([a, b]))
+	var singles: Array = []
+	flow.dialogue_requested.connect(func(l: String) -> void: singles.append(l))
 	flow.start()
 	if not game.was_visited("sc_03_the_vault_door"):
 		fail("starting the scene should mark it visited")
-	for i in 4:
+	# The cinematic, then Mara and the Explorer at once (dual dialogue: one beat), then the echo cue.
+	for i in 3:
 		flow.advance()
+	var dialogue: GDScript = load("res://vcgs/generated/dialogue/dialogue_table.gd")
+	if duals.size() != 1 or not singles.is_empty():
+		fail("Mara and the Explorer should speak at once, as one beat, got duals " + str(duals) + " and singles " + str(singles))
+	else:
+		var who: Array = [dialogue.line(duals[0][0]).get("speaker", ""), dialogue.line(duals[0][1]).get("speaker", "")]
+		print("dual: ", who, " ", duals[0])
+		if who != ["mara", "the_explorer"]:
+			fail("the pair should be Mara (left) then the Explorer, got " + str(who))
 	# In free play now. It ends by itself when the door is solved.
 	if not choices.is_empty():
 		fail("the choice should wait for the free play to end")
@@ -151,7 +164,12 @@ func _initialize() -> void:
 	player.start_now()
 	if not player.text().begins_with("[Cinematic] Door in the dark · 7.5s") or player.labels() != ["Continue"]:
 		fail("the scene should open on its cinematic, got " + player.text())
-	for i in 4:
+	player.press(0)
+	# The player shows Mara and the Explorer together: one screen, one Continue.
+	print("dual on screen: ", player.text().replace("\n", " | "))
+	if not player.text().begins_with("MARA  (listening)") or not player.text().contains("at the same time") or not player.text().contains("THE EXPLORER  (wading forward)\nStand back."):
+		fail("the player should show both voices at once, got " + player.text())
+	for i in 2:
 		player.press(0)
 	var free_play: Array = player.labels()
 	print("free play: ", free_play)

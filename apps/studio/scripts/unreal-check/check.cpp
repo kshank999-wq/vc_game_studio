@@ -81,9 +81,22 @@ int main()
         player.OnEvent = [&](const vcgs::Value& e) { trace.push_back(e["kind"].Str() + ":" + e["label"].Str()); };
         player.OnChoice = [&](const std::string&, const std::vector<std::string>& options) { choices.push_back(options); };
         player.OnFinished = [&](const std::string& next) { finished.push_back(next); };
+        std::vector<std::pair<std::string, std::string>> duals;
+        std::vector<std::string> singles;
+        player.OnDual = [&](const std::string& a, const std::string& b) { duals.emplace_back(a, b); };
+        player.OnDialogue = [&](const std::string& l) { singles.push_back(l); };
         player.Start();
         if (!game.Visited.count(Scenes::Sc03TheVaultDoor)) Fail("starting the scene should mark it visited");
-        for (int i = 0; i < 4; i++) player.Advance();
+        // The cinematic, then Mara and the Explorer at once (dual dialogue: one beat), then the echo cue.
+        for (int i = 0; i < 3; i++) player.Advance();
+        if (duals.size() != 1 || !singles.empty()) Fail("Mara and the Explorer should speak at once, as one beat");
+        else
+        {
+            const std::string first = vcgs::StoryWalker::GetLine(game, duals[0].first).Speaker;
+            const std::string second = vcgs::StoryWalker::GetLine(game, duals[0].second).Speaker;
+            std::printf("dual: %s + %s\n", first.c_str(), second.c_str());
+            if (first != "Mara" || second != "The Explorer") Fail("the pair should be Mara (left) then the Explorer");
+        }
         if (!choices.empty()) Fail("the choice should wait for the free play to end");
         if (Join(vcgs::Interactions::AvailableVerbs(game, Objects::RustedLever), ",") != "Pull") Fail("the lever should offer Pull");
         if (!vcgs::Interactions::Interact(game, Objects::RustedLever, "Pull")) Fail("Pull should work");

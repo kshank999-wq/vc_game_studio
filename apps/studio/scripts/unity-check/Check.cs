@@ -37,9 +37,21 @@ static class Check
         player.EventStarted += e => trace.Add(D.Str(e, "kind") + ":" + D.Str(e, "label"));
         player.ChoiceRequested += (key, options) => choices.Add(options);
         player.SceneFinished += next => finished.Add(next);
+        var duals = new List<(string, string)>();
+        var singles = new List<string>();
+        player.DualRequested += (a, b) => duals.Add((a, b));
+        player.DialogueRequested += l => singles.Add(l);
         player.Start();
         if (!game.Visited.Contains(Scenes.Sc03TheVaultDoor)) Fail("starting the scene should mark it visited");
-        for (var i = 0; i < 4; i++) player.Advance();
+        // The cinematic, then Mara and the Explorer at once (dual dialogue: one beat), then the echo cue.
+        for (var i = 0; i < 3; i++) player.Advance();
+        if (duals.Count != 1 || singles.Count != 0) Fail("Mara and the Explorer should speak at once, as one beat");
+        else
+        {
+            string Speaker(string id) => story.Lines.TryGetValue(id, out var l) ? D.Str(l, "speaker") : "";
+            Console.WriteLine("dual: " + Speaker(duals[0].Item1) + " + " + Speaker(duals[0].Item2));
+            if (Speaker(duals[0].Item1) != "mara" || Speaker(duals[0].Item2) != "the_explorer") Fail("the pair should be Mara (left) then the Explorer");
+        }
         if (choices.Count != 0) Fail("the choice should wait for the free play to end");
         if (string.Join(",", Interactions.AvailableVerbs(game, Objects.RustedLever)) != "Pull") Fail("the lever should offer Pull");
         if (!Interactions.Interact(game, Objects.RustedLever, "Pull")) Fail("Pull should work");

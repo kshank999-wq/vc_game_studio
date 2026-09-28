@@ -481,20 +481,21 @@ export const continues = (project: Project, lineId: string): boolean => {
 };
 
 /**
- * The speech a dual speech is spoken beside: the one directly before it, by
- * its cue's line. Undefined when the line isn't dual, or nothing sits there
- * to be beside (it is then an ordinary speech until something does).
+ * The line a dual speech is spoken at the same time as: the one directly
+ * before it in the script — the last line of the speech it is set beside.
+ * Undefined when the line isn't a dual cue, or nothing sits there to be
+ * beside (it is then an ordinary speech until something does). The preview
+ * and every engine pair lines by this one rule.
  */
 export const dualWith = (project: Project, lineId: string): DialogueLine | undefined => {
   const line = project.lines.find((l) => l.id === lineId);
   if (!line?.dual || line.joined) return undefined;
   const lines = sceneLines(project, line.sceneId);
-  let i = lines.findIndex((l) => l.id === lineId) - 1;
-  if (lines[i]?.kind !== 'dialogue') return undefined;
-  while (i > 0 && lines[i]!.joined) i--;
-  const cue = lines[i]!;
+  const before = lines[lines.findIndex((l) => l.id === lineId) - 1];
+  if (before?.kind !== 'dialogue') return undefined;
   // A pair is two speeches: the one before must not be the right half of another.
-  return cue.dual && dualWith(project, cue.id) ? undefined : cue;
+  const cue = speechOf(project, before.id)!;
+  return cue.dual && dualWith(project, cue.id) ? undefined : before;
 };
 
 /** The line a speech starts on: its cue's, walking back over the lines that carry it on. */
@@ -512,10 +513,5 @@ export const speechOf = (project: Project, lineId: string): DialogueLine | undef
  * in the speech it is set beside. Either order, so a timeline that puts the
  * dual one first still plays them together.
  */
-export const spokenTogether = (project: Project, a: string, b: string): boolean => {
-  const pair = (x: string, y: string) => {
-    const partner = dualWith(project, speechOf(project, y)?.id ?? y);
-    return !!partner && partner.id === speechOf(project, x)?.id;
-  };
-  return a !== b && (pair(a, b) || pair(b, a));
-};
+export const spokenTogether = (project: Project, a: string, b: string): boolean =>
+  a !== b && (dualWith(project, b)?.id === a || dualWith(project, a)?.id === b);

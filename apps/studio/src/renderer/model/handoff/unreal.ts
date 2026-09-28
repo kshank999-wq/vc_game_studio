@@ -360,6 +360,7 @@ void UVcgsSubsystem::GetLine(const FString& LineId, FString& Speaker, FString& T
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsEventSignature, const FString&, Kind, const FString&, Label);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVcgsDialogueSignature, const FString&, LineId, const FString&, Speaker, const FString&, Text, const FString&, Direction);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_EightParams(FVcgsDualSignature, const FString&, LineId, const FString&, Speaker, const FString&, Text, const FString&, Direction, const FString&, WithLineId, const FString&, WithSpeaker, const FString&, WithText, const FString&, WithDirection);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsKeySignature, const FString&, Key);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsChoiceSignature, const FString&, Choice, const TArray<FString>&, Options);
 
@@ -382,6 +383,8 @@ public:
     /** Every event as it starts: its kind and label. */
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsEventSignature OnEventStarted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsDialogueSignature OnDialogue;
+    /** Dual dialogue: two lines at once, as one beat (instead of OnDialogue). Start both voices, then Advance() once. The left-hand speech comes first. */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsDualSignature OnDualDialogue;
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsKeySignature OnCinematic;
     /** Free play: how it ends, in words. It ends by itself when its rule holds. */
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsKeySignature OnFreePlay;
@@ -455,6 +458,12 @@ void UVcgsSceneFlowComponent::StartScene()
     {
         const vcgs::StoryWalker::Line Line = vcgs::StoryWalker::GetLine(*Game, LineId);
         OnDialogue.Broadcast(ToF(LineId), ToF(Line.Speaker), ToF(Line.Text), ToF(Line.Direction));
+    };
+    Player->OnDual = [this, Game](const std::string& LineId, const std::string& WithLineId)
+    {
+        const vcgs::StoryWalker::Line Line = vcgs::StoryWalker::GetLine(*Game, LineId);
+        const vcgs::StoryWalker::Line With = vcgs::StoryWalker::GetLine(*Game, WithLineId);
+        OnDualDialogue.Broadcast(ToF(LineId), ToF(Line.Speaker), ToF(Line.Text), ToF(Line.Direction), ToF(WithLineId), ToF(With.Speaker), ToF(With.Text), ToF(With.Direction));
     };
     Player->OnCinematic = [this](const std::string& Key) { OnCinematic.Broadcast(ToF(Key)); };
     Player->OnFreePlay = [this](const std::string& EndsWhen) { OnFreePlay.Broadcast(ToF(EndsWhen)); };
@@ -698,7 +707,7 @@ export. Change the story in VC Game Studio, not these files. The plugin
    Packaging > Additional Non-Asset Directories to Package*. The
    \`UVcgsSubsystem\` reads \`story.json\` from there when the game starts.
 3. **A story scene**: add \`UVcgsSceneFlowComponent\` to an actor in the level,
-   set \`SceneKey\` (\`VcgsKeys::Scenes\`), bind \`OnDialogue\`, \`OnCinematic\`,
+   set \`SceneKey\` (\`VcgsKeys::Scenes\`), bind \`OnDialogue\` (and \`OnDualDialogue\`, two lines at once), \`OnCinematic\`,
    \`OnFreePlay\`, \`OnChoice\` and \`OnFinished\`, and call \`Advance\` / \`Choose\`.
 4. **An object**: add \`UVcgsInteractableComponent\` with its \`ObjectKey\` and call
    \`Interact("Pull")\`.

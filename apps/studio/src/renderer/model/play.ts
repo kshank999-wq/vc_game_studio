@@ -1,7 +1,7 @@
 import { initialState, interactionsOf, statesOf } from './details';
 import { spineSequence } from './layout';
 import { apply, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type Rule } from './rules';
-import { dualWith, elementsIn, speechOf, spokenTogether } from './scene';
+import { dualWith, elementsIn, spokenTogether } from './scene';
 import { cinematicTiming, describeShot, shotsOf } from './shots';
 import { eventLine, eventTitle, MAIN, sceneTimeline } from './timeline';
 import type { DialogueLine, OptionBehaviour, Project, StoryObject, TimelineEvent } from './types';
@@ -295,7 +295,7 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
         const together = !!other && spokenTogether(project, line.id, other.id) && evaluate(eventRule(project, after!), d.world);
         const voice = (l: DialogueLine): Voice => ({ speaker: l.speakerId ? name(project, l.speakerId) : null, text: l.text, direction: l.direction || undefined, lineId: l.id });
         // The speech on the left of the pair (the one the other is beside) reads first.
-        const [first, second] = together && dualWith(project, speechOf(project, line.id)!.id) ? [other!, line] : [line, other];
+        const [first, second] = together && dualWith(project, line.id)?.id === other!.id ? [other!, line] : [line, other];
         d.log.push({ kind: 'line', ...voice(first), sceneId: first.sceneId, ...(together ? { with: voice(second!) } : {}) });
         next = { at: 'wait', next: together ? { ...cursor, index: cursor.index + 2 } : onward };
         break;

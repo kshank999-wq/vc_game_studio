@@ -562,6 +562,12 @@ namespace vcgs
 
         std::function<void(const Value&)> OnEvent;
         std::function<void(const std::string&)> OnDialogue;
+        /**
+         * Dual dialogue: two lines spoken at the same time, as one beat. Start both
+         * voices together, then call Advance() once. The left-hand speech of the
+         * script comes first. A pair asks for this instead of OnDialogue.
+         */
+        std::function<void(const std::string&, const std::string&)> OnDual;
         std::function<void(const std::string&)> OnCinematic;
         std::function<void(const std::string&)> OnFreePlay;
         std::function<void(const std::string&, const std::vector<std::string>&)> OnChoice;
@@ -612,6 +618,20 @@ namespace vcgs
             }
             const Value& ev = (*track)[static_cast<size_t>(index)];
             if (!Rules::Check(ev["when"], game)) { Advance(); return; }
+            // Dual dialogue: this line and the next event's are spoken at once.
+            if (const Value* other = DualAt(index))
+            {
+                index++;
+                const std::string line = ev["line"].Str();
+                const std::string otherLine = (*other)["line"].Str();
+                const std::string first = ev["dual"].Str() == otherLine ? otherLine : line;
+                const std::string second = first == line ? otherLine : line;
+                if (OnEvent) OnEvent(ev);
+                Rules::Apply(ev["effects"], game);
+                Rules::Apply((*other)["effects"], game);
+                if (OnDual) OnDual(first, second);
+                return;
+            }
             if (OnEvent) OnEvent(ev);
             const std::string kind = ev["kind"].Str();
             if (kind != "choice") Rules::Apply(ev["effects"], game);
@@ -629,6 +649,17 @@ namespace vcgs
                 if (!ev["ref"].Str().empty()) Rules::Fire(ev["ref"].Str(), game);
                 Advance();
             }
+        }
+
+        /** The event after this one, when the two are a dual pair (either way round) and it may be spoken now. */
+        const Value* DualAt(int at)
+        {
+            if (at + 1 >= static_cast<int>(track->items.size())) return nullptr;
+            const Value& a = (*track)[static_cast<size_t>(at)];
+            const Value& b = (*track)[static_cast<size_t>(at + 1)];
+            if (a["kind"].Str() != "dialogue" || b["kind"].Str() != "dialogue") return nullptr;
+            const bool paired = (!b["dual"].Str().empty() && b["dual"].Str() == a["line"].Str()) || (!a["dual"].Str().empty() && a["dual"].Str() == b["line"].Str());
+            return paired && Rules::Check(b["when"], game) ? &b : nullptr;
         }
 
         /** Call with the option the player picked, as offered: 0 is the first. */
