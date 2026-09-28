@@ -1,7 +1,7 @@
 import { cinematicTiming } from './shots';
 import { spineSequence } from './layout';
 import { newId } from './project';
-import { addElement, addLine, inScene, removeLine, sceneElements, sceneLines } from './scene';
+import { addElement, addLine, dualWith, inScene, removeLine, sceneElements, sceneLines, spokenTogether } from './scene';
 import type { DialogueLine, EventKind, ObjectType, Project, TimelineBranch, TimelineEvent } from './types';
 import { describeEffects, describeRule, isEmpty } from './rules';
 import { plainInline } from './inline';
@@ -332,3 +332,31 @@ export const exchanges = (events: TimelineEvent[]): TimelineEvent[][] => {
 /** Does this event only play sometimes: a rule on it, or on its script line? */
 export const isConditional = (project: Project, event: TimelineEvent): boolean =>
   !!event.condition || !isEmpty(event.when) || (event.kind === 'dialogue' && !isEmpty(lineOf(project, event)?.conditions));
+
+/** A dual pair in a scene's script, and whether the timeline plays it as one beat. */
+export interface DualPair {
+  /** The speech the other is set beside (its last line). */
+  left: DialogueLine;
+  /** The dual speech's cue line. */
+  right: DialogueLine;
+  /** Next to each other on a track: the game plays them at once. */
+  together: boolean;
+}
+
+/** Every dual pair the scene's script sets side by side, in script order. */
+export const dualPairs = (project: Project, sceneId: string): DualPair[] => {
+  const together = new Set<string>();
+  for (const track of sceneTimeline(project, sceneId)) {
+    track.events.forEach((e, i) => {
+      const n = track.events[i + 1];
+      if (e.kind === 'dialogue' && n?.kind === 'dialogue' && e.refId && n.refId && spokenTogether(project, e.refId, n.refId)) {
+        together.add(e.refId);
+        together.add(n.refId);
+      }
+    });
+  }
+  return sceneLines(project, sceneId).flatMap((right) => {
+    const left = dualWith(project, right.id);
+    return left ? [{ left, right, together: together.has(left.id) && together.has(right.id) }] : [];
+  });
+};

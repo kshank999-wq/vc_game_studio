@@ -7569,6 +7569,71 @@ kbd {
   text-overflow: ellipsis;
 }
 
+/* Dual dialogue in the exploded scene: a box over its two speakers, their lines side by side. */
+.dual-box {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px 6px;
+  border-radius: 8px;
+  background: #2a1d15;
+  border: 1px dashed var(--c-dialogue);
+  font-size: 12px;
+}
+
+.dual-box.apart {
+  opacity: 0.6;
+  border-color: var(--border-strong);
+}
+
+.dual-head {
+  height: 18px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f0b08a;
+}
+
+.dual-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-height: 0;
+}
+
+.dual-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 2px 4px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.dual-col:hover {
+  background: #3a2a1e;
+}
+
+.dual-who {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wire.dual-wire {
+  stroke: var(--c-dialogue);
+  stroke-dasharray: 4 3;
+}
+
+.wire.dual-wire.apart {
+  opacity: 0.5;
+}
+
 .dlg-more {
   padding: 0 4px;
   font-size: 11px;

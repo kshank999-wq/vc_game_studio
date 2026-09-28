@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useMemo,
 import { renameObject } from '../../model/project';
 import { TYPE_LABEL } from '../../model/semantics';
 import { PERIMETER, addElement, categoryCounts, elementsIn, linesOf, removeFromScene, sceneLines, type Category } from '../../model/scene';
-import type { Project, StoryObject } from '../../model/types';
+import type { DialogueLine, Project, StoryObject } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
 import { clampZoom, zoomAt, type View } from '../../view';
 import type { PaletteDrag } from '../canvas/StoryCanvas';
@@ -14,6 +14,7 @@ import { ElementDetail } from '../detail/ElementDetail';
 import type { Destination } from '../../model/details';
 import { findIssues } from '../../model/validate';
 import { Inline } from '../Inline';
+import { dualPairs, type DualPair } from '../../model/timeline';
 
 interface Props {
   project: Project;
@@ -137,6 +138,47 @@ const DLG_ROW = 18;
 const DLG_GAP = 14;
 const dialogueHeight = (n: number) => 22 + Math.min(n, DLG_ROWS) * DLG_ROW + (n > DLG_ROWS ? DLG_ROW : 0) + 6;
 
+// A dual pair: a box above its two speakers, their lines side by side.
+const DUAL_H = 64;
+const DUAL_GAP = 18;
+
+interface DualBox {
+  pair: DualPair;
+  x: number;
+  y: number;
+  w: number;
+  /** The top of the speakers' row it sits over. */
+  top: number;
+  /** The two lines, ordered as their speakers sit, so the wires never cross. */
+  lines: [DialogueLine, DialogueLine];
+  /** Their speakers' boxes, in the same order. */
+  speakers: [Point, Point];
+}
+
+/**
+ * Where each dual pair's box goes: over the speakers it joins, as wide as
+ * both, stacked upward when two pairs share the same speakers' span.
+ */
+const dualBoxes = (project: Project, sceneId: string, placed: Placed[]): DualBox[] => {
+  const boxOf = (id: string | null) => (id ? placed.find((p) => p.object?.id === id)?.at : undefined);
+  const out: DualBox[] = [];
+  for (const pair of dualPairs(project, sceneId)) {
+    const a = boxOf(pair.left.speakerId);
+    const b = boxOf(pair.right.speakerId);
+    if (!a || !b) continue;
+    const left = Math.min(a.x, b.x);
+    const span = Math.max(a.x, b.x) + BOX_W - left;
+    const w = Math.max(span, 2 * BOX_W + 10);
+    const x = left + span / 2 - w / 2;
+    const top = Math.min(a.y, b.y);
+    // Earlier pairs over the same row of speakers, overlapping this one: go above them.
+    const under = out.filter((d) => d.top === top && d.x < x + w && x < d.x + d.w).length;
+    const flip = b.x < a.x;
+    out.push({ pair, x, y: top - DUAL_GAP - DUAL_H - under * (DUAL_H + 10), w, top, lines: flip ? [pair.right, pair.left] : [pair.left, pair.right], speakers: flip ? [b, a] : [a, b] });
+  }
+  return out;
+};
+
 /**
  * Everything the scene holds, placed around its ports; a character's
  * dialogue hangs under it. An opened element's facets sit beyond it, and the
@@ -245,6 +287,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
   const shown = preview?.project ?? project;
   const ghostId = preview && dragging?.type !== 'dialogue' ? preview.id : null;
   const placed = layout(shown, sceneId, open);
+  const duals = dualBoxes(shown, sceneId, placed);
   const openable = placed.filter((p) => p.object).map((p) => p.id);
   const counts = categoryCounts(shown, sceneId);
 
@@ -252,6 +295,7 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
     const root = rootRef.current;
     if (!root) return;
     const all = layout(project, sceneId, openIn(sceneId));
+    const pairs = dualBoxes(project, sceneId, all);
     let minX = -REACH - BOX_W;
     let maxX = SCENE_W + REACH + BOX_W;
     let minY = -REACH - BOX_H;
@@ -268,6 +312,11 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
         minY = Math.min(minY, f.at.y);
         maxY = Math.max(maxY, f.at.y + LEAF_H);
       }
+    }
+    for (const d of pairs) {
+      minX = Math.min(minX, d.x);
+      maxX = Math.max(maxX, d.x + d.w);
+      minY = Math.min(minY, d.y);
     }
     const margin = props.panel ? 24 : 40;
     // The panel's header covers its top edge.
@@ -349,6 +398,20 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
               p.object?.type === 'character' && lines.some((l) => l.speakerId === p.object!.id) ? (
                 <path key={`${p.id}:dialogue`} className="wire" style={{ stroke: 'var(--c-dialogue)' }} d={`M${p.at.x + BOX_W / 2} ${p.at.y + BOX_H} V${p.at.y + BOX_H + DLG_GAP}`} />
               ) : null,
+            )}
+            {duals.flatMap((d) =>
+              d.speakers.map((s, i) => {
+                const from = { x: d.x + (d.w * (1 + 2 * i)) / 4, y: d.y + DUAL_H };
+                const to = { x: s.x + BOX_W / 2, y: s.y };
+                const mid = (from.y + to.y) / 2;
+                return (
+                  <path
+                    key={`${d.pair.right.id}:${i}`}
+                    className={`wire dual-wire${d.pair.together ? '' : ' apart'}`}
+                    d={`M${from.x} ${from.y} C${from.x} ${mid} ${to.x} ${mid} ${to.x} ${to.y}`}
+                  />
+                );
+              }),
             )}
             {placed.flatMap((p) =>
               (p.facets ?? []).map((f, j) => <path key={`${p.id}:${j}`} className="wire facet-wire" style={{ stroke: p.category.color }} d={facetWire(p.category, p.at, f.at)} />),
@@ -524,6 +587,47 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
                 </span>
               ))}
               {said.length > DLG_ROWS && <span className="dlg-more">+ {said.length - DLG_ROWS} more</span>}
+            </div>
+          );
+        })}
+
+        {duals.map((d) => {
+          const who = (id: string | null) => (id ? shown.objects[id]?.name : undefined) ?? 'No speaker';
+          const names = `${who(d.pair.left.speakerId)} and ${who(d.pair.right.speakerId)}`;
+          return (
+            <div
+              key={`dual:${d.pair.right.id}`}
+              className={`dual-box${d.pair.together ? '' : ' apart'}`}
+              role="group"
+              aria-label={`Dual dialogue: ${names}${d.pair.together ? ', spoken at the same time' : ', apart on the timeline'}`}
+              style={{ left: d.x, top: d.y, width: d.w, height: DUAL_H }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onDoubleClick={props.onOpen}
+              title={
+                d.pair.together
+                  ? 'Spoken at the same time: the game plays these two lines as one beat. Double-click to edit the script.'
+                  : 'Side by side in the script, but something plays between them on the timeline, so the game plays them in turn.'
+              }
+            >
+              <span className="dual-head">⇹ Dual · {d.pair.together ? 'at the same time' : 'apart on the timeline'}</span>
+              <div className="dual-cols">
+                {d.lines.map((l) => (
+                  <div
+                    key={l.id}
+                    className="dual-col"
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.stopPropagation();
+                      if (l.speakerId) props.onSelect(l.speakerId);
+                    }}
+                  >
+                    <span className="dual-who">
+                      <span className="mono">#{l.order}</span> {who(l.speakerId).toUpperCase()}
+                    </span>
+                    <span className="dlg-text">{l.text ? <Inline text={l.text} /> : '…'}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           );
         })}

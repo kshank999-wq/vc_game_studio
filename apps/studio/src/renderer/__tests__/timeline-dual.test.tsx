@@ -70,4 +70,31 @@ describe('dual dialogue on the scene timeline', () => {
     const pair = screen.getByRole('group', { name: 'Dual dialogue: spoken at the same time' });
     expect([...pair.querySelectorAll('.ev .et')].map((c) => c.textContent)).toEqual(['MARA', 'THE EXPLORER']);
   });
+
+  it('sets the pair side by side in the exploded scene too, over its two speakers', () => {
+    const { container } = openTimeline(sunkenVault());
+    const box = screen.getByRole('group', { name: 'Dual dialogue: Mara and The Explorer, spoken at the same time' });
+    // The columns sit as their speakers do, so the wires don't cross: the Explorer's box is on the left.
+    const cols = [...box.querySelectorAll('.dual-col')].map((c) => [c.querySelector('.dual-who')!.textContent, c.querySelector('.dlg-text')!.textContent]);
+    expect(cols).toEqual([
+      ['#3 THE EXPLORER', 'Stand back. I’ll find it.'],
+      ['#2 MARA', 'Water’s holding it shut. There’s a lever somewhere.'],
+    ]);
+    expect(container.querySelectorAll('.dual-wire')).toHaveLength(2);
+    // A column picks its speaker, which picks their first line on the timeline.
+    fireEvent.pointerDown(box.querySelectorAll('.dual-col')[1]!, { button: 0 });
+    const pair = screen.getByRole('group', { name: 'Dual dialogue: spoken at the same time' });
+    expect(pair.querySelectorAll('.ev')[0]!.classList.contains('selected')).toBe(true);
+  });
+
+  it('says so in the exploded scene when the timeline plays the pair apart', () => {
+    const p = sunkenVault();
+    const vault = vaultOf(p);
+    const events = sceneTimeline(p, vault)[0]!.events;
+    const echo = events.find((e) => e.label === 'Echo cue')!;
+    openTimeline(moveEvent(p, vault, echo.id, 'main', events.indexOf(echo) - 1));
+    const box = screen.getByRole('group', { name: 'Dual dialogue: Mara and The Explorer, apart on the timeline' });
+    expect(box.classList.contains('apart')).toBe(true);
+    expect(within(box).getByText(/apart on the timeline/)).toBeTruthy();
+  });
 });
