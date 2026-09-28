@@ -7760,3 +7760,105 @@ kbd {
   color: var(--text-soft);
   pointer-events: none;
 }
+
+/* ------------------------------------------------------------ dual dialogue in the Game Bible */
+
+.bible-dual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.bible-dual-half {
+  grid-row: 1;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+  opacity: 0.55;
+}
+
+.bible-dual-half.own {
+  opacity: 1;
+}
+
+.bible-dual-who {
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.bible-dual-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bible-dual-mark {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--c-dialogue);
+  font-family: var(--font-ui), system-ui, sans-serif;
+}
+
+.bible-dual.apart .bible-dual-mark {
+  opacity: 0.4;
+}
+
+.bible-dual-detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.bible-dual-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px dashed var(--c-dialogue);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-soft);
+  font-family: var(--font-script);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+button.bible-dual-col {
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+button.bible-dual-col:hover {
+  opacity: 1;
+  background: #2a1d15;
+}
+
+.bible-dual-col.own {
+  border-style: solid;
+  background: #2a1d15;
+  color: var(--text);
+}
+
+.bible-dual-direction {
+  color: var(--text-soft);
+  font-size: 11.5px;
+}
+
+.bible-dual-detail.apart .bible-dual-col {
+  border-color: var(--border-strong);
+}
+
+.bible-dual-note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}

@@ -13,6 +13,41 @@ import { ElementDetail } from '../detail/ElementDetail';
 import { Symbol } from '../Symbol';
 import { ReportPreview } from './ReportPreview';
 import { Inline } from '../Inline';
+import { dualPairs, type DualPair } from '../../model/timeline';
+import type { DialogueLine } from '../../model/types';
+
+/** Every line in the project that is in a dual pair, and its pair. */
+const dualsOf = (project: Project): Map<string, DualPair> => {
+  const out = new Map<string, DualPair>();
+  for (const sceneId of new Set(project.lines.filter((l) => l.dual).map((l) => l.sceneId))) {
+    for (const pair of dualPairs(project, sceneId)) {
+      out.set(pair.left.id, pair);
+      out.set(pair.right.id, pair);
+    }
+  }
+  return out;
+};
+
+const speakerName = (project: Project, l: DialogueLine) => ((l.speakerId && project.objects[l.speakerId]?.name) || 'No speaker').toUpperCase();
+
+/**
+ * A dual line in the list: its own words beside the line it is spoken with,
+ * as the script sets them (the left-hand speech on the left), the other
+ * speaker's half dimmed and named.
+ */
+const DualName = ({ project, line, pair }: { project: Project; line: DialogueLine; pair: DualPair }) => (
+  <span className={`bible-dual${pair.together ? '' : ' apart'}`}>
+    {[pair.left, pair.right].map((l, i) => (
+      <span key={l.id} className={`bible-dual-half${l.id === line.id ? ' own' : ''}`} style={{ gridColumn: i * 2 + 1 }}>
+        {l.id !== line.id && <span className="bible-dual-who">{speakerName(project, l)}</span>}
+        <span className="bible-dual-text">{l.text ? <Inline text={l.text} /> : '…'}</span>
+      </span>
+    ))}
+    <span className="bible-dual-mark" aria-hidden="true">
+      ⇹
+    </span>
+  </span>
+);
 
 interface Props {
   project: Project;
@@ -130,6 +165,8 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
     return o.notes || (scenes ? `in ${scenes} scene${scenes === 1 ? '' : 's'}` : TYPE_LABEL[o.type]);
   };
 
+  const duals = useMemo(() => dualsOf(project), [project]);
+
   const row = (entry: Entry) => {
     const issue = issues.get(entry.id);
     const symbol: ObjectType = entry.kind === 'line' ? 'dialogue' : entry.object.type;
@@ -138,7 +175,15 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
       <button key={entry.id} className={`bible-row${selection === entry.id ? ' on' : ''}`} onClick={() => setSelected(entry.id)}>
         <Symbol type={symbol} size={14} color={color} />
         <span className="bible-row-main">
-          <span className="bible-row-name">{entry.kind === 'line' ? (entry.line.text ? <Inline text={entry.line.text} /> : '…') : entry.object.name}</span>
+          <span className="bible-row-name">
+            {entry.kind === 'line' && duals.has(entry.id) ? (
+              <DualName project={project} line={entry.line} pair={duals.get(entry.id)!} />
+            ) : entry.kind === 'line' ? (
+              entry.line.text ? <Inline text={entry.line.text} /> : '…'
+            ) : (
+              entry.object.name
+            )}
+          </span>
           <span className={`bible-row-sub${issue ? ' warn' : ''}`}>{issue ?? subtitle(entry)}</span>
         </span>
         {entry.kind === 'object' && entry.object.data.code && <span className="mono bible-row-code">{entry.object.data.code}</span>}
@@ -278,7 +323,7 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
         </div>
         <div className="bible-detail-body">
           {line ? (
-            <LineDetail project={project} lineId={line.id} onCommit={onCommit} onNavigate={onNavigate} />
+            <LineDetail project={project} lineId={line.id} pair={duals.get(line.id)} onCommit={onCommit} onNavigate={onNavigate} onSelect={setSelected} />
           ) : selection && project.objects[selection] ? (
             <>
               <ElementDetail project={project} id={selection} onCommit={onCommit} onNavigate={onNavigate} onOpenCode={onOpenCode} onDelete={onDelete} variant="bible" />
@@ -323,7 +368,22 @@ const VoMeter = ({ project, id }: { project: Project; id: string }) => {
 };
 
 /** A script line in Dialogue / Voice: the same line the script and timeline show. */
-const LineDetail = ({ project, lineId, onCommit, onNavigate }: { project: Project; lineId: string; onCommit: (p: Project) => void; onNavigate: (to: Destination) => void }) => {
+const LineDetail = ({
+  project,
+  lineId,
+  pair,
+  onCommit,
+  onNavigate,
+  onSelect,
+}: {
+  project: Project;
+  lineId: string;
+  /** The dual pair the line is in, if any. */
+  pair?: DualPair;
+  onCommit: (p: Project) => void;
+  onNavigate: (to: Destination) => void;
+  onSelect: (id: string) => void;
+}) => {
   const line = project.lines.find((l) => l.id === lineId)!;
   const scene = project.objects[line.sceneId];
   return (
@@ -381,6 +441,38 @@ const LineDetail = ({ project, lineId, onCommit, onNavigate }: { project: Projec
           <textarea key={line.notes} className="inp" rows={2} defaultValue={line.notes} placeholder="Delivery, context for the actor…" onBlur={(e) => onCommit(updateLine(project, line.id, { notes: e.currentTarget.value }))} />
         </label>
       </section>
+      {pair && (
+        <section className="detail-section" aria-label="Spoken at the same time">
+          <div className="lbl">⇹ Spoken at the same time</div>
+          <div className={`bible-dual-detail${pair.together ? '' : ' apart'}`}>
+            {[pair.left, pair.right].map((l) => {
+              const body = (
+                <>
+                  <span className="bible-dual-who">
+                    <span className="mono">#{l.order}</span> {speakerName(project, l)}
+                  </span>
+                  {l.direction && <span className="bible-dual-direction">({l.direction})</span>}
+                  <span className="bible-dual-said">{l.text ? <Inline text={l.text} /> : '…'}</span>
+                </>
+              );
+              return l.id === line.id ? (
+                <div key={l.id} className="bible-dual-col own">
+                  {body}
+                </div>
+              ) : (
+                <button key={l.id} className="bible-dual-col" title="Show this line" onClick={() => onSelect(l.id)}>
+                  {body}
+                </button>
+              );
+            })}
+          </div>
+          <p className="bible-dual-note">
+            {pair.together
+              ? 'Side by side in the script and next to each other on the timeline: the game plays them as one beat.'
+              : 'Side by side in the script, but something plays between them on the timeline, so the game plays them in turn.'}
+          </p>
+        </section>
+      )}
       <div className="detail-actions">
         <button className="tb-btn small" onClick={() => onNavigate({ kind: 'scene', sceneId: line.sceneId, mode: 'open' })}>
           Open in the script
