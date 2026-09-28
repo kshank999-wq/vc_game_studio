@@ -1,6 +1,6 @@
 import { cinematicTiming } from '../../model/shots';
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { addElement, sceneElements } from '../../model/scene';
+import { addElement, dualWith, sceneElements, spokenTogether } from '../../model/scene';
 import {
   MAIN,
   addEvent,
@@ -80,7 +80,21 @@ interface Block {
   events: TimelineEvent[];
   x: number;
   w: number;
+  /** Dual dialogue: two lines spoken at once, set side by side in one slot (left-hand speech first). */
+  dual?: boolean;
 }
+
+/** Two dialogue events that play as one beat: their lines are a dual pair. */
+const isDualPair = (project: Project, a: TimelineEvent, b: TimelineEvent): boolean =>
+  a.kind === 'dialogue' && b.kind === 'dialogue' && !!a.refId && !!b.refId && spokenTogether(project, a.refId, b.refId);
+
+/** A pair as the script sets it: the speech the other is beside on the left. */
+const leftFirst = (project: Project, [a, b]: TimelineEvent[]): TimelineEvent[] =>
+  a && b && dualWith(project, a.refId ?? '')?.id === b.refId ? [b, a] : [a!, b!];
+
+const DUAL_GAP = 6;
+/** Each half of a pair wide enough for a cue like THE EXPLORER. */
+const halfOf = (project: Project, e: TimelineEvent): number => Math.max(widthOf(project, e), 130);
 
 interface Row {
   track: Track;
@@ -97,10 +111,19 @@ const layoutTracks = (project: Project, tracks: Track[], grouped: boolean): Row[
     const top = FIRST_TRACK + i * (TRACK_H + TRACK_GAP);
     const startX = track.branch ? (choiceX.get(track.branch.choiceEventId) ?? PAD_X) + CHOICE + 28 : PAD_X;
     let x = startX;
-    const groups = grouped ? exchanges(track.events) : track.events.map((e) => [e]);
-    const blocks = groups.map((events) => {
-      const w = events.length > 1 ? 170 : widthOf(project, events[0]!);
-      const block = { events, x, w };
+    // A dual pair shares one slot however it is grouped: it is one beat.
+    const groups: { events: TimelineEvent[]; dual?: boolean }[] = [];
+    for (const e of track.events) {
+      const last = groups[groups.length - 1];
+      if (!grouped && last && !last.dual && last.events.length === 1 && isDualPair(project, last.events[0]!, e)) {
+        last.events.push(e);
+        last.dual = true;
+      } else groups.push({ events: [e] });
+    }
+    const merged = grouped ? exchanges(track.events).map((events) => ({ events })) : groups;
+    const blocks = merged.map(({ events, dual }: { events: TimelineEvent[]; dual?: boolean }) => {
+      const w = dual ? events.reduce((sum, e) => sum + halfOf(project, e), DUAL_GAP) : events.length > 1 ? 170 : widthOf(project, events[0]!);
+      const block: Block = { events, x, w, ...(dual ? { dual: true } : {}) };
       if (events[0]!.kind === 'choice') choiceX.set(events[0]!.id, x);
       x += w + GAP;
       return block;
@@ -143,13 +166,14 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
     const y = clientY - rect.top + el.scrollTop;
     let row = rows[0]!;
     for (const r of rows) if (y >= r.top - TRACK_GAP / 2) row = r;
-    const blocks = row.blocks.filter((b) => !b.events.some((e) => e.id === except));
+    // Half a dual pair being dragged away leaves the other half in its slot.
+    const blocks = row.blocks.map((b) => ({ ...b, stay: b.events.filter((e) => e.id !== except).length })).filter((b) => b.stay > 0);
     let index = 0;
     let markX = row.startX - GAP / 2;
     let count = 0;
     for (const b of blocks) {
       if (b.x + b.w / 2 < x) {
-        count += b.events.length;
+        count += b.stay;
         index = count;
         markX = b.x + b.w + GAP / 2;
       }
@@ -426,6 +450,44 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
                       />
                       <span className="ev-choice-label" style={{ left: block.x + CHOICE + 8, top: row.top + EVENT_TOP + 24 }}>
                         {first.mainLabel || eventTitle(project, first)}{afterLabel({ after: first.mainAfter })}
+                      </span>
+                    </div>
+                  );
+                }
+                if (block.dual) {
+                  // Dual dialogue: both lines in one slot, side by side, as the script sets them.
+                  return (
+                    <div
+                      key={`dual-${first.id}`}
+                      className="ev-dual"
+                      role="group"
+                      aria-label="Dual dialogue: spoken at the same time"
+                      style={{ left: block.x, top: row.top + EVENT_TOP, width: block.w, height: EVENT_H }}
+                    >
+                      {leftFirst(project, block.events).map((e) => {
+                        const conditional = isConditional(project, e);
+                        const dragged = drag?.id === e.id;
+                        return (
+                          <div
+                            key={e.id}
+                            className={`ev ev-dialogue${e.id === selected ? ' selected' : ''}${conditional ? ' conditional' : ''}${dragged ? ' dragging' : ''}`}
+                            style={{ flex: halfOf(project, e), ...(dragged ? { transform: `translate(${drag.dx}px, ${drag.dy}px)`, zIndex: 5 } : {}) }}
+                            onPointerDown={(ev) => onBlockDown(ev, { events: [e], x: block.x, w: block.w })}
+                            title="Spoken at the same time as the line beside it. Drag it away to play it on its own."
+                          >
+                            <span className="ek">{`DLG #${numbers.get(e.id)}${conditional ? ' · IF' : ''}`}</span>
+                            <span className="et">{eventTitle(project, e)}</span>
+                            <span className="es">{eventDetail(project, e)}</span>
+                          </div>
+                        );
+                      })}
+                      <span
+                        className="ev-dual-tag"
+                        aria-hidden="true"
+                        // Over the gap between the two cards.
+                        style={{ left: halfOf(project, leftFirst(project, block.events)[0]!) + DUAL_GAP / 2 }}
+                      >
+                        ⇹
                       </span>
                     </div>
                   );

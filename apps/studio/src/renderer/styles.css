@@ -3062,6 +3062,37 @@ a:hover {
   box-shadow: 0 0 0 4px rgba(232, 200, 114, 0.18);
 }
 
+/* Dual dialogue: two lines in one slot, side by side, spoken at once. */
+.ev-dual {
+  position: absolute;
+  display: flex;
+  gap: 6px;
+  padding: 0;
+  border-radius: 8px;
+  outline: 1px dashed var(--c-dialogue);
+  outline-offset: 3px;
+}
+
+.ev-dual > .ev {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+}
+
+.ev-dual-tag {
+  position: absolute;
+  top: -11px;
+  transform: translateX(-50%);
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #2a1d15;
+  border: 1px solid var(--c-dialogue);
+  color: #f0b08a;
+  font-size: 11px;
+  line-height: 16px;
+  pointer-events: none;
+}
+
 .ev-choice {
   position: absolute;
   height: 32px;
