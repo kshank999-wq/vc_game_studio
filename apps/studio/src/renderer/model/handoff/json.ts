@@ -1,6 +1,6 @@
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
-import type { HandoffIR } from './ir';
+import { DESIGN_LISTS, type HandoffIR } from './ir';
 
 /**
  * The JSON adapter: the handoff model itself, for any engine. story.json is
@@ -42,6 +42,10 @@ export const storySchema = () => ({
     objects: { type: 'array', items: ref('object') },
     items: { type: 'array', items: ref('thing') },
     locations: { type: 'array', items: ref('thing') },
+    lore: { type: 'array', items: ref('thing'), description: 'Lore entries: history and world facts, for codex or journal text.' },
+    quests: { type: 'array', items: ref('thing'), description: 'Quests and objectives, as designed; their logic lives in flags and triggers.' },
+    mechanics: { type: 'array', items: ref('thing'), description: 'Mechanic definitions: how a system works, in the designer\'s words.' },
+    encounters: { type: 'array', items: ref('thing'), description: 'Encounters and enemies.' },
     cinematics: { type: 'array', items: ref('thing') },
     flags: { type: 'array', items: obj({ id: str, ident, name: str, values: strings, initial: str, setBy: strings }) },
     triggers: { type: 'array', items: ref('trigger') },
@@ -216,6 +220,10 @@ export: change the story in the studio, not these files.
 - \`story.json\`: the whole story as data (validate it with \`story.schema.json\`).
 - \`story.schema.json\`: JSON Schema (2020-12) for it.
 
+\`lore\`, \`quests\`, \`mechanics\` and \`encounters\` are design definitions
+(a name, code, description and any other fields as \`fields\`) for the game to
+read, such as codex text or a quest log. They don't play on their own.
+
 ## Playing it
 
 1. **Start** at the \`graph\` node whose \`kind\` is \`begin\`.
@@ -304,6 +312,7 @@ const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
   for (const o of ir.objects) row({ id: o.id, label: o.name, symbol: o.kind, group: 'World', generates: o.kind === 'puzzle' ? 'objects[] · puzzle' : `objects[] · ${o.interactions.length} interactions` }, o);
   for (const t of ir.items) row({ id: t.id, label: t.name, symbol: 'inventory', group: 'World', generates: 'items[]' }, t);
   for (const t of ir.locations) row({ id: t.id, label: t.name, symbol: 'environment', group: 'World', generates: 'locations[]' }, t);
+  for (const d of DESIGN_LISTS) for (const t of ir[d.list]) row({ id: t.id, label: `${t.code} ${t.name}`.trim(), symbol: d.type, group: d.group, generates: `${d.list}[]` }, t);
   for (const f of ir.flags) row({ id: f.id, label: f.name, symbol: 'state', group: 'Logic', generates: `flags[] · ${f.values.join(' / ')}` }, f);
   for (const t of ir.triggers) row({ id: t.id, label: t.name, symbol: t.kind, group: 'Logic', generates: t.rule ? 'triggers[] · by rule' : 'triggers[]' }, t);
   for (const l of ir.levels) row({ id: l.guid, label: l.name, symbol: 'environment', group: 'World', generates: `levels[] · ${l.items.length} items (${l.export_name})` }, l);

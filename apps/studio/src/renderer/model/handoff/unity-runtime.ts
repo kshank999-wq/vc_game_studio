@@ -1025,6 +1025,46 @@ namespace VCGS
     public sealed class VcgsLocation : VcgsElement { }
 }
 `,
+  'VcgsLore.cs': String.raw`${HEAD}
+using UnityEngine;
+
+namespace VCGS
+{
+    /// <summary>A lore entry: history or a world fact, for codex or journal text.</summary>
+    [CreateAssetMenu(menuName = "VCGS/Lore entry")]
+    public sealed class VcgsLore : VcgsElement { }
+}
+`,
+  'VcgsQuest.cs': String.raw`${HEAD}
+using UnityEngine;
+
+namespace VCGS
+{
+    /// <summary>A quest or objective as designed; its logic lives in flags and triggers.</summary>
+    [CreateAssetMenu(menuName = "VCGS/Quest")]
+    public sealed class VcgsQuest : VcgsElement { }
+}
+`,
+  'VcgsMechanic.cs': String.raw`${HEAD}
+using UnityEngine;
+
+namespace VCGS
+{
+    /// <summary>A mechanic: how a system works, in the designer's words.</summary>
+    [CreateAssetMenu(menuName = "VCGS/Mechanic")]
+    public sealed class VcgsMechanic : VcgsElement { }
+}
+`,
+  'VcgsEncounter.cs': String.raw`${HEAD}
+using UnityEngine;
+
+namespace VCGS
+{
+    /// <summary>An encounter or enemy.</summary>
+    [CreateAssetMenu(menuName = "VCGS/Encounter")]
+    public sealed class VcgsEncounter : VcgsElement { }
+}
+`,
   'VcgsCinematic.cs': String.raw`${HEAD}
 using System.Collections.Generic;
 using UnityEngine;

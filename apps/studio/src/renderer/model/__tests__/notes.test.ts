@@ -138,7 +138,7 @@ describe('the Note Sorter: into the game', () => {
     const { p, ids } = sorted();
     const made = convertNote(p, ids.lantern, 'mechanic', 'Lantern oil')!;
     const object = made.project.objects[made.objectId]!;
-    expect(object).toMatchObject({ type: 'mechanic', name: 'Lantern oil', data: { code: 'MEC-01', fromNote: ids.lantern } });
+    expect(object).toMatchObject({ type: 'mechanic', name: 'Lantern oil', data: { code: 'MEC-02', fromNote: ids.lantern } });
     expect(statusOf(made.project, noteById(made.project, ids.lantern)!)).toBe('converted');
     const twice = convertNote(made.project, ids.lantern, 'state', 'lantern_oil')!;
     expect(noteById(twice.project, ids.lantern)!.destinations.map((d) => d.objectType)).toEqual(['mechanic', 'state']);

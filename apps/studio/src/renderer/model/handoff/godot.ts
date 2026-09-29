@@ -1,6 +1,6 @@
 import type { EngineAdapter, ElementOutput, EngineOutput, GenerateOptions, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
-import type { HandoffIR, IrEvent, IrThing } from './ir';
+import { DESIGN_LISTS, type HandoffIR, type IrEvent, type IrThing } from './ir';
 import { levelRuntime, levelScript, levelTscn, playTscn } from './godot-levels';
 import { sceneRuntime, sceneTscn, storyNodes, storyTscn } from './godot-scenes';
 import { markupInline } from '../inline';
@@ -558,6 +558,10 @@ const runtime = (): GeneratedFile[] => {
     element('VCGSCharacter', ['@export var role := ""', '@export var arc := ""', '@export var color := Color.WHITE']),
     element('VCGSItem', []),
     element('VCGSLocation', []),
+    element('VCGSLore', []),
+    element('VCGSQuest', []),
+    element('VCGSMechanic', []),
+    element('VCGSEncounter', []),
     element('VCGSCinematic', [
       '@export var seconds := 0.0',
       '@export var shots := 1',
@@ -580,7 +584,8 @@ const runtime = (): GeneratedFile[] => {
       '  studio. Triggers and puzzles settle themselves after each change to',
       '  GameState; set `GameState.auto_rules = false` to drive them yourself.',
       '- The Resource classes hold characters, items, locations, cinematics',
-      '  and puzzles.',
+      '  and puzzles, and the design definitions: lore, quests, mechanics and',
+      '  encounters.',
       '- `placeholder.gd` draws a stand-in for an element in the generated',
       '  scenes; `debug_player.gd` is the plain on-screen player in them.',
     ]),
@@ -870,13 +875,21 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
     );
     row({ id: o.id, label: o.name, symbol: 'object', group: 'World', generates: o.states.length ? 'Interactable · state machine' : 'Interactable stub', files: [path] }, o);
   }
-  for (const [list, symbol, cls, script, label] of [
-    [ir.items, 'inventory', 'VCGSItem', 'item.gd', 'Item definition'],
-    [ir.locations, 'environment', 'VCGSLocation', 'location.gd', 'Location data · ambience cues'],
+  for (const [list, symbol, cls, folder, label] of [
+    [ir.items, 'inventory', 'VCGSItem', 'items', 'Item definition'],
+    [ir.locations, 'environment', 'VCGSLocation', 'locations', 'Location data · ambience cues'],
   ] as const) {
     for (const t of list) {
-      const path = add(`${cls === 'VCGSItem' ? 'items' : 'locations'}/${t.ident.key}.tres`, tres(cls, script, thingFields(t)));
+      const path = add(`${folder}/${t.ident.key}.tres`, tres(cls, `${cls.replace('VCGS', '').toLowerCase()}.gd`, thingFields(t)));
       row({ id: t.id, label: t.name, symbol, group: 'World', generates: label, files: [path] }, t);
+    }
+  }
+  // Design definitions: a Resource each, for the game's codex, quest log or tuning.
+  for (const d of DESIGN_LISTS) {
+    const cls = `VCGS${d.type[0]!.toUpperCase()}${d.type.slice(1)}`;
+    for (const t of ir[d.list]) {
+      const path = add(`${d.list}/${t.ident.key}.tres`, tres(cls, `${d.type}.gd`, thingFields(t)));
+      row({ id: t.id, label: `${t.code} ${t.name}`.trim(), symbol: d.type, group: d.group, generates: `${cls} resource`, files: [path] }, t);
     }
   }
 
@@ -959,7 +972,7 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
 
   // Levels: a scene per level, its data, and a scene to walk it.
   const names: Record<string, string> = Object.fromEntries(
-    [...ir.characters, ...ir.objects, ...ir.items, ...ir.locations, ...ir.cinematics, ...ir.flags, ...ir.triggers, ...ir.choices, ...ir.scenes].map((x) => [x.ident.key, x.name]),
+    [...ir.characters, ...ir.objects, ...ir.items, ...ir.locations, ...DESIGN_LISTS.flatMap((d) => ir[d.list]), ...ir.cinematics, ...ir.flags, ...ir.triggers, ...ir.choices, ...ir.scenes].map((x) => [x.ident.key, x.name]),
   );
   for (const level of ir.levels) {
     const scene = add(`levels/${level.key}.tscn`, levelTscn(level, root));
@@ -993,6 +1006,18 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
       'These scenes are rewritten on every export. To build the real thing, make an',
       'inherited scene from one (Scene > New Inherited Scene), save it outside this',
       'folder and add art there: it keeps the generated nodes and your changes both.',
+      ...(DESIGN_LISTS.some((d) => ir[d.list].length)
+        ? [
+            '',
+            '## Lore, quests, mechanics and encounters',
+            '',
+            '`lore/`, `quests/`, `mechanics/` and `encounters/` hold a Resource per',
+            'definition (`VCGSLore`, `VCGSQuest`, `VCGSMechanic`, `VCGSEncounter`): its',
+            'key, code, name, description and other fields, for a codex, a quest log or',
+            'tuning to read with `load()`. They are data; wire their logic with flags and',
+            'triggers in the studio.',
+          ]
+        : []),
       ...(ir.levels.length
         ? [
             '',

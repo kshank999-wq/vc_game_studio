@@ -47,7 +47,7 @@ itself is never deleted.
 | Player Lane | A lane for the player's progression is created the first time a beat is dropped (a subplot lane, colour `#E8E0C8`). The beat goes on it. |
 | Scene layer | Narrative, behavior and systemic notes are used in the scene. A dialogue block becomes a line in the scene with its speaker. |
 | Level | The note is appended to the level's notes, and scenes and plot points are linked to the level. |
-| Game Bible / system | The placement is recorded, and the object appears in its Bible view. The new types are lore, quests, mechanics and encounters. |
+| Game Bible / system | The placement is recorded, and the object appears in its Bible view. The new types are lore, quests, mechanics and encounters. Every engine gets them as data; see [ENGINE-ADAPTERS.md](ENGINE-ADAPTERS.md#design-definitions). |
 
 ## Suggestions
 
@@ -69,6 +69,4 @@ The Sunken Vault with the Action-adventure categories.
 
 ## Not yet
 
-- Lore, quest, mechanic and encounter objects live in the studio and the Game
-  Bible. They aren't exported to the Godot, Unity or Unreal handoff yet.
 - The raw notes panel shows plain text. Formatting in a `.docx` is not kept.

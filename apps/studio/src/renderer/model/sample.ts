@@ -1,6 +1,6 @@
 import { addInteraction, interactionsOf, setField, setNotes, setSceneUse, setStates, setValue, toggleTag, updateInteraction } from './details';
 import { spineLane } from './layout';
-import { addLane, connect, createProject, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
+import { addLane, connect, createProject, makeObject, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
 import { sampleLevel } from './level/sample-level';
 import { addElement, addLine, setSceneData, updateLine, useInScene } from './scene';
 import { addBranch, addEvent, moveEvent, sceneTimeline, updateBranch, updateEvent } from './timeline';
@@ -187,6 +187,17 @@ export const sunkenVault = (): Project => {
   p = useInScene(p, theKey, key);
   const found = addEvent(p, theKey, 'action', { label: 'Find the key in the silt' })!;
   p = updateEvent(found.project, theKey, found.id, { effects: [{ kind: 'give', ref: key }] });
+
+  // Design definitions in the Bible: the world's history, the goal, a system and a threat.
+  for (const [type, name, notes, fields] of [
+    ['lore', 'The Drowned Order', 'River priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.', { era: 'Three centuries before the game' }],
+    ['quest', 'Open the vault', 'Find the Vault Key and drain the seam, then turn the key in the vault door.', { goal: 'Reach the vault chamber and open the door' }],
+    ['mechanic', 'Lantern oil', 'The lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.', { tuning: 'About a minute of deep water on a full lantern' }],
+    ['encounter', 'Eel swarm', 'Eels in the deep channels. They scatter from lantern light.', { weakness: 'Lantern light' }],
+  ] as const) {
+    const object = makeObject(type, name, p.objects[mara]!.created, { code: nextCode(p, codeFormatFor(type)!), ...fields });
+    p = setNotes({ ...p, objects: { ...p.objects, [object.id]: object } }, object.id, notes);
+  }
 
   // Where it all happens: one level, tied to the scenes and the Bible.
   p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent });

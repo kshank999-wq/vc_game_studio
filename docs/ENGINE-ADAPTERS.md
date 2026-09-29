@@ -44,15 +44,28 @@ EngineOutput { files, elements }   one row per element: what it generates,
 
 Nothing in the story model, the Bible or the handoff screen changes.
 
+## Design definitions
+
+Lore entries, quests, mechanics and encounters (often sorted out of raw notes;
+see [NOTE-SORTER.md](NOTE-SORTER.md)) go to every engine as data: the IR's
+`lore`, `quests`, `mechanics` and `encounters`, each with its key, code, name,
+description and other fields. They are for the game to read, such as a codex, a
+quest log or tuning. They don't play on their own; their logic is written with
+flags, triggers and gates, as for everything else.
+
 ## The Godot 4 adapter
 
 - **Runtime** (`addons/vcgs_runtime/`, the same for every project):
   `game_state.gd` (the GameState autoload), `scene_flow.gd` (plays a scene's
   timeline and emits a signal for each event), `interactable.gd`,
   `rule_engine.gd` (conditions and effects), and
-  Resource classes for characters, items, locations, cinematics and puzzles.
+  Resource classes for characters, items, locations, cinematics and puzzles,
+  and for the design definitions (`VCGSLore`, `VCGSQuest`, `VCGSMechanic`,
+  `VCGSEncounter`).
 - **Generated** (`res://vcgs/generated/` by default): a flow controller per
-  scene, a `.tres` per character / item / location / cinematic / puzzle, an
+  scene, a `.tres` per character / item / location / cinematic / puzzle and
+  per lore entry / quest / mechanic / encounter (`lore/`, `quests/`,
+  `mechanics/`, `encounters/`), an
   interactable script per object, `logic/rules.gd` (flags, triggers, gates),
   a script per choice, the dialogue table, the story graph, a VO cue list
   (under a `.gdignore`), a README and a manifest.
@@ -112,11 +125,12 @@ definition, `VCGS.Runtime`), the story to `Assets/VCGS/Generated`:
   `story.json`), `VcgsSceneFlow` (a scene key and a `ScenePlayer`),
   `VcgsInteractable` (an object key), and ScriptableObject classes
   `VcgsCharacter`, `VcgsItem`, `VcgsLocation`, `VcgsCinematic` (with its shot
-  list), one class per file as Unity requires.
+  list), `VcgsLore`, `VcgsQuest`, `VcgsMechanic` and `VcgsEncounter`, one class
+  per file as Unity requires.
 - **Generated**: `story.json` (the same handoff model as the JSON adapter),
   `StoryKeys.cs` (`VCGS.Keys.Scenes.Sc03TheVaultDoor` and every other key, for
-  game code), and a ScriptableObject `.asset` per character, item, location
-  and cinematic.
+  game code), and a ScriptableObject `.asset` per character, item, location,
+  cinematic, lore entry, quest, mechanic and encounter.
 - **Every file has a `.meta`** whose GUID comes from its path, so assets keep
   their script references and your references to them survive re-exports.
 - **Checked with .NET**: `apps/studio/scripts/check-unity.sh` exports the
@@ -140,7 +154,8 @@ Pick **Unreal Engine 5**. It writes a plugin and the story's data:
 - **Generated**: `Content/VCGS/Generated/story.json`,
   `Plugins/VCGS/Source/VCGS/Public/Generated/VcgsStoryKeys.h`
   (`VcgsKeys::Scenes::Sc03TheVaultDoor` and every other key), DataTable CSVs
-  (characters, items, locations, cinematics, shots, lines) and
+  (characters, items, locations, cinematics, shots, lines, lore, quests,
+  mechanics, encounters) and
   `import_datatables.py`, which imports them in the editor as DT_ assets.
 - `story.json` is read at runtime, so add `VCGS/Generated` to *Additional
   Non-Asset Directories to Package*.

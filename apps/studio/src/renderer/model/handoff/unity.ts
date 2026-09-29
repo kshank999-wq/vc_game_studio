@@ -1,6 +1,6 @@
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
-import type { HandoffIR, IrThing, Ident } from './ir';
+import { DESIGN_LISTS, type HandoffIR, type IrThing, type Ident } from './ir';
 import { JSON_FORMAT } from './json';
 import { ASMDEF, RUNTIME_FILES } from './unity-runtime';
 import { EDITOR_ASMDEF, LEVEL_EDITOR_FILES, LEVEL_RUNTIME_FILES, levelJson } from './unity-levels';
@@ -104,6 +104,7 @@ const storyKeys = (ir: HandoffIR): string =>
     ...keyClass('Puzzles', 'Puzzles.', ir.objects.filter((o) => o.kind === 'puzzle')),
     ...keyClass('Items', 'Inventory items.', ir.items),
     ...keyClass('Locations', 'Locations.', ir.locations),
+    ...DESIGN_LISTS.flatMap((d) => keyClass(d.folder, `${d.folder}: VcgsElement assets under ${d.folder}/.`, ir[d.list])),
     ...keyClass('Cinematics', 'Cinematics.', ir.cinematics),
     ...keyClass('Flags', 'States the game remembers (GameState.GetFlag / SetFlag).', ir.flags),
     ...keyClass('Triggers', 'Triggers (Rules.Fire).', ir.triggers.filter((t) => t.kind === 'trigger')),
@@ -132,7 +133,10 @@ project.
    true; \`StoryWalker\` follows the graph between scenes.
 
 The Characters, Items, Locations and Cinematics folders hold a ScriptableObject
-per element, for designers to find in the Project window.
+per element, for designers to find in the Project window. So do Lore, Quests,
+Mechanics and Encounters (\`VcgsLore\`, \`VcgsQuest\`, \`VcgsMechanic\`,
+\`VcgsEncounter\`): design definitions for a codex, a quest log or tuning to
+read. They are data; their logic lives in flags and triggers.
 `;
 
 export const generateUnity = (ir: HandoffIR, outputPath: string): EngineOutput => {
@@ -220,12 +224,19 @@ export const generateUnity = (ir: HandoffIR, outputPath: string): EngineOutput =
       row({ id: t.id, label: t.name, symbol, group: 'World', generates: label, files: [path] }, t);
     }
   }
+  for (const d of DESIGN_LISTS) {
+    const className = `Vcgs${d.type[0]!.toUpperCase()}${d.type.slice(1)}`;
+    for (const t of ir[d.list]) {
+      const path = asset(d.folder, t, className, elementFields(t.ident.key, t.code, t.name, t.notes, t.fields));
+      row({ id: t.id, label: `${t.code} ${t.name}`.trim(), symbol: d.type, group: d.group, generates: `${className} asset`, files: [path] }, t);
+    }
+  }
   for (const f of ir.flags) row({ id: f.id, label: f.name, symbol: 'state', group: 'Logic', generates: `GameState flag · ${f.values.join(' / ')}`, files: [storyPath] }, f);
   for (const t of ir.triggers) row({ id: t.id, label: t.name, symbol: t.kind, group: 'Logic', generates: t.kind === 'gate' ? 'Rules.GateOpen' : 'Trigger · fires by rule', files: [storyPath] }, t);
 
   // Levels: their data, which VCGS › Update level from data… builds into the open scene.
   const names: Record<string, string> = Object.fromEntries(
-    [...ir.characters, ...ir.objects, ...ir.items, ...ir.locations, ...ir.cinematics, ...ir.flags, ...ir.triggers, ...ir.choices, ...ir.scenes].map((x) => [x.ident.key, x.name]),
+    [...ir.characters, ...ir.objects, ...ir.items, ...ir.locations, ...DESIGN_LISTS.flatMap((d) => ir[d.list]), ...ir.cinematics, ...ir.flags, ...ir.triggers, ...ir.choices, ...ir.scenes].map((x) => [x.ident.key, x.name]),
   );
   for (const level of ir.levels) {
     const path = put(`${root}/Levels/${level.key}.json`, levelJson(level, names), 'generated', 'text');

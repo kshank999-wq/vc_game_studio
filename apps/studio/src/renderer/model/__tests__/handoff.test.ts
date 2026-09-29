@@ -303,3 +303,57 @@ describe('level export', () => {
     expect(unreal.issues.length).toBeGreaterThanOrEqual(godot.issues.length);
   });
 });
+
+describe('design definitions: lore, quests, mechanics and encounters', () => {
+  const ir = () => buildIR(sunkenVault());
+
+  it('are in the handoff model with their codes and fields, without studio-only lineage', () => {
+    const { lore, quests, mechanics, encounters } = ir();
+    expect([lore, quests, mechanics, encounters].map((l) => l.map((t) => `${t.code} ${t.ident.key}`))).toEqual([['LORE-01 the_drowned_order'], ['QST-01 open_the_vault'], ['MEC-01 lantern_oil'], ['ENC-01 eel_swarm']]);
+    expect(mechanics[0]!.fields).toEqual({ tuning: 'About a minute of deep water on a full lantern' });
+    const withLineage = { ...sunkenVault() };
+    const id = Object.values(withLineage.objects).find((o) => o.type === 'mechanic')!.id;
+    withLineage.objects = { ...withLineage.objects, [id]: { ...withLineage.objects[id]!, data: { ...withLineage.objects[id]!.data, fromNote: 'note_1' } } };
+    expect(buildIR(withLineage).mechanics[0]!.fields).not.toHaveProperty('fromNote');
+  });
+
+  it('get a row on every engine and a file where the engine keeps element data', async () => {
+    const { json, storySchema } = await import('../handoff/json');
+    const { generateGodot } = await import('../handoff/godot');
+    const { generateUnity } = await import('../handoff/unity');
+    const { generateUnreal } = await import('../handoff/unreal');
+    const outputs = { json: json.generate!(ir(), 'vcgs'), godot: generateGodot(ir(), 'vcgs/generated'), unity: generateUnity(ir(), 'Assets/VCGS/Generated'), unreal: generateUnreal(ir(), 'Content/VCGS/Generated') };
+    for (const out of Object.values(outputs)) {
+      expect(out.elements.filter((e) => ['lore', 'quest', 'mechanic', 'encounter'].includes(e.symbol)).map((e) => [e.label, e.group])).toEqual([
+        ['LORE-01 The Drowned Order', 'World'],
+        ['QST-01 Open the vault', 'Story'],
+        ['MEC-01 Lantern oil', 'Logic'],
+        ['ENC-01 Eel swarm', 'World'],
+      ]);
+    }
+    const file = (out: { files: { path: string; content: string }[] }, path: string) => out.files.find((f) => f.path === path)?.content;
+
+    // JSON: in story.json and described by its schema.
+    const story = JSON.parse(file(outputs.json, 'vcgs/story.json')!);
+    expect(story.quests[0]).toMatchObject({ name: 'Open the vault', code: 'QST-01', fields: { goal: 'Reach the vault chamber and open the door' } });
+    expect(Object.keys(storySchema().properties)).toEqual(expect.arrayContaining(['lore', 'quests', 'mechanics', 'encounters']));
+
+    // Godot: a Resource class in the runtime and a .tres per definition.
+    expect(file(outputs.godot, 'addons/vcgs_runtime/quest.gd')).toContain('class_name VCGSQuest');
+    const eel = file(outputs.godot, 'vcgs/generated/encounters/eel_swarm.tres')!;
+    expect(eel).toMatch(/script_class="VCGSEncounter"/);
+    expect(eel).toContain('path="res://addons/vcgs_runtime/encounter.gd"');
+    expect(eel).toContain('code = "ENC-01"');
+
+    // Unity: a ScriptableObject class and an asset, each with a .meta; keys for code.
+    expect(file(outputs.unity, 'Assets/VCGS/Runtime/VcgsLore.cs')).toContain('public sealed class VcgsLore : VcgsElement');
+    expect(file(outputs.unity, 'Assets/VCGS/Generated/Lore/the_drowned_order.asset')).toContain('code: "LORE-01"');
+    expect(file(outputs.unity, 'Assets/VCGS/Generated/Lore/the_drowned_order.asset.meta')).toBeDefined();
+    expect(file(outputs.unity, 'Assets/VCGS/Generated/StoryKeys.cs')).toContain('public static class Mechanics');
+
+    // Unreal: a DataTable CSV each, imported by the script, and keys.
+    expect(file(outputs.unreal, 'Content/VCGS/Generated/DataTables/Mechanics.csv')!.split('\n')[1]).toBe('lantern_oil,lantern_oil,MEC-01,Lantern oil,The lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.,tuning: About a minute of deep water on a full lantern');
+    expect(file(outputs.unreal, 'Content/VCGS/Generated/import_datatables.py')).toContain('"Encounters": "/Script/VCGS.VcgsElementRow",');
+    expect(file(outputs.unreal, 'Plugins/VCGS/Source/VCGS/Public/Generated/VcgsStoryKeys.h')).toContain('namespace Quests');
+  });
+});

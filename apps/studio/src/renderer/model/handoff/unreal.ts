@@ -1,6 +1,6 @@
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
-import type { HandoffIR, Ident } from './ir';
+import { DESIGN_LISTS, type HandoffIR, type Ident } from './ir';
 import { JSON_FORMAT } from './json';
 import { VCGS_CORE_H } from './unreal-core';
 import { buildLevelScript, LEVEL_PLUGIN_FILES, levelJsonUnreal } from './unreal-levels';
@@ -110,7 +110,7 @@ struct VCGS_API FVcgsCharacterRow : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FLinearColor Color = FLinearColor::White;
 };
 
-/** A row of DT_Items or DT_Locations: its fields as "name: value" lines in Details. */
+/** A row of DT_Items, DT_Locations, DT_Lore, DT_Quests, DT_Mechanics or DT_Encounters: its fields as "name: value" lines in Details. */
 USTRUCT(BlueprintType)
 struct VCGS_API FVcgsElementRow : public FTableRowBase
 {
@@ -604,6 +604,7 @@ export const storyKeysHeader = (ir: HandoffIR): string =>
     ...keySection('Puzzles', 'Puzzles.', ir.objects.filter((o) => o.kind === 'puzzle')),
     ...keySection('Items', 'Inventory items.', ir.items),
     ...keySection('Locations', 'Locations.', ir.locations),
+    ...DESIGN_LISTS.flatMap((d) => keySection(d.folder, `${d.folder} (DT_${d.folder}).`, ir[d.list])),
     ...keySection('Cinematics', 'Cinematics.', ir.cinematics),
     ...keySection('Flags', 'States the game remembers.', ir.flags),
     ...keySection('Triggers', 'Triggers.', ir.triggers.filter((t) => t.kind === 'trigger')),
@@ -640,6 +641,9 @@ export const dataTables = (ir: HandoffIR): Record<string, { struct: string; csv:
     },
     Items: { struct: 'VcgsElementRow', csv: csv(['---', 'Key', 'Code', 'DisplayName', 'Description', 'Details'], ir.items.map((t) => [t.ident.key, t.ident.key, t.code, t.name, t.notes, details(t.fields)])) },
     Locations: { struct: 'VcgsElementRow', csv: csv(['---', 'Key', 'Code', 'DisplayName', 'Description', 'Details'], ir.locations.map((t) => [t.ident.key, t.ident.key, t.code, t.name, t.notes, details(t.fields)])) },
+    ...Object.fromEntries(
+      DESIGN_LISTS.map((d) => [d.folder, { struct: 'VcgsElementRow', csv: csv(['---', 'Key', 'Code', 'DisplayName', 'Description', 'Details'], ir[d.list].map((t) => [t.ident.key, t.ident.key, t.code, t.name, t.notes, details(t.fields)])) }]),
+    ),
     Cinematics: {
       struct: 'VcgsCinematicRow',
       csv: csv(
@@ -713,7 +717,9 @@ export. Change the story in VC Game Studio, not these files. The plugin
    \`Interact("Pull")\`.
 5. **DataTables** (optional, for designers and subtitles): run
    \`${root}/import_datatables.py\` in the editor to make DT_Characters, DT_Items,
-   DT_Locations, DT_Cinematics, DT_Shots and DT_Lines.
+   DT_Locations, DT_Cinematics, DT_Shots and DT_Lines, and the design
+   definitions DT_Lore, DT_Quests, DT_Mechanics and DT_Encounters (codex text,
+   a quest log, tuning; their logic lives in flags and triggers).
 
 The game state lives in the \`UVcgsSubsystem\` (flags, items, arcs and the rest,
 all Blueprint-callable). Triggers fire and puzzles solve themselves as their
@@ -750,13 +756,14 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
   for (const o of ir.objects) row({ id: o.id, label: o.name, symbol: o.kind, group: 'World', generates: o.kind === 'puzzle' ? 'Puzzle · solved by rule' : `UVcgsInteractableComponent · ${o.interactions.length} interaction${o.interactions.length === 1 ? '' : 's'}`, files: [storyPath] }, o);
   for (const t of ir.items) row({ id: t.id, label: t.name, symbol: 'inventory', group: 'World', generates: 'DT_Items row', files: [tablePaths.Items!] }, t);
   for (const t of ir.locations) row({ id: t.id, label: t.name, symbol: 'environment', group: 'World', generates: 'DT_Locations row', files: [tablePaths.Locations!] }, t);
+  for (const d of DESIGN_LISTS) for (const t of ir[d.list]) row({ id: t.id, label: `${t.code} ${t.name}`.trim(), symbol: d.type, group: d.group, generates: `DT_${d.folder} row`, files: [tablePaths[d.folder]!] }, t);
   for (const f of ir.flags) row({ id: f.id, label: f.name, symbol: 'state', group: 'Logic', generates: `Game state flag · ${f.values.join(' / ')}`, files: [storyPath] }, f);
   for (const t of ir.triggers) row({ id: t.id, label: t.name, symbol: t.kind, group: 'Logic', generates: t.kind === 'gate' ? 'GateOpen' : 'Trigger · fires by rule', files: [storyPath] }, t);
 
   // Levels: their data, and the editor script that places and updates their actors.
   if (ir.levels.length) {
     const names: Record<string, string> = Object.fromEntries(
-      [...ir.characters, ...ir.objects, ...ir.items, ...ir.locations, ...ir.cinematics, ...ir.flags, ...ir.triggers, ...ir.choices, ...ir.scenes].map((x) => [x.ident.key, x.name]),
+      [...ir.characters, ...ir.objects, ...ir.items, ...ir.locations, ...DESIGN_LISTS.flatMap((d) => ir[d.list]), ...ir.cinematics, ...ir.flags, ...ir.triggers, ...ir.choices, ...ir.scenes].map((x) => [x.ident.key, x.name]),
     );
     const builder = put(`${root}/Levels/build_level.py`, buildLevelScript(root), 'generated');
     for (const level of ir.levels) {

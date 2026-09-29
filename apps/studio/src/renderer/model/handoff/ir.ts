@@ -269,6 +269,11 @@ export interface HandoffIR {
   objects: IrObject[];
   items: IrThing[];
   locations: IrThing[];
+  /** Design definitions, most often sorted out of raw notes (docs/NOTE-SORTER.md): data for the game to read. */
+  lore: IrThing[];
+  quests: IrThing[];
+  mechanics: IrThing[];
+  encounters: IrThing[];
   cinematics: IrThing[];
   flags: IrFlag[];
   triggers: IrTrigger[];
@@ -279,14 +284,27 @@ export interface HandoffIR {
   levels: IrLevel[];
 }
 
+/**
+ * The design definitions every engine writes out as data, in the same way:
+ * lore, quests, mechanics and encounters. `list` is their array in the IR,
+ * `folder` their folder or table name, `group` their row on the handoff screen.
+ */
+export const DESIGN_LISTS = [
+  { list: 'lore', type: 'lore', label: 'Lore entry', folder: 'Lore', group: 'World' },
+  { list: 'quests', type: 'quest', label: 'Quest', folder: 'Quests', group: 'Story' },
+  { list: 'mechanics', type: 'mechanic', label: 'Mechanic', folder: 'Mechanics', group: 'Logic' },
+  { list: 'encounters', type: 'encounter', label: 'Encounter', folder: 'Encounters', group: 'World' },
+] as const satisfies readonly { list: keyof HandoffIR; type: ObjectType; label: string; folder: string; group: string }[];
+
 const fieldsOf = (o: StoryObject): Record<string, string> =>
-  Object.fromEntries(Object.entries(o.data).filter(([k, v]) => typeof v === 'string' && !['code', 'color', 'initialState', 'setsFlag'].includes(k)) as [string, string][]);
+  Object.fromEntries(Object.entries(o.data).filter(([k, v]) => typeof v === 'string' && !['code', 'color', 'initialState', 'setsFlag', 'fromNote'].includes(k)) as [string, string][]);
 
 export const buildIR = (project: Project): HandoffIR => {
   const ids = identifiers(project);
   const key = (id: string | undefined | null): string | null => (id && ids.get(id)?.key) || null;
   const all = Object.values(project.objects).sort((a, b) => (a.data.code ?? a.name).localeCompare(b.data.code ?? b.name, undefined, { numeric: true }));
   const of = (...types: ObjectType[]) => all.filter((o) => types.includes(o.type));
+  const thing = (o: StoryObject): IrThing => ({ id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, type: o.type, notes: o.notes, fields: fieldsOf(o) });
   const node = (id: string): IrStoryNode => ({ key: key(id)!, kind: project.objects[id]!.type, name: project.objects[id]!.name });
   const lineId = (sceneCode: string, order: number) => `${toKey(sceneCode || 'scene')}_line_${String(order).padStart(2, '0')}`;
   const rule = (r: Rule | undefined): IrRule | undefined => {
@@ -444,8 +462,12 @@ export const buildIR = (project: Project): HandoffIR => {
       ...(o.type === 'puzzle' && rule(o.data.rule as Rule | undefined) ? { solvedWhen: rule(o.data.rule as Rule | undefined) } : {}),
       ...(o.type === 'puzzle' && effects(o.data.effects as Effect[] | undefined) ? { effects: effects(o.data.effects as Effect[] | undefined) } : {}),
     })),
-    items: of('inventory').map((o) => ({ id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, type: o.type, notes: o.notes, fields: fieldsOf(o) })),
-    locations: of('environment').map((o) => ({ id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, type: o.type, notes: o.notes, fields: fieldsOf(o) })),
+    items: of('inventory').map(thing),
+    locations: of('environment').map(thing),
+    lore: of('lore').map(thing),
+    quests: of('quest').map(thing),
+    mechanics: of('mechanic').map(thing),
+    encounters: of('encounter').map(thing),
     cinematics: of('cinematic').map((o) => {
       const event = project.events.find((e) => e.refId === o.id);
       const timing = event || shotsOf(o).length ? cinematicTiming(project, o.id, event) : undefined;
