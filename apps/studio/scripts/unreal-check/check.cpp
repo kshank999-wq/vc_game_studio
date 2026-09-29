@@ -132,6 +132,15 @@ int main()
         if (!vcgs::Rules::Check(asks, game)) Fail("a rule should see the quest done and the lore known");
     }
 
+    // Effects can start a quest and reveal lore.
+    {
+        vcgs::GameState told(story);
+        told.Quests.clear();
+        vcgs::Value effects = vcgs::JsonReader::Parse(R"([{"kind":"startQuest","ref":"open_the_vault"},{"kind":"revealLore","ref":"the_drowned_order"}])", nullptr);
+        vcgs::Rules::Apply(effects, told);
+        if (told.QuestState(Quests::OpenTheVault) != "active" || !told.KnowsLore(Lore::TheDrownedOrder)) Fail("the effects should start the quest and reveal the lore");
+    }
+
     // SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
     {
         vcgs::GameState fresh(story);

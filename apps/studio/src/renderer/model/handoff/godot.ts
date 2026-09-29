@@ -348,6 +348,11 @@ const runtime = (): GeneratedFile[] => {
       '\t\t\t\tVCGSRules.solve(ref, game)',
       '\t\t\t"fire":',
       '\t\t\t\tVCGSRules.fire(ref, game)',
+      '\t\t\t"startQuest":',
+      '\t\t\t\tif game.quest_state(ref) == "":',
+      '\t\t\t\t\tgame.set_quest(ref, "active")',
+      '\t\t\t"revealLore":',
+      '\t\t\t\tgame.discover_lore(ref)',
     ]),
     file('scene_flow.gd', [
       '# VCGS Runtime for Godot 4.',

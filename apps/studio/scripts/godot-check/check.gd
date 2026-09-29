@@ -151,6 +151,13 @@ func _initialize() -> void:
 	if not VCGSRuleEngine.check(asks, game) or VCGSRuleEngine.check({ "match": "all", "items": [{ "kind": "quest", "ref": "open_the_vault", "op": "notStarted" }] }, game):
 		fail("a rule should see the quest done and the lore known")
 
+	# Effects can start a quest and reveal lore.
+	load("res://vcgs/generated/logic/rules.gd").reset(game)
+	game.quests.clear()
+	VCGSRuleEngine.apply([{ "kind": "startQuest", "ref": "open_the_vault" }, { "kind": "revealLore", "ref": "the_drowned_order" }], game)
+	if game.quest_state("open_the_vault") != "active" or not game.knows_lore("the_drowned_order"):
+		fail("the effects should start the quest and reveal the lore")
+
 	# SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
 	load("res://vcgs/generated/logic/rules.gd").reset(game)
 	var key_scene: Node = load("res://vcgs/generated/scenes/sc_02_the_key.gd").new()

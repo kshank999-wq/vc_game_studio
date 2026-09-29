@@ -418,3 +418,18 @@ describe('conditions on quests, lore and mechanics in the engines', () => {
     expect(condition.op.enum).toEqual(expect.arrayContaining(['done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable']));
   });
 });
+
+describe('effects that start quests and reveal lore, in the engines', () => {
+  it('reach every rule engine, and the schema allows them', async () => {
+    const { storySchema } = await import('../handoff/json');
+    const { generateGodot } = await import('../handoff/godot');
+    const { RUNTIME_FILES } = await import('../handoff/unity-runtime');
+    const { VCGS_CORE_H } = await import('../handoff/unreal-core');
+    const effect = JSON.parse(JSON.stringify(storySchema())).$defs.effect.properties;
+    expect(effect.kind.enum).toEqual(expect.arrayContaining(['startQuest', 'revealLore']));
+    const engine = generateGodot(buildIR(sunkenVault()), 'vcgs/generated').files.find((f) => f.path === 'addons/vcgs_runtime/rule_engine.gd')!.content;
+    expect(engine).toContain('"revealLore":');
+    expect(RUNTIME_FILES['Rules.cs']).toContain('case "startQuest":');
+    expect(VCGS_CORE_H).toContain('kind == "revealLore"');
+  });
+});

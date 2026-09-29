@@ -313,3 +313,36 @@ describe('conditions on quests, lore and mechanics', () => {
     expect(newCondition('mechanic', 'x')).toEqual({ kind: 'mechanic', ref: 'x', op: 'available' });
   });
 });
+
+describe('effects that start quests and reveal lore', () => {
+  const quest = id(p, 'Open the vault', 'quest');
+  const lore = id(p, 'The Drowned Order', 'lore');
+
+  it('start a quest waiting for its rule, and reveal lore, when an event does them', async () => {
+    const { addEvent, updateEvent } = await import('../timeline');
+    const { describeEffects } = await import('../rules');
+    // The quest waits for the key; the silt camp's event starts it and tells the Order's story early.
+    let waiting: Project = { ...p, objects: { ...p.objects, [quest]: { ...p.objects[quest]!, data: { ...p.objects[quest]!.data, starts: { match: 'all', items: [{ kind: 'flag', ref: id(p, 'door_solved'), op: 'is', value: 'never' }] } } } } };
+    const theKey = id(p, 'The Key', 'scene');
+    const added = addEvent(waiting, theKey, 'action', { label: 'Read the camp journal' })!;
+    const effects = [{ kind: 'startQuest' as const, ref: quest }, { kind: 'revealLore' as const, ref: lore }];
+    waiting = updateEvent(added.project, theKey, added.id, { effects });
+    expect(describeEffects(waiting, effects)).toBe('start Open the vault · reveal The Drowned Order');
+    let play = startPlay(waiting, theKey);
+    expect(play.world.quests[quest]).toBeUndefined();
+    play = setWorld(waiting, play, (w) => ({ ...w, mechanics: { ...w.mechanics, [id(p, 'Lantern oil', 'mechanic')]: true } }));
+    play = playToDecision(waiting, choose(waiting, play, 0));
+    expect(play.world.quests[quest]).toBe('active');
+    expect(play.world.lore[lore]).toBe(true);
+    const texts = play.log.map((e) => `${e.kind}:${e.text}`);
+    expect(texts).toContain('quest:Open the vault');
+    expect(texts).toContain('lore:The Drowned Order');
+  });
+
+  it('leave a quest under way or done as it is', async () => {
+    const { apply, emptyState } = await import('../rules');
+    const done = { ...emptyState(), quests: { [quest]: 'done' as const } };
+    expect(apply([{ kind: 'startQuest', ref: quest }], done).quests[quest]).toBe('done');
+    expect(apply([{ kind: 'startQuest', ref: quest }], emptyState()).quests[quest]).toBe('active');
+  });
+});

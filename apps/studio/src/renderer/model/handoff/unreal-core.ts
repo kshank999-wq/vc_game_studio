@@ -504,6 +504,8 @@ namespace vcgs
                 else if (kind == "arc") game.AddArc(ref, static_cast<int>(e["amount"].Num()));
                 else if (kind == "solve") Solve(ref, game);
                 else if (kind == "fire") Fire(ref, game);
+                else if (kind == "startQuest") { if (game.QuestState(ref).empty()) game.SetQuest(ref, "active"); }
+                else if (kind == "revealLore") game.DiscoverLore(ref);
             }
         }
 

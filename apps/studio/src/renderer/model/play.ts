@@ -126,6 +126,15 @@ const doEffects = (d: Doing, effects: Effect[] | undefined) => {
   for (const e of effects ?? []) {
     if (e.kind === 'fire') fire(d, e.ref);
     else if (e.kind === 'solve') solve(d, e.ref);
+    else if (e.kind === 'startQuest') {
+      const quest = d.project.objects[e.ref];
+      if (quest && !d.world.quests[e.ref]) setQuest(d, quest, 'active');
+    } else if (e.kind === 'revealLore') {
+      if (d.project.objects[e.ref] && !d.world.lore[e.ref]) {
+        d.world = { ...d.world, lore: { ...d.world.lore, [e.ref]: true } };
+        d.log.push({ kind: 'lore', text: name(d.project, e.ref) });
+      }
+    }
     else {
       d.world = { ...d.world, ...apply([e], d.world) };
       d.log.push({ kind: 'effect', text: describeEffect(d.project, e) });

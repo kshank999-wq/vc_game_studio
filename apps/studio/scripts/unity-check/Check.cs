@@ -84,6 +84,14 @@ static class Check
             new Dictionary<string, object> { ["kind"] = "lore", ["ref"] = Lore.TheDrownedOrder, ["op"] = "known" } } };
         if (!Rules.Check(asks, game)) Fail("a rule should see the quest done and the lore known");
 
+        // Effects can start a quest and reveal lore.
+        var told = new GameState(story);
+        told.Quests.Clear();
+        Rules.Apply(new List<object> {
+            new Dictionary<string, object> { ["kind"] = "startQuest", ["ref"] = Quests.OpenTheVault },
+            new Dictionary<string, object> { ["kind"] = "revealLore", ["ref"] = Lore.TheDrownedOrder } }, told);
+        if (told.QuestState(Quests.OpenTheVault) != "active" || !told.KnowsLore(Lore.TheDrownedOrder)) Fail("the effects should start the quest and reveal the lore");
+
         // SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
         var fresh = new GameState(story);
         var silt = new ScenePlayer(fresh, Scenes.Sc02TheKey);

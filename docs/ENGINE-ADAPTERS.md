@@ -89,6 +89,12 @@ the studio's play-through:
   conditions (`{ "kind": "quest", "ref": "open_the_vault", "op": "done" }`),
   checked by every runtime's rule engine. In the sample the eels can only be
   beaten once Lantern oil is available.
+- **Effects** can start a quest (*Start quest*: a quest under way or done stays
+  as it is) and reveal lore (*Reveal lore*), wherever effects go: a trigger, a
+  choice's option, a timeline event, a route, a puzzle's or quest's reward. They
+  reach the engines as `{ "kind": "startQuest", "ref": … }` and
+  `{ "kind": "revealLore", "ref": … }`, and raise the same started and
+  discovered events as the rules do.
 
 ## The Godot 4 adapter
 

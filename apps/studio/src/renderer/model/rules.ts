@@ -31,7 +31,9 @@ export type Effect =
   | { kind: 'setObject'; ref: string; value: string }
   | { kind: 'arc'; ref: string; amount: number }
   | { kind: 'solve'; ref: string }
-  | { kind: 'fire'; ref: string };
+  | { kind: 'fire'; ref: string }
+  | { kind: 'startQuest'; ref: string }
+  | { kind: 'revealLore'; ref: string };
 
 export const isRule = (x: Condition | Rule): x is Rule => 'match' in x;
 
@@ -91,6 +93,8 @@ export const EFFECTS: readonly EffectKind[] = [
   { kind: 'arc', label: 'Move arc', type: 'character', value: 'number' },
   { kind: 'solve', label: 'Solve puzzle', type: 'puzzle', value: 'none' },
   { kind: 'fire', label: 'Fire trigger', type: 'trigger', value: 'none' },
+  { kind: 'startQuest', label: 'Start quest', type: 'quest', value: 'none' },
+  { kind: 'revealLore', label: 'Reveal lore', type: 'lore', value: 'none' },
 ];
 
 export const subjectOf = (kind: Condition['kind']): Subject => SUBJECTS.find((s) => s.kind === kind)!;
@@ -185,6 +189,10 @@ export const describeEffect = (project: Project, e: Effect): string => {
       return `solve ${who}`;
     case 'fire':
       return `fire ${who}`;
+    case 'startQuest':
+      return `start ${who}`;
+    case 'revealLore':
+      return `reveal ${who}`;
   }
 };
 
@@ -252,7 +260,7 @@ export const evaluate = (rule: Rule | undefined, s: PlayState): boolean => {
 
 /** Apply effects to a state. Firing a trigger is left to the caller, which knows the trigger's own effects. */
 export const apply = (effects: Effect[] | undefined, s: PlayState): PlayState => {
-  const next: PlayState = { ...s, flags: { ...s.flags }, items: { ...s.items }, objects: { ...s.objects }, arcs: { ...s.arcs }, solved: { ...s.solved } };
+  const next: PlayState = { ...s, flags: { ...s.flags }, items: { ...s.items }, objects: { ...s.objects }, arcs: { ...s.arcs }, solved: { ...s.solved }, quests: { ...s.quests }, lore: { ...s.lore } };
   for (const e of effects ?? []) {
     if (e.kind === 'setFlag') next.flags[e.ref] = e.value;
     if (e.kind === 'setObject') next.objects[e.ref] = e.value;
@@ -260,6 +268,9 @@ export const apply = (effects: Effect[] | undefined, s: PlayState): PlayState =>
     if (e.kind === 'take') next.items[e.ref] = Math.max(0, (next.items[e.ref] ?? 0) - 1);
     if (e.kind === 'arc') next.arcs[e.ref] = (next.arcs[e.ref] ?? 0) + e.amount;
     if (e.kind === 'solve') next.solved[e.ref] = true;
+    // Starting a quest that is under way or done changes nothing.
+    if (e.kind === 'startQuest' && !next.quests[e.ref]) next.quests[e.ref] = 'active';
+    if (e.kind === 'revealLore') next.lore[e.ref] = true;
   }
   return next;
 };

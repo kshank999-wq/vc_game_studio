@@ -150,7 +150,7 @@ export const storySchema = () => ({
     effect: {
       type: 'object',
       required: ['kind', 'ref'],
-      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire'] }, ref: str, value: str, amount: num },
+      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire', 'startQuest', 'revealLore'] }, ref: str, value: str, amount: num },
     },
     effects: { type: 'array', items: ref('effect') },
     storyNode: obj({ key: str, kind: str, name: str }),

@@ -507,6 +507,8 @@ namespace VCGS
                     case "arc": game.AddArc(reference, (int)D.Num(e, "amount")); break;
                     case "solve": Solve(reference, game); break;
                     case "fire": Fire(reference, game); break;
+                    case "startQuest": if (game.QuestState(reference) == "") game.SetQuest(reference, "active"); break;
+                    case "revealLore": game.DiscoverLore(reference); break;
                 }
             }
         }
