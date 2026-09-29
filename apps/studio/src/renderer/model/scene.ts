@@ -99,6 +99,9 @@ const ELEMENT_CODE: Partial<Record<ObjectType, { prefix: string; pad: number }>>
   character: { prefix: 'CH-', pad: 2 },
 };
 
+/** The code format a type is numbered by as a scene element, if it has one. */
+export const elementCodeFor = (type: ObjectType) => ELEMENT_CODE[type];
+
 const ELEMENT_NAME: Partial<Record<ObjectType, string>> = {
   character: 'New character',
   object: 'New object',

@@ -16,8 +16,10 @@ handoff that generates engine code for Unity, Unreal, Godot or a custom engine.
 - UI design package: [`docs/ui/`](docs/ui/README.md)
 - Specs: [`docs/specs/vc-writer-spec.md`](docs/specs/vc-writer-spec.md),
   [`docs/specs/vc-game-studio-spec.md`](docs/specs/vc-game-studio-spec.md),
-  [`docs/specs/level-designer-spec.md`](docs/specs/level-designer-spec.md)
+  [`docs/specs/level-designer-spec.md`](docs/specs/level-designer-spec.md),
+  [`docs/specs/note-sorter-spec.md`](docs/specs/note-sorter-spec.md)
 - Level Designer: [`docs/LEVEL-DESIGNER.md`](docs/LEVEL-DESIGNER.md)
+- Note Sorter: [`docs/NOTE-SORTER.md`](docs/NOTE-SORTER.md)
 - Plan and status: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 ## Packages

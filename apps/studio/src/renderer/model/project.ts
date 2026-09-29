@@ -82,8 +82,15 @@ const CODE_FORMAT: Partial<Record<ObjectType, { prefix: string; pad: number }>> 
   cinematic: { prefix: 'CIN-', pad: 2 },
   choice: { prefix: 'C', pad: 0 },
   dialogue: { prefix: 'DLG-', pad: 2 },
+  lore: { prefix: 'LORE-', pad: 2 },
+  quest: { prefix: 'QST-', pad: 2 },
+  mechanic: { prefix: 'MEC-', pad: 2 },
+  encounter: { prefix: 'ENC-', pad: 2 },
 };
 const SUBPLOT_POINT = { prefix: 'SP', pad: 0 };
+
+/** The code format a type is numbered by on the graph, if it has one. */
+export const codeFormatFor = (type: ObjectType) => CODE_FORMAT[type];
 
 export const nextCode = (project: Project, format: { prefix: string; pad: number }): string => {
   const pattern = new RegExp(`^${format.prefix}(\\d+)$`);

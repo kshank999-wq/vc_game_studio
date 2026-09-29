@@ -20,6 +20,10 @@ export type ViewKey =
   | 'cinematics'
   | 'puzzles'
   | 'logic'
+  | 'lore'
+  | 'quests'
+  | 'mechanics'
+  | 'encounters'
   | 'production';
 
 export interface BibleView {
@@ -42,6 +46,10 @@ export const VIEWS: readonly BibleView[] = [
   { key: 'cinematics', label: 'Cinematics', symbol: 'cinematic', types: ['cinematic'] },
   { key: 'puzzles', label: 'Puzzles', symbol: 'puzzle', types: ['puzzle'] },
   { key: 'logic', label: 'Triggers / Gates / State', symbol: 'trigger', types: ['trigger', 'gate', 'state'] },
+  { key: 'lore', label: 'Lore', symbol: 'lore', types: ['lore'] },
+  { key: 'quests', label: 'Quests / Objectives', symbol: 'quest', types: ['quest'] },
+  { key: 'mechanics', label: 'Mechanics', symbol: 'mechanic', types: ['mechanic'] },
+  { key: 'encounters', label: 'Encounters / Enemies', symbol: 'encounter', types: ['encounter'] },
   { key: 'production', label: 'Production Requirements', symbol: 'object' },
 ];
 
@@ -95,7 +103,7 @@ export const viewGroups = (project: Project, key: ViewKey, query = ''): Group[] 
 
   switch (key) {
     case 'all': {
-      const order: ObjectType[] = ['begin', 'plotPoint', 'end', 'scene', 'cinematic', 'choice', 'character', 'environment', 'object', 'inventory', 'puzzle', 'trigger', 'gate', 'state', 'arcEvent', 'dialogue'];
+      const order: ObjectType[] = ['begin', 'plotPoint', 'end', 'scene', 'cinematic', 'choice', 'character', 'environment', 'object', 'inventory', 'puzzle', 'trigger', 'gate', 'state', 'arcEvent', 'dialogue', 'lore', 'quest', 'mechanic', 'encounter'];
       return keep(order.map((type) => ({ label: TYPE_LABEL[type], entries: wrap(objects.filter((o) => o.type === type)) })));
     }
     case 'characters': {
@@ -109,7 +117,7 @@ export const viewGroups = (project: Project, key: ViewKey, query = ''): Group[] 
       const groups: Group[] = [{ label: 'Spine', entries: spine.map((object) => ({ kind: 'object', id: object.id, object })) }];
       for (const lane of project.lanes.filter((l) => l.kind === 'subplot')) {
         const beats = laneSequence(project, lane.id).map((id) => project.objects[id]!);
-        groups.push({ label: `Subplot · ${lane.name}`, entries: beats.map((object) => ({ kind: 'object', id: object.id, object })) });
+        groups.push({ label: lane.role === 'player' ? lane.name : `Subplot · ${lane.name}`, entries: beats.map((object) => ({ kind: 'object', id: object.id, object })) });
       }
       const loose = objects.filter((o) => o.type === 'plotPoint' && project.placements[o.id]?.laneId === null);
       if (loose.length) groups.push({ label: 'Branches', entries: wrap(loose) });

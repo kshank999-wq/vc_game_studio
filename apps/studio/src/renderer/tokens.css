@@ -25,6 +25,10 @@
   --c-inventory: #6cc4d6;
   --c-puzzle: #e07bb0;
   --c-logic: #c8bfae;
+  --c-lore: #c9a45c;
+  --c-quest: #e8c872;
+  --c-mechanic: #6fae5e;
+  --c-encounter: #e5534b;
   --c-character: #d9607a;
   --c-subplot: #8fa8c4;
   --c-subplot-line: #3c4655;
@@ -35,6 +39,7 @@
   --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-script: 'Courier Prime', 'Courier New', monospace;
+  --font-notes: 'Source Serif 4', Georgia, serif;
 
   --topbar-h: 52px;
   --palette-w: 264px;

@@ -75,6 +75,10 @@ const VIEW_GROUP: Record<ViewKey, string> = {
   cinematics: 'Where it sits',
   puzzles: 'Type',
   logic: 'Type',
+  lore: 'Type',
+  quests: 'Type',
+  mechanics: 'Type',
+  encounters: 'Type',
   production: 'Production tag',
 };
 
@@ -85,6 +89,10 @@ const CREATES: Partial<Record<ViewKey, ObjectType>> = {
   objects: 'object',
   puzzles: 'puzzle',
   logic: 'state',
+  lore: 'lore',
+  quests: 'quest',
+  mechanics: 'mechanic',
+  encounters: 'encounter',
 };
 
 const CREATE_CODE: Partial<Record<ObjectType, { prefix: string; pad: number }>> = {
@@ -93,6 +101,10 @@ const CREATE_CODE: Partial<Record<ObjectType, { prefix: string; pad: number }>> 
   object: { prefix: 'OBJ-', pad: 2 },
   puzzle: { prefix: 'PZ-', pad: 2 },
   state: { prefix: 'ST-', pad: 2 },
+  lore: { prefix: 'LORE-', pad: 2 },
+  quest: { prefix: 'QST-', pad: 2 },
+  mechanic: { prefix: 'MEC-', pad: 2 },
+  encounter: { prefix: 'ENC-', pad: 2 },
 };
 
 const viewFor = (project: Project, id: string | undefined): ViewKey => {

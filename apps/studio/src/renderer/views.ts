@@ -14,12 +14,14 @@ const loaders = {
   play: () => import('./components/play/PlayView'),
   engine: () => import('./components/engine/EngineHandoff'),
   levels: () => import('./components/level/LevelDesigner'),
+  notes: () => import('./components/notes/NoteSorter'),
 };
 
 export const GameBible = lazy(() => loaders.bible().then((m) => ({ default: m.GameBible })));
 export const ShotList = lazy(() => loaders.shots().then((m) => ({ default: m.ShotList })));
 export const PlayView = lazy(() => loaders.play().then((m) => ({ default: m.PlayView })));
 export const LevelDesigner = lazy(() => loaders.levels().then((m) => ({ default: m.LevelDesigner })));
+export const NoteSorter = lazy(() => loaders.notes().then((m) => ({ default: m.NoteSorter })));
 export const EngineHandoff = lazy(() => loaders.engine().then((m) => ({ default: m.EngineHandoff })));
 
 /** The handoff model, for export on save, without putting the engines in the first load. */

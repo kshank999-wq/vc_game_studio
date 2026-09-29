@@ -1,4 +1,5 @@
 import type { LevelSet } from './level/types';
+import type { NoteSet } from './notes/types';
 import type { Effect, Rule } from './rules';
 
 /**
@@ -22,7 +23,13 @@ export type ObjectType =
   | 'trigger'
   | 'gate'
   | 'state'
-  | 'arcEvent';
+  | 'arcEvent'
+  // From the Note Sorter's destinations (Note Sorter spec §7): the Bible's
+  // lore, and gameplay definitions a designer sorts out of raw notes.
+  | 'lore'
+  | 'quest'
+  | 'mechanic'
+  | 'encounter';
 
 export interface StoryObject {
   id: string;
@@ -67,6 +74,8 @@ export interface Lane {
   locked: boolean;
   /** A character lane follows one canonical character object. */
   characterId?: string;
+  /** The Player Lane (Note Sorter spec §9): the player's progression beats, Beginning to Ending. */
+  role?: 'player';
 }
 
 export type ConnectionKind = 'spine' | 'branch' | 'contains' | 'references' | 'arcEvent' | 'laneTie' | 'gate';
@@ -240,4 +249,6 @@ export interface Project {
   handoff?: { target: EngineTarget; last?: ExportRecord };
   /** The Level Designer's levels, items and project assets. Absent until the first level. */
   levels?: LevelSet;
+  /** The Note Sorter's raw notes, cards and categories. Absent until the first import. */
+  notes?: NoteSet;
 }

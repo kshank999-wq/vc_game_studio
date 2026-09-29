@@ -19,6 +19,10 @@ const FILL: Partial<Record<ObjectType, string>> = {
   gate: 'var(--c-logic)',
   state: 'var(--c-logic)',
   arcEvent: 'var(--c-character)',
+  lore: 'var(--c-lore)',
+  quest: 'var(--c-quest)',
+  mechanic: 'var(--c-mechanic)',
+  encounter: 'var(--c-encounter)',
   begin: 'var(--gold)',
   end: 'var(--gold)',
 };
@@ -84,6 +88,27 @@ export const Symbol = ({ type, size = 14, color }: { type: ObjectType; size?: nu
           <circle cx="8" cy="8" r="3.4" fill={fill} />
         </>,
       );
+    case 'lore':
+      // An outline square: a page of the Bible.
+      return svg(<rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="none" stroke={fill} strokeWidth="1.6" />);
+    case 'quest':
+      return svg(
+        <>
+          <rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="none" stroke={fill} strokeWidth="1.5" />
+          <path d="M5 8.2l2 2 4-4.4" fill="none" stroke={fill} strokeWidth="1.6" />
+        </>,
+      );
+    case 'mechanic':
+      // A cross-hair.
+      return svg(
+        <>
+          <circle cx="8" cy="8" r="4" fill="none" stroke={fill} strokeWidth="1.5" />
+          <path d="M8 1v3.5M8 11.5V15M1 8h3.5M11.5 8H15" stroke={fill} strokeWidth="1.5" />
+        </>,
+      );
+    case 'encounter':
+      // An arrow, striking.
+      return svg(<path d="M3 13L12 4M6.5 3.5H12.5V9.5" fill="none" stroke={fill} strokeWidth="1.8" strokeLinecap="round" />);
     case 'begin':
     case 'end':
       return <LockIcon size={size} />;

@@ -40,6 +40,10 @@ export const TYPE_LABEL: Record<ObjectType, string> = {
   gate: 'Gate',
   state: 'State',
   arcEvent: 'Arc event',
+  lore: 'Lore Entry',
+  quest: 'Quest / Objective',
+  mechanic: 'Mechanic',
+  encounter: 'Encounter / Enemy',
 };
 
 /** What each track accepts from the palette (spec §5, §6). Character arcs take arc events (build step 4). */

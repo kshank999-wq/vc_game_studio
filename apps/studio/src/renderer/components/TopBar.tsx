@@ -34,6 +34,9 @@ interface Props {
   onEngine: () => void;
   onLevels: () => void;
   levelsOn?: boolean;
+  /** The Note Sorter: raw notes into the game. */
+  onNotes?: () => void;
+  notesOn?: boolean;
   saveState: SaveState;
   issueCount: number;
   onIssues: () => void;
@@ -164,6 +167,11 @@ export const TopBar = (props: Props) => {
       <button className="bible-btn" onClick={props.onBible}>
         GAME BIBLE
       </button>
+      {props.onNotes && (
+        <button className={`tb-btn levels-btn${props.notesOn ? ' on' : ''}`} title="Sort raw notes into the game: lore, characters, mechanics, scenes, levels" onClick={props.onNotes}>
+          NOTES
+        </button>
+      )}
       <button className={`tb-btn levels-btn${props.levelsOn ? ' on' : ''}`} title="Lay out levels: rooms, doors, pickups, triggers (Ctrl+L)" onClick={props.onLevels}>
         LEVELS
       </button>

@@ -25,7 +25,7 @@ import { REPORTS, type ReportKey } from './model/reports';
 import { isPreview, PURCHASE_URL } from './edition';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
-import { EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, PlayView, preloadViews, ShotList } from './views';
+import { EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, ShotList } from './views';
 import type { LevelMode } from './components/level/LevelDesigner';
 import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
@@ -44,7 +44,8 @@ export type Route =
   | { view: 'engine'; focus?: string; back: PlaceRoute }
   | { view: 'play'; from?: string; back: PlaceRoute }
   | { view: 'cinematic'; id: string; back: PlaceRoute }
-  | { view: 'level'; focus?: string; mode?: LevelMode; back: PlaceRoute };
+  | { view: 'level'; focus?: string; mode?: LevelMode; back: PlaceRoute }
+  | { view: 'notes'; back: PlaceRoute };
 
 /** Views that stand aside from the graph and scenes, with a way back to where they were opened. */
 const isAside = (r: Route): r is Extract<Route, { back: PlaceRoute }> => 'back' in r;
@@ -135,6 +136,7 @@ export const App = () => {
   const openPlay = (from?: string) => setRoute((r) => ({ view: 'play', from, back: placeOf(r) }));
   const openBible = (focus?: string, report?: ReportKey) => setRoute((r) => ({ view: 'bible', focus, report, back: placeOf(r) }));
   const openEngine = (focus?: string) => setRoute((r) => ({ view: 'engine', focus, back: placeOf(r) }));
+  const openNotes = () => setRoute((r) => ({ view: 'notes', back: placeOf(r) }));
 
   // Export on save (desktop): once edits settle, send what changed to the engine project.
   useEffect(() => {
@@ -686,6 +688,7 @@ export const App = () => {
         { label: 'Story graph', checked: onGraph, onClick: () => setRoute({ view: 'graph' }) },
         { label: 'Game Bible', shortcut: 'Mod+B', checked: route.view === 'bible', onClick: () => openBible() },
         { label: 'Levels', shortcut: 'Mod+L', checked: route.view === 'level', onClick: () => openLevels() },
+        { label: 'Note Sorter', checked: route.view === 'notes', onClick: () => (route.view === 'notes' ? setRoute(route.back) : openNotes()) },
         { label: 'Engine handoff', shortcut: 'Mod+E', checked: route.view === 'engine', onClick: () => openEngine() },
         { label: 'Play-through', shortcut: 'F5', checked: route.view === 'play', onClick: () => openPlay() },
         {
@@ -836,6 +839,8 @@ export const App = () => {
           ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Play-through' }]
         : route.view === 'level'
           ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Levels' }]
+        : route.view === 'notes'
+          ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Note Sorter' }]
           : route.view === 'cinematic'
             ? [
                 { label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) },
@@ -877,6 +882,8 @@ export const App = () => {
           onEngine={() => (route.view === 'engine' ? setRoute(route.back) : openEngine())}
           onLevels={() => (route.view === 'level' ? setRoute(route.back) : openLevels(route.view === 'scene' ? route.sceneId : route.view === 'graph' ? (selection ?? undefined) : undefined))}
           levelsOn={route.view === 'level'}
+          onNotes={() => (route.view === 'notes' ? setRoute(route.back) : openNotes())}
+          notesOn={route.view === 'notes'}
           saveState={studio.saveState}
           issueCount={route.view === 'graph' ? issues.length : 0}
           onIssues={showNextIssue}
@@ -977,6 +984,9 @@ export const App = () => {
             )}
             {route.view === 'cinematic' && (
               <ShotList key={route.id} project={project} id={route.id} onCommit={commit} onNavigate={navigate} onOpenBible={openBible} onOpenCode={openEngine} />
+            )}
+            {route.view === 'notes' && (
+              <NoteSorter project={project} onCommit={commit} onUndo={studio.undo} canUndo={studio.canUndo} onOpenBible={openBible} onSay={say} />
             )}
             {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} />}
             {route.view === 'level' && (
