@@ -158,7 +158,19 @@ the studio's play-through:
   `paste_codex_notes()` (and `take_codex_notes(text)`); Unity
   `VcgsCodex.ShareNotes` / `PasteNotes`; Unreal `CopyCodexNotes` /
   `PasteCodexNotes` (the plugin now uses the ApplicationCore module for the
-  clipboard).
+  clipboard). And the notes **sync** through a sync file (JSON,
+  `"format": "vcgs-codex-notes-sync"`): every note with when it was last
+  changed (a note taken off kept, empty), merged so that for each entry the
+  newer note wins, and written back. The placeholder screens sync when the
+  codex opens, every few seconds while it is open, and after each note; put
+  the file in a folder that syncs (a cloud drive, Steam Cloud) and the notes
+  follow the player across devices. Godot `sync_codex_notes()` and
+  `codex_sync_path` (user://codex_notes_sync.json), `sync_notes` /
+  `notes_sync_text` on the game state; Unity `VcgsCodex.SyncNotes()` and
+  `SyncPath` (persistentDataPath), `GameState.SyncNotes` / `NotesSyncText`;
+  Unreal `SyncCodexNotes` (Saved/CodexNotesSync.json). Entries are named by
+  their keys, so a game's copies sync with each other (not with the studio's
+  preview, which names them differently).
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

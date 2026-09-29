@@ -128,4 +128,5 @@ struct FTransform {};
 struct FMath
 {
     static double Sqrt(double v) { return std::sqrt(v); }
+    template <typename T> static T Max(T a, T b) { return a < b ? b : a; }
 };

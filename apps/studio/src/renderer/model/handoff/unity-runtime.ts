@@ -117,7 +117,7 @@ namespace VCGS
             {
                 if (Peek() != '"') throw new FormatException("Expected a string at " + i);
                 i++;
-                var sb = new StringBuilder();
+                var sb = new System.Text.StringBuilder();
                 while (true)
                 {
                     var c = Peek();
@@ -319,6 +319,8 @@ namespace VCGS
         public readonly List<string> Bookmarks = new List<string>();
         /// <summary>The player's notes on codex entries, by key.</summary>
         public readonly Dictionary<string, string> Notes = new Dictionary<string, string>();
+        /// <summary>When each note was last changed (milliseconds since 1970), kept for notes taken off too, so they sync.</summary>
+        public readonly Dictionary<string, long> NoteTimes = new Dictionary<string, long>();
         /// <summary>Lore the player has come across, in the order they found it (the codex).</summary>
         public readonly List<string> KnownLore = new List<string>();
         /// <summary>Mechanics the player can use now.</summary>
@@ -352,7 +354,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -433,12 +435,60 @@ namespace VCGS
         /// <summary>Keep the player's note on a codex entry ("" takes it off).</summary>
         public void SetNote(string entry, string text)
         {
+            NoteTimes[entry] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             text = (text ?? "").Trim();
             if (text == "") Notes.Remove(entry);
             else Notes[entry] = text;
         }
 
         public string NoteFor(string entry) => Notes.TryGetValue(entry, out var n) ? n : "";
+
+        /// <summary>The notes as a sync file: each with when it was last changed (a note taken off, empty).</summary>
+        public string NotesSyncText(string story)
+        {
+            string Q(string s)
+            {
+                var b = new System.Text.StringBuilder("\"");
+                foreach (var c in s ?? "")
+                {
+                    if (c == '"' || c == '\\') b.Append('\\').Append(c);
+                    else if (c == '\n') b.Append("\\n");
+                    else if (c == '\r') b.Append("\\r");
+                    else if (c == '\t') b.Append("\\t");
+                    else if (c < ' ') b.Append("\\u").Append(((int)c).ToString("x4"));
+                    else b.Append(c);
+                }
+                return b.Append('"').ToString();
+            }
+            var keys = new List<string>(NoteTimes.Keys);
+            keys.Sort(string.CompareOrdinal);
+            var json = new System.Text.StringBuilder("{\n  \"format\": \"vcgs-codex-notes-sync\",\n  \"version\": 1,\n  \"story\": " + Q(story) + ",\n  \"notes\": {");
+            for (var i = 0; i < keys.Count; i++)
+                json.Append((i > 0 ? "," : "") + "\n    " + Q(keys[i]) + ": { \"text\": " + Q(NoteFor(keys[i])) + ", \"at\": " + NoteTimes[keys[i]] + " }");
+            return json.Append(keys.Count > 0 ? "\n  }\n}" : "}\n}").ToString();
+        }
+
+        /// <summary>Merge a sync file into the notes: for each entry, the newer note wins (on a tie, ours). Returns how many notes it changed, or -1 when the text is not a sync file.</summary>
+        public int SyncNotes(string text)
+        {
+            Dictionary<string, object> data;
+            try { data = D.Map(Json.Parse(text ?? "")); }
+            catch (Exception) { return -1; }
+            if (D.Str(data, "format") != "vcgs-codex-notes-sync" || !(D.Get(data, "notes") is Dictionary<string, object> notes)) return -1;
+            var changed = 0;
+            foreach (var n in notes)
+            {
+                if (!(n.Value is Dictionary<string, object> note) || !(D.Get(note, "text") is string words) || !(D.Get(note, "at") is double atNumber)) continue;
+                var at = (long)atNumber;
+                if (NoteTimes.TryGetValue(n.Key, out var ours) && at <= ours) continue;
+                words = words.Trim();
+                if (NoteFor(n.Key) != words) changed++;
+                NoteTimes[n.Key] = at;
+                if (words == "") Notes.Remove(n.Key);
+                else Notes[n.Key] = words;
+            }
+            return changed;
+        }
 
         /// <summary>The player has used an object (Interactions.Interact says so).</summary>
         public void UseObject(string obj)
@@ -1254,7 +1304,7 @@ namespace VCGS
                 if (key != "quests") entries = Sorted(entries);
                 var shown = q == "" ? entries : entries.FindAll(e => e.text.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0 || game.NoteFor(e.key).IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
                 if (q != "" && shown.Count == 0) return;
-                var text = new StringBuilder(heading);
+                var text = new System.Text.StringBuilder(heading);
                 if (shown.Count == 0) text.Append("\n" + empty);
                 foreach (var e in shown)
                 {
@@ -1525,6 +1575,7 @@ namespace VCGS
         {
             if (VcgsGame.Instance != null && Cursor != "") VcgsGame.Instance.State.SetNote(Cursor, text);
             NoteDraft = null;
+            SyncNotes();
         }
 
         /// <summary>What just happened, shown under the codex (the notes saved, say).</summary>
@@ -1545,6 +1596,37 @@ namespace VCGS
             {
                 Status = "Could not save the notes.";
                 return "";
+            }
+        }
+
+        /// <summary>
+        /// Where the codex notes sync: the notes are merged with this file (the newer note wins)
+        /// when the codex opens, every few seconds while it is open, and after each note. Put it
+        /// in a folder that syncs (a cloud drive, Steam Cloud) to share them across devices;
+        /// empty turns syncing off. Null: codex_notes_sync.json in persistentDataPath.
+        /// </summary>
+        public string SyncPath { get; set; }
+
+        DateTime lastSync = DateTime.MinValue;
+
+        /// <summary>Sync the notes with the sync file: merge it in, and write the result back. Returns how many notes the file changed here, or -1 when it could not sync.</summary>
+        public int SyncNotes()
+        {
+            lastSync = DateTime.UtcNow;
+            if (Book == null || VcgsGame.Instance == null || SyncPath == "") return -1;
+            var path = SyncPath ?? System.IO.Path.Combine(Application.persistentDataPath, "codex_notes_sync.json");
+            try
+            {
+                var state = VcgsGame.Instance.State;
+                var changed = System.IO.File.Exists(path) ? Math.Max(0, state.SyncNotes(System.IO.File.ReadAllText(path))) : 0;
+                var text = state.NotesSyncText(state.Story.Name);
+                if (!System.IO.File.Exists(path) || System.IO.File.ReadAllText(path) != text) System.IO.File.WriteAllText(path, text);
+                if (changed > 0) Status = "Notes synced: " + changed + " changed elsewhere.";
+                return changed;
+            }
+            catch (Exception)
+            {
+                return -1;
             }
         }
 
@@ -1608,6 +1690,7 @@ namespace VCGS
             if (Book == null) return;
             IsOpen = true;
             Book.MarkRead();
+            SyncNotes();
         }
 
         public void Close() => IsOpen = false;
@@ -1707,6 +1790,7 @@ namespace VCGS
             if (GUI.Button(new Rect(Screen.width - 210, 10, 200, 30), ButtonText())) Toggle();
             if (!IsOpen) return;
             Book.MarkRead();
+            if (e.type == EventType.Repaint && (DateTime.UtcNow - lastSync).TotalSeconds >= 3) SyncNotes();
             if (text == null) text = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 16 };
             var area = new Rect(60, 50, Screen.width - 120, Screen.height - 100);
             GUI.Box(area, "");

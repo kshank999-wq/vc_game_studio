@@ -5,4 +5,5 @@ class UWorld : public UObject
 {
 public:
     UGameInstance* GetGameInstance() const { return nullptr; }
+    float GetDeltaSeconds() const { return 0.f; }
 };

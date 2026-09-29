@@ -284,6 +284,8 @@ func _initialize() -> void:
 	game.enable_mechanic("lantern_oil")
 	var silt: Node = load("res://vcgs/generated/scenes/sc_02_the_key.tscn").instantiate()
 	var silt_player: Node = silt.get_node("DebugPlayer")
+	# Not with a sync file from an earlier run: the sync test below uses its own.
+	silt_player.codex_sync_path = ""
 	silt_player.autostart = false
 	root.add_child(silt)
 	silt_player.start_now()
@@ -384,6 +386,28 @@ func _initialize() -> void:
 	if taken["notes"].size() != 1 or game.note_for("lore:the_drowned_order") != "From a friend":
 		fail("taking in shared notes should set them, got " + str(taken))
 	game.set_note("lore:the_drowned_order", "")
+	# Sync: the notes merge with the sync file, the newer note winning, and it is written back.
+	silt_player.codex_sync_path = "user://vcgs_check_sync.json"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://vcgs_check_sync.json"))
+	game.set_note("items:vault_key", "Mine")
+	if silt_player.sync_codex_notes() != 0 or not FileAccess.get_file_as_string("user://vcgs_check_sync.json").contains("\"items:vault_key\""):
+		fail("the first sync should write the notes out")
+	var elsewhere: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("user://vcgs_check_sync.json"))
+	var later := int(Time.get_unix_time_from_system() * 1000.0) + 60000
+	elsewhere["notes"]["items:vault_key"] = { "text": "Changed on the other device", "at": later }
+	elsewhere["notes"]["lore:the_last_expedition"] = { "text": "Written on the other device", "at": later }
+	elsewhere["notes"]["quests:open_the_vault"] = { "text": "Too old to win", "at": 1 }
+	var sync_file := FileAccess.open("user://vcgs_check_sync.json", FileAccess.WRITE)
+	sync_file.store_string(JSON.stringify(elsewhere))
+	sync_file.close()
+	var synced: int = silt_player.sync_codex_notes()
+	if synced != 2 or game.note_for("items:vault_key") != "Changed on the other device" or game.note_for("lore:the_last_expedition") != "Written on the other device" or game.note_for("quests:open_the_vault") != "Key first,\nthen the lever":
+		fail("syncing should keep the newer note of each, got " + str(synced) + " " + str(game.codex_notes))
+	if game.sync_notes("CODEX NOTES · not a sync file") != -1:
+		fail("text that is not a sync file should not sync")
+	for key in ["items:vault_key", "lore:the_last_expedition"]:
+		game.set_note(key, "")
+	silt_player.codex_sync_path = ""
 	if silt_player.codex_name_of("EEL SWARM (won)") != "eel swarm":
 		fail("the name should drop its state")
 	game.set_note("quests:open_the_vault", "")

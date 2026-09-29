@@ -274,6 +274,17 @@ describe('play-through', () => {
     fireEvent.click(within(codex).getByRole('button', { name: 'Share notes' }));
     await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('This page cannot copy by itself'));
     expect((within(codex).getByLabelText('Notes to copy') as HTMLTextAreaElement).value).toContain('LORE · THE DROWNED ORDER\nPriests');
+    // Sync: the notes are kept in the browser, and a note changed in another window turns up here.
+    const storedKey = Object.keys(localStorage).find((k) => k.startsWith('vcgs.codexNotes.'))!;
+    const stored = JSON.parse(localStorage.getItem(storedKey)!);
+    expect(stored.story).toBe('The Sunken Vault');
+    expect(Object.values(stored.notes).map((n) => (n as { text: string }).text)).toContain('Priests');
+    const eels = Object.keys(stored.notes).find((k) => k.startsWith('encounters:'))!;
+    const elsewhere = JSON.stringify({ ...stored, notes: { ...stored.notes, [eels]: { text: 'Changed in the other window', at: Date.now() + 60000 } } });
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: storedKey, newValue: elsewhere }));
+    });
+    expect(codex.textContent).toContain('Note: Changed in the other window');
     // Take in notes someone shared: paste them, and they go where they belong.
     fireEvent.click(within(codex).getByRole('button', { name: 'Paste notes' }));
     fireEvent.change(within(codex).getByLabelText('Shared notes to take in'), { target: { value: 'CODEX NOTES · The Sunken Vault\n\nITEMS · VAULT KEY\nFrom a friend: it fits the vault door' } });

@@ -205,6 +205,19 @@ int main()
             // Import them back: matched by section and name, whatever the entry's state.
             const vcgs::Codex::ReadNotes read = book.NotesFrom("CODEX NOTES · The Sunken Vault\r\n\r\nLORE · THE LAST EXPEDITION (seen)\r\nPry marks,\r\nby the lock\r\n\r\nENCOUNTERS · EEL SWARM (won)\r\nNot met here");
             if (read.Notes.size() != 1 || read.Notes[0].first != std::string("lore:") + Lore::TheLastExpedition || read.Notes[0].second != "Pry marks,\nby the lock" || Join(read.Skipped, ",") != "ENCOUNTERS · EEL SWARM (won)") Fail("importing notes should match them by section and name");
+            // Sync: the newer note of each wins, takings-off too, and it writes back what it merged.
+            {
+                vcgs::GameState device(story);
+                device.SetNote(std::string("lore:") + Lore::TheLastExpedition, "Mine, older");
+                device.SetNote(std::string("items:") + Items::VaultKey, "Taken off later");
+                const std::string later = std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() + 60000);
+                const std::string other = std::string("{ \"format\": \"vcgs-codex-notes-sync\", \"version\": 1, \"story\": \"The Sunken Vault\", \"notes\": { \"lore:") + Lore::TheLastExpedition + "\": { \"text\": \"Theirs, \\\"newer\\\"\\nsecond line\", \"at\": " + later + " }, \"items:" + Items::VaultKey + "\": { \"text\": \"\", \"at\": " + later + " }, \"quests:" + Quests::OpenTheVault + "\": { \"text\": \"Theirs, old\", \"at\": 1 } } }";
+                const int synced = device.SyncNotes(other);
+                if (synced != 3 || device.NoteFor(std::string("lore:") + Lore::TheLastExpedition) != "Theirs, \"newer\"\nsecond line" || !device.NoteFor(std::string("items:") + Items::VaultKey).empty() || device.NoteFor(std::string("quests:") + Quests::OpenTheVault) != "Theirs, old") Fail("syncing should keep the newer note of each, got " + std::to_string(synced));
+                vcgs::GameState back(story);
+                if (back.SyncNotes(device.NotesSyncText("The Sunken Vault")) != 2 || back.NotesSyncText("The Sunken Vault") != device.NotesSyncText("The Sunken Vault")) Fail("a sync file should read back what it wrote, got " + back.NotesSyncText("The Sunken Vault"));
+                if (device.SyncNotes("CODEX NOTES · not a sync file") != -1) Fail("text that is not a sync file should not sync");
+            }
             if (vcgs::Codex::NameOf("• Open the vault — Reach it") != "open the vault" || vcgs::Codex::NameOf("VAULT KEY (carried ×2)") != "vault key") Fail("the name should drop the goal and the state");
             sorting.SetNote(std::string("lore:") + Lore::TheDrownedOrder, "");
             if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nNo notes yet.") Fail("with no notes, the export should say so, got " + book.NotesText());

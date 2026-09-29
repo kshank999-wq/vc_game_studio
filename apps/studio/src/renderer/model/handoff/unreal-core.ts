@@ -9,6 +9,7 @@ export const VCGS_CORE_H = String.raw`// VCGS Runtime for Unreal: the story's lo
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <functional>
 #include <map>
@@ -376,6 +377,8 @@ namespace vcgs
         std::vector<std::string> Bookmarks;
         /** The player's notes on codex entries, by key. */
         std::map<std::string, std::string> Notes;
+        /** When each note was last changed (milliseconds since 1970), kept for notes taken off too, so they sync. */
+        std::map<std::string, long long> NoteTimes;
         /** Lore the player has come across, in the order they found it (the codex). */
         std::vector<std::string> KnownLore;
         /** Mechanics the player can use now. */
@@ -398,7 +401,7 @@ namespace vcgs
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -475,6 +478,7 @@ namespace vcgs
         /** Keep the player's note on a codex entry ("" takes it off). */
         void SetNote(const std::string& entry, std::string text)
         {
+            NoteTimes[entry] = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             const size_t start = text.find_first_not_of(" \t\n");
             text = start == std::string::npos ? std::string() : text.substr(start, text.find_last_not_of(" \t\n") - start + 1);
             if (text.empty()) Notes.erase(entry);
@@ -484,6 +488,60 @@ namespace vcgs
         {
             auto it = Notes.find(entry);
             return it == Notes.end() ? std::string() : it->second;
+        }
+
+        /** The notes as a sync file: each with when it was last changed (a note taken off, empty). */
+        std::string NotesSyncText(const std::string& story) const
+        {
+            auto q = [](const std::string& s)
+            {
+                std::string out = "\"";
+                for (const char c : s)
+                {
+                    if (c == '"' || c == '\\') { out += '\\'; out += c; }
+                    else if (c == '\n') out += "\\n";
+                    else if (c == '\r') out += "\\r";
+                    else if (c == '\t') out += "\\t";
+                    else if (static_cast<unsigned char>(c) < 0x20)
+                    {
+                        const char* hex = "0123456789abcdef";
+                        out += "\\u00";
+                        out += hex[(c >> 4) & 0xf];
+                        out += hex[c & 0xf];
+                    }
+                    else out += c;
+                }
+                return out + "\"";
+            };
+            std::string json = "{\n  \"format\": \"vcgs-codex-notes-sync\",\n  \"version\": 1,\n  \"story\": " + q(story) + ",\n  \"notes\": {";
+            bool first = true;
+            for (const auto& t : NoteTimes)
+            {
+                json += std::string(first ? "" : ",") + "\n    " + q(t.first) + ": { \"text\": " + q(NoteFor(t.first)) + ", \"at\": " + std::to_string(t.second) + " }";
+                first = false;
+            }
+            return json + (first ? "}\n}" : "\n  }\n}");
+        }
+
+        /** Merge a sync file into the notes: for each entry, the newer note wins (on a tie, ours). Returns how many notes it changed, or -1 when the text is not a sync file. */
+        int SyncNotes(const std::string& text)
+        {
+            std::string error;
+            const Value data = JsonReader::Parse(text, &error);
+            if (!error.empty() || data["format"].Str() != "vcgs-codex-notes-sync" || !data["notes"].IsObject()) return -1;
+            int changed = 0;
+            for (const auto& n : data["notes"].fields)
+            {
+                if (n.second["text"].type != Value::Type::String || !n.second["at"].IsNumber()) continue;
+                const long long at = static_cast<long long>(n.second["at"].number);
+                auto ours = NoteTimes.find(n.first);
+                if (ours != NoteTimes.end() && at <= ours->second) continue;
+                const std::string before = NoteFor(n.first);
+                SetNote(n.first, n.second["text"].Str());
+                NoteTimes[n.first] = at;
+                if (NoteFor(n.first) != before) changed++;
+            }
+            return changed;
         }
         /** The player has used an object (Interactions::Interact says so). */
         void UseObject(const std::string& obj)

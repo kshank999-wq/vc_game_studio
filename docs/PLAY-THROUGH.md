@@ -79,7 +79,10 @@ monitor while you fix it on another.
   the codex yet are listed, not lost silently. **Share notes** hands the same
   text to the system's share sheet where there is one (a phone, say), and
   copies it otherwise, to paste into a message; **Paste notes** takes in notes
-  someone shared, the same way Import notes does. The engines' codex
+  someone shared, the same way Import notes does. The notes **sync** across
+  the studio's windows in this browser, and are there again next time: each
+  keeps when it was last changed, and the newer one wins (a note taken off
+  stays off). The engines sync the same way through a file. The engines' codex
   screens search, filter, sort and bookmark the same way.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.

@@ -278,6 +278,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") FString CopyCodexNotes();
     /** Take in notes someone shared: read them from the clipboard (as ImportCodexNotesText does). */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 PasteCodexNotes(TArray<FString>& Skipped);
+    /**
+     * Sync the notes with a sync file (Saved/CodexNotesSync.json when Path is
+     * empty): merge it in, for each entry the newer note winning, and write the
+     * result back. Put it in a folder that syncs (a cloud drive, Steam Cloud) to
+     * share the notes across devices. Returns how many notes the file changed
+     * here, or -1 when it could not sync. The codex HUD syncs on its own.
+     */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 SyncCodexNotes(const FString& Path = TEXT(""));
     /** The codex entries shown (for a search, section and sort), in order, by key: what a cursor moves through. */
     UFUNCTION(BlueprintPure, Category = "VCGS|Codex") TArray<FString> GetCodexEntries(const FString& Search = TEXT(""), const FString& Section = TEXT(""), const FString& Sort = TEXT("")) const;
     /** Quest, character, location, item, object, mechanic, encounter and lore updates since the codex was last read. */
@@ -430,6 +438,18 @@ int32 UVcgsSubsystem::PasteCodexNotes(TArray<FString>& Skipped)
     return ImportCodexNotesText(Text, Skipped);
 }
 
+int32 UVcgsSubsystem::SyncCodexNotes(const FString& Path)
+{
+    if (!Game || !StoryData) return -1;
+    const FString Where = Path.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("CodexNotesSync.json") : Path;
+    FString Stored;
+    int32 Changed = 0;
+    if (FFileHelper::LoadFileToString(Stored, *Where)) Changed = FMath::Max(0, Game->SyncNotes(ToStd(Stored)));
+    const FString Text = ToF(Game->NotesSyncText(StoryData->Name));
+    if (!(Text == Stored) && !FFileHelper::SaveStringToFile(Text, *Where, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM)) return -1;
+    return Changed;
+}
+
 int32 UVcgsSubsystem::ImportCodexNotes(TArray<FString>& Skipped, const FString& Path)
 {
     const FString Where = Path.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("CodexNotes.txt") : Path;
@@ -567,7 +587,9 @@ namespace vcgs { class Codex; }
  * is on (★); Tab reaches the bookmarks alone too. N writes a note on it: type
  * it, Enter keeps it, Escape leaves it. E saves every note as a text file
  * (ExportCodexNotes on the subsystem), and I reads it back (ImportCodexNotes).
- * Y copies the notes to share them, V takes in notes someone shared.
+ * Y copies the notes to share them, V takes in notes someone shared. The notes
+ * sync with Saved/CodexNotesSync.json (SyncCodexNotes) when the codex opens,
+ * every few seconds while it is open, and after each note.
  */
 UCLASS()
 class VCGS_API AVcgsCodexHUD : public AHUD
@@ -600,6 +622,9 @@ private:
     std::string SortKey = "found";
     std::string CursorKey;
     bool bTypingNote = false;
+    /** Seconds since the notes last synced (they sync every few while the codex is open). */
+    float SinceSync = 0.f;
+    void SyncNotes();
     std::string NoteDraft;
     /** What just happened, shown in the panel (the notes saved, say). */
     std::string StatusText;
@@ -672,6 +697,16 @@ void AVcgsCodexHUD::TypeSearch()
     }
 }
 
+void AVcgsCodexHUD::SyncNotes()
+{
+    SinceSync = 0.f;
+    if (UVcgsSubsystem* Story = Subsystem())
+    {
+        const int32 Changed = Story->SyncCodexNotes();
+        if (Changed > 0) StatusText = "Notes synced: " + std::to_string(Changed) + " changed elsewhere.";
+    }
+}
+
 void AVcgsCodexHUD::MoveCursor(vcgs::Codex& Book, int Step)
 {
     const std::vector<std::string> Keys = Book.EntryKeys(SearchText, SectionKey, SortKey);
@@ -685,6 +720,7 @@ void AVcgsCodexHUD::MoveCursor(vcgs::Codex& Book, int Step)
 void AVcgsCodexHUD::ToggleCodex()
 {
     bCodexOpen = !bCodexOpen;
+    if (bCodexOpen) SyncNotes();
     bTypingSearch = false;
     if (UVcgsSubsystem* Story = Subsystem()) Story->MarkCodexRead();
 }
@@ -698,7 +734,7 @@ void AVcgsCodexHUD::DrawHUD()
     if (PlayerOwner && bCodexOpen && bTypingNote)
     {
         // Writing a note: Enter keeps it, Escape leaves it as it was.
-        if (PlayerOwner->WasInputKeyJustPressed(EKeys::Enter)) { Story->SetCodexNote(ToF(CursorKey), ToF(NoteDraft)); bTypingNote = false; }
+        if (PlayerOwner->WasInputKeyJustPressed(EKeys::Enter)) { Story->SetCodexNote(ToF(CursorKey), ToF(NoteDraft)); bTypingNote = false; SyncNotes(); }
         else if (PlayerOwner->WasInputKeyJustPressed(EKeys::Escape)) bTypingNote = false;
         else TypeKeys(NoteDraft);
     }
@@ -762,6 +798,8 @@ void AVcgsCodexHUD::DrawHUD()
     DrawText(ToF(Book->ButtonText(ToStd(CodexKey.ToString()))), Gold, Width - 220.f, 16.f);
     if (!bCodexOpen) return;
     Book->MarkRead();
+    SinceSync += GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.f;
+    if (SinceSync >= 3.f) SyncNotes();
 
     // The panel: the codex, line by line, as much as fits.
     const float Left = 60.f;

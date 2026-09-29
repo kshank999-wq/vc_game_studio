@@ -4,6 +4,7 @@ import { statesOf } from '../../model/details';
 import { advance, choose, codexNotesFrom, codexNotesText, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { copyText, downloadText, notesFileNameFor, readText } from '../../files';
+import { liveNotes, mergeNotes, notesFromSync, notesStorageKey, notesSyncText, type StampedNote } from '../../model/codex-sync';
 import { Symbol } from '../Symbol';
 import { Inline } from '../Inline';
 
@@ -122,6 +123,7 @@ const CodexPanel = ({
   notes,
   onNote,
   onImportNotes,
+  synced,
 }: {
   project: Project;
   world: PlayWorld;
@@ -134,6 +136,8 @@ const CodexPanel = ({
   onNote: (key: string, text: string) => void;
   /** Notes read from an exported file, by entry key, to set (the others stay). */
   onImportNotes: (notes: ReadonlyMap<string, string>) => void;
+  /** What the last sync from elsewhere changed, if anything. */
+  synced: string;
 }) => {
   const c = codexOf(project, world);
   const [query, setQuery] = useState('');
@@ -251,7 +255,7 @@ const CodexPanel = ({
     <div className="play-codex" role="dialog" aria-label="Codex">
       <div className="play-codex-head">
         <span className="rule-label">Codex</span>
-        <span className="pref-hint">What the player has found, as a codex screen shows it.</span>
+        <span className="pref-hint">What the player has found, as a codex screen shows it. Notes sync across this browser’s windows.</span>
         <div className="grow" />
         <button
           className="tb-btn small"
@@ -320,6 +324,11 @@ const CodexPanel = ({
             Take them in
           </button>
         </div>
+      )}
+      {synced && !imported && (
+        <p className="play-note" role="status">
+          {synced}
+        </p>
       )}
       {imported && (
         <p className="play-note" role="status">
@@ -703,7 +712,46 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   // The player's bookmarks in the codex: kept for the whole play-through, stepping back or not.
   const [bookmarks, setBookmarks] = useState<ReadonlySet<string>>(new Set());
   // And the player's notes on entries, the same way.
-  const [notes, setNotes] = useState<ReadonlyMap<string, string>>(new Map());
+  // Each with when it was last changed (a note taken off stays, empty), so they can sync.
+  const [stamped, setStamped] = useState<ReadonlyMap<string, StampedNote>>(new Map());
+  const notes = useMemo(() => liveNotes(stamped), [stamped]);
+  const [synced, setSynced] = useState('');
+  const setNote = (key: string, text: string) => setStamped((n) => new Map(n).set(key, { text, at: Date.now() }));
+  // Sync: the notes are kept in the browser too, so every window of the studio (and the next visit) has the same ones.
+  const storageKey = notesStorageKey(project.id);
+  const syncWith = (stored: string | null, from: string) => {
+    const theirs = stored ? notesFromSync(stored) : null;
+    if (!theirs) return;
+    setStamped((ours) => {
+      const merged = mergeNotes(ours, theirs);
+      if (!merged.changed) return ours;
+      setSynced(`Notes synced: ${merged.changed} changed ${from}.`);
+      return merged.notes;
+    });
+  };
+  useEffect(() => {
+    try {
+      syncWith(localStorage.getItem(storageKey), 'from before');
+    } catch {
+      // No storage here (a private window, say): the notes stay in this window.
+    }
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === storageKey) syncWith(e.newValue, 'in another window');
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [storageKey]);
+  useEffect(() => {
+    if (!stamped.size) return;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      const merged = mergeNotes(stamped, (stored && notesFromSync(stored)) || new Map()).notes;
+      const text = notesSyncText(project.name, merged);
+      if (text !== stored) localStorage.setItem(storageKey, text);
+    } catch {
+      // No storage here: nothing to sync with.
+    }
+  }, [stamped, storageKey]);
   // What the codex had when last read, for its "new" count.
   const [seen, setSeen] = useState(0);
   const progress = codexProgress(project, play.world);
@@ -791,21 +839,15 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
             onClose={() => setCodexOpen(false)}
             bookmarks={bookmarks}
             notes={notes}
+            synced={synced}
             onImportNotes={(read) =>
-              setNotes((n) => {
+              setStamped((n) => {
                 const next = new Map(n);
-                for (const [key, text] of read) next.set(key, text);
+                for (const [key, text] of read) next.set(key, { text, at: Date.now() });
                 return next;
               })
             }
-            onNote={(key, text) =>
-              setNotes((n) => {
-                const next = new Map(n);
-                if (text) next.set(key, text);
-                else next.delete(key);
-                return next;
-              })
-            }
+            onNote={setNote}
             onBookmark={(key) =>
               setBookmarks((b) => {
                 const next = new Set(b);

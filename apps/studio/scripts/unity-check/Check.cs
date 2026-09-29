@@ -157,6 +157,17 @@ static class Check
         // Import them back: matched by section and name, whatever the entry's state.
         var read = book.ImportNotes("CODEX NOTES · The Sunken Vault\r\n\r\nLORE · THE LAST EXPEDITION (seen)\r\nPry marks,\r\nby the lock\r\n\r\nENCOUNTERS · EEL SWARM (won)\r\nNot met here");
         if (read.notes.Count != 1 || sorting.NoteFor("lore:" + Lore.TheLastExpedition) != "Pry marks,\nby the lock" || string.Join(",", read.skipped) != "ENCOUNTERS · EEL SWARM (won)") Fail("importing notes should match them by section and name, got " + read.notes.Count + " / " + string.Join(",", read.skipped));
+        // Sync: the newer note of each wins, takings-off too, and it writes back what it merged.
+        var device = new GameState(story);
+        device.SetNote("lore:" + Lore.TheLastExpedition, "Mine, older");
+        device.SetNote("items:" + Items.VaultKey, "Taken off later");
+        var later = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60000;
+        var other = "{ \"format\": \"vcgs-codex-notes-sync\", \"version\": 1, \"story\": \"The Sunken Vault\", \"notes\": { \"lore:" + Lore.TheLastExpedition + "\": { \"text\": \"Theirs, \\\"newer\\\"\\nsecond line\", \"at\": " + later + " }, \"items:" + Items.VaultKey + "\": { \"text\": \"\", \"at\": " + later + " }, \"quests:" + Quests.OpenTheVault + "\": { \"text\": \"Theirs, old\", \"at\": 1 } } }";
+        var synced = device.SyncNotes(other);
+        if (synced != 3 || device.NoteFor("lore:" + Lore.TheLastExpedition) != "Theirs, \"newer\"\nsecond line" || device.NoteFor("items:" + Items.VaultKey) != "" || device.NoteFor("quests:" + Quests.OpenTheVault) != "Theirs, old") Fail("syncing should keep the newer note of each, got " + synced);
+        var back = new GameState(story);
+        if (back.SyncNotes(device.NotesSyncText("The Sunken Vault")) != 2 || back.NoteFor("lore:" + Lore.TheLastExpedition) != "Theirs, \"newer\"\nsecond line" || back.NotesSyncText("The Sunken Vault") != device.NotesSyncText("The Sunken Vault")) Fail("a sync file should read back what it wrote, got " + back.NotesSyncText("The Sunken Vault"));
+        if (device.SyncNotes("CODEX NOTES · not a sync file") != -1) Fail("text that is not a sync file should not sync");
         if (Codex.NameOf("• Open the vault — Reach it") != "open the vault" || Codex.NameOf("VAULT KEY (carried ×2)") != "vault key") Fail("the name should drop the goal and the state");
         sorting.SetNote("lore:" + Lore.TheLastExpedition, "");
         sorting.SetNote("lore:" + Lore.TheDrownedOrder, "");
