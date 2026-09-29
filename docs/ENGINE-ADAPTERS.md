@@ -82,6 +82,13 @@ the studio's play-through:
   game (`game_over` / `GameOver` / `OnGameOver`), or carries on through the
   scene. Godot's placeholder scenes stand in for the fight with Win and Lose
   buttons.
+- **Conditions** can ask about all three, anywhere a rule goes (a gate, a
+  choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
+  under way* or *has not started*; lore *is known* or *is not known*; a mechanic
+  *is available* or *is not available*. They reach the engines as plain
+  conditions (`{ "kind": "quest", "ref": "open_the_vault", "op": "done" }`),
+  checked by every runtime's rule engine. In the sample the eels can only be
+  beaten once Lantern oil is available.
 
 ## The Godot 4 adapter
 

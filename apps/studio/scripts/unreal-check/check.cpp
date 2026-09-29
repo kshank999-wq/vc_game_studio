@@ -126,6 +126,12 @@ int main()
     if (game.HasItem(Items::VaultKey) || game.Arc(Characters::Mara) != 1) Fail("turning the key should use it up and move Mara +1");
     if (game.QuestState(Quests::OpenTheVault) != "done" || Join(questsDone, ",") != Quests::OpenTheVault) Fail("solving the door should complete Open the vault once, got " + game.QuestState(Quests::OpenTheVault) + " " + Join(questsDone, ","));
 
+    // Rules can ask about quests and lore.
+    {
+        vcgs::Value asks = vcgs::JsonReader::Parse(R"({"match":"all","items":[{"kind":"quest","ref":"open_the_vault","op":"done"},{"kind":"lore","ref":"the_drowned_order","op":"known"}]})", nullptr);
+        if (!vcgs::Rules::Check(asks, game)) Fail("a rule should see the quest done and the lore known");
+    }
+
     // SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
     {
         vcgs::GameState fresh(story);
@@ -136,8 +142,12 @@ int main()
         silt.Start();
         silt.Lose();
         std::printf("encounter: %s\n", Join(encounters, ", ").c_str());
-        if (Join(encounters, ",") != std::string(Encounters::EelSwarm) + "," + Encounters::EelSwarm || !over.empty()) Fail("losing the eels should play them again, got " + Join(encounters, ","));
-        if (!silt.Win()) Fail("a win against the eels should count");
+        // The eels can only be beaten once the lantern's oil is in play (a mechanic condition).
+        const std::string notYet = std::string(Encounters::EelSwarm) + " (can't win)";
+        if (Join(encounters, ",") != notYet + "," + notYet || !over.empty()) Fail("losing the eels should play them again, not yet winnable, got " + Join(encounters, ","));
+        if (silt.Win()) Fail("a win should not count before the lantern's oil is in play");
+        fresh.EnableMechanic(Mechanics::LanternOil);
+        if (!silt.Win()) Fail("with the lantern's oil, a win against the eels should count");
         if (!fresh.WasWon(Encounters::EelSwarm) || !fresh.HasItem(Items::VaultKey)) Fail("winning should mark the eels won, and the scene go on to find the key");
         if (silt.Win()) Fail("there is no encounter to win now");
     }

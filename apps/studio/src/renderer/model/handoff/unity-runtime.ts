@@ -483,6 +483,11 @@ namespace VCGS
                     return op == "atLeast" ? n >= v : n <= v;
                 case "puzzle": return game.Solved.Contains(reference) == (op == "solved");
                 case "visited": return game.Visited.Contains(reference) == (op == "visited");
+                case "quest":
+                    var state = game.QuestState(reference);
+                    return op == "done" ? state == "done" : op == "notDone" ? state != "done" : op == "active" ? state == "active" : state == "";
+                case "lore": return game.KnowsLore(reference) == (op == "known");
+                case "mechanic": return game.HasMechanic(reference) == (op == "available");
                 default: return false;
             }
         }

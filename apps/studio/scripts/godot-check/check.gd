@@ -146,6 +146,10 @@ func _initialize() -> void:
 	# Solving the door completed the quest, once.
 	if game.quest_state("open_the_vault") != "done" or quest_done != ["open_the_vault"]:
 		fail("solving the door should complete Open the vault once, got " + game.quest_state("open_the_vault") + " " + str(quest_done))
+	# Rules can ask about quests and lore.
+	var asks := { "match": "all", "items": [{ "kind": "quest", "ref": "open_the_vault", "op": "done" }, { "kind": "lore", "ref": "the_drowned_order", "op": "known" }] }
+	if not VCGSRuleEngine.check(asks, game) or VCGSRuleEngine.check({ "match": "all", "items": [{ "kind": "quest", "ref": "open_the_vault", "op": "notStarted" }] }, game):
+		fail("a rule should see the quest done and the lore known")
 
 	# SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
 	load("res://vcgs/generated/logic/rules.gd").reset(game)
@@ -157,10 +161,14 @@ func _initialize() -> void:
 	key_scene.game_over.connect(func(k: String) -> void: over.append(k))
 	key_scene.start()
 	key_scene.lose()
-	if encounters != [["eel_swarm", true], ["eel_swarm", true]] or not over.is_empty():
-		fail("losing the eels should play them again, got " + str(encounters))
+	# The eels can only be beaten once the lantern's oil is in play (a mechanic condition).
+	if encounters != [["eel_swarm", false], ["eel_swarm", false]] or not over.is_empty():
+		fail("losing the eels should play them again, not yet winnable, got " + str(encounters))
+	if key_scene.win():
+		fail("a win should not count before the lantern's oil is in play")
+	game.enable_mechanic("lantern_oil")
 	if not key_scene.win():
-		fail("a win against the eels should count")
+		fail("with the lantern's oil, a win against the eels should count")
 	if not game.was_won("eel_swarm") or not game.has_item("vault_key"):
 		fail("winning should mark the eels won, and the scene go on to find the key")
 	print("encounter: ", encounters, " won ", game.was_won("eel_swarm"), ", key ", game.has_item("vault_key"))
@@ -240,6 +248,7 @@ func _initialize() -> void:
 
 	# SC-02's placeholder scene stands in for the eels with Win and Lose.
 	load("res://vcgs/generated/logic/rules.gd").reset(game)
+	game.enable_mechanic("lantern_oil")
 	var silt: Node = load("res://vcgs/generated/scenes/sc_02_the_key.tscn").instantiate()
 	var silt_player: Node = silt.get_node("DebugPlayer")
 	silt_player.autostart = false

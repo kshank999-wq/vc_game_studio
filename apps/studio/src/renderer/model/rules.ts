@@ -14,7 +14,10 @@ export type Condition =
   | { kind: 'choice'; ref: string; op: 'chose' | 'didNotChoose'; value: string }
   | { kind: 'arc'; ref: string; op: 'atLeast' | 'atMost'; value: number }
   | { kind: 'puzzle'; ref: string; op: 'solved' | 'unsolved' }
-  | { kind: 'visited'; ref: string; op: 'visited' | 'notVisited' };
+  | { kind: 'visited'; ref: string; op: 'visited' | 'notVisited' }
+  | { kind: 'quest'; ref: string; op: 'done' | 'notDone' | 'active' | 'notStarted' }
+  | { kind: 'lore'; ref: string; op: 'known' | 'unknown' }
+  | { kind: 'mechanic'; ref: string; op: 'available' | 'unavailable' };
 
 export interface Rule {
   match: 'all' | 'any';
@@ -56,6 +59,20 @@ export const SUBJECTS: readonly Subject[] = [
   { kind: 'choice', label: 'Choice', type: 'choice', ops: [{ op: 'chose', label: 'was answered' }, { op: 'didNotChoose', label: 'was not answered' }], value: 'options' },
   { kind: 'arc', label: 'Character arc', type: 'character', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'atMost', label: 'is at most' }], value: 'number' },
   { kind: 'puzzle', label: 'Puzzle', type: 'puzzle', ops: [{ op: 'solved', label: 'is solved' }, { op: 'unsolved', label: 'is not solved' }], value: 'none' },
+  {
+    kind: 'quest',
+    label: 'Quest',
+    type: 'quest',
+    ops: [
+      { op: 'done', label: 'is done' },
+      { op: 'notDone', label: 'is not done' },
+      { op: 'active', label: 'is under way' },
+      { op: 'notStarted', label: 'has not started' },
+    ],
+    value: 'none',
+  },
+  { kind: 'lore', label: 'Lore', type: 'lore', ops: [{ op: 'known', label: 'is known' }, { op: 'unknown', label: 'is not known' }], value: 'none' },
+  { kind: 'mechanic', label: 'Mechanic', type: 'mechanic', ops: [{ op: 'available', label: 'is available' }, { op: 'unavailable', label: 'is not available' }], value: 'none' },
   { kind: 'visited', label: 'Scene', type: 'scene', ops: [{ op: 'visited', label: 'was visited' }, { op: 'notVisited', label: 'was not visited' }], value: 'none' },
 ];
 
@@ -95,6 +112,12 @@ export const newCondition = (kind: Condition['kind'], ref = '', value = ''): Con
       return { kind, ref, op: 'solved' };
     case 'visited':
       return { kind, ref, op: 'visited' };
+    case 'quest':
+      return { kind, ref, op: 'done' };
+    case 'lore':
+      return { kind, ref, op: 'known' };
+    case 'mechanic':
+      return { kind, ref, op: 'available' };
   }
 };
 
@@ -130,6 +153,12 @@ export const describeCondition = (project: Project, c: Condition): string => {
       return `${who} is ${c.op === 'solved' ? 'solved' : 'not solved'}`;
     case 'visited':
       return `${who} was ${c.op === 'visited' ? '' : 'not '}visited`;
+    case 'quest':
+      return `${who} ${{ done: 'is done', notDone: 'is not done', active: 'is under way', notStarted: 'has not started' }[c.op]}`;
+    case 'lore':
+      return `${who} is ${c.op === 'known' ? '' : 'not '}known`;
+    case 'mechanic':
+      return `${who} is ${c.op === 'available' ? '' : 'not '}available`;
   }
 };
 
@@ -173,9 +202,17 @@ export interface PlayState {
   arcs: Record<string, number>;
   solved: Record<string, boolean>;
   visited: Record<string, boolean>;
+  /** Quests under way ("active") or "done"; one not in here hasn't started. */
+  quests: Record<string, QuestState>;
+  /** Lore the player has come across (their codex). */
+  lore: Record<string, boolean>;
+  /** Mechanics the player can use now. */
+  mechanics: Record<string, boolean>;
 }
 
-export const emptyState = (): PlayState => ({ flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {} });
+export type QuestState = 'active' | 'done';
+
+export const emptyState = (): PlayState => ({ flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, quests: {}, lore: {}, mechanics: {} });
 
 export const holds = (c: Condition, s: PlayState): boolean => {
   switch (c.kind) {
@@ -196,6 +233,14 @@ export const holds = (c: Condition, s: PlayState): boolean => {
       return !!s.solved[c.ref] === (c.op === 'solved');
     case 'visited':
       return !!s.visited[c.ref] === (c.op === 'visited');
+    case 'quest': {
+      const state = s.quests[c.ref];
+      return c.op === 'done' ? state === 'done' : c.op === 'notDone' ? state !== 'done' : c.op === 'active' ? state === 'active' : !state;
+    }
+    case 'lore':
+      return !!s.lore[c.ref] === (c.op === 'known');
+    case 'mechanic':
+      return !!s.mechanics[c.ref] === (c.op === 'available');
   }
 };
 

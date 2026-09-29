@@ -407,3 +407,14 @@ describe('lore and mechanics in the engines', () => {
     expect(schema.properties.lore.items).toEqual({ $ref: '#/$defs/lore' });
   });
 });
+
+describe('conditions on quests, lore and mechanics in the engines', () => {
+  it('go to every engine as plain conditions, and the schema allows them', async () => {
+    const ir = buildIR(sunkenVault());
+    expect(ir.encounters[0]!.winWhen).toEqual({ match: 'all', items: [{ kind: 'mechanic', ref: 'lantern_oil', op: 'available' }] });
+    const { storySchema } = await import('../handoff/json');
+    const condition = JSON.parse(JSON.stringify(storySchema())).$defs.condition.properties;
+    expect(condition.kind.enum).toEqual(expect.arrayContaining(['quest', 'lore', 'mechanic']));
+    expect(condition.op.enum).toEqual(expect.arrayContaining(['done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable']));
+  });
+});

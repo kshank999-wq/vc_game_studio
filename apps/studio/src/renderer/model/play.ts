@@ -1,6 +1,6 @@
 import { initialState, interactionsOf, statesOf } from './details';
 import { spineSequence } from './layout';
-import { apply, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type Rule } from './rules';
+import { apply, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
 import { dualWith, elementsIn, spokenTogether } from './scene';
 import { cinematicTiming, describeShot, shotsOf } from './shots';
 import { eventLine, eventTitle, loseOf, MAIN, sceneTimeline } from './timeline';
@@ -21,17 +21,11 @@ export interface PlayWorld extends PlayState {
   fired: Record<string, boolean>;
   /** How many times each option has been picked, by option key. */
   picked: Record<string, number>;
-  /** Quests under way or done; one not in here hasn't started. */
-  quests: Record<string, QuestState>;
   /** Encounters won. */
   won: Record<string, boolean>;
-  /** Lore the player has come across (their codex). */
-  lore: Record<string, boolean>;
-  /** Mechanics the player can use now. */
-  mechanics: Record<string, boolean>;
 }
 
-export type QuestState = 'active' | 'done';
+export type { QuestState };
 
 /** A second voice on a line: dual dialogue, spoken at the same time. */
 export interface Voice {

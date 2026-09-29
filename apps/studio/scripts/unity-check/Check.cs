@@ -78,6 +78,12 @@ static class Check
         if (game.HasItem(Items.VaultKey) || game.Arc(Characters.Mara) != 1) Fail("turning the key should use it up and move Mara +1");
         if (game.QuestState(Quests.OpenTheVault) != "done" || string.Join(",", questsDone) != Quests.OpenTheVault) Fail("solving the door should complete Open the vault once, got " + game.QuestState(Quests.OpenTheVault) + " " + string.Join(",", questsDone));
 
+        // Rules can ask about quests and lore.
+        var asks = new Dictionary<string, object> { ["match"] = "all", ["items"] = new List<object> {
+            new Dictionary<string, object> { ["kind"] = "quest", ["ref"] = Quests.OpenTheVault, ["op"] = "done" },
+            new Dictionary<string, object> { ["kind"] = "lore", ["ref"] = Lore.TheDrownedOrder, ["op"] = "known" } } };
+        if (!Rules.Check(asks, game)) Fail("a rule should see the quest done and the lore known");
+
         // SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
         var fresh = new GameState(story);
         var silt = new ScenePlayer(fresh, Scenes.Sc02TheKey);
@@ -88,8 +94,12 @@ static class Check
         silt.Start();
         silt.Lose();
         Console.WriteLine("encounter: " + string.Join(", ", encounters));
-        if (string.Join(",", encounters) != Encounters.EelSwarm + "," + Encounters.EelSwarm || over.Count != 0) Fail("losing the eels should play them again, got " + string.Join(",", encounters));
-        if (!silt.Win()) Fail("a win against the eels should count");
+        // The eels can only be beaten once the lantern's oil is in play (a mechanic condition).
+        var notYet = Encounters.EelSwarm + " (can't win)";
+        if (string.Join(",", encounters) != notYet + "," + notYet || over.Count != 0) Fail("losing the eels should play them again, not yet winnable, got " + string.Join(",", encounters));
+        if (silt.Win()) Fail("a win should not count before the lantern's oil is in play");
+        fresh.EnableMechanic(Mechanics.LanternOil);
+        if (!silt.Win()) Fail("with the lantern's oil, a win against the eels should count");
         if (!fresh.WasWon(Encounters.EelSwarm) || !fresh.HasItem(Items.VaultKey)) Fail("winning should mark the eels won, and the scene go on to find the key");
         if (silt.Win()) Fail("there is no encounter to win now");
 

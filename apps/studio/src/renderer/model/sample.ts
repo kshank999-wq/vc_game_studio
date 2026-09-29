@@ -207,6 +207,8 @@ export const sunkenVault = (): Project => {
   // The Order's story comes out at the vault door; the lantern's oil matters once the lantern is taken.
   p = setValue(p, design.lore!, 'rule', { match: 'all', items: [{ kind: 'visited', ref: vaultDoor, op: 'visited' }] });
   p = setValue(p, design.mechanic!, 'rule', { match: 'all', items: [{ kind: 'choice', ref: c1, op: 'chose', value: '' }] });
+  // The eels scatter from lantern light: they can only be beaten once the lantern's oil is in play.
+  p = setValue(p, design.encounter!, 'rule', { match: 'all', items: [{ kind: 'mechanic', ref: design.mechanic!, op: 'available' }] });
 
   // Where it all happens: one level, tied to the scenes and the Bible.
   p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent });

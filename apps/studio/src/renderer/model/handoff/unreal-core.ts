@@ -462,6 +462,16 @@ namespace vcgs
             }
             if (kind == "puzzle") return (game.Solved.count(ref) > 0) == (op == "solved");
             if (kind == "visited") return (game.Visited.count(ref) > 0) == (op == "visited");
+            if (kind == "quest")
+            {
+                const std::string state = game.QuestState(ref);
+                if (op == "done") return state == "done";
+                if (op == "notDone") return state != "done";
+                if (op == "active") return state == "active";
+                return state.empty();
+            }
+            if (kind == "lore") return game.KnowsLore(ref) == (op == "known");
+            if (kind == "mechanic") return game.HasMechanic(ref) == (op == "available");
             return false;
         }
 

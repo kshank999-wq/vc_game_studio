@@ -254,7 +254,7 @@ describe('quests and encounters', () => {
     expect(made.project.objects[event.refId!]).toMatchObject({ type: 'encounter', name: 'New encounter', data: { code: 'ENC-02' } });
     expect(addEvent(p, theKey, 'encounter', { refId: key })).toBeNull();
     const staged = findEvent(p, theKey, p.events.find((e) => e.refId === eels)!.id)!;
-    expect(eventDetail(p, staged)).toBe('Win or lose · a loss: try again');
+    expect(eventDetail(p, staged)).toBe('Won when Lantern oil is available · a loss: try again');
     const broken = set(p, quest, { starts: { match: 'all', items: [{ kind: 'item', ref: 'gone', op: 'has' }] } });
     expect(brokenReferences(broken)).toEqual([{ owner: quest, where: 'Open the vault · starts' }]);
   });
@@ -283,5 +283,33 @@ describe('lore and mechanics', () => {
     const play = startPlay(open);
     expect(play.world.lore[lore]).toBe(true);
     expect(play.log[0]).toEqual({ kind: 'lore', text: 'The Drowned Order' });
+  });
+});
+
+describe('conditions on quests, lore and mechanics', () => {
+  it('hold as the play-through goes: the eels need the lantern oil', () => {
+    const theKey = id(p, 'The Key', 'scene');
+    // Straight into SC-02, without the lantern: Win isn't on offer yet.
+    let play = playToDecision(p, startPlay(p, theKey));
+    const prompt = promptOf(p, play);
+    expect(prompt.kind === 'choice' && prompt.options[0]).toEqual({ label: 'Win', available: false, needs: 'Lantern oil is available' });
+    play = setWorld(p, play, (w) => ({ ...w, mechanics: { ...w.mechanics, [id(p, 'Lantern oil', 'mechanic')]: true } }));
+    const now = promptOf(p, play);
+    expect(now.kind === 'choice' && now.options[0]!.available).toBe(true);
+  });
+
+  it('read each quest state, lore and mechanic, and say so in words', async () => {
+    const { evaluate, describeRule, emptyState, newCondition } = await import('../rules');
+    const q = id(p, 'Open the vault', 'quest');
+    const rule = (c: ReturnType<typeof newCondition>) => ({ match: 'all' as const, items: [c] });
+    const state = { ...emptyState(), quests: { [q]: 'active' as const } };
+    const ops = ['done', 'notDone', 'active', 'notStarted'] as const;
+    expect(ops.map((op) => evaluate(rule({ kind: 'quest', ref: q, op }), state))).toEqual([false, true, true, false]);
+    expect(ops.map((op) => evaluate(rule({ kind: 'quest', ref: q, op }), emptyState()))).toEqual([false, true, false, true]);
+    expect(describeRule(p, rule({ kind: 'quest', ref: q, op: 'active' }))).toBe('Open the vault is under way');
+    const lore = id(p, 'The Drowned Order', 'lore');
+    expect(evaluate(rule(newCondition('lore', lore)), { ...emptyState(), lore: { [lore]: true } })).toBe(true);
+    expect(describeRule(p, rule({ kind: 'lore', ref: lore, op: 'unknown' }))).toBe('The Drowned Order is not known');
+    expect(newCondition('mechanic', 'x')).toEqual({ kind: 'mechanic', ref: 'x', op: 'available' });
   });
 });
