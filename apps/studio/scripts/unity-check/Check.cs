@@ -91,6 +91,10 @@ static class Check
             new Dictionary<string, object> { ["kind"] = "startQuest", ["ref"] = Quests.OpenTheVault },
             new Dictionary<string, object> { ["kind"] = "revealLore", ["ref"] = Lore.TheDrownedOrder } }, told);
         if (told.QuestState(Quests.OpenTheVault) != "active" || !told.KnowsLore(Lore.TheDrownedOrder)) Fail("the effects should start the quest and reveal the lore");
+        Rules.Apply(new List<object> {
+            new Dictionary<string, object> { ["kind"] = "completeQuest", ["ref"] = Quests.OpenTheVault },
+            new Dictionary<string, object> { ["kind"] = "enableMechanic", ["ref"] = Mechanics.LanternOil } }, told);
+        if (told.QuestState(Quests.OpenTheVault) != "done" || !told.HasMechanic(Mechanics.LanternOil)) Fail("the effects should complete the quest and make the mechanic available");
 
         // SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
         var fresh = new GameState(story);

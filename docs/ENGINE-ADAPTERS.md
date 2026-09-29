@@ -90,11 +90,12 @@ the studio's play-through:
   checked by every runtime's rule engine. In the sample the eels can only be
   beaten once Lantern oil is available.
 - **Effects** can start a quest (*Start quest*: a quest under way or done stays
-  as it is) and reveal lore (*Reveal lore*), wherever effects go: a trigger, a
+  as it is), complete one (*Complete quest*: done at once, started or not, and
+  its reward paid once), reveal lore (*Reveal lore*) and make a mechanic
+  available (*Make mechanic available*), wherever effects go: a trigger, a
   choice's option, a timeline event, a route, a puzzle's or quest's reward. They
-  reach the engines as `{ "kind": "startQuest", "ref": … }` and
-  `{ "kind": "revealLore", "ref": … }`, and raise the same started and
-  discovered events as the rules do.
+  reach the engines as `startQuest`, `completeQuest`, `revealLore` and
+  `enableMechanic` effects, and raise the same events as the rules do.
 
 ## The Godot 4 adapter
 

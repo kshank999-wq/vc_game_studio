@@ -426,10 +426,13 @@ describe('effects that start quests and reveal lore, in the engines', () => {
     const { RUNTIME_FILES } = await import('../handoff/unity-runtime');
     const { VCGS_CORE_H } = await import('../handoff/unreal-core');
     const effect = JSON.parse(JSON.stringify(storySchema())).$defs.effect.properties;
-    expect(effect.kind.enum).toEqual(expect.arrayContaining(['startQuest', 'revealLore']));
+    expect(effect.kind.enum).toEqual(expect.arrayContaining(['startQuest', 'revealLore', 'completeQuest', 'enableMechanic']));
     const engine = generateGodot(buildIR(sunkenVault()), 'vcgs/generated').files.find((f) => f.path === 'addons/vcgs_runtime/rule_engine.gd')!.content;
     expect(engine).toContain('"revealLore":');
     expect(RUNTIME_FILES['Rules.cs']).toContain('case "startQuest":');
     expect(VCGS_CORE_H).toContain('kind == "revealLore"');
+    expect(engine).toContain('VCGSRules.complete_quest(ref, game)');
+    expect(RUNTIME_FILES['Rules.cs']).toContain('case "enableMechanic": game.EnableMechanic(reference); break;');
+    expect(VCGS_CORE_H).toContain('inline void CompleteQuest(const std::string& quest, GameState& game)');
   });
 });

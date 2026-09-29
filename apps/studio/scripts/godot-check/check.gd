@@ -157,6 +157,9 @@ func _initialize() -> void:
 	VCGSRuleEngine.apply([{ "kind": "startQuest", "ref": "open_the_vault" }, { "kind": "revealLore", "ref": "the_drowned_order" }], game)
 	if game.quest_state("open_the_vault") != "active" or not game.knows_lore("the_drowned_order"):
 		fail("the effects should start the quest and reveal the lore")
+	VCGSRuleEngine.apply([{ "kind": "completeQuest", "ref": "open_the_vault" }, { "kind": "enableMechanic", "ref": "lantern_oil" }], game)
+	if game.quest_state("open_the_vault") != "done" or not game.has_mechanic("lantern_oil"):
+		fail("the effects should complete the quest and make the mechanic available")
 
 	# SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
 	load("res://vcgs/generated/logic/rules.gd").reset(game)

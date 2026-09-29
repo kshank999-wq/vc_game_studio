@@ -33,7 +33,9 @@ export type Effect =
   | { kind: 'solve'; ref: string }
   | { kind: 'fire'; ref: string }
   | { kind: 'startQuest'; ref: string }
-  | { kind: 'revealLore'; ref: string };
+  | { kind: 'revealLore'; ref: string }
+  | { kind: 'completeQuest'; ref: string }
+  | { kind: 'enableMechanic'; ref: string };
 
 export const isRule = (x: Condition | Rule): x is Rule => 'match' in x;
 
@@ -94,7 +96,9 @@ export const EFFECTS: readonly EffectKind[] = [
   { kind: 'solve', label: 'Solve puzzle', type: 'puzzle', value: 'none' },
   { kind: 'fire', label: 'Fire trigger', type: 'trigger', value: 'none' },
   { kind: 'startQuest', label: 'Start quest', type: 'quest', value: 'none' },
+  { kind: 'completeQuest', label: 'Complete quest', type: 'quest', value: 'none' },
   { kind: 'revealLore', label: 'Reveal lore', type: 'lore', value: 'none' },
+  { kind: 'enableMechanic', label: 'Make mechanic available', type: 'mechanic', value: 'none' },
 ];
 
 export const subjectOf = (kind: Condition['kind']): Subject => SUBJECTS.find((s) => s.kind === kind)!;
@@ -193,6 +197,10 @@ export const describeEffect = (project: Project, e: Effect): string => {
       return `start ${who}`;
     case 'revealLore':
       return `reveal ${who}`;
+    case 'completeQuest':
+      return `complete ${who}`;
+    case 'enableMechanic':
+      return `make ${who} available`;
   }
 };
 
@@ -260,7 +268,7 @@ export const evaluate = (rule: Rule | undefined, s: PlayState): boolean => {
 
 /** Apply effects to a state. Firing a trigger is left to the caller, which knows the trigger's own effects. */
 export const apply = (effects: Effect[] | undefined, s: PlayState): PlayState => {
-  const next: PlayState = { ...s, flags: { ...s.flags }, items: { ...s.items }, objects: { ...s.objects }, arcs: { ...s.arcs }, solved: { ...s.solved }, quests: { ...s.quests }, lore: { ...s.lore } };
+  const next: PlayState = { ...s, flags: { ...s.flags }, items: { ...s.items }, objects: { ...s.objects }, arcs: { ...s.arcs }, solved: { ...s.solved }, quests: { ...s.quests }, lore: { ...s.lore }, mechanics: { ...s.mechanics } };
   for (const e of effects ?? []) {
     if (e.kind === 'setFlag') next.flags[e.ref] = e.value;
     if (e.kind === 'setObject') next.objects[e.ref] = e.value;
@@ -271,6 +279,9 @@ export const apply = (effects: Effect[] | undefined, s: PlayState): PlayState =>
     // Starting a quest that is under way or done changes nothing.
     if (e.kind === 'startQuest' && !next.quests[e.ref]) next.quests[e.ref] = 'active';
     if (e.kind === 'revealLore') next.lore[e.ref] = true;
+    // Completing a quest pays its reward too; the play-through does that (its reward is the quest's own effects).
+    if (e.kind === 'completeQuest') next.quests[e.ref] = 'done';
+    if (e.kind === 'enableMechanic') next.mechanics[e.ref] = true;
   }
   return next;
 };

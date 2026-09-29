@@ -509,6 +509,8 @@ namespace VCGS
                     case "fire": Fire(reference, game); break;
                     case "startQuest": if (game.QuestState(reference) == "") game.SetQuest(reference, "active"); break;
                     case "revealLore": game.DiscoverLore(reference); break;
+                    case "completeQuest": CompleteQuest(reference, game); break;
+                    case "enableMechanic": game.EnableMechanic(reference); break;
                 }
             }
         }
@@ -563,8 +565,7 @@ namespace VCGS
                     }
                     else if (state == "active" && q.Value.ContainsKey("completes") && Check(D.Get(q.Value, "completes"), game))
                     {
-                        game.SetQuest(q.Key, "done");
-                        Apply(D.Get(q.Value, "reward"), game);
+                        CompleteQuest(q.Key, game);
                         moved = true;
                     }
                 }
@@ -582,6 +583,15 @@ namespace VCGS
                 }
                 if (!moved) return;
             }
+        }
+
+        /// <summary>Complete a quest now, started or not, and pay its reward (once).</summary>
+        public static void CompleteQuest(string quest, GameState game)
+        {
+            if (game.QuestState(quest) == "done") return;
+            game.SetQuest(quest, "done");
+            game.Story.Quests.TryGetValue(quest, out var q);
+            Apply(D.Get(q, "reward"), game);
         }
 
         /// <summary>Whether a win against this encounter counts now (its win rule holds).</summary>

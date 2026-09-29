@@ -139,6 +139,9 @@ int main()
         vcgs::Value effects = vcgs::JsonReader::Parse(R"([{"kind":"startQuest","ref":"open_the_vault"},{"kind":"revealLore","ref":"the_drowned_order"}])", nullptr);
         vcgs::Rules::Apply(effects, told);
         if (told.QuestState(Quests::OpenTheVault) != "active" || !told.KnowsLore(Lore::TheDrownedOrder)) Fail("the effects should start the quest and reveal the lore");
+        vcgs::Value more = vcgs::JsonReader::Parse(R"([{"kind":"completeQuest","ref":"open_the_vault"},{"kind":"enableMechanic","ref":"lantern_oil"}])", nullptr);
+        vcgs::Rules::Apply(more, told);
+        if (told.QuestState(Quests::OpenTheVault) != "done" || !told.HasMechanic(Mechanics::LanternOil)) Fail("the effects should complete the quest and make the mechanic available");
     }
 
     // SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.

@@ -291,6 +291,7 @@ namespace vcgs
         void Fire(const std::string& trigger, GameState& game);
         void Solve(const std::string& puzzle, GameState& game);
         void Settle(GameState& game);
+        void CompleteQuest(const std::string& quest, GameState& game);
     }
 
     /**
@@ -506,6 +507,8 @@ namespace vcgs
                 else if (kind == "fire") Fire(ref, game);
                 else if (kind == "startQuest") { if (game.QuestState(ref).empty()) game.SetQuest(ref, "active"); }
                 else if (kind == "revealLore") game.DiscoverLore(ref);
+                else if (kind == "completeQuest") CompleteQuest(ref, game);
+                else if (kind == "enableMechanic") game.EnableMechanic(ref);
             }
         }
 
@@ -559,8 +562,7 @@ namespace vcgs
                     }
                     else if (state == "active" && quest.Has("completes") && Check(quest["completes"], game))
                     {
-                        game.SetQuest(q.first, "done");
-                        Apply(quest["reward"], game);
+                        CompleteQuest(q.first, game);
                         moved = true;
                     }
                 }
@@ -580,6 +582,14 @@ namespace vcgs
                 }
                 if (!moved) return;
             }
+        }
+
+        /** Complete a quest now, started or not, and pay its reward (once). */
+        inline void CompleteQuest(const std::string& quest, GameState& game)
+        {
+            if (game.QuestState(quest) == "done") return;
+            game.SetQuest(quest, "done");
+            Apply(Story::Find(game.StoryData.Quests, quest)["reward"], game);
         }
 
         /** Whether a win against this encounter counts now (its win rule holds). */

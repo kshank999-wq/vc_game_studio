@@ -346,3 +346,23 @@ describe('effects that start quests and reveal lore', () => {
     expect(apply([{ kind: 'startQuest', ref: quest }], emptyState()).quests[quest]).toBe('active');
   });
 });
+
+describe('effects that complete quests and make mechanics available', () => {
+  const quest = id(p, 'Open the vault', 'quest');
+  const lantern = id(p, 'Lantern oil', 'mechanic');
+  const mara = id(p, 'Mara');
+
+  it('complete a quest at once, paying its reward once, and make a mechanic available', async () => {
+    const { describeEffects } = await import('../rules');
+    const { applyStoryEffects } = await import('../play');
+    const rewarded = { ...p, objects: { ...p.objects, [quest]: { ...p.objects[quest]!, data: { ...p.objects[quest]!.data, effects: [{ kind: 'arc', ref: mara, amount: 1 }] } } } };
+    const effects = [{ kind: 'completeQuest' as const, ref: quest }, { kind: 'enableMechanic' as const, ref: lantern }, { kind: 'completeQuest' as const, ref: quest }];
+    expect(describeEffects(rewarded, effects.slice(0, 2))).toBe('complete Open the vault · make Lantern oil available');
+    const done = applyStoryEffects(rewarded, startPlay(rewarded).world, effects);
+    expect(done.world.quests[quest]).toBe('done');
+    expect(done.world.mechanics[lantern]).toBe(true);
+    // The reward is paid once, however many times it is completed.
+    expect(done.world.arcs[mara]).toBe(1);
+    expect(done.log.map((e) => `${e.kind}:${e.text}`)).toEqual(['quest:Open the vault', 'effect:Mara +1', 'mechanic:Lantern oil']);
+  });
+});

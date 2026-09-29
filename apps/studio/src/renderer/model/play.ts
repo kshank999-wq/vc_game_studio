@@ -129,6 +129,15 @@ const doEffects = (d: Doing, effects: Effect[] | undefined) => {
     else if (e.kind === 'startQuest') {
       const quest = d.project.objects[e.ref];
       if (quest && !d.world.quests[e.ref]) setQuest(d, quest, 'active');
+    } else if (e.kind === 'completeQuest') {
+      // Done at once, started or not, and its reward is paid.
+      const quest = d.project.objects[e.ref];
+      if (quest && d.world.quests[e.ref] !== 'done') setQuest(d, quest, 'done');
+    } else if (e.kind === 'enableMechanic') {
+      if (d.project.objects[e.ref] && !d.world.mechanics[e.ref]) {
+        d.world = { ...d.world, mechanics: { ...d.world.mechanics, [e.ref]: true } };
+        d.log.push({ kind: 'mechanic', text: name(d.project, e.ref) });
+      }
     } else if (e.kind === 'revealLore') {
       if (d.project.objects[e.ref] && !d.world.lore[e.ref]) {
         d.world = { ...d.world, lore: { ...d.world.lore, [e.ref]: true } };
