@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
-import { advance, choose, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, choose, codexNotesText, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
+import { downloadText, notesFileNameFor } from '../../files';
 import { Symbol } from '../Symbol';
 import { Inline } from '../Inline';
 
@@ -213,6 +214,14 @@ const CodexPanel = ({
         <span className="rule-label">Codex</span>
         <span className="pref-hint">What the player has found, as a codex screen shows it.</span>
         <div className="grow" />
+        <button
+          className="tb-btn small"
+          disabled={!notes.size}
+          title={notes.size ? 'Save every note as a text file' : 'Write a note (✎) first'}
+          onClick={() => downloadText(notesFileNameFor(project), codexNotesText(project, world, notes))}
+        >
+          Export notes
+        </button>
         <button className="tb-btn small" onClick={onClose}>
           Close <kbd>C</kbd>
         </button>

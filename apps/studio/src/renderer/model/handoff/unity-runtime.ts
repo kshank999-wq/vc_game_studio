@@ -1235,6 +1235,7 @@ namespace VCGS
             var only = section ?? "";
             var parts = new List<string>();
             shownKeys.Clear();
+            titles.Clear();
             List<(string key, string text)> Sorted(List<(string key, string text)> entries)
             {
                 var list = new List<(string key, string text)>(entries);
@@ -1267,6 +1268,8 @@ namespace VCGS
                     if (game.NoteFor(e.key) != "") words += "\nNote: " + game.NoteFor(e.key);
                     text.Append(sep + words);
                     shownKeys.Add(e.key);
+                    var first = e.text.Split('\n')[0];
+                    titles[e.key] = key.ToUpperInvariant() + " · " + (first.StartsWith("• ") ? first.Substring(2) : first);
                 }
                 parts.Add(text.ToString());
             }
@@ -1371,6 +1374,22 @@ namespace VCGS
         }
 
         readonly List<string> shownKeys = new List<string>();
+        readonly Dictionary<string, string> titles = new Dictionary<string, string>();
+
+        /// <summary>
+        /// The player's notes in words, to export: each entry with a note, in
+        /// the codex's order, under "SECTION · the entry's first line" (the
+        /// same as the studio's play-through exports).
+        /// </summary>
+        public string NotesText()
+        {
+            Text();
+            var parts = new List<string> { "CODEX NOTES · " + game.Story.Name };
+            foreach (var key in shownKeys)
+                if (game.NoteFor(key) != "") parts.Add(titles[key] + "\n" + game.NoteFor(key));
+            if (parts.Count == 1) parts.Add("No notes yet.");
+            return string.Join("\n\n", parts);
+        }
 
         /// <summary>The entries shown, in order, by key ("lore:…"): what a cursor moves through.</summary>
         public List<string> EntryKeys(string query = "", string section = "", string sort = "")
@@ -1396,7 +1415,8 @@ namespace VCGS
     /// / to search (Escape clears the search, then leaves the box), Tab
     /// (or the row of buttons) to show one section, and S (or the sort buttons)
     /// to order each section; the arrows move a cursor (▶) and B bookmarks
-    /// the entry it is on (★Bookmarks shows only those), and N writes a note on it. Drawn with
+    /// the entry it is on (★Bookmarks shows only those), N writes a note on it,
+    /// and E saves every note as a text file. Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1441,6 +1461,27 @@ namespace VCGS
         {
             if (VcgsGame.Instance != null && Cursor != "") VcgsGame.Instance.State.SetNote(Cursor, text);
             NoteDraft = null;
+        }
+
+        /// <summary>What just happened, shown under the codex (the notes saved, say).</summary>
+        public string Status { get; private set; } = "";
+
+        /// <summary>Save every note as a text file (E); returns where, or "" if it could not.</summary>
+        public string ExportNotes(string path = null)
+        {
+            if (Book == null) return "";
+            path = path ?? System.IO.Path.Combine(Application.persistentDataPath, "codex_notes.txt");
+            try
+            {
+                System.IO.File.WriteAllText(path, Book.NotesText());
+                Status = "Notes saved to " + path;
+                return path;
+            }
+            catch (Exception)
+            {
+                Status = "Could not save the notes.";
+                return "";
+            }
         }
 
         /// <summary>Bookmark the entry under the cursor (the first shown, if none), or take its bookmark off.</summary>
@@ -1517,6 +1558,11 @@ namespace VCGS
                 MoveCursor(e.keyCode == KeyCode.DownArrow ? 1 : -1);
                 e.Use();
             }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.E)
+            {
+                ExportNotes();
+                e.Use();
+            }
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.N)
             {
                 EditNote();
@@ -1566,6 +1612,7 @@ namespace VCGS
             }
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label(Book.Text(Search, Section, Sort, Cursor), text);
+            if (Status != "") GUILayout.Label(Status, text);
             GUILayout.EndScrollView();
             if (GUILayout.Button("Close")) Close();
             GUILayout.EndArea();

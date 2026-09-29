@@ -848,6 +848,7 @@ namespace vcgs
             const std::string q = Lower(Trim(query));
             std::vector<std::string> parts;
             ShownKeys.clear();
+            Titles.clear();
             using Entries = std::vector<std::pair<std::string, std::string>>;
             auto sorted = [&](Entries entries)
             {
@@ -882,6 +883,9 @@ namespace vcgs
                     if (!game.NoteFor(e.first).empty()) words += "\nNote: " + game.NoteFor(e.first);
                     text += sep + words;
                     ShownKeys.push_back(e.first);
+                    std::string first = e.second.substr(0, e.second.find('\n'));
+                    if (first.rfind("• ", 0) == 0) first = first.substr(std::string("• ").size());
+                    Titles[e.first] = Upper(key) + " · " + first;
                 }
                 parts.push_back(text);
             };
@@ -995,6 +999,26 @@ namespace vcgs
             return out;
         }
 
+        /**
+         * The player's notes in words, to export: each entry with a note, in the
+         * codex's order, under "SECTION · the entry's first line" (the same as
+         * the studio's play-through exports).
+         */
+        std::string NotesText() const
+        {
+            Text();
+            std::string out = "CODEX NOTES · " + game.StoryData.Name;
+            bool any = false;
+            for (const std::string& key : ShownKeys)
+            {
+                const std::string note = game.NoteFor(key);
+                if (note.empty()) continue;
+                out += "\n\n" + Titles.at(key) + "\n" + note;
+                any = true;
+            }
+            return any ? out : out + "\n\nNo notes yet.";
+        }
+
         /** The entries shown, in order, by key ("lore:…"): what a cursor moves through. */
         std::vector<std::string> EntryKeys(const std::string& query = "", const std::string& only = "", const std::string& sort = "") const
         {
@@ -1029,6 +1053,7 @@ namespace vcgs
         const GameState& game;
         int seen;
         mutable std::vector<std::string> ShownKeys;
+        mutable std::map<std::string, std::string> Titles;
 
         int Progress() const
         {

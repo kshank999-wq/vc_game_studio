@@ -200,7 +200,10 @@ int main()
             sorting.SetNote(std::string("lore:") + Lore::TheDrownedOrder, "  Priests, not monks  ");
             if (sorting.NoteFor(std::string("lore:") + Lore::TheDrownedOrder) != "Priests, not monks" || book.Text().find("They believed the water kept their secrets.\nNote: Priests, not monks") == std::string::npos) Fail("the note should end the entry, got " + book.Text());
             if (book.Text("not monks").find("THE DROWNED ORDER") == std::string::npos) Fail("a search should find the note, got " + book.Text("not monks"));
+            // Export them: each entry with a note, in the codex's order.
+            if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nPriests, not monks") Fail("the notes export should list each noted entry, got " + book.NotesText());
             sorting.SetNote(std::string("lore:") + Lore::TheDrownedOrder, "");
+            if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nNo notes yet.") Fail("with no notes, the export should say so, got " + book.NotesText());
             if (book.Text().find("Note:") != std::string::npos) Fail("an empty note should take the note off");
             if (sorting.ToggleBookmark(std::string("lore:") + Lore::TheDrownedOrder) || book.Text("", "bookmarks") != "CODEX\n\nNo bookmarks yet.") Fail("taking the bookmark off should leave none, got " + book.Text("", "bookmarks"));
             auto heads = [&](const char* sort)

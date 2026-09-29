@@ -150,7 +150,12 @@ static class Check
         sorting.SetNote("lore:" + Lore.TheDrownedOrder, "  Priests, not monks  ");
         if (sorting.NoteFor("lore:" + Lore.TheDrownedOrder) != "Priests, not monks" || !book.Text().Contains("They believed the water kept their secrets.\nNote: Priests, not monks")) Fail("the note should end the entry, got " + book.Text());
         if (!book.Text("not monks").Contains("THE DROWNED ORDER")) Fail("a search should find the note, got " + book.Text("not monks"));
+        // Export them: each entry with a note, in the codex's order.
+        sorting.SetNote("encounters:" + Encounters.EelSwarm, "Bring the lantern");
+        if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nPriests, not monks") Fail("the notes export should list each noted entry (the eels are not met here), got " + book.NotesText());
+        sorting.SetNote("encounters:" + Encounters.EelSwarm, "");
         sorting.SetNote("lore:" + Lore.TheDrownedOrder, "");
+        if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nNo notes yet.") Fail("with no notes, the export should say so, got " + book.NotesText());
         if (book.Text().Contains("Note:")) Fail("an empty note should take the note off");
         if (sorting.ToggleBookmark("lore:" + Lore.TheDrownedOrder) || book.Text("", "bookmarks") != "CODEX\n\nNo bookmarks yet.") Fail("taking the bookmark off should leave none, got " + book.Text("", "bookmarks"));
         string Heads(string sort) => string.Join(",", Array.FindAll(new Codex(sorting).Text("", "lore", sort).Split('\n'), l => l.StartsWith("THE ")));

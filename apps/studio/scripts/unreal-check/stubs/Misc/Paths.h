@@ -3,4 +3,5 @@
 struct FPaths
 {
     static FString ProjectContentDir() { return FString(""); }
+    static FString ProjectSavedDir() { return FString(""); }
 };

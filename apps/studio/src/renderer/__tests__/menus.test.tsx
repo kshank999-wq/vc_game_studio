@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { fileNameFor, parse, serialize } from '../files';
 import { sunkenVault } from '../model/sample';
@@ -233,6 +233,24 @@ describe('play-through', () => {
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(within(codex).queryByLabelText('Your note on Eel swarm')).toBeNull();
     expect(codex.textContent).toContain('Note: Light the lantern first');
+    // Export the notes: a text file with each noted entry.
+    const saved: Blob[] = [];
+    const created = URL.createObjectURL;
+    const revoked = URL.revokeObjectURL;
+    URL.createObjectURL = (b: Blob) => (saved.push(b), 'blob:notes');
+    URL.revokeObjectURL = () => {};
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    fireEvent.click(within(codex).getByRole('button', { name: 'Export notes' }));
+    expect(click).toHaveBeenCalled();
+    const read = (b: Blob) => new Promise<string>((done) => {
+      const r = new FileReader();
+      r.onload = () => done(String(r.result));
+      r.readAsText(b);
+    });
+    expect(await read(saved[0]!)).toContain('ENCOUNTERS · EEL SWARM (won)\nLight the lantern first');
+    click.mockRestore();
+    URL.createObjectURL = created;
+    URL.revokeObjectURL = revoked;
     expect(screen.getByRole('dialog', { name: 'Codex' })).toBeTruthy();
     fireEvent.change(search, { target: { value: 'lantern' } });
     fireEvent.click(within(sections).getByRole('button', { name: 'All' }));

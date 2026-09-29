@@ -256,7 +256,7 @@ namespace UnityEngine
         public Rect(float x, float y, float width, float height) { this.x = x; this.y = y; this.width = width; this.height = height; }
     }
 
-    public enum KeyCode { None, C, Escape, Return, Slash, Tab, S, B, N, UpArrow, DownArrow }
+    public enum KeyCode { None, C, Escape, Return, Slash, Tab, S, B, N, E, UpArrow, DownArrow }
     public enum EventType { KeyDown, KeyUp, Repaint, Layout }
 
     public sealed class Event
@@ -266,6 +266,11 @@ namespace UnityEngine
         public KeyCode keyCode;
         public bool shift;
         public void Use() { }
+    }
+
+    public static class Application
+    {
+        public static string persistentDataPath = System.IO.Path.GetTempPath();
     }
 
     public static class Screen

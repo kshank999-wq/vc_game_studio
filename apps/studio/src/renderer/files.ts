@@ -133,6 +133,21 @@ export const saveProjectFile = async (project: Project, file: ProjectFile | null
   return { name };
 };
 
+/** Hand the person a text file to keep (a download). */
+export const downloadText = (name: string, text: string): void => {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+/** The name for a project's exported codex notes. */
+export const notesFileNameFor = (project: Project): string => fileNameFor(project).replace(/\.[^.]+$/, '') + ' codex notes.txt';
+
 /** Can this file be written back to without asking (so autosave can use it)? */
 export const canWriteBack = (file: ProjectFile | null): boolean => !!file && (!!file.path || !!file.handle);
 

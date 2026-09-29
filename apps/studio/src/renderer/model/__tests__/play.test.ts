@@ -491,6 +491,20 @@ describe('the codex', () => {
     expect(both.endsWith('\nNote: Light the lantern first!')).toBe(true);
   });
 
+  it('exports the player\'s notes: each entry with a note, in the codex\'s order', async () => {
+    const { codexNotesText } = await import('../play');
+    const world = toTheVault(p).world;
+    expect(codexNotesText(p, world, new Map())).toBe(`CODEX NOTES · ${p.name}\n\nNo notes yet.`);
+    const notes = new Map([
+      [`lore:${id(p, 'The Drowned Order')}`, 'Priests, not monks'],
+      [`quests:${id(p, 'Open the vault')}`, 'Key first, then the lever'],
+      [`encounters:${id(p, 'Eel swarm')}`, ' '],
+    ]);
+    expect(codexNotesText(p, world, notes)).toBe(
+      `CODEX NOTES · ${p.name}\n\nQUESTS · Open the vault — Reach the vault chamber and open the door\nKey first, then the lever\n\nLORE · THE DROWNED ORDER\nPriests, not monks`,
+    );
+  });
+
   it('lists a character once heard, and only one with a codex entry', async () => {
     const { codexText, codexProgress } = await import('../play');
     const mara = id(p, 'Mara');

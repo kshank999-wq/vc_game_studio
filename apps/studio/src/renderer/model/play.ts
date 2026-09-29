@@ -868,6 +868,18 @@ export const codexText = (
   return ['CODEX', ...parts].join('\n\n');
 };
 
+/**
+ * The player's notes in words, to export: each entry with a note, section by
+ * section in the codex's order, under "SECTION · the entry's first line". The
+ * same as the engines' notes export writes.
+ */
+export const codexNotesText = (project: Project, world: PlayWorld, notes: ReadonlyMap<string, string>): string => {
+  const parts: string[] = [];
+  for (const s of codexSections(project, world, '', '', '', new Set(), notes))
+    for (const e of s.entries) if (e.note) parts.push(`${s.key.toUpperCase()} · ${e.text.split('\n')[0]!.replace(/^• /, '')}\n${e.note}`);
+  return [`CODEX NOTES · ${project.name}`, ...(parts.length ? parts : ['No notes yet.'])].join('\n\n');
+};
+
 /** How far the codex has come (quests started and done, characters met, locations visited, items found, objects used, mechanics available, encounters met and won, lore found), for counting what is new since it was read. */
 export const codexProgress = (project: Project, world: PlayWorld): number =>
   Object.keys(world.metCharacters).filter((id) => world.metCharacters[id] && codexEntry(project.objects[id])).length +

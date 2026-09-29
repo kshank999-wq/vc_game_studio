@@ -143,7 +143,11 @@ the studio's play-through:
   leaves it). Godot `set_note` / `note_for` on the game state and
   `edit_codex_note` / `set_codex_note` on the screen; Unity
   `GameState.SetNote` / `NoteFor` and `VcgsCodex.EditNote` / `KeepNote`;
-  Unreal `SetCodexNote` / `GetCodexNote` on the subsystem.
+  Unreal `SetCodexNote` / `GetCodexNote` on the subsystem. The notes export
+  (E on the placeholder screens) writes the same text as the studio's: Godot
+  `codex_notes_text()` / `export_codex_notes()` (user://codex_notes.txt);
+  Unity `Codex.NotesText` / `VcgsCodex.ExportNotes` (persistentDataPath);
+  Unreal `GetCodexNotesText` / `ExportCodexNotes` (Saved/CodexNotes.txt).
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

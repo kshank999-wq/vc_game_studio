@@ -69,7 +69,10 @@ monitor while you fix it on another.
   entries, from every section (searched and sorted as usual). The bookmarks
   last the whole play-through, stepping back or not. **Notes**: the pencil (✎)
   opens a box for the player's own note on an entry (Enter keeps it); it shows
-  under the entry as "Note: …", and a search finds it. An empty note is none. The engines' codex
+  under the entry as "Note: …", and a search finds it. An empty note is none.
+  **Export notes** (in the codex's header) saves them all as a text file: each
+  entry with a note, section by section in the codex's order, under
+  "SECTION · the entry's first line". The engines' codex
   screens search, filter, sort and bookmark the same way.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.

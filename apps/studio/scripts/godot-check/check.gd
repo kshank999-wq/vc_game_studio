@@ -359,6 +359,16 @@ func _initialize() -> void:
 		fail("the note should end the entry, got " + silt_player.codex_text())
 	if not silt_player.codex_text("not monks").contains("THE DROWNED ORDER"):
 		fail("a search should find the note, got " + silt_player.codex_text("not monks"))
+	# Export them: each entry with a note, in the codex's order, saved as a text file.
+	game.set_note("quests:open_the_vault", "Key first, then the lever")
+	var notes: String = silt_player.codex_notes_text()
+	print("notes: ", notes.replace("\n", " | "))
+	if notes != "CODEX NOTES · The Sunken Vault\n\nQUESTS · Open the vault — Reach the vault chamber and open the door\nKey first, then the lever\n\nLORE · THE DROWNED ORDER\nPriests, not monks":
+		fail("the notes export should list each noted entry, got " + notes)
+	var saved: String = silt_player.export_codex_notes("user://vcgs_check_notes.txt")
+	if saved == "" or FileAccess.get_file_as_string(saved) != notes:
+		fail("the notes should be saved as a text file, got " + saved)
+	game.set_note("quests:open_the_vault", "")
 	game.set_note("lore:the_drowned_order", "")
 	if silt_player.codex_text().contains("Note:"):
 		fail("an empty note should take the note off")

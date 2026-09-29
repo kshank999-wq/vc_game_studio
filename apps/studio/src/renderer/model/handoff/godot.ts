@@ -998,6 +998,7 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
       'extends RefCounted',
       `## ${ir.project.name}: the spine in order, branches, subplots and character arcs.`,
       '',
+      `const NAME := ${gd(ir.project.name)}`,
       `const SPINE := ${gd(ir.spine.map((n) => ({ key: n.key, kind: n.kind, name: n.name })))}`,
       `const BRANCHES := ${gd(ir.branches)}`,
       `const SUBPLOTS := ${gd(ir.subplots.map((s) => ({ key: s.key, name: s.name, from: s.from, to: s.to, beats: s.beats.map((b) => b.key) })))}`,
