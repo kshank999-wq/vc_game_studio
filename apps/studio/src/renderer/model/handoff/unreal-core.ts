@@ -810,17 +810,25 @@ namespace vcgs
          * The whole codex in words, the same as Godot's placeholder scenes show it.
          * With a search, only the entries it finds (ignoring case), in the sections
          * that have any; the headings still count everything. With a section
-         * ("quests", "lore"…, as SectionKeys lists them), only that one.
+         * ("quests", "lore"…, as SectionKeys lists them), only that one. With a
+         * sort ("found", the default; "newest"; "name", A–Z ignoring case), each
+         * section in that order (quests under way still before those done).
          */
-        std::string Text(const std::string& query = "", const std::string& only = "") const
+        std::string Text(const std::string& query = "", const std::string& only = "", const std::string& sort = "") const
         {
             const std::string q = Lower(Trim(query));
             std::vector<std::string> parts;
+            auto sorted = [&](std::vector<std::string> entries)
+            {
+                if (sort == "newest") std::reverse(entries.begin(), entries.end());
+                else if (sort == "name") std::stable_sort(entries.begin(), entries.end(), [](const std::string& a, const std::string& b) { return Lower(a) < Lower(b); });
+                return entries;
+            };
             auto section = [&](const char* key, const std::string& heading, const std::vector<std::string>& entries, const char* sep, const char* empty)
             {
                 if (!only.empty() && only != key) return;
                 std::vector<std::string> shown;
-                for (const std::string& e : entries) if (q.empty() || Lower(e).find(q) != std::string::npos) shown.push_back(e);
+                for (const std::string& e : std::string(key) == "quests" ? entries : sorted(entries)) if (q.empty() || Lower(e).find(q) != std::string::npos) shown.push_back(e);
                 if (!q.empty() && shown.empty()) return;
                 std::string text = heading;
                 if (shown.empty()) text += std::string("\n") + empty;
@@ -840,6 +848,8 @@ namespace vcgs
                     else active.push_back("• " + name + (goal.empty() ? "" : " — " + goal));
                 }
                 const std::string heading = "QUESTS · " + std::to_string(active.size()) + " under way, " + std::to_string(done.size()) + " done";
+                active = sorted(active);
+                done = sorted(done);
                 active.insert(active.end(), done.begin(), done.end());
                 section("quests", heading, active, "\n", "None yet.");
             }

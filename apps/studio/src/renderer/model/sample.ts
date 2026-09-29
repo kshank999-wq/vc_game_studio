@@ -218,6 +218,11 @@ export const sunkenVault = (): Project => {
   p = updateEvent(p, theKey, found.id, {
     effects: [{ kind: 'give', ref: key }, { kind: 'startQuest', ref: design.quest! }, { kind: 'revealLore', ref: design.lore! }],
   });
+  // Forcing the door shows the last expedition got this far: more lore, found only that way.
+  const expedition = makeObject('lore', 'The Last Expedition', p.objects[mara]!.created, { code: nextCode(p, codeFormatFor('lore')!), era: 'Ten years before the game' });
+  p = setNotes({ ...p, objects: { ...p.objects, [expedition.id]: expedition } }, expedition.id, 'Pry marks around the lock: the last expedition forced this door too, and none of them came back up.');
+  p = setValue(p, expedition.id, 'byEffect', true);
+  p = updateBranch(p, force.id, { effects: [{ kind: 'revealLore', ref: expedition.id }] });
   // Turning the key opens the vault: the quest is done.
   p = updateEvent(p, vaultDoor, choice.id, { effects: [{ kind: 'take', ref: key }, { kind: 'arc', ref: mara, amount: 1 }, { kind: 'completeQuest', ref: design.quest! }] });
 

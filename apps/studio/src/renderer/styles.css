@@ -5361,6 +5361,23 @@ kbd {
   border-color: var(--gold);
 }
 
+.play-codex-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+
+.play-codex-sort select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--node);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
 .play-codex h3 {
   margin: 14px 0 6px;
   font-size: 12px;

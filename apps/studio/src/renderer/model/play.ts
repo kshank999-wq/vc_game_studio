@@ -725,12 +725,25 @@ export const CODEX_SECTION_NAMES: Record<CodexSection['key'], string> = {
   lore: 'Lore',
 };
 
+/** How the codex orders each section's entries: as found (the default), newest first, or by name (A–Z, ignoring case). */
+export type CodexSort = 'found' | 'newest' | 'name';
+export const CODEX_SORTS: { key: CodexSort; label: string }[] = [
+  { key: 'found', label: 'Order found' },
+  { key: 'newest', label: 'Newest first' },
+  { key: 'name', label: 'A–Z' },
+];
+
+/** Entries in a sort's order. Quests keep those under way before those done, each group in that order. */
+const sortEntries = <T extends { text: string }>(entries: T[], sort: string): T[] =>
+  sort === 'newest' ? [...entries].reverse() : sort === 'name' ? [...entries].sort((a, b) => (a.text.toLowerCase() < b.text.toLowerCase() ? -1 : a.text.toLowerCase() > b.text.toLowerCase() ? 1 : 0)) : entries;
+
 /**
  * The codex's sections in words, the same as Godot, Unity and Unreal write
  * them. With a search, only the entries it finds, and only the sections with
  * any (their headings still count everything). With a section, only that one.
+ * With a sort, each section's entries in that order.
  */
-export const codexSections = (project: Project, world: PlayWorld, query = '', section = ''): CodexSection[] => {
+export const codexSections = (project: Project, world: PlayWorld, query = '', section = '', sort = ''): CodexSection[] => {
   const c = codexOf(project, world);
   const all: (CodexSection | false)[] = [
     !!c.quests && {
@@ -738,7 +751,10 @@ export const codexSections = (project: Project, world: PlayWorld, query = '', se
       heading: `QUESTS · ${c.underWay.length} under way, ${c.done.length} done`,
       empty: 'None yet.',
       sep: '\n',
-      entries: [...c.underWay.map((q) => ({ id: q.id, text: `• ${q.name}${q.goal ? ` — ${q.goal}` : ''}` })), ...c.done.map((q) => ({ id: q.id, text: `• ${q.name} (done)` }))],
+      entries: [
+        ...sortEntries(c.underWay.map((q) => ({ id: q.id, text: `• ${q.name}${q.goal ? ` — ${q.goal}` : ''}` })), sort),
+        ...sortEntries(c.done.map((q) => ({ id: q.id, text: `• ${q.name} (done)` })), sort),
+      ],
     },
     !!c.charactersTotal && {
       key: 'characters',
@@ -793,7 +809,9 @@ export const codexSections = (project: Project, world: PlayWorld, query = '', se
       entries: c.lore.map((l) => ({ id: l.id, text: `${l.name.toUpperCase()}\n${l.text}` })),
     },
   ];
-  const sections = all.filter((x): x is CodexSection => !!x && (!section || x.key === section));
+  const sections = all
+    .filter((x): x is CodexSection => !!x && (!section || x.key === section))
+    .map((x) => (x.key === 'quests' ? x : { ...x, entries: sortEntries(x.entries, sort) }));
   if (!query.trim()) return sections;
   return sections.map((s) => ({ ...s, entries: s.entries.filter((e) => codexMatches(e.text, query)) })).filter((s) => s.entries.length);
 };
@@ -801,9 +819,9 @@ export const codexSections = (project: Project, world: PlayWorld, query = '', se
 /** The sections this codex has (those with anything to find), in order: what a filter by section offers. */
 export const codexSectionKeys = (project: Project, world: PlayWorld): CodexSection['key'][] => codexSections(project, world).map((s) => s.key);
 
-/** The codex in words, exactly as Godot, Unity and Unreal write it; with a search, only what it finds; with a section, only that one. */
-export const codexText = (project: Project, world: PlayWorld, query = '', section = ''): string => {
-  const sections = codexSections(project, world, query, section);
+/** The codex in words, exactly as Godot, Unity and Unreal write it; with a search, only what it finds; with a section, only that one; with a sort, in that order. */
+export const codexText = (project: Project, world: PlayWorld, query = '', section = '', sort = ''): string => {
+  const sections = codexSections(project, world, query, section, sort);
   const within = section in CODEX_SECTION_NAMES ? ` in ${CODEX_SECTION_NAMES[section as CodexSection['key']]}` : '';
   if (query.trim() && !sections.length) return `CODEX\n\nNothing matches "${query.trim()}"${within}.`;
   const parts = sections.map((s) => s.heading + (s.entries.length ? s.entries.map((e) => s.sep + e.text).join('') : `\n${s.empty}`));

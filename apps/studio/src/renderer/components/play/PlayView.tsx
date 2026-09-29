@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
-import { advance, choose, CODEX_SECTION_NAMES, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, choose, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { Symbol } from '../Symbol';
 import { Inline } from '../Inline';
@@ -116,12 +116,15 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
   const c = codexOf(project, world);
   const [query, setQuery] = useState('');
   const [section, setSection] = useState<CodexSection['key'] | ''>('');
+  const [sort, setSort] = useState<CodexSort>('found');
   const search = useRef<HTMLInputElement>(null);
   const keys = codexSectionKeys(project, world);
-  // With a search or a section: the entries shown, by section (the same rule as the engines' codex).
-  const found = query.trim() || section ? new Map(codexSections(project, world, query, section).map((s) => [s.key, new Set(s.entries.map((e) => e.id))])) : null;
+  // The entries shown, by section and in order (the same rules as the engines' codex).
+  const shown = new Map(codexSections(project, world, query, section, sort).map((s) => [s.key, s.entries.map((e) => e.id)]));
+  const found = query.trim() || section ? shown : null;
   const has = (key: CodexSection['key']) => !found || found.has(key);
-  const keep = (key: CodexSection['key']) => (x: { id: string }) => !found || !!found.get(key)?.has(x.id);
+  const keep = (key: CodexSection['key']) => (x: { id: string }) => !!shown.get(key)?.includes(x.id);
+  const inOrder = (key: CodexSection['key']) => (a: { id: string }, b: { id: string }) => shown.get(key)!.indexOf(a.id) - shown.get(key)!.indexOf(b.id);
   useEffect(() => {
     // "/" goes to the search box, as in the engines' codex screens.
     const onKey = (e: KeyboardEvent) => {
@@ -170,6 +173,16 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           ))}
         </div>
       )}
+      <label className="play-codex-sort">
+        <span className="pref-hint">Sort</span>
+        <select aria-label="Sort the codex" value={sort} onChange={(e) => setSort(e.target.value as CodexSort)}>
+          {CODEX_SORTS.map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
       {found && !found.size && query.trim() && (
         <p className="play-note">
           Nothing matches “{query.trim()}”{section ? ` in ${CODEX_SECTION_NAMES[section]}` : ''}.
@@ -182,13 +195,13 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           </h3>
           {!c.underWay.length && !c.done.length && <p className="play-note">None yet.</p>}
           <ul className="play-codex-quests">
-            {c.underWay.filter(keep('quests')).map((q) => (
+            {c.underWay.filter(keep('quests')).sort(inOrder('quests')).map((q) => (
               <li key={q.id}>
                 <Symbol type="quest" size={11} /> <strong>{q.name}</strong>
                 {q.goal && <span className="play-note"> — {q.goal}</span>}
               </li>
             ))}
-            {c.done.filter(keep('quests')).map((q) => (
+            {c.done.filter(keep('quests')).sort(inOrder('quests')).map((q) => (
               <li key={q.id} className="done">
                 <Symbol type="quest" size={11} /> {q.name} <span className="play-note">(done)</span>
               </li>
@@ -202,7 +215,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
             Characters <span className="play-note">· {c.characters.length} of {c.charactersTotal} met</span>
           </h3>
           {!c.characters.length && <p className="play-note">None yet.</p>}
-          {c.characters.filter(keep('characters')).map((ch) => (
+          {c.characters.filter(keep('characters')).sort(inOrder('characters')).map((ch) => (
             <article key={ch.id} className="play-codex-lore play-codex-character">
               <h4>
                 <Symbol type="character" size={11} /> {ch.name}
@@ -218,7 +231,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
             Locations <span className="play-note">· {c.locations.length} of {c.locationsTotal} visited</span>
           </h3>
           {!c.locations.length && <p className="play-note">None yet.</p>}
-          {c.locations.filter(keep('locations')).map((l) => (
+          {c.locations.filter(keep('locations')).sort(inOrder('locations')).map((l) => (
             <article key={l.id} className="play-codex-lore play-codex-location">
               <h4>
                 <Symbol type="environment" size={11} /> {l.name}
@@ -234,7 +247,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
             Items <span className="play-note">· {c.items.length} of {c.itemsTotal} found</span>
           </h3>
           {!c.items.length && <p className="play-note">None yet.</p>}
-          {c.items.filter(keep('items')).map((i) => (
+          {c.items.filter(keep('items')).sort(inOrder('items')).map((i) => (
             <article key={i.id} className="play-codex-lore play-codex-item">
               <h4>
                 <Symbol type="inventory" size={11} /> {i.name}
@@ -251,7 +264,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
             Objects <span className="play-note">· {c.objects.length} of {c.objectsTotal} used</span>
           </h3>
           {!c.objects.length && <p className="play-note">None yet.</p>}
-          {c.objects.filter(keep('objects')).map((o) => (
+          {c.objects.filter(keep('objects')).sort(inOrder('objects')).map((o) => (
             <article key={o.id} className="play-codex-lore play-codex-object">
               <h4>
                 <Symbol type="object" size={11} /> {o.name}
@@ -268,7 +281,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
             Mechanics <span className="play-note">· {c.mechanics.length} of {c.mechanicsTotal} available</span>
           </h3>
           {!c.mechanics.length && <p className="play-note">None yet.</p>}
-          {c.mechanics.filter(keep('mechanics')).map((m) => (
+          {c.mechanics.filter(keep('mechanics')).sort(inOrder('mechanics')).map((m) => (
             <article key={m.id} className="play-codex-lore play-codex-mechanic">
               <h4>
                 <Symbol type="mechanic" size={11} /> {m.name}
@@ -285,7 +298,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
             Encounters <span className="play-note">· {c.encounters.length} met, {c.encounters.filter((e) => e.won).length} won</span>
           </h3>
           {!c.encounters.length && <p className="play-note">None yet.</p>}
-          {c.encounters.filter(keep('encounters')).map((e) => (
+          {c.encounters.filter(keep('encounters')).sort(inOrder('encounters')).map((e) => (
             <article key={e.id} className="play-codex-lore play-codex-encounter">
               <h4>
                 <Symbol type="encounter" size={11} /> {e.name}
@@ -305,7 +318,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
             Lore <span className="play-note">· {c.lore.length} of {c.loreTotal} found</span>
           </h3>
           {!c.lore.length && <p className="play-note">Nothing found yet.</p>}
-          {c.lore.filter(keep('lore')).map((l) => (
+          {c.lore.filter(keep('lore')).sort(inOrder('lore')).map((l) => (
             <article key={l.id} className="play-codex-lore">
               <h4>
                 <Symbol type="lore" size={11} /> {l.name}

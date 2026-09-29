@@ -309,7 +309,7 @@ describe('design definitions: lore, quests, mechanics and encounters', () => {
 
   it('are in the handoff model with their codes and fields, without studio-only lineage', () => {
     const { lore, quests, mechanics, encounters } = ir();
-    expect([lore, quests, mechanics, encounters].map((l) => l.map((t) => `${t.code} ${t.ident.key}`))).toEqual([['LORE-01 the_drowned_order'], ['QST-01 open_the_vault'], ['MEC-01 lantern_oil'], ['ENC-01 eel_swarm']]);
+    expect([lore, quests, mechanics, encounters].map((l) => l.map((t) => `${t.code} ${t.ident.key}`))).toEqual([['LORE-01 the_drowned_order', 'LORE-02 the_last_expedition'], ['QST-01 open_the_vault'], ['MEC-01 lantern_oil'], ['ENC-01 eel_swarm']]);
     expect(mechanics[0]!.fields).toEqual({ controls: 'Hold to raise the lantern', tuning: 'About a minute of deep water on a full lantern' });
     const withLineage = { ...sunkenVault() };
     const id = Object.values(withLineage.objects).find((o) => o.type === 'mechanic')!.id;
@@ -326,6 +326,7 @@ describe('design definitions: lore, quests, mechanics and encounters', () => {
     for (const out of Object.values(outputs)) {
       expect(out.elements.filter((e) => ['lore', 'quest', 'mechanic', 'encounter'].includes(e.symbol)).map((e) => [e.label, e.group])).toEqual([
         ['LORE-01 The Drowned Order', 'World'],
+        ['LORE-02 The Last Expedition', 'World'],
         ['QST-01 Open the vault', 'Story'],
         ['MEC-01 Lantern oil', 'Logic'],
         ['ENC-01 Eel swarm', 'World'],
@@ -386,11 +387,11 @@ describe('quests and encounters in the engines', () => {
     expect(file('addons/vcgs_runtime/scene_flow.gd')).toContain('signal encounter_requested(encounter_key: String, can_win: bool)');
     // The placeholder scenes' player has a codex of the lore found.
     const player = file('addons/vcgs_runtime/debug_player.gd');
-    expect(player).toContain('func codex_text(query := "", section := "") -> String:');
+    expect(player).toContain('func codex_text(query := "", section := "", sort := "") -> String:');
     expect(player).toContain('game.lore_discovered.connect(_on_codex_news)');
     expect(player).toContain('game.quest_started.connect(_on_codex_news)');
     // Unity and Unreal have one too: the same text, a screen to draw it.
-    expect(RUNTIME_FILES['Codex.cs']).toContain('public string Text(string query = "", string section = "")');
+    expect(RUNTIME_FILES['Codex.cs']).toContain('public string Text(string query = "", string section = "", string sort = "")');
     expect(RUNTIME_FILES['VcgsCodex.cs']).toContain('public sealed class VcgsCodex : MonoBehaviour');
     expect(VCGS_CORE_H).toContain('class Codex');
     const { PLUGIN_FILES } = await import('../handoff/unreal');

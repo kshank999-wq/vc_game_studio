@@ -212,6 +212,10 @@ describe('play-through', () => {
     fireEvent.change(search, { target: { value: 'lantern' } });
     expect(codex.textContent).toContain('Eel swarm');
     expect(codex.textContent).not.toContain('MaraA guide');
+    // Sort: the choice sticks while the codex is open (one entry a section here, so the same order).
+    fireEvent.change(within(codex).getByLabelText('Sort the codex'), { target: { value: 'name' } });
+    expect((within(codex).getByLabelText('Sort the codex') as HTMLSelectElement).value).toBe('name');
+    expect(codex.textContent).toContain('Eel swarm');
     fireEvent.click(within(sections).getByRole('button', { name: 'All' }));
     expect(codex.textContent).toContain('MaraA guide');
     fireEvent.change(search, { target: { value: 'nothing like it' } });

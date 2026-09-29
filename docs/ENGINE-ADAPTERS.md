@@ -123,7 +123,13 @@ the studio's play-through:
   (`codex_text(query, section)`, `set_codex_section`, `codex_section_keys()`);
   Unity's a toolbar and Tab (`Codex.Text(query, section)`, `Codex.SectionKeys`,
   `VcgsCodex.Section`); Unreal's HUD Tab (`GetCodexText(Search, Section)`,
-  `GetCodexSections`, `SetCodexSection`).
+  `GetCodexSections`, `SetCodexSection`). And each sorts every section:
+  "found" (the order found, the default), "newest" (newest first) or "name"
+  (A–Z, ignoring case), quests under way still before those done. Godot has a
+  sort menu and S (`codex_text(query, section, sort)`, `set_codex_sort`);
+  Unity sort buttons and S (`Codex.Text(query, section, sort)`,
+  `VcgsCodex.Sort`); Unreal's HUD S (`GetCodexText(Search, Section, Sort)`,
+  `SetCodexSort`).
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

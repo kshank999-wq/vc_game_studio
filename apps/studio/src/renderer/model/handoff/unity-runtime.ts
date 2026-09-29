@@ -1197,16 +1197,26 @@ namespace VCGS
         /// The whole codex in words, the same as Godot's placeholder scenes show it.
         /// With a search, only the entries it finds (ignoring case), in the sections
         /// that have any; the headings still count everything. With a section
-        /// ("quests", "lore"…, as SectionKeys lists them), only that one.
+        /// ("quests", "lore"…, as SectionKeys lists them), only that one. With a
+        /// sort ("found", the default; "newest"; "name", A–Z ignoring case), each
+        /// section in that order (quests under way still before those done).
         /// </summary>
-        public string Text(string query = "", string section = "")
+        public string Text(string query = "", string section = "", string sort = "")
         {
             var q = (query ?? "").Trim();
             var only = section ?? "";
             var parts = new List<string>();
+            List<string> Sorted(List<string> entries)
+            {
+                var list = new List<string>(entries);
+                if (sort == "newest") list.Reverse();
+                else if (sort == "name") list.Sort((a, b) => string.CompareOrdinal(a.ToLowerInvariant(), b.ToLowerInvariant()));
+                return list;
+            }
             void Section(string key, string heading, List<string> entries, string sep, string empty)
             {
                 if (only != "" && only != key) return;
+                if (key != "quests") entries = Sorted(entries);
                 var shown = q == "" ? entries : entries.FindAll(e => e.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
                 if (q != "" && shown.Count == 0) return;
                 var text = new StringBuilder(heading);
@@ -1219,9 +1229,12 @@ namespace VCGS
             {
                 var active = UnderWay();
                 var done = Done();
-                var lines = new List<string>();
-                foreach (var (name, goal) in active) lines.Add("• " + name + (goal != "" ? " — " + goal : ""));
-                foreach (var name in done) lines.Add("• " + name + " (done)");
+                var underWay = new List<string>();
+                var finished = new List<string>();
+                foreach (var (name, goal) in active) underWay.Add("• " + name + (goal != "" ? " — " + goal : ""));
+                foreach (var name in done) finished.Add("• " + name + " (done)");
+                var lines = Sorted(underWay);
+                lines.AddRange(Sorted(finished));
                 Section("quests", "QUESTS · " + active.Count + " under way, " + done.Count + " done", lines, "\n", "None yet.");
             }
             var withEntry = 0;
@@ -1322,8 +1335,9 @@ namespace VCGS
     /// Codex button in the top corner (it counts what is new) and a panel with
     /// everything found so far, and a search box over it. Put it next to
     /// VcgsGame; press C (or the button) to open it, C or Escape to close, and
-    /// / to search (Escape clears the search, then leaves the box), and Tab
-    /// (or the row of buttons) to show one section. Drawn with
+    /// / to search (Escape clears the search, then leaves the box), Tab
+    /// (or the row of buttons) to show one section, and S (or the sort buttons)
+    /// to order each section. Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1339,6 +1353,11 @@ namespace VCGS
         public string Search { get; set; } = "";
         /// <summary>The section the codex is filtered to ("" for all of them; Tab picks the next).</summary>
         public string Section { get; set; } = "";
+        /// <summary>How each section is ordered: "found", "newest" or "name" (A–Z; S picks the next).</summary>
+        public string Sort { get; set; } = "found";
+
+        static readonly string[] Sorts = { "found", "newest", "name" };
+        static readonly string[] SortNames = { "Order found", "Newest first", "A–Z" };
 
         const string SearchControl = "vcgs-codex-search";
         Codex book;
@@ -1388,6 +1407,11 @@ namespace VCGS
                 GUI.FocusControl(SearchControl);
                 e.Use();
             }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.S)
+            {
+                Sort = Sorts[(Math.Max(0, Array.IndexOf(Sorts, Sort)) + 1) % Sorts.Length];
+                e.Use();
+            }
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.Tab)
             {
                 var options = Options();
@@ -1414,8 +1438,9 @@ namespace VCGS
                 var names = sections.ConvertAll(k => k == "" ? "All" : char.ToUpperInvariant(k[0]) + k.Substring(1)).ToArray();
                 Section = sections[GUILayout.Toolbar(Math.Max(0, sections.IndexOf(Section ?? "")), names)];
             }
+            Sort = Sorts[GUILayout.Toolbar(Math.Max(0, Array.IndexOf(Sorts, Sort)), SortNames)];
             scroll = GUILayout.BeginScrollView(scroll);
-            GUILayout.Label(Book.Text(Search, Section), text);
+            GUILayout.Label(Book.Text(Search, Section, Sort), text);
             GUILayout.EndScrollView();
             if (GUILayout.Button("Close")) Close();
             GUILayout.EndArea();

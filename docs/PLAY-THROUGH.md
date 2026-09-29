@@ -62,7 +62,10 @@ monitor while you fix it on another.
   box. **Filter** it by section with the row of buttons under the search
   (All, Quests, Characters…, only those the story has): one section alone,
   with the search inside it if there is one ("Nothing matches … in Lore").
-  The engines' codex screens search and filter the same way.
+  **Sort** each section with the Sort menu: in the order found (the default),
+  newest first, or A–Z by name (ignoring case); quests under way still come
+  before those done. The engines' codex screens search, filter and sort the
+  same way.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.
 - **The world** panel shows every state, what is carried, object states, arcs,
