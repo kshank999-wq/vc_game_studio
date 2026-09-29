@@ -371,3 +371,19 @@ describe('effects that complete quests and make mechanics available', () => {
     expect(done.log.map((e) => `${e.kind}:${e.text}`)).toEqual(['quest:Open the vault', 'effect:Mara +1', 'mechanic:Lantern oil']);
   });
 });
+
+describe('the codex', () => {
+  it('reads the same as the engines\' codex: the quest log, then the lore found', async () => {
+    const { codexText, codexProgress } = await import('../play');
+    const start = startPlay(p);
+    expect(codexText(p, start.world)).toBe('CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet.');
+    const atVault = toTheVault(p);
+    expect(codexText(p, atVault.world)).toBe(
+      'CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.',
+    );
+    // Two new: the quest started and the lore found.
+    expect(codexProgress(atVault.world) - codexProgress(start.world)).toBe(2);
+    const end = playThrough(p);
+    expect(codexText(p, end.world)).toContain('QUESTS · 0 under way, 1 done\n• Open the vault (done)');
+  });
+});

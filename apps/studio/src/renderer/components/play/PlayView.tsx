@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
-import { advance, choose, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, choose, codexOf, codexProgress, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { Symbol } from '../Symbol';
 import { Inline } from '../Inline';
@@ -109,6 +109,60 @@ const EntryView = ({ entry }: { entry: Entry }) => {
     case 'end':
       return <div className="play-end">{entry.text}</div>;
   }
+};
+
+/** The codex as the player would read it: the quest log, then the lore found. */
+const CodexPanel = ({ project, world, onClose }: { project: Project; world: PlayWorld; onClose: () => void }) => {
+  const c = codexOf(project, world);
+  return (
+    <div className="play-codex" role="dialog" aria-label="Codex">
+      <div className="play-codex-head">
+        <span className="rule-label">Codex</span>
+        <span className="pref-hint">What the player has found, as a codex screen shows it.</span>
+        <div className="grow" />
+        <button className="tb-btn small" onClick={onClose}>
+          Close <kbd>C</kbd>
+        </button>
+      </div>
+      {c.quests > 0 && (
+        <section aria-label="Quests">
+          <h3>
+            Quests <span className="play-note">· {c.underWay.length} under way, {c.done.length} done</span>
+          </h3>
+          {!c.underWay.length && !c.done.length && <p className="play-note">None yet.</p>}
+          <ul className="play-codex-quests">
+            {c.underWay.map((q) => (
+              <li key={q.id}>
+                <Symbol type="quest" size={11} /> <strong>{q.name}</strong>
+                {q.goal && <span className="play-note"> — {q.goal}</span>}
+              </li>
+            ))}
+            {c.done.map((q) => (
+              <li key={q.id} className="done">
+                <Symbol type="quest" size={11} /> {q.name} <span className="play-note">(done)</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {c.loreTotal > 0 && (
+        <section aria-label="Lore">
+          <h3>
+            Lore <span className="play-note">· {c.lore.length} of {c.loreTotal} found</span>
+          </h3>
+          {!c.lore.length && <p className="play-note">Nothing found yet.</p>}
+          {c.lore.map((l) => (
+            <article key={l.id} className="play-codex-lore">
+              <h4>
+                <Symbol type="lore" size={11} /> {l.name}
+              </h4>
+              <p>{l.text}</p>
+            </article>
+          ))}
+        </section>
+      )}
+    </div>
+  );
 };
 
 /** The world, which the designer can change by hand to try another path. */
@@ -288,7 +342,20 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   const prompt = useMemo(() => promptOf(project, play), [project, play]);
   const push = (next: Play) => next !== play && setHistory((h) => [...h, next]);
   const transcript = useRef<HTMLDivElement>(null);
-  const restart = () => setHistory([startPlay(project, from)]);
+  const [codexOpen, setCodexOpen] = useState(false);
+  // What the codex had when last read, for its "new" count.
+  const [seen, setSeen] = useState(0);
+  const progress = codexProgress(play.world);
+  const hasCodex = Object.values(project.objects).some((o) => o.type === 'quest' || o.type === 'lore');
+  const fresh = Math.max(0, progress - seen);
+  useEffect(() => {
+    // Read while open; after a step back there is less to have read.
+    if (codexOpen || progress < seen) setSeen(progress);
+  }, [codexOpen, progress, seen]);
+  const restart = () => {
+    setHistory([startPlay(project, from)]);
+    setSeen(0);
+  };
 
   useEffect(() => {
     const el = transcript.current;
@@ -298,6 +365,15 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (hasCodex && (e.key === 'c' || e.key === 'C')) {
+        e.preventDefault();
+        setCodexOpen((o) => !o);
+        return;
+      }
+      if (codexOpen) {
+        if (e.key === 'Escape') setCodexOpen(false);
+        return;
+      }
       if ((e.key === 'Enter' || e.key === ' ') && prompt.kind === 'continue') {
         e.preventDefault();
         push(advance(project, play));
@@ -332,6 +408,11 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
           <button className="tb-btn small" onClick={restart}>
             ⟲ Restart
           </button>
+          {hasCodex && (
+            <button className={`tb-btn small${codexOpen ? ' on' : ''}`} aria-pressed={codexOpen} title="The codex: quests and lore found (C)" onClick={() => setCodexOpen(!codexOpen)}>
+              Codex{fresh > 0 && <span className="play-codex-new"> · {fresh} new</span>}
+            </button>
+          )}
           {here && (
             <button
               className="tb-btn small"
@@ -341,6 +422,7 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
             </button>
           )}
         </div>
+        {codexOpen && <CodexPanel project={project} world={play.world} onClose={() => setCodexOpen(false)} />}
         <div className="play-transcript" ref={transcript} aria-live="polite">
           {play.log.map((entry, i) => (
             <EntryView key={i} entry={entry} />

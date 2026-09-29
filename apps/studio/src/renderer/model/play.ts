@@ -597,6 +597,60 @@ const useInteraction = (d: Doing, object: StoryObject, i: ReturnType<typeof inte
   settle(d);
 };
 
+// ---------------------------------------------------------------- the codex
+
+export interface Codex {
+  /** Quests under way, each with its goal, in the order they started. */
+  underWay: { id: string; name: string; goal: string }[];
+  /** Quests done, in the order they started. */
+  done: { id: string; name: string }[];
+  /** Lore found, in the order found, with its text. */
+  lore: { id: string; name: string; text: string }[];
+  /** How many quests and lore entries the project has (a section shows only when it has some). */
+  quests: number;
+  loreTotal: number;
+}
+
+/** The codex as the player reads it, the same as the engines' codex screens show it. */
+export const codexOf = (project: Project, world: PlayWorld): Codex => {
+  const all = Object.values(project.objects);
+  const known = (id: string) => project.objects[id];
+  const quests = Object.keys(world.quests).filter(known);
+  return {
+    underWay: quests.filter((id) => world.quests[id] !== 'done').map((id) => ({ id, name: name(project, id), goal: String(project.objects[id]!.data.goal ?? '') })),
+    done: quests.filter((id) => world.quests[id] === 'done').map((id) => ({ id, name: name(project, id) })),
+    lore: Object.keys(world.lore)
+      .filter((id) => world.lore[id] && known(id))
+      .map((id) => ({ id, name: name(project, id), text: project.objects[id]!.notes })),
+    quests: all.filter((o) => o.type === 'quest').length,
+    loreTotal: all.filter((o) => o.type === 'lore').length,
+  };
+};
+
+/** The codex in words, exactly as Godot, Unity and Unreal write it. */
+export const codexText = (project: Project, world: PlayWorld): string => {
+  const c = codexOf(project, world);
+  const parts: string[] = [];
+  if (c.quests) {
+    const lines = [`QUESTS · ${c.underWay.length} under way, ${c.done.length} done`];
+    if (!c.underWay.length && !c.done.length) lines.push('None yet.');
+    for (const q of c.underWay) lines.push(`• ${q.name}${q.goal ? ` — ${q.goal}` : ''}`);
+    for (const q of c.done) lines.push(`• ${q.name} (done)`);
+    parts.push(lines.join('\n'));
+  }
+  if (c.loreTotal) {
+    let lore = `LORE · ${c.lore.length} of ${c.loreTotal} found`;
+    if (!c.lore.length) lore += '\nNothing found yet.';
+    for (const l of c.lore) lore += `\n\n${l.name.toUpperCase()}\n${l.text}`;
+    parts.push(lore);
+  }
+  return ['CODEX', ...parts].join('\n\n');
+};
+
+/** How far the codex has come (quests started, quests done, lore found), for counting what is new since it was read. */
+export const codexProgress = (world: PlayWorld): number =>
+  Object.keys(world.lore).filter((id) => world.lore[id]).length + Object.values(world.quests).reduce((n, q) => n + (q === 'done' ? 2 : 1), 0);
+
 // ---------------------------------------------------------------- for the level's play mode
 
 /** What changed in words, for a log. */

@@ -5270,6 +5270,7 @@ kbd {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
   border-right: 1px solid var(--border);
 }
 
@@ -5289,6 +5290,68 @@ kbd {
 .play-where {
   font-size: 12.5px;
   color: var(--text-soft);
+}
+
+.play-codex {
+  position: absolute;
+  z-index: 5;
+  top: 52px;
+  left: max(24px, calc(50% - 360px));
+  right: max(24px, calc(50% - 360px));
+  max-height: calc(100% - 140px);
+  overflow: auto;
+  padding: 18px 22px;
+  background: var(--panel);
+  border: 1px solid var(--gold-lo);
+  border-radius: 6px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.play-codex-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.play-codex h3 {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-hi);
+}
+
+.play-codex-quests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.play-codex-quests li.done {
+  color: var(--muted);
+}
+
+.play-codex-lore h4 {
+  margin: 10px 0 2px;
+  font-size: 13px;
+  color: var(--c-lore);
+}
+
+.play-codex-lore p {
+  margin: 0;
+  font-family: var(--font-notes, var(--font-ui));
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.play-codex-new {
+  color: var(--gold-hi);
 }
 
 .play-transcript {

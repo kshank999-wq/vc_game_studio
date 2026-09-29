@@ -175,6 +175,19 @@ describe('play-through', () => {
     // Finding the key starts the quest, and its seal tells the Order's story.
     expect(container.querySelector('.play-quest')?.textContent).toContain('New quest: Open the vault');
     expect(container.querySelector('.play-lore')?.textContent).toContain('Discovered: The Drowned Order');
+    // The codex counts both, and opens on the quest log and the lore (C, or its button).
+    expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex · 2 new');
+    act(() => {
+      fireEvent.keyDown(window, { key: 'c' });
+    });
+    const codex = screen.getByRole('dialog', { name: 'Codex' });
+    expect(codex.textContent).toContain('Open the vault — Reach the vault chamber and open the door');
+    expect(codex.textContent).toContain('The Drowned OrderRiver priests who sealed the vault');
+    expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex');
+    act(() => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+    expect(screen.queryByRole('dialog', { name: 'Codex' })).toBeNull();
     expect(container.querySelector('.play-free')?.textContent).toContain('Rusted Lever');
     fireEvent.click(screen.getByRole('button', { name: 'Pull' }));
     expect(container.querySelector('.play-transcript')?.textContent).toContain('Seam drains fires');
