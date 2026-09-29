@@ -196,6 +196,8 @@ describe('play-through', () => {
     expect(container.querySelector('.play-free')?.textContent).toContain('Rusted Lever');
     fireEvent.click(screen.getByRole('button', { name: 'Pull' }));
     expect(container.querySelector('.play-transcript')?.textContent).toContain('Seam drains fires');
+    // Using the lever puts it in the codex's objects.
+    expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex · 1 new');
     // Turning the key opens the vault: the quest is done.
     expect(container.querySelector('.play-quest.done')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Turn the key/ }));

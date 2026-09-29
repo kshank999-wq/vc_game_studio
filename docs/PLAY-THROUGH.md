@@ -49,7 +49,8 @@ monitor while you fix it on another.
   the Bible, once they speak a line; a character without one stays out of it),
   the locations visited (the same, once a scene set there plays), the items
   found (the same, once held; marked while carried, and kept once
-  used up),
+  used up), the objects used (the same, once used in free play, with how they
+  stand now),
   the mechanics available (with their controls and
   description), the encounters met (their enemies and weakness, and whether
   they were won; one lost still shows, so its weakness is there to read) and

@@ -118,6 +118,7 @@ export const sunkenVault = (): Project => {
   p = useInScene(useInScene(p, vaultDoor, mara), vaultDoor, explorer);
   p = setSceneUse(p, vaultDoor, mara, 'behaviour', 'Leads if trust ≥ 1');
   const lever = add('object', 'Rusted Lever');
+  p = setField(p, lever, 'codex', 'An iron lever half-buried by the door, stiff with rust. It works the old sluice.');
   const key = add('inventory', 'Vault Key');
   p = setField(p, key, 'codex', 'A heavy bronze key, green with age, stamped with the Order’s wave.');
   const puzzle = add('puzzle', 'The Vault Door');

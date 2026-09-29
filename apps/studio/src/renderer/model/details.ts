@@ -26,7 +26,10 @@ export const FIELDS: Partial<Record<ObjectType, readonly FieldSpec[]>> = {
     { key: 'voice', label: 'Voice / casting', placeholder: 'Low, dry, local accent' },
     { key: 'codex', label: 'Codex entry (as the player reads it, once met)', multiline: true, placeholder: 'A guide who knows the flooded caves' },
   ],
-  object: [{ key: 'location', label: 'Where it is', placeholder: 'Half-buried by the door' }],
+  object: [
+    { key: 'location', label: 'Where it is', placeholder: 'Half-buried by the door' },
+    { key: 'codex', label: 'Codex entry (as the player reads it, once used)', multiline: true, placeholder: 'An iron lever, stiff with rust' },
+  ],
   environment: [
     { key: 'appearance', label: 'Appearance', multiline: true, placeholder: 'Ankle-deep water, green bronze door' },
     { key: 'lighting', label: 'Lighting / weather', placeholder: 'Lantern only' },

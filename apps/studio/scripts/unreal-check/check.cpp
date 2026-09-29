@@ -110,6 +110,8 @@ int main()
         if (!choices.empty()) Fail("the choice should wait for the free play to end");
         if (Join(vcgs::Interactions::AvailableVerbs(game, Objects::RustedLever), ",") != "Pull") Fail("the lever should offer Pull");
         if (!vcgs::Interactions::Interact(game, Objects::RustedLever, "Pull")) Fail("Pull should work");
+        // Pulling it puts the lever in the codex, with how it stands now.
+        if (Join(game.UsedObjects, ",") != Objects::RustedLever || vcgs::Codex(game).Text().find("OBJECTS · 1 of 1 used\n\nRUSTED LEVER (up)\nAn iron lever half-buried by the door, stiff with rust. It works the old sluice.") == std::string::npos) Fail("the codex should list the lever, got " + vcgs::Codex(game).Text());
         if (game.GetObjectState(Objects::RustedLever) != "up" || game.GetFlag(Flags::DoorSolved) != "yes") Fail("Pull should leave the lever up and set door_solved");
         if (!game.Fired.count(Triggers::SeamDrains) || !game.Solved.count(Puzzles::TheVaultDoor)) Fail("the lever should fire Seam drains and solve the door");
         if (choices.size() != 1) Fail("free play should end into the choice");
@@ -155,7 +157,7 @@ int main()
         silt.OnEncounter = [&](const std::string& e, bool canWin) { encounters.push_back(e + (canWin ? "" : " (can't win)")); };
         silt.OnGameOver = [&](const std::string& e) { over.push_back(e); };
         vcgs::Codex codex(fresh);
-        if (codex.Text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 0 of 1 found\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nENCOUNTERS · 0 met, 0 won\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet." || codex.New() != 0) Fail("the codex should start empty, got " + codex.Text());
+        if (codex.Text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 0 of 1 found\nNone yet.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nENCOUNTERS · 0 met, 0 won\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet." || codex.New() != 0) Fail("the codex should start empty, got " + codex.Text());
         silt.Start();
         silt.Lose();
         std::printf("encounter: %s\n", Join(encounters, ", ").c_str());
@@ -172,7 +174,7 @@ int main()
         // The codex: the quest log, the mechanics, the encounters and the lore, and what is new since it was read.
         const std::string text = codex.Text();
         std::printf("codex: %s · new %d\n", text.substr(0, 80).c_str(), codex.New());
-        if (codex.ButtonText("C") != "Codex (C) · 6 new" || text.rfind("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 1 of 1 found\n\nVAULT KEY (carried)\nA heavy bronze key, green with age, stamped with the Order’s wave.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault", 0) != 0) Fail("the codex should show the quest under way, the key, the lantern's oil, the eels won and The Drowned Order, 6 new, got " + text);
+        if (codex.ButtonText("C") != "Codex (C) · 6 new" || text.rfind("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 1 of 1 found\n\nVAULT KEY (carried)\nA heavy bronze key, green with age, stamped with the Order’s wave.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault", 0) != 0) Fail("the codex should show the quest under way, the key, the lantern's oil, the eels won and The Drowned Order, 6 new, got " + text);
         codex.MarkRead();
         vcgs::Rules::CompleteQuest(Quests::OpenTheVault, fresh);
         if (codex.ButtonText("C") != "Codex (C) · 1 new" || codex.Text().find("QUESTS · 0 under way, 1 done\n• Open the vault (done)") == std::string::npos) Fail("the quest log should show the quest done, 1 new, got " + codex.Text());

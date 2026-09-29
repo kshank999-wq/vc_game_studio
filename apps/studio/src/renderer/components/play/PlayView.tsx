@@ -111,7 +111,7 @@ const EntryView = ({ entry }: { entry: Entry }) => {
   }
 };
 
-/** The codex as the player would read it: the quest log, the characters met, the locations visited, the items found, the mechanics, the encounters met, then the lore found. */
+/** The codex as the player would read it: the quest log, the characters met, the locations visited, the items found, the objects used, the mechanics, the encounters met, then the lore found. */
 const CodexPanel = ({ project, world, onClose }: { project: Project; world: PlayWorld; onClose: () => void }) => {
   const c = codexOf(project, world);
   return (
@@ -190,6 +190,23 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
                 {i.carried > 0 && <span className="play-note"> (carried{i.carried > 1 ? ` ×${i.carried}` : ''})</span>}
               </h4>
               <p>{i.text}</p>
+            </article>
+          ))}
+        </section>
+      )}
+      {c.objectsTotal > 0 && (
+        <section aria-label="Objects">
+          <h3>
+            Objects <span className="play-note">· {c.objects.length} of {c.objectsTotal} used</span>
+          </h3>
+          {!c.objects.length && <p className="play-note">None yet.</p>}
+          {c.objects.map((o) => (
+            <article key={o.id} className="play-codex-lore play-codex-object">
+              <h4>
+                <Symbol type="object" size={11} /> {o.name}
+                {o.state && <span className="play-note"> ({o.state})</span>}
+              </h4>
+              <p>{o.text}</p>
             </article>
           ))}
         </section>
@@ -433,7 +450,7 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   const [seen, setSeen] = useState(0);
   const progress = codexProgress(project, play.world);
   const book = codexOf(project, play.world);
-  const hasCodex = book.quests + book.charactersTotal + book.locationsTotal + book.itemsTotal + book.mechanicsTotal + book.encountersTotal + book.loreTotal > 0;
+  const hasCodex = book.quests + book.charactersTotal + book.locationsTotal + book.itemsTotal + book.objectsTotal + book.mechanicsTotal + book.encountersTotal + book.loreTotal > 0;
   const fresh = Math.max(0, progress - seen);
   useEffect(() => {
     // Read while open; after a step back there is less to have read.

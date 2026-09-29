@@ -272,6 +272,19 @@ namespace vcgs
         }
         /** What the codex says about a character once met ("" keeps them out of it). */
         std::string CharacterCodex(const std::string& key) const { return Find(Characters, key)["codex"].Str(); }
+        /** What the codex says about an object (not a puzzle) once used ("" keeps it out of it). */
+        std::string ObjectCodex(const std::string& key) const
+        {
+            const Value& o = Find(Objects, key);
+            return o["kind"].Str() == "object" ? o["fields"]["codex"].Str() : std::string();
+        }
+        /** How many objects have a codex entry. */
+        size_t CodexObjects() const
+        {
+            size_t n = 0;
+            for (const auto& o : Objects) if ((*o.second)["kind"].Str() == "object" && !(*o.second)["fields"]["codex"].Str().empty()) n++;
+            return n;
+        }
         /** What the codex says about a location once visited ("" keeps it out of it). */
         std::string LocationCodex(const std::string& key) const { return Find(LocationDefs, key)["fields"]["codex"].Str(); }
         /** How many locations have a codex entry. */
@@ -357,6 +370,8 @@ namespace vcgs
         std::vector<std::string> FoundItems;
         /** Locations the player has been to (a scene set there played), in the order visited. */
         std::vector<std::string> VisitedLocations;
+        /** Objects the player has used, in the order first used. */
+        std::vector<std::string> UsedObjects;
         /** Lore the player has come across, in the order they found it (the codex). */
         std::vector<std::string> KnownLore;
         /** Mechanics the player can use now. */
@@ -374,11 +389,12 @@ namespace vcgs
         std::function<void(const std::string&)> OnCharacterMet;
         std::function<void(const std::string&)> OnItemFound;
         std::function<void(const std::string&)> OnLocationVisited;
+        std::function<void(const std::string&)> OnObjectUsed;
 
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -443,6 +459,13 @@ namespace vcgs
         void RememberChoice(const std::string& choice, const std::string& option) { Chosen[choice] = option; Changed(); }
         void MarkSolved(const std::string& puzzle) { if (Solved.insert(puzzle).second) Changed(); }
         void Visit(const std::string& scene) { if (Visited.insert(scene).second) Changed(); }
+        /** The player has used an object (Interactions::Interact says so). */
+        void UseObject(const std::string& obj)
+        {
+            if (obj.empty() || std::find(UsedObjects.begin(), UsedObjects.end(), obj) != UsedObjects.end()) return;
+            UsedObjects.push_back(obj);
+            if (OnObjectUsed) OnObjectUsed(obj);
+        }
         /** The player is at a location (the scene player says so as a scene set there starts). */
         void VisitLocation(const std::string& location)
         {
@@ -830,6 +853,23 @@ namespace vcgs
                 if (!found) things += "\nNone yet.";
                 parts.push_back(things + entries);
             }
+            if (const size_t withEntry = game.StoryData.CodexObjects())
+            {
+                std::string entries;
+                size_t used = 0;
+                for (const std::string& key : game.UsedObjects)
+                {
+                    const std::string codex = game.StoryData.ObjectCodex(key);
+                    if (codex.empty()) continue;
+                    used++;
+                    const std::string name = Story::Find(game.StoryData.Objects, key)["name"].Str();
+                    const std::string now = game.GetObjectState(key);
+                    entries += "\n\n" + Upper(name.empty() ? key : name) + (now.empty() ? "" : " (" + now + ")") + "\n" + codex;
+                }
+                std::string props = "OBJECTS · " + std::to_string(used) + " of " + std::to_string(withEntry) + " used";
+                if (!used) props += "\nNone yet.";
+                parts.push_back(props + entries);
+            }
             if (!game.StoryData.Mechanics.empty())
             {
                 std::string mechanics = "MECHANICS · " + std::to_string(game.MechanicOrder.size()) + " of " + std::to_string(game.StoryData.Mechanics.size()) + " available";
@@ -910,6 +950,7 @@ namespace vcgs
             for (const std::string& c : game.MetCharacters) if (!game.StoryData.CharacterCodex(c).empty()) n++;
             for (const std::string& i : game.FoundItems) if (!game.StoryData.ItemCodex(i).empty()) n++;
             for (const std::string& l : game.VisitedLocations) if (!game.StoryData.LocationCodex(l).empty()) n++;
+            for (const std::string& o : game.UsedObjects) if (!game.StoryData.ObjectCodex(o).empty()) n++;
             for (const auto& q : game.Quests) n += q.second == "done" ? 2 : 1;
             return n;
         }
@@ -945,6 +986,7 @@ namespace vcgs
             for (const auto& i : Story::Find(game.StoryData.Objects, obj)["interactions"].items)
             {
                 if (i["verb"].Str() != verb || !Allowed(i, obj, game)) continue;
+                game.UseObject(obj);
                 if (!i["becomes"].Str().empty()) game.SetObjectState(obj, i["becomes"].Str());
                 if (i["sets"].IsObject()) game.SetFlag(i["sets"]["flag"].Str(), i["sets"]["value"].Str());
                 if (!i["fires"].Str().empty()) Rules::Fire(i["fires"].Str(), game);

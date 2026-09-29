@@ -263,6 +263,8 @@ namespace VCGS
         public string CharacterName(string key) => Characters.TryGetValue(key ?? "", out var c) ? D.Str(c, "name") : "";
         /// <summary>What the codex says about a character once met ("" keeps them out of it).</summary>
         public string CharacterCodex(string key) => Characters.TryGetValue(key ?? "", out var c) ? D.Str(c, "codex").Trim() : "";
+        /// <summary>What the codex says about an object (not a puzzle) once used ("" keeps it out of it).</summary>
+        public string ObjectCodex(string key) => Objects.TryGetValue(key ?? "", out var o) && D.Str(o, "kind") == "object" ? D.Str(D.Map(o, "fields"), "codex").Trim() : "";
         /// <summary>What the codex says about a location once visited ("" keeps it out of it).</summary>
         public string LocationCodex(string key) => LocationDefs.TryGetValue(key ?? "", out var l) ? D.Str(D.Map(l, "fields"), "codex").Trim() : "";
         public string LocationName(string key) => LocationDefs.TryGetValue(key ?? "", out var l) ? D.Str(l, "name") : "";
@@ -311,6 +313,8 @@ namespace VCGS
         public readonly List<string> FoundItems = new List<string>();
         /// <summary>Locations the player has been to (a scene set there played), in the order visited.</summary>
         public readonly List<string> VisitedLocations = new List<string>();
+        /// <summary>Objects the player has used, in the order first used.</summary>
+        public readonly List<string> UsedObjects = new List<string>();
         /// <summary>Lore the player has come across, in the order they found it (the codex).</summary>
         public readonly List<string> KnownLore = new List<string>();
         /// <summary>Mechanics the player can use now.</summary>
@@ -330,6 +334,7 @@ namespace VCGS
         public event Action<string> CharacterMet;
         public event Action<string> ItemFound;
         public event Action<string> LocationVisited;
+        public event Action<string> ObjectUsed;
         public bool AutoRules = true;
         bool settling;
 
@@ -343,7 +348,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -409,6 +414,14 @@ namespace VCGS
         public void MarkSolved(string puzzle)
         {
             if (Solved.Add(puzzle)) OnChanged();
+        }
+
+        /// <summary>The player has used an object (Interactions.Interact says so).</summary>
+        public void UseObject(string obj)
+        {
+            if (string.IsNullOrEmpty(obj) || UsedObjects.Contains(obj)) return;
+            UsedObjects.Add(obj);
+            ObjectUsed?.Invoke(obj);
         }
 
         /// <summary>The player is at a location (the scene player says so as a scene set there starts).</summary>
@@ -734,6 +747,7 @@ namespace VCGS
             {
                 var i = D.Map(item);
                 if (D.Str(i, "verb") != verb || !Allowed(i, obj, game)) continue;
+                game.UseObject(obj);
                 var becomes = D.Str(i, "becomes");
                 if (becomes != "") game.SetObjectState(obj, becomes);
                 var sets = D.Map(i, "sets");
@@ -1098,11 +1112,11 @@ namespace VCGS
     /// <summary>
     /// The codex as the player reads it: the quest log (quests under way with
     /// their goals, then those done, in the order they started), the characters
-    /// met, locations visited and items found (those with a codex entry), the mechanics
+    /// met, locations visited, items found and objects used (those with a codex entry), the mechanics
     /// available, the encounters met (with their enemies and weakness, and
     /// whether they were won) and the lore found, in the order found. New counts
     /// what has happened since the codex was last read (quests starting or
-    /// completing, characters met, locations visited, items found, mechanics, encounters met or won, lore found), for a
+    /// completing, characters met, locations visited, items found, objects used, mechanics, encounters met or won, lore found), for a
     /// "new" badge. Plain C#: VcgsCodex draws it, or use it in your own UI.
     /// </summary>
     public sealed class Codex
@@ -1135,6 +1149,7 @@ namespace VCGS
             foreach (var c in game.MetCharacters) if (game.Story.CharacterCodex(c) != "") n++;
             foreach (var i in game.FoundItems) if (game.Story.ItemCodex(i) != "") n++;
             foreach (var l in game.VisitedLocations) if (game.Story.LocationCodex(l) != "") n++;
+            foreach (var o in game.UsedObjects) if (game.Story.ObjectCodex(o) != "") n++;
             foreach (var state in game.Quests.Values) n += state == "done" ? 2 : 1;
             return n;
         }
@@ -1216,6 +1231,22 @@ namespace VCGS
                     things.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (count > 1 ? " (carried ×" + count + ")" : count == 1 ? " (carried)" : "") + "\n" + game.Story.ItemCodex(key));
                 }
                 parts.Add(things.ToString());
+            }
+            var objectsWithEntry = 0;
+            foreach (var o in game.Story.Objects.Keys) if (game.Story.ObjectCodex(o) != "") objectsWithEntry++;
+            if (objectsWithEntry > 0)
+            {
+                var used = game.UsedObjects.FindAll(o => game.Story.ObjectCodex(o) != "");
+                var props = new StringBuilder("OBJECTS · " + used.Count + " of " + objectsWithEntry + " used");
+                if (used.Count == 0) props.Append("\nNone yet.");
+                foreach (var key in used)
+                {
+                    game.Story.Objects.TryGetValue(key, out var o);
+                    var name = D.Str(o, "name");
+                    var now = game.GetObjectState(key);
+                    props.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (now != "" ? " (" + now + ")" : "") + "\n" + game.Story.ObjectCodex(key));
+                }
+                parts.Add(props.ToString());
             }
             if (game.Story.Mechanics.Count > 0)
             {
