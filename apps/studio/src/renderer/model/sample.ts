@@ -101,6 +101,7 @@ export const sunkenVault = (): Project => {
   p = setField(p, mara, 'role', 'Main');
   p = setField(p, mara, 'arc', 'Guarded → trusting');
   p = setNotes(p, mara, 'Knows the cave system from childhood. Lost her brother Tomas with the last expedition and won’t say so.');
+  p = setField(p, mara, 'codex', 'A guide who knows the flooded caves better than anyone alive. She carries the lantern.');
   p = setField(p, explorer, 'role', 'Player character');
 
   // Inside SC-05 The Vault Door.

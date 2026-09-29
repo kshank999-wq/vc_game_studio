@@ -255,6 +255,10 @@ namespace VCGS
 
         /// <summary>A character's name by key, for the speaker of a line.</summary>
         public string CharacterName(string key) => Characters.TryGetValue(key ?? "", out var c) ? D.Str(c, "name") : "";
+        /// <summary>What the codex says about a character once met ("" keeps them out of it).</summary>
+        public string CharacterCodex(string key) => Characters.TryGetValue(key ?? "", out var c) ? D.Str(c, "codex").Trim() : "";
+        /// <summary>A line's speaker key ("" for none).</summary>
+        public string Speaker(string lineId) => Lines.TryGetValue(lineId ?? "", out var l) ? D.Str(l, "speaker") : "";
     }
 }
 `,
@@ -289,6 +293,8 @@ namespace VCGS
         public readonly HashSet<string> Won = new HashSet<string>();
         /// <summary>Encounters the player has come to, in the order met (the codex).</summary>
         public readonly List<string> MetEncounters = new List<string>();
+        /// <summary>Characters the player has met (heard speak), in the order met.</summary>
+        public readonly List<string> MetCharacters = new List<string>();
         /// <summary>Lore the player has come across, in the order they found it (the codex).</summary>
         public readonly List<string> KnownLore = new List<string>();
         /// <summary>Mechanics the player can use now.</summary>
@@ -305,6 +311,7 @@ namespace VCGS
         public event Action<string> MechanicAvailable;
         public event Action<string> EncounterMet;
         public event Action<string> EncounterWon;
+        public event Action<string> CharacterMet;
         public bool AutoRules = true;
         bool settling;
 
@@ -318,7 +325,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -429,6 +436,16 @@ namespace VCGS
         }
 
         public bool HasMet(string encounter) => MetEncounters.Contains(encounter);
+
+        public bool HasMetCharacter(string character) => MetCharacters.Contains(character);
+
+        /// <summary>The player has met a character (the scene flow says so when they speak a line).</summary>
+        public void MeetCharacter(string character)
+        {
+            if (string.IsNullOrEmpty(character) || HasMetCharacter(character)) return;
+            MetCharacters.Add(character);
+            CharacterMet?.Invoke(character);
+        }
 
         /// <summary>The player has come to an encounter (the scene flow says so as it starts).</summary>
         public void MeetEncounter(string encounter)
@@ -815,6 +832,8 @@ namespace VCGS
                 EventStarted?.Invoke(both);
                 Rules.Apply(D.Get(ev, "effects"), game);
                 Rules.Apply(D.Get(other, "effects"), game);
+                game.MeetCharacter(game.Story.Speaker(first));
+                game.MeetCharacter(game.Story.Speaker(second));
                 DualRequested?.Invoke(first, second);
                 return;
             }
@@ -823,7 +842,7 @@ namespace VCGS
             if (kind != "choice") Rules.Apply(D.Get(ev, "effects"), game);
             switch (kind)
             {
-                case "dialogue": DialogueRequested?.Invoke(D.Str(ev, "line")); break;
+                case "dialogue": game.MeetCharacter(game.Story.Speaker(D.Str(ev, "line"))); DialogueRequested?.Invoke(D.Str(ev, "line")); break;
                 case "cinematic": CinematicRequested?.Invoke(D.Str(ev, "ref")); break;
                 case "freePlay":
                     FreePlayStarted?.Invoke(D.Str(ev, "endsWhen"));
@@ -1046,11 +1065,12 @@ namespace VCGS
 {
     /// <summary>
     /// The codex as the player reads it: the quest log (quests under way with
-    /// their goals, then those done, in the order they started), the mechanics
+    /// their goals, then those done, in the order they started), the characters
+    /// met (those with a codex entry), the mechanics
     /// available, the encounters met (with their enemies and weakness, and
     /// whether they were won) and the lore found, in the order found. New counts
     /// what has happened since the codex was last read (quests starting or
-    /// completing, mechanics, encounters met or won, lore found), for a
+    /// completing, characters met, mechanics, encounters met or won, lore found), for a
     /// "new" badge. Plain C#: VcgsCodex draws it, or use it in your own UI.
     /// </summary>
     public sealed class Codex
@@ -1080,6 +1100,7 @@ namespace VCGS
         int Progress()
         {
             var n = game.KnownLore.Count + game.AvailableMechanics.Count + game.MetEncounters.Count + game.Won.Count;
+            foreach (var c in game.MetCharacters) if (game.Story.CharacterCodex(c) != "") n++;
             foreach (var state in game.Quests.Values) n += state == "done" ? 2 : 1;
             return n;
         }
@@ -1118,6 +1139,20 @@ namespace VCGS
                 foreach (var (name, goal) in active) log.Append("\n• " + name + (goal != "" ? " — " + goal : ""));
                 foreach (var name in done) log.Append("\n• " + name + " (done)");
                 parts.Add(log.ToString());
+            }
+            var withEntry = 0;
+            foreach (var c in game.Story.Characters.Keys) if (game.Story.CharacterCodex(c) != "") withEntry++;
+            if (withEntry > 0)
+            {
+                var met = game.MetCharacters.FindAll(c => game.Story.CharacterCodex(c) != "");
+                var cast = new StringBuilder("CHARACTERS · " + met.Count + " of " + withEntry + " met");
+                if (met.Count == 0) cast.Append("\nNone yet.");
+                foreach (var key in met)
+                {
+                    var name = game.Story.CharacterName(key);
+                    cast.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + "\n" + game.Story.CharacterCodex(key));
+                }
+                parts.Add(cast.ToString());
             }
             if (game.Story.Mechanics.Count > 0)
             {

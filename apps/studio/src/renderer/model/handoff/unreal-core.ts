@@ -268,6 +268,17 @@ namespace vcgs
             auto it = in.find(key);
             return it == in.end() ? Value::None() : *it->second;
         }
+        /** What the codex says about a character once met ("" keeps them out of it). */
+        std::string CharacterCodex(const std::string& key) const { return Find(Characters, key)["codex"].Str(); }
+        /** A line's speaker key ("" for none). */
+        std::string Speaker(const std::string& lineId) const { return Find(Lines, lineId)["speaker"].Str(); }
+        /** How many characters have a codex entry. */
+        size_t CodexCharacters() const
+        {
+            size_t n = 0;
+            for (const auto& c : Characters) if (!(*c.second)["codex"].Str().empty()) n++;
+            return n;
+        }
 
         const Value Root;
         std::string Name;
@@ -316,6 +327,8 @@ namespace vcgs
         std::set<std::string> Won;
         /** Encounters the player has come to, in the order met (the codex). */
         std::vector<std::string> MetEncounters;
+        /** Characters the player has met (heard speak), in the order met. */
+        std::vector<std::string> MetCharacters;
         /** Lore the player has come across, in the order they found it (the codex). */
         std::vector<std::string> KnownLore;
         /** Mechanics the player can use now. */
@@ -330,11 +343,12 @@ namespace vcgs
         std::function<void(const std::string&)> OnMechanicAvailable;
         std::function<void(const std::string&)> OnEncounterMet;
         std::function<void(const std::string&)> OnEncounterWon;
+        std::function<void(const std::string&)> OnCharacterMet;
 
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -434,6 +448,14 @@ namespace vcgs
             MeetEncounter(encounter);
             if (OnEncounterWon) OnEncounterWon(encounter);
             Changed();
+        }
+        bool HasMetCharacter(const std::string& character) const { return std::find(MetCharacters.begin(), MetCharacters.end(), character) != MetCharacters.end(); }
+        /** The player has met a character (the scene flow says so when they speak a line). */
+        void MeetCharacter(const std::string& character)
+        {
+            if (character.empty() || HasMetCharacter(character)) return;
+            MetCharacters.push_back(character);
+            if (OnCharacterMet) OnCharacterMet(character);
         }
         bool HasMet(const std::string& encounter) const { return std::find(MetEncounters.begin(), MetEncounters.end(), encounter) != MetEncounters.end(); }
         /** The player has come to an encounter (the scene flow says so as it starts). */
@@ -712,6 +734,22 @@ namespace vcgs
                 for (const auto& line : done) log += "\n" + line;
                 parts.push_back(log);
             }
+            if (const size_t withEntry = game.StoryData.CodexCharacters())
+            {
+                std::string entries;
+                size_t met = 0;
+                for (const std::string& key : game.MetCharacters)
+                {
+                    const std::string codex = game.StoryData.CharacterCodex(key);
+                    if (codex.empty()) continue;
+                    met++;
+                    const std::string name = Story::Find(game.StoryData.Characters, key)["name"].Str();
+                    entries += "\n\n" + Upper(name.empty() ? key : name) + "\n" + codex;
+                }
+                std::string cast = "CHARACTERS · " + std::to_string(met) + " of " + std::to_string(withEntry) + " met";
+                if (!met) cast += "\nNone yet.";
+                parts.push_back(cast + entries);
+            }
             if (!game.StoryData.Mechanics.empty())
             {
                 std::string mechanics = "MECHANICS · " + std::to_string(game.MechanicOrder.size()) + " of " + std::to_string(game.StoryData.Mechanics.size()) + " available";
@@ -789,6 +827,7 @@ namespace vcgs
         int Progress() const
         {
             int n = static_cast<int>(game.KnownLore.size() + game.MechanicOrder.size() + game.MetEncounters.size() + game.Won.size());
+            for (const std::string& c : game.MetCharacters) if (!game.StoryData.CharacterCodex(c).empty()) n++;
             for (const auto& q : game.Quests) n += q.second == "done" ? 2 : 1;
             return n;
         }
@@ -923,13 +962,15 @@ namespace vcgs
                 if (OnEvent) OnEvent(ev);
                 Rules::Apply(ev["effects"], game);
                 Rules::Apply((*other)["effects"], game);
+                game.MeetCharacter(game.StoryData.Speaker(first));
+                game.MeetCharacter(game.StoryData.Speaker(second));
                 if (OnDual) OnDual(first, second);
                 return;
             }
             if (OnEvent) OnEvent(ev);
             const std::string kind = ev["kind"].Str();
             if (kind != "choice") Rules::Apply(ev["effects"], game);
-            if (kind == "dialogue") { if (OnDialogue) OnDialogue(ev["line"].Str()); }
+            if (kind == "dialogue") { game.MeetCharacter(game.StoryData.Speaker(ev["line"].Str())); if (OnDialogue) OnDialogue(ev["line"].Str()); }
             else if (kind == "cinematic") { if (OnCinematic) OnCinematic(ev["ref"].Str()); }
             else if (kind == "freePlay")
             {

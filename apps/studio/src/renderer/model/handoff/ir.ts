@@ -92,6 +92,8 @@ export interface IrCharacter {
   arc: string;
   color: string;
   description: string;
+  /** What the codex says about them once the player has met them (they speak a line); none keeps them out of it. */
+  codex: string;
 }
 
 export interface IrInteraction {
@@ -472,6 +474,7 @@ export const buildIR = (project: Project): HandoffIR => {
       arc: String(c.data.arc ?? ''),
       color: String(c.data.color ?? '#D9607A'),
       description: c.notes,
+      codex: String(c.data.codex ?? '').trim(),
     })),
     objects: of('object', 'puzzle').map((o) => ({
       id: o.id,

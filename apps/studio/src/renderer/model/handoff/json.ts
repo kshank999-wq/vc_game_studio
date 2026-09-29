@@ -38,7 +38,7 @@ export const storySchema = () => ({
     branches: { type: 'array', items: obj({ from: str, to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['from', 'to', 'label']) },
     subplots: { type: 'array', items: obj({ key: str, name: str, from: str, to: str, beats: { type: 'array', items: ref('storyNode') } }) },
     arcs: { type: 'array', items: obj({ character: str, name: str, events: { type: 'array', items: obj({ polarity: { enum: ['up', 'down', 'turn'] }, name: str, tiedTo: { type: ['string', 'null'] } }) } }) },
-    characters: { type: 'array', items: obj({ id: str, ident, code: str, name: str, role: str, arc: str, color: str, description: str }) },
+    characters: { type: 'array', items: obj({ id: str, ident, code: str, name: str, role: str, arc: str, color: str, description: str, codex: { ...str, description: 'What the codex says once the player has met them (they speak a line); empty keeps them out of it.' } }) },
     objects: { type: 'array', items: ref('object') },
     items: { type: 'array', items: ref('thing') },
     locations: { type: 'array', items: ref('thing') },
