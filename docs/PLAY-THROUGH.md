@@ -56,6 +56,10 @@ monitor while you fix it on another.
   they were won; one lost still shows, so its weakness is there to read) and
   the lore found, in the order found, with its text.
   The button counts what's new since it was last opened; Escape closes it.
+  **Search** it with the box at the top (or press /): only the entries that
+  have what you type, ignoring case, stay, in the sections that have any; the
+  headings still count everything. Escape clears the search, then leaves the
+  box. The engines' codex screens search the same way.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.
 - **The world** panel shows every state, what is carried, object states, arcs,

@@ -393,6 +393,19 @@ describe('the codex', () => {
     expect(codexText(p, end.world)).toContain('ITEMS · 1 of 1 found\n\nVAULT KEY\nA heavy bronze key, green with age, stamped with the Order’s wave.');
   });
 
+  it('searches the codex: only the entries that match, in the sections that have any', async () => {
+    const { codexText } = await import('../play');
+    const world = toTheVault(p).world;
+    // "lantern" is in Mara's entry, the oil and the eels' weakness, and nowhere else.
+    expect(codexText(p, world, 'LANTERN')).toBe(
+      'CODEX\n\nCHARACTERS · 1 of 1 met\n\nMARA\nA guide who knows the flooded caves better than anyone alive. She carries the lantern.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.',
+    );
+    // A heading is not searched, and a blank search is no search.
+    expect(codexText(p, world, 'quests')).toBe('CODEX\n\nNothing matches "quests".');
+    expect(codexText(p, world, '  ')).toBe(codexText(p, world));
+    expect(codexText(p, world, 'vault')).toContain('QUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nLOCATIONS');
+  });
+
   it('lists a character once heard, and only one with a codex entry', async () => {
     const { codexText, codexProgress } = await import('../play');
     const mara = id(p, 'Mara');

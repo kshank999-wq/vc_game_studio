@@ -111,7 +111,13 @@ the studio's play-through:
   same codex as `Codex` (plain C#) and a `VcgsCodex` screen to put next to
   `VcgsGame`; Unreal as `vcgs::Codex`, `GetCodexText` / `GetCodexNewCount` on
   the subsystem and an `AVcgsCodexHUD` to set as the game mode's HUD. C opens
-  each.
+  each. Each codex searches: with a search, only the entries that
+  have it (ignoring case), in the sections that have any, and "Nothing matches"
+  when none do. Godot's screen has a search box (/ to type in it;
+  `codex_text(query)`, `set_codex_search`); Unity's too (`Codex.Text(query)`,
+  `VcgsCodex.Search`); Unreal's HUD takes / then typed letters, digits and
+  spaces (Enter stops, Escape clears; `GetCodexText(Search)`,
+  `SetCodexSearch`).
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

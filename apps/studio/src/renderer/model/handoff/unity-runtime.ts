@@ -1175,120 +1175,115 @@ namespace VCGS
         string QuestName(string key) => game.Story.Quests.TryGetValue(key, out var q) ? D.Str(q, "name") : key;
         string QuestGoal(string key) => game.Story.Quests.TryGetValue(key, out var q) ? D.Str(D.Map(q, "fields"), "goal") : "";
 
-        /// <summary>The whole codex in words, the same as Godot's placeholder scenes show it.</summary>
-        public string Text()
+        /// <summary>
+        /// The whole codex in words, the same as Godot's placeholder scenes show it.
+        /// With a search, only the entries it finds (ignoring case), in the sections
+        /// that have any; the headings still count everything.
+        /// </summary>
+        public string Text(string query = "")
         {
+            var q = (query ?? "").Trim();
             var parts = new List<string>();
+            void Section(string heading, List<string> entries, string sep, string empty)
+            {
+                var shown = q == "" ? entries : entries.FindAll(e => e.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
+                if (q != "" && shown.Count == 0) return;
+                var text = new StringBuilder(heading);
+                if (shown.Count == 0) text.Append("\n" + empty);
+                foreach (var e in shown) text.Append(sep + e);
+                parts.Add(text.ToString());
+            }
+            string Title(string name, string key) => (name == "" ? key : name).ToUpperInvariant();
             if (game.Story.Quests.Count > 0)
             {
                 var active = UnderWay();
                 var done = Done();
-                var log = new StringBuilder("QUESTS · " + active.Count + " under way, " + done.Count + " done");
-                if (active.Count == 0 && done.Count == 0) log.Append("\nNone yet.");
-                foreach (var (name, goal) in active) log.Append("\n• " + name + (goal != "" ? " — " + goal : ""));
-                foreach (var name in done) log.Append("\n• " + name + " (done)");
-                parts.Add(log.ToString());
+                var lines = new List<string>();
+                foreach (var (name, goal) in active) lines.Add("• " + name + (goal != "" ? " — " + goal : ""));
+                foreach (var name in done) lines.Add("• " + name + " (done)");
+                Section("QUESTS · " + active.Count + " under way, " + done.Count + " done", lines, "\n", "None yet.");
             }
             var withEntry = 0;
             foreach (var c in game.Story.Characters.Keys) if (game.Story.CharacterCodex(c) != "") withEntry++;
             if (withEntry > 0)
             {
-                var met = game.MetCharacters.FindAll(c => game.Story.CharacterCodex(c) != "");
-                var cast = new StringBuilder("CHARACTERS · " + met.Count + " of " + withEntry + " met");
-                if (met.Count == 0) cast.Append("\nNone yet.");
-                foreach (var key in met)
-                {
-                    var name = game.Story.CharacterName(key);
-                    cast.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + "\n" + game.Story.CharacterCodex(key));
-                }
-                parts.Add(cast.ToString());
+                var cast = new List<string>();
+                foreach (var key in game.MetCharacters)
+                    if (game.Story.CharacterCodex(key) != "") cast.Add(Title(game.Story.CharacterName(key), key) + "\n" + game.Story.CharacterCodex(key));
+                Section("CHARACTERS · " + cast.Count + " of " + withEntry + " met", cast, "\n\n", "None yet.");
             }
             var locationsWithEntry = 0;
             foreach (var l in game.Story.LocationDefs.Keys) if (game.Story.LocationCodex(l) != "") locationsWithEntry++;
             if (locationsWithEntry > 0)
             {
-                var been = game.VisitedLocations.FindAll(l => game.Story.LocationCodex(l) != "");
-                var places = new StringBuilder("LOCATIONS · " + been.Count + " of " + locationsWithEntry + " visited");
-                if (been.Count == 0) places.Append("\nNone yet.");
-                foreach (var key in been)
-                {
-                    var name = game.Story.LocationName(key);
-                    places.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + "\n" + game.Story.LocationCodex(key));
-                }
-                parts.Add(places.ToString());
+                var places = new List<string>();
+                foreach (var key in game.VisitedLocations)
+                    if (game.Story.LocationCodex(key) != "") places.Add(Title(game.Story.LocationName(key), key) + "\n" + game.Story.LocationCodex(key));
+                Section("LOCATIONS · " + places.Count + " of " + locationsWithEntry + " visited", places, "\n\n", "None yet.");
             }
             var itemsWithEntry = 0;
             foreach (var i in game.Story.ItemDefs.Keys) if (game.Story.ItemCodex(i) != "") itemsWithEntry++;
             if (itemsWithEntry > 0)
             {
-                var found = game.FoundItems.FindAll(i => game.Story.ItemCodex(i) != "");
-                var things = new StringBuilder("ITEMS · " + found.Count + " of " + itemsWithEntry + " found");
-                if (found.Count == 0) things.Append("\nNone yet.");
-                foreach (var key in found)
+                var things = new List<string>();
+                foreach (var key in game.FoundItems)
                 {
-                    var name = game.Story.ItemName(key);
+                    if (game.Story.ItemCodex(key) == "") continue;
                     var count = game.Items.TryGetValue(key, out var n) ? n : 0;
-                    things.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (count > 1 ? " (carried ×" + count + ")" : count == 1 ? " (carried)" : "") + "\n" + game.Story.ItemCodex(key));
+                    things.Add(Title(game.Story.ItemName(key), key) + (count > 1 ? " (carried ×" + count + ")" : count == 1 ? " (carried)" : "") + "\n" + game.Story.ItemCodex(key));
                 }
-                parts.Add(things.ToString());
+                Section("ITEMS · " + things.Count + " of " + itemsWithEntry + " found", things, "\n\n", "None yet.");
             }
             var objectsWithEntry = 0;
             foreach (var o in game.Story.Objects.Keys) if (game.Story.ObjectCodex(o) != "") objectsWithEntry++;
             if (objectsWithEntry > 0)
             {
-                var used = game.UsedObjects.FindAll(o => game.Story.ObjectCodex(o) != "");
-                var props = new StringBuilder("OBJECTS · " + used.Count + " of " + objectsWithEntry + " used");
-                if (used.Count == 0) props.Append("\nNone yet.");
-                foreach (var key in used)
+                var props = new List<string>();
+                foreach (var key in game.UsedObjects)
                 {
+                    if (game.Story.ObjectCodex(key) == "") continue;
                     game.Story.Objects.TryGetValue(key, out var o);
-                    var name = D.Str(o, "name");
                     var now = game.GetObjectState(key);
-                    props.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (now != "" ? " (" + now + ")" : "") + "\n" + game.Story.ObjectCodex(key));
+                    props.Add(Title(D.Str(o, "name"), key) + (now != "" ? " (" + now + ")" : "") + "\n" + game.Story.ObjectCodex(key));
                 }
-                parts.Add(props.ToString());
+                Section("OBJECTS · " + props.Count + " of " + objectsWithEntry + " used", props, "\n\n", "None yet.");
             }
             if (game.Story.Mechanics.Count > 0)
             {
-                var mechanics = new StringBuilder("MECHANICS · " + game.AvailableMechanics.Count + " of " + game.Story.Mechanics.Count + " available");
-                if (game.AvailableMechanics.Count == 0) mechanics.Append("\nNone yet.");
+                var usable = new List<string>();
                 foreach (var key in game.AvailableMechanics)
                 {
                     game.Story.Mechanics.TryGetValue(key, out var m);
-                    var name = D.Str(m, "name");
                     var controls = game.Story.MechanicDetail(key, "controls");
-                    mechanics.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (controls != "" ? "\nControls: " + controls : "") + "\n" + D.Str(m, "notes"));
+                    usable.Add(Title(D.Str(m, "name"), key) + (controls != "" ? "\nControls: " + controls : "") + "\n" + D.Str(m, "notes"));
                 }
-                parts.Add(mechanics.ToString());
+                Section("MECHANICS · " + usable.Count + " of " + game.Story.Mechanics.Count + " available", usable, "\n\n", "None yet.");
             }
             if (game.Story.Encounters.Count > 0)
             {
                 var won = 0;
-                var entries = new StringBuilder();
+                var faced = new List<string>();
                 foreach (var key in game.MetEncounters)
                 {
                     game.Story.Encounters.TryGetValue(key, out var e);
-                    var name = D.Str(e, "name");
                     var enemies = D.Str(D.Map(e, "fields"), "enemies");
                     var weakness = D.Str(D.Map(e, "fields"), "weakness");
                     if (game.WasWon(key)) won++;
-                    entries.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (game.WasWon(key) ? " (won)" : "") + (enemies != "" ? "\nEnemies: " + enemies : "") + (weakness != "" ? "\nWeak to: " + weakness : "") + "\n" + D.Str(e, "notes"));
+                    faced.Add(Title(D.Str(e, "name"), key) + (game.WasWon(key) ? " (won)" : "") + (enemies != "" ? "\nEnemies: " + enemies : "") + (weakness != "" ? "\nWeak to: " + weakness : "") + "\n" + D.Str(e, "notes"));
                 }
-                var encounters = new StringBuilder("ENCOUNTERS · " + game.MetEncounters.Count + " met, " + won + " won");
-                if (game.MetEncounters.Count == 0) encounters.Append("\nNone yet.");
-                parts.Add(encounters.Append(entries).ToString());
+                Section("ENCOUNTERS · " + faced.Count + " met, " + won + " won", faced, "\n\n", "None yet.");
             }
             if (game.Story.Lore.Count > 0)
             {
-                var lore = new StringBuilder("LORE · " + game.KnownLore.Count + " of " + game.Story.Lore.Count + " found");
-                if (game.KnownLore.Count == 0) lore.Append("\nNothing found yet.");
+                var found = new List<string>();
                 foreach (var key in game.KnownLore)
                 {
                     var (name, text) = game.Story.LoreEntry(key);
-                    lore.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + "\n" + text);
+                    found.Add(Title(name, key) + "\n" + text);
                 }
-                parts.Add(lore.ToString());
+                Section("LORE · " + found.Count + " of " + game.Story.Lore.Count + " found", found, "\n\n", "Nothing found yet.");
             }
+            if (q != "" && parts.Count == 0) return "CODEX\n\nNothing matches \"" + q + "\".";
             return "CODEX\n\n" + string.Join("\n\n", parts);
         }
     }
@@ -1302,9 +1297,10 @@ namespace VCGS
     /// <summary>
     /// A codex screen to try the story with before the game has its own: a
     /// Codex button in the top corner (it counts what is new) and a panel with
-    /// the quest log and the lore found. Put it next to VcgsGame; press C (or
-    /// the button) to open it, C or Escape to close. Drawn with Unity's
-    /// immediate-mode GUI, so it needs no canvas or prefab.
+    /// everything found so far, and a search box over it. Put it next to
+    /// VcgsGame; press C (or the button) to open it, C or Escape to close, and
+    /// / to search (Escape clears the search, then leaves the box). Drawn with
+    /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
     {
@@ -1315,6 +1311,10 @@ namespace VCGS
         /// <summary>The codex behind the screen, for your own UI (null until VcgsGame has a story).</summary>
         public Codex Book => book ?? (VcgsGame.Instance != null && VcgsGame.Instance.State != null ? book = new Codex(VcgsGame.Instance.State) : null);
 
+        /// <summary>What the search box holds: the codex shows only the entries it finds ("" for everything).</summary>
+        public string Search { get; set; } = "";
+
+        const string SearchControl = "vcgs-codex-search";
         Codex book;
         Vector2 scroll;
         GUIStyle text;
@@ -1341,7 +1341,20 @@ namespace VCGS
         {
             if (Book == null) return;
             var e = Event.current;
-            if (e.type == EventType.KeyDown && (e.keyCode == key || (IsOpen && e.keyCode == KeyCode.Escape)))
+            var typing = GUI.GetNameOfFocusedControl() == SearchControl;
+            if (e.type == EventType.KeyDown && typing && e.keyCode == KeyCode.Escape)
+            {
+                // Escape clears the search, then leaves the box.
+                if (Search != "") Search = "";
+                else GUI.FocusControl("");
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.Slash)
+            {
+                GUI.FocusControl(SearchControl);
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && (e.keyCode == key || (IsOpen && e.keyCode == KeyCode.Escape)))
             {
                 Toggle();
                 e.Use();
@@ -1353,8 +1366,10 @@ namespace VCGS
             var area = new Rect(60, 50, Screen.width - 120, Screen.height - 100);
             GUI.Box(area, "");
             GUILayout.BeginArea(new Rect(area.x + 18, area.y + 18, area.width - 36, area.height - 36));
+            GUI.SetNextControlName(SearchControl);
+            Search = GUILayout.TextField(Search ?? "");
             scroll = GUILayout.BeginScrollView(scroll);
-            GUILayout.Label(Book.Text(), text);
+            GUILayout.Label(Book.Text(Search), text);
             GUILayout.EndScrollView();
             if (GUILayout.Button("Close")) Close();
             GUILayout.EndArea();

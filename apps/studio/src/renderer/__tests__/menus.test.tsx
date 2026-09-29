@@ -189,6 +189,27 @@ describe('play-through', () => {
     expect(codex.textContent).toContain('Eel swarm (won)Eels, a dozen or so · weak to lantern light');
     expect(codex.textContent).toContain('The Drowned OrderRiver priests who sealed the vault');
     expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex');
+    // Search it: "/" goes to the box; only what matches stays, and C types rather than closes.
+    act(() => {
+      fireEvent.keyDown(window, { key: '/' });
+    });
+    const search = screen.getByLabelText('Search the codex') as HTMLInputElement;
+    expect(document.activeElement).toBe(search);
+    fireEvent.change(search, { target: { value: 'lantern' } });
+    expect(codex.textContent).toContain('MaraA guide');
+    expect(codex.textContent).toContain('Eel swarm');
+    expect(codex.textContent).not.toContain('Vault Key');
+    expect(screen.queryByRole('region', { name: 'Lore' })).toBeNull();
+    fireEvent.keyDown(search, { key: 'c' });
+    expect(screen.getByRole('dialog', { name: 'Codex' })).toBeTruthy();
+    fireEvent.change(search, { target: { value: 'nothing like it' } });
+    expect(codex.textContent).toContain('Nothing matches “nothing like it”.');
+    // Escape clears the search, then leaves the box.
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(search.value).toBe('');
+    expect(codex.textContent).toContain('Vault Key');
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(document.activeElement).not.toBe(search);
     act(() => {
       fireEvent.keyDown(window, { key: 'Escape' });
     });

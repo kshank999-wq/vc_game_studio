@@ -251,7 +251,8 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnLoreDiscovered;
 
     /** The codex in words: the quest log, the characters met, the locations visited, the items found, the objects used, the mechanics, the encounters met, then the lore found (AVcgsCodexHUD draws it). */
-    UFUNCTION(BlueprintPure, Category = "VCGS|Codex") FString GetCodexText() const;
+    /** With a Search, only the entries it finds (ignoring case), in the sections that have any. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Codex") FString GetCodexText(const FString& Search = TEXT("")) const;
     /** Quest, character, location, item, object, mechanic, encounter and lore updates since the codex was last read. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 GetCodexNewCount();
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") void MarkCodexRead();
@@ -371,7 +372,7 @@ bool UVcgsSubsystem::WasVisited(const FString& Scene) const { return Game && Gam
 bool UVcgsSubsystem::GateOpen(const FString& Gate) const { return !Game || vcgs::Rules::GateOpen(ToStd(Gate), *Game); }
 FString UVcgsSubsystem::GetQuestState(const FString& Quest) const { return Game ? ToF(Game->QuestState(ToStd(Quest))) : FString(); }
 bool UVcgsSubsystem::WasWon(const FString& Encounter) const { return Game && Game->WasWon(ToStd(Encounter)); }
-FString UVcgsSubsystem::GetCodexText() const { return CodexData ? ToF(CodexData->Text()) : FString(); }
+FString UVcgsSubsystem::GetCodexText(const FString& Search) const { return CodexData ? ToF(CodexData->Text(ToStd(Search))) : FString(); }
 int32 UVcgsSubsystem::GetCodexNewCount() { return CodexData ? CodexData->New() : 0; }
 void UVcgsSubsystem::MarkCodexRead() { if (CodexData) CodexData->MarkRead(); }
 TArray<FString> UVcgsSubsystem::GetMetEncounters() const
@@ -464,6 +465,7 @@ void UVcgsSubsystem::GetLine(const FString& LineId, FString& Speaker, FString& T
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "InputCoreTypes.h"
+#include <string>
 #include "VcgsCodexHUD.generated.h"
 
 class UVcgsSubsystem;
@@ -471,8 +473,10 @@ class UVcgsSubsystem;
 /**
  * A codex screen to try the story with before the game has its own: a Codex
  * label in the top corner (it counts what is new) and, when open, a panel with
- * the quest log and the lore found. Set it as the game mode's HUD class; press
- * CodexKey (C) to open it, C or Escape to close, or call ToggleCodex.
+ * everything found so far. Set it as the game mode's HUD class; press CodexKey
+ * (C) to open it, C or Escape to close, or call ToggleCodex. Press / to search:
+ * type letters, digits and spaces (Backspace deletes), Enter to stop typing,
+ * Escape to clear the search; or call SetCodexSearch from your own UI.
  */
 UCLASS()
 class VCGS_API AVcgsCodexHUD : public AHUD
@@ -484,12 +488,20 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "VCGS") void ToggleCodex();
     UFUNCTION(BlueprintPure, Category = "VCGS") bool IsCodexOpen() const { return bCodexOpen; }
+    /** Show only the codex entries that match ("" for everything). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") void SetCodexSearch(const FString& Search);
+    UFUNCTION(BlueprintPure, Category = "VCGS") FString GetCodexSearch() const;
+    UFUNCTION(BlueprintPure, Category = "VCGS") bool IsTypingSearch() const { return bTypingSearch; }
 
     virtual void DrawHUD() override;
 
 private:
     bool bCodexOpen = false;
+    bool bTypingSearch = false;
+    std::string SearchText;
     UVcgsSubsystem* Subsystem() const;
+    /** While typing a search: add the keys just pressed to it. */
+    void TypeSearch();
 };
 `,
 
@@ -512,9 +524,31 @@ UVcgsSubsystem* AVcgsCodexHUD::Subsystem() const
     return GameInstance ? GameInstance->GetSubsystem<UVcgsSubsystem>() : nullptr;
 }
 
+void AVcgsCodexHUD::SetCodexSearch(const FString& Search) { SearchText = ToStd(Search); }
+FString AVcgsCodexHUD::GetCodexSearch() const { return ToF(SearchText); }
+
+void AVcgsCodexHUD::TypeSearch()
+{
+    static const FKey Letters[] = {EKeys::A, EKeys::B, EKeys::C, EKeys::D, EKeys::E, EKeys::F, EKeys::G, EKeys::H, EKeys::I, EKeys::J, EKeys::K, EKeys::L, EKeys::M,
+                                   EKeys::N, EKeys::O, EKeys::P, EKeys::Q, EKeys::R, EKeys::S, EKeys::T, EKeys::U, EKeys::V, EKeys::W, EKeys::X, EKeys::Y, EKeys::Z};
+    static const FKey Digits[] = {EKeys::Zero, EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine};
+    for (int i = 0; i < 26; i++) if (PlayerOwner->WasInputKeyJustPressed(Letters[i])) SearchText += static_cast<char>('a' + i);
+    for (int i = 0; i < 10; i++) if (PlayerOwner->WasInputKeyJustPressed(Digits[i])) SearchText += static_cast<char>('0' + i);
+    if (PlayerOwner->WasInputKeyJustPressed(EKeys::SpaceBar)) SearchText += ' ';
+    if (PlayerOwner->WasInputKeyJustPressed(EKeys::BackSpace) && !SearchText.empty()) SearchText.pop_back();
+    if (PlayerOwner->WasInputKeyJustPressed(EKeys::Enter)) bTypingSearch = false;
+    if (PlayerOwner->WasInputKeyJustPressed(EKeys::Escape))
+    {
+        // Escape clears the search, then stops typing.
+        if (SearchText.empty()) bTypingSearch = false;
+        SearchText.clear();
+    }
+}
+
 void AVcgsCodexHUD::ToggleCodex()
 {
     bCodexOpen = !bCodexOpen;
+    bTypingSearch = false;
     if (UVcgsSubsystem* Story = Subsystem()) Story->MarkCodexRead();
 }
 
@@ -524,7 +558,9 @@ void AVcgsCodexHUD::DrawHUD()
     UVcgsSubsystem* Story = Subsystem();
     vcgs::Codex* Book = Story ? Story->CodexState() : nullptr;
     if (!Book || !Canvas) return;
-    if (PlayerOwner && (PlayerOwner->WasInputKeyJustPressed(CodexKey) || (bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Escape)))) ToggleCodex();
+    if (PlayerOwner && bCodexOpen && bTypingSearch) TypeSearch();
+    else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Slash)) bTypingSearch = true;
+    else if (PlayerOwner && (PlayerOwner->WasInputKeyJustPressed(CodexKey) || (bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Escape)))) ToggleCodex();
 
     const float Width = Canvas->ClipX;
     const float Height = Canvas->ClipY;
@@ -543,13 +579,18 @@ void AVcgsCodexHUD::DrawHUD()
     DrawRect(FLinearColor(0.09f, 0.08f, 0.06f, 0.97f), Left, Top, PanelWidth, PanelHeight);
     const size_t Columns = static_cast<size_t>((PanelWidth - 36.f) / 9.f);
     float Y = Top + 18.f;
-    for (const std::string& Line : vcgs::Codex::Wrap(Book->Text(), Columns > 20 ? Columns : 20))
+    if (bTypingSearch || !SearchText.empty())
+    {
+        DrawText(ToF("Search: " + SearchText + (bTypingSearch ? "_" : "")), Gold, Left + 18.f, Y);
+        Y += 30.f;
+    }
+    for (const std::string& Line : vcgs::Codex::Wrap(Book->Text(SearchText), Columns > 20 ? Columns : 20))
     {
         if (Y > Top + PanelHeight - 44.f) break;
         DrawText(ToF(Line), Line == "CODEX" ? Gold : Ink, Left + 18.f, Y);
         Y += 22.f;
     }
-    DrawText(ToF("C or Esc to close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
+    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ to search · C or Esc to close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
 }
 `,
 

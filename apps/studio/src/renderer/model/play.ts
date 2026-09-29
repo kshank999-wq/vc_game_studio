@@ -699,60 +699,98 @@ export const codexOf = (project: Project, world: PlayWorld): Codex => {
   };
 };
 
-/** The codex in words, exactly as Godot, Unity and Unreal write it. */
-export const codexText = (project: Project, world: PlayWorld): string => {
+/** One section of the codex in words: its heading, and each entry as the codex writes it. */
+export interface CodexSection {
+  key: 'quests' | 'characters' | 'locations' | 'items' | 'objects' | 'mechanics' | 'encounters' | 'lore';
+  heading: string;
+  /** What an empty section says. */
+  empty: string;
+  /** Between the heading and each entry: quest lines sit close, the rest have a blank line. */
+  sep: string;
+  entries: { id: string; text: string }[];
+}
+
+/** Whether a search finds an entry: the query, ignoring case, anywhere in the entry as written (its heading and counts aside). */
+export const codexMatches = (text: string, query: string) => !query.trim() || text.toLowerCase().includes(query.trim().toLowerCase());
+
+/**
+ * The codex's sections in words, the same as Godot, Unity and Unreal write
+ * them. With a search, only the entries it finds, and only the sections with
+ * any (their headings still count everything).
+ */
+export const codexSections = (project: Project, world: PlayWorld, query = ''): CodexSection[] => {
   const c = codexOf(project, world);
-  const parts: string[] = [];
-  if (c.quests) {
-    const lines = [`QUESTS · ${c.underWay.length} under way, ${c.done.length} done`];
-    if (!c.underWay.length && !c.done.length) lines.push('None yet.');
-    for (const q of c.underWay) lines.push(`• ${q.name}${q.goal ? ` — ${q.goal}` : ''}`);
-    for (const q of c.done) lines.push(`• ${q.name} (done)`);
-    parts.push(lines.join('\n'));
-  }
-  if (c.charactersTotal) {
-    let characters = `CHARACTERS · ${c.characters.length} of ${c.charactersTotal} met`;
-    if (!c.characters.length) characters += '\nNone yet.';
-    for (const ch of c.characters) characters += `\n\n${ch.name.toUpperCase()}\n${ch.text}`;
-    parts.push(characters);
-  }
-  if (c.locationsTotal) {
-    let locations = `LOCATIONS · ${c.locations.length} of ${c.locationsTotal} visited`;
-    if (!c.locations.length) locations += '\nNone yet.';
-    for (const l of c.locations) locations += `\n\n${l.name.toUpperCase()}\n${l.text}`;
-    parts.push(locations);
-  }
-  if (c.itemsTotal) {
-    let items = `ITEMS · ${c.items.length} of ${c.itemsTotal} found`;
-    if (!c.items.length) items += '\nNone yet.';
-    for (const i of c.items) items += `\n\n${i.name.toUpperCase()}${i.carried > 1 ? ` (carried ×${i.carried})` : i.carried ? ' (carried)' : ''}\n${i.text}`;
-    parts.push(items);
-  }
-  if (c.objectsTotal) {
-    let objects = `OBJECTS · ${c.objects.length} of ${c.objectsTotal} used`;
-    if (!c.objects.length) objects += '\nNone yet.';
-    for (const o of c.objects) objects += `\n\n${o.name.toUpperCase()}${o.state ? ` (${o.state})` : ''}\n${o.text}`;
-    parts.push(objects);
-  }
-  if (c.mechanicsTotal) {
-    let mechanics = `MECHANICS · ${c.mechanics.length} of ${c.mechanicsTotal} available`;
-    if (!c.mechanics.length) mechanics += '\nNone yet.';
-    for (const m of c.mechanics) mechanics += `\n\n${m.name.toUpperCase()}${m.controls ? `\nControls: ${m.controls}` : ''}\n${m.text}`;
-    parts.push(mechanics);
-  }
-  if (c.encountersTotal) {
-    let encounters = `ENCOUNTERS · ${c.encounters.length} met, ${c.encounters.filter((e) => e.won).length} won`;
-    if (!c.encounters.length) encounters += '\nNone yet.';
-    for (const e of c.encounters)
-      encounters += `\n\n${e.name.toUpperCase()}${e.won ? ' (won)' : ''}${e.enemies ? `\nEnemies: ${e.enemies}` : ''}${e.weakness ? `\nWeak to: ${e.weakness}` : ''}\n${e.text}`;
-    parts.push(encounters);
-  }
-  if (c.loreTotal) {
-    let lore = `LORE · ${c.lore.length} of ${c.loreTotal} found`;
-    if (!c.lore.length) lore += '\nNothing found yet.';
-    for (const l of c.lore) lore += `\n\n${l.name.toUpperCase()}\n${l.text}`;
-    parts.push(lore);
-  }
+  const all: (CodexSection | false)[] = [
+    !!c.quests && {
+      key: 'quests',
+      heading: `QUESTS · ${c.underWay.length} under way, ${c.done.length} done`,
+      empty: 'None yet.',
+      sep: '\n',
+      entries: [...c.underWay.map((q) => ({ id: q.id, text: `• ${q.name}${q.goal ? ` — ${q.goal}` : ''}` })), ...c.done.map((q) => ({ id: q.id, text: `• ${q.name} (done)` }))],
+    },
+    !!c.charactersTotal && {
+      key: 'characters',
+      heading: `CHARACTERS · ${c.characters.length} of ${c.charactersTotal} met`,
+      empty: 'None yet.',
+      sep: '\n\n',
+      entries: c.characters.map((ch) => ({ id: ch.id, text: `${ch.name.toUpperCase()}\n${ch.text}` })),
+    },
+    !!c.locationsTotal && {
+      key: 'locations',
+      heading: `LOCATIONS · ${c.locations.length} of ${c.locationsTotal} visited`,
+      empty: 'None yet.',
+      sep: '\n\n',
+      entries: c.locations.map((l) => ({ id: l.id, text: `${l.name.toUpperCase()}\n${l.text}` })),
+    },
+    !!c.itemsTotal && {
+      key: 'items',
+      heading: `ITEMS · ${c.items.length} of ${c.itemsTotal} found`,
+      empty: 'None yet.',
+      sep: '\n\n',
+      entries: c.items.map((i) => ({ id: i.id, text: `${i.name.toUpperCase()}${i.carried > 1 ? ` (carried ×${i.carried})` : i.carried ? ' (carried)' : ''}\n${i.text}` })),
+    },
+    !!c.objectsTotal && {
+      key: 'objects',
+      heading: `OBJECTS · ${c.objects.length} of ${c.objectsTotal} used`,
+      empty: 'None yet.',
+      sep: '\n\n',
+      entries: c.objects.map((o) => ({ id: o.id, text: `${o.name.toUpperCase()}${o.state ? ` (${o.state})` : ''}\n${o.text}` })),
+    },
+    !!c.mechanicsTotal && {
+      key: 'mechanics',
+      heading: `MECHANICS · ${c.mechanics.length} of ${c.mechanicsTotal} available`,
+      empty: 'None yet.',
+      sep: '\n\n',
+      entries: c.mechanics.map((m) => ({ id: m.id, text: `${m.name.toUpperCase()}${m.controls ? `\nControls: ${m.controls}` : ''}\n${m.text}` })),
+    },
+    !!c.encountersTotal && {
+      key: 'encounters',
+      heading: `ENCOUNTERS · ${c.encounters.length} met, ${c.encounters.filter((e) => e.won).length} won`,
+      empty: 'None yet.',
+      sep: '\n\n',
+      entries: c.encounters.map((e) => ({
+        id: e.id,
+        text: `${e.name.toUpperCase()}${e.won ? ' (won)' : ''}${e.enemies ? `\nEnemies: ${e.enemies}` : ''}${e.weakness ? `\nWeak to: ${e.weakness}` : ''}\n${e.text}`,
+      })),
+    },
+    !!c.loreTotal && {
+      key: 'lore',
+      heading: `LORE · ${c.lore.length} of ${c.loreTotal} found`,
+      empty: 'Nothing found yet.',
+      sep: '\n\n',
+      entries: c.lore.map((l) => ({ id: l.id, text: `${l.name.toUpperCase()}\n${l.text}` })),
+    },
+  ];
+  const sections = all.filter((x): x is CodexSection => !!x);
+  if (!query.trim()) return sections;
+  return sections.map((s) => ({ ...s, entries: s.entries.filter((e) => codexMatches(e.text, query)) })).filter((s) => s.entries.length);
+};
+
+/** The codex in words, exactly as Godot, Unity and Unreal write it; with a search, only what it finds. */
+export const codexText = (project: Project, world: PlayWorld, query = ''): string => {
+  const sections = codexSections(project, world, query);
+  if (query.trim() && !sections.length) return `CODEX\n\nNothing matches "${query.trim()}".`;
+  const parts = sections.map((s) => s.heading + (s.entries.length ? s.entries.map((e) => s.sep + e.text).join('') : `\n${s.empty}`));
   return ['CODEX', ...parts].join('\n\n');
 };
 

@@ -304,6 +304,16 @@ func _initialize() -> void:
 	print("codex: ", silt_player.codex_text().replace("\n", " | "))
 	if not silt_player.codex_open() or not silt_player.codex_text().begins_with("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 1 of 1 found\n\nVAULT KEY (carried)\nA heavy bronze key, green with age, stamped with the Order’s wave.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault") or silt_player.codex_button_text() != "Codex (C)":
 		fail("the codex should show The Drowned Order, got " + silt_player.codex_text())
+	# Search it: only the entries that match, ignoring case; headings are not searched.
+	silt_player.set_codex_search("LANTERN")
+	print("search: ", silt_player.codex_text("LANTERN").replace("\n", " | "))
+	if silt_player.codex_text("LANTERN") != "CODEX\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.":
+		fail("searching for lantern should show the oil and the eels, got " + silt_player.codex_text("LANTERN"))
+	if silt_player.codex_text("quests") != "CODEX\n\nNothing matches \"quests\".":
+		fail("a search with no match should say so, got " + silt_player.codex_text("quests"))
+	silt_player.set_codex_search("")
+	if silt_player.codex_search() != "":
+		fail("clearing the search should empty it")
 	silt_player.close_codex()
 	if silt_player.codex_open():
 		fail("the codex should close")

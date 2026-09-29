@@ -256,7 +256,7 @@ namespace UnityEngine
         public Rect(float x, float y, float width, float height) { this.x = x; this.y = y; this.width = width; this.height = height; }
     }
 
-    public enum KeyCode { None, C, Escape, Return }
+    public enum KeyCode { None, C, Escape, Return, Slash }
     public enum EventType { KeyDown, KeyUp, Repaint, Layout }
 
     public sealed class Event
@@ -293,6 +293,9 @@ namespace UnityEngine
         public static GUISkin skin = new GUISkin();
         public static bool Button(Rect position, string text) => false;
         public static void Box(Rect position, string text) { }
+        public static void SetNextControlName(string name) { }
+        public static void FocusControl(string name) { }
+        public static string GetNameOfFocusedControl() => "";
     }
 
     public static class GUILayout
@@ -303,6 +306,7 @@ namespace UnityEngine
         public static void EndScrollView() { }
         public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
         public static bool Button(string text, params GUILayoutOption[] options) => false;
+        public static string TextField(string text, params GUILayoutOption[] options) => text;
     }
 
     public static class Mathf
