@@ -134,6 +134,8 @@ export interface IrThing {
 
 /** A quest as the runtimes play it: under way once `starts` holds (at once without it), done when `completes` holds, paying `reward`. */
 export interface IrQuest extends IrThing {
+  /** Starts only when an effect starts it (it has no `starts` then). */
+  byEffect?: true;
   starts?: IrRule;
   completes?: IrRule;
   reward?: IrEffect[];
@@ -141,11 +143,15 @@ export interface IrQuest extends IrThing {
 
 /** Lore the player comes across: known once `discoveredWhen` holds (from the start without it). */
 export interface IrLore extends IrThing {
+  /** Known only when an effect reveals it (it has no `discoveredWhen` then). */
+  byEffect?: true;
   discoveredWhen?: IrRule;
 }
 
 /** A mechanic: usable once `availableWhen` holds (from the start without it); its tuning is in `fields`. */
 export interface IrMechanic extends IrThing {
+  /** Available only when an effect makes it available (it has no `availableWhen` then). */
+  byEffect?: true;
   availableWhen?: IrRule;
 }
 
@@ -491,14 +497,14 @@ export const buildIR = (project: Project): HandoffIR => {
     })),
     items: of('inventory').map(thing),
     locations: of('environment').map(thing),
-    lore: of('lore').map((o): IrLore => ((when) => ({ ...thing(o), ...(when ? { discoveredWhen: when } : {}) }))(rule(o.data.rule as Rule | undefined))),
+    lore: of('lore').map((o): IrLore => (o.data.byEffect ? { ...thing(o), byEffect: true } : ((when) => ({ ...thing(o), ...(when ? { discoveredWhen: when } : {}) }))(rule(o.data.rule as Rule | undefined)))),
     quests: of('quest').map((o): IrQuest => {
-      const starts = rule(o.data.starts as Rule | undefined);
+      const starts = o.data.byEffect ? undefined : rule(o.data.starts as Rule | undefined);
       const completes = rule(o.data.rule as Rule | undefined);
       const reward = effects(o.data.effects as Effect[] | undefined);
-      return { ...thing(o), ...(starts ? { starts } : {}), ...(completes ? { completes } : {}), ...(reward ? { reward } : {}) };
+      return { ...thing(o), ...(o.data.byEffect ? { byEffect: true as const } : {}), ...(starts ? { starts } : {}), ...(completes ? { completes } : {}), ...(reward ? { reward } : {}) };
     }),
-    mechanics: of('mechanic').map((o): IrMechanic => ((when) => ({ ...thing(o), ...(when ? { availableWhen: when } : {}) }))(rule(o.data.rule as Rule | undefined))),
+    mechanics: of('mechanic').map((o): IrMechanic => (o.data.byEffect ? { ...thing(o), byEffect: true } : ((when) => ({ ...thing(o), ...(when ? { availableWhen: when } : {}) }))(rule(o.data.rule as Rule | undefined)))),
     encounters: of('encounter').map((o): IrEncounter => {
       const winWhen = rule(o.data.rule as Rule | undefined);
       const onWin = effects(o.data.effects as Effect[] | undefined);

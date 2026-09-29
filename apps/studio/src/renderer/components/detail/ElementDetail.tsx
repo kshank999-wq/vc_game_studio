@@ -51,6 +51,13 @@ const RULES: Partial<Record<StoryObject['type'], { rule: string; effects?: strin
   mechanic: { rule: 'Available when (empty: from the beginning)' },
 };
 
+/** The rule that an effect can stand in for: "Only by an effect" turns it off (data.byEffect). */
+const BY_EFFECT: Partial<Record<StoryObject['type'], { rule: 'starts' | 'rule'; says: string }>> = {
+  quest: { rule: 'starts', says: 'Starts only when an effect starts it' },
+  lore: { rule: 'rule', says: 'Discovered only when an effect reveals it' },
+  mechanic: { rule: 'rule', says: 'Available only when an effect makes it available' },
+};
+
 interface Props {
   project: Project;
   id: string;
@@ -373,10 +380,19 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
 
       {RULES[object.type] && (
         <section className="detail-section">
-          {RULES[object.type]!.starts && (
+          {BY_EFFECT[object.type] && (
+            <label className="check by-effect">
+              <input type="checkbox" checked={!!object.data.byEffect} onChange={(e) => onCommit(setValue(project, id, 'byEffect', e.currentTarget.checked || undefined))} />
+              Only by an effect
+              <span className="pref-hint">{object.data.byEffect ? BY_EFFECT[object.type]!.says : 'or its rule below'}</span>
+            </label>
+          )}
+          {RULES[object.type]!.starts && !(object.data.byEffect && BY_EFFECT[object.type]?.rule === 'starts') && (
             <RuleEditor project={project} rule={object.data.starts as Rule | undefined} label={RULES[object.type]!.starts!} onChange={(r) => onCommit(setValue(project, id, 'starts', r))} />
           )}
-          <RuleEditor project={project} rule={object.data.rule as Rule | undefined} label={RULES[object.type]!.rule} onChange={(r) => onCommit(setValue(project, id, 'rule', r))} />
+          {!(object.data.byEffect && BY_EFFECT[object.type]?.rule === 'rule') && (
+            <RuleEditor project={project} rule={object.data.rule as Rule | undefined} label={RULES[object.type]!.rule} onChange={(r) => onCommit(setValue(project, id, 'rule', r))} />
+          )}
           {RULES[object.type]!.effects && (
             <EffectsEditor
               project={project}

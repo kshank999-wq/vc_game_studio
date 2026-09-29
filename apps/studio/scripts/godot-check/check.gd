@@ -59,9 +59,9 @@ func _initialize() -> void:
 	load("res://vcgs/generated/logic/rules.gd").reset(game)
 	if game.get_flag("door_solved") != "no":
 		fail("door_solved should start at no")
-	# The quest has no start rule: it is under way from the reset.
-	if game.quest_state("open_the_vault") != "active":
-		fail("Open the vault should be under way after reset, is " + game.quest_state("open_the_vault"))
+	# The quest starts only by an effect (finding the key): not yet.
+	if game.quest_state("open_the_vault") != "":
+		fail("Open the vault should wait for its effect after reset, is " + game.quest_state("open_the_vault"))
 	if game.knows_lore("the_drowned_order") or game.has_mechanic("lantern_oil"):
 		fail("the Order's lore and the lantern's oil should wait for their rules")
 	var quest_done: Array = []
@@ -181,6 +181,9 @@ func _initialize() -> void:
 		fail("with the lantern's oil, a win against the eels should count")
 	if not game.was_won("eel_swarm") or not game.has_item("vault_key"):
 		fail("winning should mark the eels won, and the scene go on to find the key")
+	# Finding the key starts the quest and reveals the Order's story (effects).
+	if game.quest_state("open_the_vault") != "active" or not game.knows_lore("the_drowned_order"):
+		fail("finding the key should start the quest and reveal the lore")
 	print("encounter: ", encounters, " won ", game.was_won("eel_swarm"), ", key ", game.has_item("vault_key"))
 	key_scene.queue_free()
 
@@ -197,16 +200,21 @@ func _initialize() -> void:
 
 	var choice: GDScript = load("res://vcgs/generated/choices/take_the_lantern.gd")
 	print("C1 options: ", choice.OPTIONS)
-	var available: Array = []
-	game.mechanic_available.connect(func(k: String) -> void: available.append(k))
 	if choice.choose(1, game) != "sc_04_the_squeeze":
 		fail("Crawl through should lead to the squeeze")
-	# Taking the lantern (either way) makes its oil a mechanic in play, with its tuning.
-	print("mechanics: ", available, " tuning: ", rules.mechanic_detail("lantern_oil", "tuning"))
-	if available != ["lantern_oil"] or not game.has_mechanic("lantern_oil") or rules.mechanic_detail("lantern_oil", "tuning") != "About a minute of deep water on a full lantern":
-		fail("answering Take the lantern should make Lantern oil available, with its tuning")
 	if not game.was_picked("take_the_lantern:crawl_through"):
 		fail("the pick should be remembered by its option key")
+	# SC-01 opens by lighting the lantern: its oil becomes a mechanic in play (an effect), with its tuning.
+	rules.reset(game)
+	var available: Array = []
+	game.mechanic_available.connect(func(k: String) -> void: available.append(k))
+	var cave: Node = load("res://vcgs/generated/scenes/sc_01_the_cave_mouth.gd").new()
+	root.add_child(cave)
+	cave.start()
+	print("mechanics: ", available, " tuning: ", rules.mechanic_detail("lantern_oil", "tuning"))
+	if available != ["lantern_oil"] or not game.has_mechanic("lantern_oil") or rules.mechanic_detail("lantern_oil", "tuning") != "About a minute of deep water on a full lantern":
+		fail("lighting the lantern should make Lantern oil available, with its tuning")
+	cave.queue_free()
 
 	# The Vault Door's placeholder scene, played through its on-screen player.
 	load("res://vcgs/generated/logic/rules.gd").reset(game)

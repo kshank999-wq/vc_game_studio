@@ -200,15 +200,22 @@ export const sunkenVault = (): Project => {
     p = setNotes({ ...p, objects: { ...p.objects, [object.id]: object } }, object.id, notes);
     design[type] = object.id;
   }
-  // They play: the quest is under way from the start and done when the door is solved;
-  // the eels guard the silt where the key lies.
-  p = setValue(p, design.quest!, 'rule', { match: 'all', items: [{ kind: 'puzzle', ref: puzzle, op: 'solved' }] });
+  // They play. The eels guard the silt where the key lies, and scatter from lantern light:
+  // they can only be beaten once the lantern's oil is in play.
   p = addEvent(p, theKey, 'encounter', { refId: design.encounter!, index: 0 })!.project;
-  // The Order's story comes out at the vault door; the lantern's oil matters once the lantern is taken.
-  p = setValue(p, design.lore!, 'rule', { match: 'all', items: [{ kind: 'visited', ref: vaultDoor, op: 'visited' }] });
-  p = setValue(p, design.mechanic!, 'rule', { match: 'all', items: [{ kind: 'choice', ref: c1, op: 'chose', value: '' }] });
-  // The eels scatter from lantern light: they can only be beaten once the lantern's oil is in play.
   p = setValue(p, design.encounter!, 'rule', { match: 'all', items: [{ kind: 'mechanic', ref: design.mechanic!, op: 'available' }] });
+  // The lantern's oil matters once the lantern is lit, at the cave mouth.
+  p = setValue(p, design.mechanic!, 'byEffect', true);
+  const lit = addEvent(p, caveMouth, 'action', { label: 'Light the lantern' })!;
+  p = updateEvent(lit.project, caveMouth, lit.id, { effects: [{ kind: 'enableMechanic', ref: design.mechanic! }] });
+  // Finding the key starts the quest, and its seal tells the Order's story (else the vault door does).
+  p = setValue(p, design.quest!, 'byEffect', true);
+  p = setValue(p, design.lore!, 'rule', { match: 'all', items: [{ kind: 'visited', ref: vaultDoor, op: 'visited' }] });
+  p = updateEvent(p, theKey, found.id, {
+    effects: [{ kind: 'give', ref: key }, { kind: 'startQuest', ref: design.quest! }, { kind: 'revealLore', ref: design.lore! }],
+  });
+  // Turning the key opens the vault: the quest is done.
+  p = updateEvent(p, vaultDoor, choice.id, { effects: [{ kind: 'take', ref: key }, { kind: 'arc', ref: mara, amount: 1 }, { kind: 'completeQuest', ref: design.quest! }] });
 
   // Where it all happens: one level, tied to the scenes and the Bible.
   p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent });

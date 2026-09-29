@@ -39,7 +39,7 @@ describe('the handoff model', () => {
     expect(door.main[4]!.ends).toEqual({ match: 'all', items: [{ kind: 'flag', ref: 'door_solved', op: 'is', value: 'yes' }] });
     // The choice's own availability gates its event; its main option spends the key.
     expect(door.main[5]!.when!.items).toHaveLength(2);
-    expect(door.main[5]!.effects).toEqual([{ kind: 'take', ref: 'vault_key' }, { kind: 'arc', ref: 'mara', amount: 1 }]);
+    expect(door.main[5]!.effects).toEqual([{ kind: 'take', ref: 'vault_key' }, { kind: 'arc', ref: 'mara', amount: 1 }, { kind: 'completeQuest', ref: 'open_the_vault' }]);
     expect(ir.flags.find((f) => f.name === 'door_solved')!.setBy).toEqual(['seam_drains']);
     // A spine choice carries on along the spine as well as down its branch.
     expect(ir.choices.find((c) => c.name === 'Take the lantern')!.options.map((o) => o.label)).toEqual(['Carry on', 'Crawl through']);
@@ -361,8 +361,10 @@ describe('design definitions: lore, quests, mechanics and encounters', () => {
 describe('quests and encounters in the engines', () => {
   it('carry their rules in the handoff model, as the studio plays them', async () => {
     const ir = buildIR(sunkenVault());
-    expect(ir.quests[0]).toMatchObject({ completes: { match: 'all', items: [{ kind: 'puzzle', ref: 'the_vault_door', op: 'solved' }] } });
+    // The sample's quest starts, and completes, by effects: finding the key and turning it.
+    expect(ir.quests[0]).toMatchObject({ byEffect: true });
     expect(ir.quests[0]).not.toHaveProperty('starts');
+    expect(ir.quests[0]).not.toHaveProperty('completes');
     expect(ir.encounters[0]).toMatchObject({ ident: { key: 'eel_swarm' }, loss: 'retry' });
     const theKey = ir.scenes.find((s) => s.name === 'The Key')!;
     expect(theKey.main[0]).toMatchObject({ kind: 'encounter', ref: 'eel_swarm', label: 'Eel swarm' });
@@ -392,7 +394,9 @@ describe('lore and mechanics in the engines', () => {
   it('carry their rules, and every runtime settles them', async () => {
     const ir = buildIR(sunkenVault());
     expect(ir.lore[0]).toMatchObject({ discoveredWhen: { match: 'all', items: [{ kind: 'visited', ref: 'sc_03_the_vault_door', op: 'visited' }] } });
-    expect(ir.mechanics[0]).toMatchObject({ availableWhen: { match: 'all', items: [{ kind: 'choice', ref: 'take_the_lantern', op: 'chose' }] }, fields: { tuning: 'About a minute of deep water on a full lantern' } });
+    expect(ir.mechanics[0]).toMatchObject({ byEffect: true, fields: { tuning: 'About a minute of deep water on a full lantern' } });
+    expect(ir.mechanics[0]).not.toHaveProperty('availableWhen');
+    expect(ir.scenes.find((s) => s.name === 'The Cave Mouth')!.main[0]).toMatchObject({ kind: 'action', label: 'Light the lantern', effects: [{ kind: 'enableMechanic', ref: 'lantern_oil' }] });
     const { generateGodot } = await import('../handoff/godot');
     const { RUNTIME_FILES } = await import('../handoff/unity-runtime');
     const { VCGS_CORE_H } = await import('../handoff/unreal-core');

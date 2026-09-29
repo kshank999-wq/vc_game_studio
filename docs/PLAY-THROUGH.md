@@ -32,6 +32,11 @@ monitor while you fix it on another.
   *Mechanic › is available / is not available*. Effects can *Start quest*
   (one under way or done stays as it is), *Complete quest* (done at once,
   paying its reward once), *Reveal lore* and *Make mechanic available*.
+  *Only by an effect* (in the Game Bible) makes a quest's start, a lore entry
+  or a mechanic wait for one of those effects instead of a rule. In the sample,
+  lighting the lantern at the cave mouth makes Lantern oil available, finding
+  the key starts *Open the vault* and its seal reveals *The Drowned Order* (the
+  vault door reveals it otherwise), and turning the key completes the quest.
 - **Encounters** go on a scene's timeline (**+ Event › Encounter**, new or one
   from the Bible). The preview offers **Win**, only when the encounter's *Can be
   won when* rule holds (otherwise it says what it needs), and **Lose**. A win

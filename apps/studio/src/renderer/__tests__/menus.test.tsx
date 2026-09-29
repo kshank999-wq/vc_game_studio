@@ -161,23 +161,26 @@ describe('play-through', () => {
     await opened();
     expect(container.querySelector('.play-view')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /To the next decision/ }));
-    // The sample's quest is under way from the start.
-    expect(container.querySelector('.play-quest')?.textContent).toContain('New quest: Open the vault');
-    fireEvent.click(screen.getByRole('button', { name: /Carry on/ }));
-    fireEvent.click(screen.getByRole('button', { name: /To the next decision/ }));
-    // Taking the lantern makes its oil a mechanic in play.
+    // SC-01 opens by lighting the lantern: its oil is a mechanic in play.
     expect(container.querySelector('.play-mechanic')?.textContent).toContain('Now available: Lantern oil');
     expect((screen.getByLabelText('Available: Lantern oil') as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /Carry on/ }));
+    fireEvent.click(screen.getByRole('button', { name: /To the next decision/ }));
     // SC-02 opens on an encounter: win it or lose it.
     expect(container.querySelector('.play-choice-title')?.textContent).toContain('Encounter: Eel swarm');
     fireEvent.click(screen.getByRole('button', { name: /Lose · try again/ }));
     expect(container.querySelector('.play-transcript')?.textContent).toContain('Eel swarm: try again');
     fireEvent.click(screen.getByRole('button', { name: /^1\s*Win/ }));
     fireEvent.click(screen.getByRole('button', { name: /To the next decision/ }));
+    // Finding the key starts the quest, and its seal tells the Order's story.
+    expect(container.querySelector('.play-quest')?.textContent).toContain('New quest: Open the vault');
+    expect(container.querySelector('.play-lore')?.textContent).toContain('Discovered: The Drowned Order');
     expect(container.querySelector('.play-free')?.textContent).toContain('Rusted Lever');
     fireEvent.click(screen.getByRole('button', { name: 'Pull' }));
     expect(container.querySelector('.play-transcript')?.textContent).toContain('Seam drains fires');
-    // Solving the door completes the quest.
+    // Turning the key opens the vault: the quest is done.
+    expect(container.querySelector('.play-quest.done')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Turn the key/ }));
     expect(container.querySelector('.play-quest.done')?.textContent).toContain('Quest complete: Open the vault');
     expect((screen.getByLabelText('Quest Open the vault') as HTMLSelectElement).value).toBe('done');
   });

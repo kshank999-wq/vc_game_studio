@@ -545,20 +545,20 @@ namespace VCGS
                 var moved = false;
                 foreach (var l in game.Story.Lore)
                 {
-                    if (game.KnowsLore(l.Key) || !Check(D.Get(l.Value, "discoveredWhen"), game)) continue;
+                    if (game.KnowsLore(l.Key) || D.Bool(l.Value, "byEffect") || !Check(D.Get(l.Value, "discoveredWhen"), game)) continue;
                     game.DiscoverLore(l.Key);
                     moved = true;
                 }
                 foreach (var m in game.Story.Mechanics)
                 {
-                    if (game.HasMechanic(m.Key) || !Check(D.Get(m.Value, "availableWhen"), game)) continue;
+                    if (game.HasMechanic(m.Key) || D.Bool(m.Value, "byEffect") || !Check(D.Get(m.Value, "availableWhen"), game)) continue;
                     game.EnableMechanic(m.Key);
                     moved = true;
                 }
                 foreach (var q in game.Story.Quests)
                 {
                     var state = game.QuestState(q.Key);
-                    if (state == "" && Check(D.Get(q.Value, "starts"), game))
+                    if (state == "" && !D.Bool(q.Value, "byEffect") && Check(D.Get(q.Value, "starts"), game))
                     {
                         game.SetQuest(q.Key, "active");
                         moved = true;

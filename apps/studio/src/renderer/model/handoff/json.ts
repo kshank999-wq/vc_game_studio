@@ -158,10 +158,10 @@ export const storySchema = () => ({
       ...obj({ key: str, kind: str, name: str, onward: { type: ['string', 'null'] }, routes: { type: 'array', items: obj({ to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['to', 'label']) }, outcome: { enum: ['ending', 'gameOver'] } }, ['key', 'kind', 'name', 'onward', 'routes']),
       description: 'A node on the story graph. Where it goes: the first route whose conditions hold, else onward along the spine.',
     },
-    lore: { allOf: [ref('thing'), obj({ discoveredWhen: ref('rule') }, [])], description: 'A lore entry: known once `discoveredWhen` holds, from the start when there is none.' },
-    mechanic: { allOf: [ref('thing'), obj({ availableWhen: ref('rule') }, [])], description: 'A mechanic: usable once `availableWhen` holds, from the start when there is none.' },
+    lore: { allOf: [ref('thing'), obj({ byEffect: { const: true }, discoveredWhen: ref('rule') }, [])], description: 'A lore entry: known once `discoveredWhen` holds, from the start when there is none.' },
+    mechanic: { allOf: [ref('thing'), obj({ byEffect: { const: true }, availableWhen: ref('rule') }, [])], description: 'A mechanic: usable once `availableWhen` holds, from the start when there is none.' },
     quest: {
-      allOf: [ref('thing'), obj({ starts: ref('rule'), completes: ref('rule'), reward: ref('effects') }, [])],
+      allOf: [ref('thing'), obj({ byEffect: { const: true }, starts: ref('rule'), completes: ref('rule'), reward: ref('effects') }, [])],
       description: 'A quest: under way once `starts` holds (at once when there is none), done when `completes` holds (never without it), then its `reward` effects are done.',
     },
     encounter: {
@@ -255,7 +255,8 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
    none), and complete each quest under way whose \`completes\` holds, doing its
    \`reward\`. Mark each lore entry known once its \`discoveredWhen\` holds, and
    each mechanic usable once its \`availableWhen\` holds (at once when either has
-   none): a codex shows the lore known, and a system switches on with its
+   none). One with \`byEffect: true\` waits for an effect instead
+   (\`startQuest\`, \`revealLore\`, \`enableMechanic\`): a codex shows the lore known, and a system switches on with its
    mechanic. Do this once when a new game begins too.
 6. **An \`encounter\` event** is a fight, chase or the like for your game to play;
    its \`ref\` is a key in \`encounters\`. A win counts only when \`winWhen\` holds;

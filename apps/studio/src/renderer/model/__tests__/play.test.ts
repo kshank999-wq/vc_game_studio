@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advance, choose, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Play } from '../play';
+import { advance, choose, endFreePlay, interact, playToDecision, promptOf, settleWorld, setWorld, startPlay, startWorld, type Play } from '../play';
 import { setConnectionRules } from '../project';
 import { sunkenVault } from '../sample';
 import type { Project } from '../types';
@@ -184,20 +184,22 @@ describe('quests and encounters', () => {
   });
 
   it('starts a quest with no start rule at once, and completes it when its rule holds, with its reward', () => {
-    const rewarded = set(p, quest, { effects: [{ kind: 'arc', ref: id(p, 'Mara'), amount: 2 }] });
+    // By its rules, not the sample's effects: under way at once, done when the door is solved.
+    const byRule = set(p, quest, { byEffect: undefined, rule: { match: 'all', items: [{ kind: 'puzzle', ref: id(p, 'The Vault Door', 'puzzle'), op: 'solved' }] } });
+    const rewarded = set(byRule, quest, { effects: [{ kind: 'arc', ref: id(p, 'Mara'), amount: 2 }] });
     const play = startPlay(rewarded);
     expect(play.world.quests[quest]).toBe('active');
     expect(play.log[0]).toEqual({ kind: 'quest', text: 'Open the vault', state: 'active', detail: 'Reach the vault chamber and open the door' });
     const end = playThrough(rewarded);
     expect(end.world.quests[quest]).toBe('done');
     const texts = end.log.map((e) => `${e.kind}:${e.text}`);
-    // Done as the door is solved, and the reward is paid then (the key choice adds one more).
+    // Done as the door is solved, and the reward is paid then, once (the key choice adds one more).
     expect(texts.indexOf('quest:Open the vault', 1)).toBe(texts.indexOf('fired:The Vault Door is solved') + 1);
     expect(end.world.arcs[id(p, 'Mara')]).toBe(3);
   });
 
   it('waits to start a quest until its start rule holds', () => {
-    const later = set(p, quest, { starts: { match: 'all', items: [{ kind: 'item', ref: key, op: 'has' }] } });
+    const later = set(p, quest, { byEffect: undefined, starts: { match: 'all', items: [{ kind: 'item', ref: key, op: 'has' }] } });
     let play = startPlay(later);
     expect(play.world.quests[quest]).toBeUndefined();
     play = setWorld(later, play, (w) => ({ ...w, items: { ...w.items, [key]: 1 } }));
@@ -243,7 +245,7 @@ describe('quests and encounters', () => {
     const on = losing('Carry on');
     const carried = choose(on, at(on), 1);
     expect(carried.log.some((e) => e.text === 'Lost: Eel swarm')).toBe(true);
-    expect(carried.log.at(-2)).toMatchObject({ kind: 'action', text: 'Find the key in the silt' });
+    expect(carried.log).toContainEqual(expect.objectContaining({ kind: 'action', text: 'Find the key in the silt' }));
   });
 
   it('goes on a timeline as a new encounter or one from the Bible, and its rules are checked like any other', async () => {
@@ -264,18 +266,21 @@ describe('lore and mechanics', () => {
   const lore = id(p, 'The Drowned Order', 'lore');
   const lantern = id(p, 'Lantern oil', 'mechanic');
 
-  it('discovers lore and makes a mechanic available once its rule holds, and says so', () => {
+  it('in the sample: lighting the lantern makes its oil a mechanic, and the key\'s seal reveals the lore', () => {
+    // Only by an effect: nothing is known or available before the story does it.
+    const settled = settleWorld(p, startWorld(p)).world;
+    expect(settled.lore[lore]).toBeUndefined();
+    expect(settled.mechanics[lantern]).toBeUndefined();
+    // SC-01 opens by lighting the lantern.
     let play = startPlay(p);
-    expect(play.world.lore[lore]).toBeUndefined();
-    expect(play.world.mechanics[lantern]).toBeUndefined();
-    // Taking the lantern makes its oil matter.
-    play = choose(p, playToDecision(p, play), 0);
     expect(play.world.mechanics[lantern]).toBe(true);
     expect(play.log).toContainEqual({ kind: 'mechanic', text: 'Lantern oil' });
-    // The Order's story comes out at the vault door.
+    // The key's seal tells the Order's story in SC-02, before the vault door (the rule's fallback).
     play = toTheVault(p);
     expect(play.world.lore[lore]).toBe(true);
-    expect(play.log).toContainEqual({ kind: 'lore', text: 'The Drowned Order' });
+    const texts = play.log.map((e) => `${e.kind}:${e.text}`);
+    expect(texts.indexOf('lore:The Drowned Order')).toBeLessThan(texts.findIndex((t) => t.startsWith('heading:SC-03')));
+    expect(texts.indexOf('quest:Open the vault')).toBe(texts.indexOf('action:Find the key in the silt') + 2);
   });
 
   it('knows lore, and has a mechanic, from the start when it has no rule', () => {
@@ -358,7 +363,7 @@ describe('effects that complete quests and make mechanics available', () => {
     const rewarded = { ...p, objects: { ...p.objects, [quest]: { ...p.objects[quest]!, data: { ...p.objects[quest]!.data, effects: [{ kind: 'arc', ref: mara, amount: 1 }] } } } };
     const effects = [{ kind: 'completeQuest' as const, ref: quest }, { kind: 'enableMechanic' as const, ref: lantern }, { kind: 'completeQuest' as const, ref: quest }];
     expect(describeEffects(rewarded, effects.slice(0, 2))).toBe('complete Open the vault · make Lantern oil available');
-    const done = applyStoryEffects(rewarded, startPlay(rewarded).world, effects);
+    const done = applyStoryEffects(rewarded, startWorld(rewarded), effects);
     expect(done.world.quests[quest]).toBe('done');
     expect(done.world.mechanics[lantern]).toBe(true);
     // The reward is paid once, however many times it is completed.

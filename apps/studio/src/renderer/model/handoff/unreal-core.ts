@@ -541,13 +541,13 @@ namespace vcgs
                 bool moved = false;
                 for (const auto& l : game.StoryData.Lore)
                 {
-                    if (game.KnowsLore(l.first) || !Check((*l.second)["discoveredWhen"], game)) continue;
+                    if (game.KnowsLore(l.first) || (*l.second)["byEffect"].Bool() || !Check((*l.second)["discoveredWhen"], game)) continue;
                     game.DiscoverLore(l.first);
                     moved = true;
                 }
                 for (const auto& m : game.StoryData.Mechanics)
                 {
-                    if (game.HasMechanic(m.first) || !Check((*m.second)["availableWhen"], game)) continue;
+                    if (game.HasMechanic(m.first) || (*m.second)["byEffect"].Bool() || !Check((*m.second)["availableWhen"], game)) continue;
                     game.EnableMechanic(m.first);
                     moved = true;
                 }
@@ -555,7 +555,7 @@ namespace vcgs
                 {
                     const Value& quest = *q.second;
                     const std::string state = game.QuestState(q.first);
-                    if (state.empty() && Check(quest["starts"], game))
+                    if (state.empty() && !quest["byEffect"].Bool() && Check(quest["starts"], game))
                     {
                         game.SetQuest(q.first, "active");
                         moved = true;

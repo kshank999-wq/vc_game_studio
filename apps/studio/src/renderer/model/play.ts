@@ -197,7 +197,8 @@ const settle = (d: Doing) => {
         moved = true;
       }
       // Lore is discovered, and a mechanic becomes available, once its rule holds (at once with none).
-      if ((o.type === 'lore' || o.type === 'mechanic') && !d.world[o.type === 'lore' ? 'lore' : 'mechanics'][o.id] && evaluate(ruleOf(o), d.world)) {
+      // (One set "Only by an effect" waits for an effect to do it.)
+      if ((o.type === 'lore' || o.type === 'mechanic') && !o.data.byEffect && !d.world[o.type === 'lore' ? 'lore' : 'mechanics'][o.id] && evaluate(ruleOf(o), d.world)) {
         const key = o.type === 'lore' ? 'lore' : 'mechanics';
         d.world = { ...d.world, [key]: { ...d.world[key], [o.id]: true } };
         d.log.push({ kind: o.type, text: o.name });
@@ -205,7 +206,7 @@ const settle = (d: Doing) => {
       }
       if (o.type === 'quest') {
         const state = d.world.quests[o.id];
-        if (!state && evaluate(o.data.starts as Rule | undefined, d.world)) {
+        if (!state && !o.data.byEffect && evaluate(o.data.starts as Rule | undefined, d.world)) {
           setQuest(d, o, 'active');
           moved = true;
         } else if (state === 'active' && !isEmpty(ruleOf(o)) && evaluate(ruleOf(o), d.world)) {

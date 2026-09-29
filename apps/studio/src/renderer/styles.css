@@ -3240,6 +3240,12 @@ a:hover {
   margin-left: auto;
 }
 
+.by-effect {
+  flex-wrap: wrap;
+  white-space: normal;
+  margin-bottom: 8px;
+}
+
 .insp-note {
   margin: 0 0 6px;
   font-size: 12px;

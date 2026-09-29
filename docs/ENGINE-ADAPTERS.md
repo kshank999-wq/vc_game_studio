@@ -95,7 +95,9 @@ the studio's play-through:
   available (*Make mechanic available*), wherever effects go: a trigger, a
   choice's option, a timeline event, a route, a puzzle's or quest's reward. They
   reach the engines as `startQuest`, `completeQuest`, `revealLore` and
-  `enableMechanic` effects, and raise the same events as the rules do.
+  `enableMechanic` effects, and raise the same events as the rules do. A quest,
+  lore entry or mechanic set *Only by an effect* carries `byEffect: true` and
+  no rule of its own: the runtimes wait for the effect.
 
 ## The Godot 4 adapter
 
