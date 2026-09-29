@@ -256,6 +256,31 @@ describe('play-through', () => {
     expect(codex.textContent).toContain('Note: Bring the lantern');
     fireEvent.click(within(sections).getByRole('button', { name: 'All' }));
     expect(codex.textContent).toContain('Note: Priests');
+    // Share them: no share sheet here, so they are copied, as the text the export writes.
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t: string) => void copied.push(t) } });
+    fireEvent.click(within(codex).getByRole('button', { name: 'Share notes' }));
+    await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('Notes copied.'));
+    expect(copied[0]).toContain('LORE · THE DROWNED ORDER\nPriests');
+    // With a share sheet, that is used instead.
+    const shared: ShareData[] = [];
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async (d: ShareData) => void shared.push(d) });
+    fireEvent.click(within(codex).getByRole('button', { name: 'Share notes' }));
+    await waitFor(() => expect(within(codex).getByRole('status').textContent).toBe('Notes shared.'));
+    expect(shared[0]).toMatchObject({ title: 'The Sunken Vault codex notes' });
+    delete (navigator as { share?: unknown }).share;
+    // Neither a share sheet nor a clipboard (an embedded page, say): the notes are shown, selected, to copy by hand.
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    fireEvent.click(within(codex).getByRole('button', { name: 'Share notes' }));
+    await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('This page cannot copy by itself'));
+    expect((within(codex).getByLabelText('Notes to copy') as HTMLTextAreaElement).value).toContain('LORE · THE DROWNED ORDER\nPriests');
+    // Take in notes someone shared: paste them, and they go where they belong.
+    fireEvent.click(within(codex).getByRole('button', { name: 'Paste notes' }));
+    fireEvent.change(within(codex).getByLabelText('Shared notes to take in'), { target: { value: 'CODEX NOTES · The Sunken Vault\n\nITEMS · VAULT KEY\nFrom a friend: it fits the vault door' } });
+    fireEvent.click(within(codex).getByRole('button', { name: 'Take them in' }));
+    expect(within(codex).getByRole('status').textContent).toBe('Imported 1 note.');
+    expect(codex.textContent).toContain('Note: From a friend: it fits the vault door');
+    expect(within(codex).queryByLabelText('Shared notes to take in')).toBeNull();
     fireEvent.click(within(sections).getByRole('button', { name: '★ Bookmarks' }));
     URL.createObjectURL = created;
     URL.revokeObjectURL = revoked;

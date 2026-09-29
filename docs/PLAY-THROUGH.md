@@ -76,7 +76,10 @@ monitor while you fix it on another.
   (from the studio or any engine): each note goes to the entry of that section
   and name, whatever state it is in now ("(won)", "(carried)", a quest's goal
   aside), replacing the note it had; the others stay. Notes for entries not in
-  the codex yet are listed, not lost silently. The engines' codex
+  the codex yet are listed, not lost silently. **Share notes** hands the same
+  text to the system's share sheet where there is one (a phone, say), and
+  copies it otherwise, to paste into a message; **Paste notes** takes in notes
+  someone shared, the same way Import notes does. The engines' codex
   screens search, filter, sort and bookmark the same way.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.

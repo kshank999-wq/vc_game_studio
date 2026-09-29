@@ -3,7 +3,7 @@ import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
 import { advance, choose, codexNotesFrom, codexNotesText, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
-import { downloadText, notesFileNameFor, readText } from '../../files';
+import { copyText, downloadText, notesFileNameFor, readText } from '../../files';
 import { Symbol } from '../Symbol';
 import { Inline } from '../Inline';
 
@@ -146,11 +146,38 @@ const CodexPanel = ({
   // Importing notes: the file picker, and what the last import did.
   const notesFile = useRef<HTMLInputElement>(null);
   const [imported, setImported] = useState('');
-  const importNotes = async (file: File) => {
-    const read = codexNotesFrom(project, world, await readText(file));
+  /** Take notes from exported or shared text: set those that match, and say what happened. */
+  const takeNotes = (text: string) => {
+    const read = codexNotesFrom(project, world, text);
     onImportNotes(read.notes);
     const got = `Imported ${read.notes.size} note${read.notes.size === 1 ? '' : 's'}`;
     setImported(read.skipped.length ? `${got}. Not in the codex (yet): ${read.skipped.join('; ')}.` : `${got}.`);
+  };
+  const importNotes = async (file: File) => takeNotes(await readText(file));
+  // Sharing: the share sheet where there is one, else the clipboard; and a box to paste shared notes into.
+  const [pasting, setPasting] = useState(false);
+  const [pasted, setPasted] = useState('');
+  // Where neither a share sheet nor the clipboard can be used: the notes, to copy by hand.
+  const [toCopy, setToCopy] = useState('');
+  const shareNotes = async () => {
+    const text = codexNotesText(project, world, notes);
+    setToCopy('');
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: `${project.name} codex notes`, text });
+        setImported('Notes shared.');
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        // Refused (an embedded page, say): copy them instead.
+      }
+    }
+    const copied = await copyText(text);
+    if (copied) setImported('Notes copied. Paste them to share them; in another codex, Paste notes takes them in.');
+    else {
+      setToCopy(text);
+      setImported('This page cannot copy by itself: the notes are below, selected. Copy them (Ctrl+C or ⌘C) to share them.');
+    }
   };
   // The entry whose note is being written, by key.
   const [editing, setEditing] = useState('');
@@ -237,6 +264,12 @@ const CodexPanel = ({
         <button className="tb-btn small" title="Read notes from an exported file" onClick={() => notesFile.current?.click()}>
           Import notes
         </button>
+        <button className="tb-btn small" disabled={!notes.size} title={notes.size ? 'Share every note (or copy them)' : 'Write a note (✎) first'} onClick={() => void shareNotes()}>
+          Share notes
+        </button>
+        <button className="tb-btn small" aria-expanded={pasting} title="Take in notes someone shared with you" onClick={() => setPasting((o) => !o)}>
+          Paste notes
+        </button>
         <input
           ref={notesFile}
           type="file"
@@ -253,6 +286,41 @@ const CodexPanel = ({
           Close <kbd>C</kbd>
         </button>
       </div>
+      {toCopy && (
+        <textarea
+          className="play-codex-search"
+          aria-label="Notes to copy"
+          readOnly
+          rows={5}
+          value={toCopy}
+          ref={(el) => el?.select()}
+          onBlur={() => setToCopy('')}
+        />
+      )}
+      {pasting && (
+        <div className="play-codex-paste">
+          <textarea
+            className="play-codex-search"
+            aria-label="Shared notes to take in"
+            placeholder="Paste the notes someone shared (CODEX NOTES · …)"
+            rows={4}
+            autoFocus
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+          />
+          <button
+            className="tb-btn small"
+            disabled={!pasted.trim()}
+            onClick={() => {
+              takeNotes(pasted);
+              setPasted('');
+              setPasting(false);
+            }}
+          >
+            Take them in
+          </button>
+        </div>
+      )}
       {imported && (
         <p className="play-note" role="status">
           {imported}

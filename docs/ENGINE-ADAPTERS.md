@@ -153,7 +153,12 @@ the studio's play-through:
   Godot `codex_notes_from()` / `import_codex_notes()`; Unity
   `Codex.NotesFrom` / `ImportNotes` and `VcgsCodex.ImportNotes`; Unreal
   `ImportCodexNotes` / `ImportCodexNotesText` (with the headings it could not
-  match).
+  match). To share them, Y copies the notes to the clipboard and V takes in
+  notes someone shared from it: Godot `share_codex_notes()` /
+  `paste_codex_notes()` (and `take_codex_notes(text)`); Unity
+  `VcgsCodex.ShareNotes` / `PasteNotes`; Unreal `CopyCodexNotes` /
+  `PasteCodexNotes` (the plugin now uses the ApplicationCore module for the
+  clipboard).
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

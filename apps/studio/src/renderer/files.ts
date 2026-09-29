@@ -145,6 +145,36 @@ export const downloadText = (name: string, text: string): void => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
+/**
+ * Put text on the clipboard: the clipboard itself where the page may use it,
+ * else the older copy command. False when neither works (an embedded page
+ * that is not allowed to, say).
+ */
+export const copyText = async (text: string): Promise<boolean> => {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Not allowed here: try the older way.
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const done = typeof document.execCommand === 'function' && document.execCommand('copy');
+    area.remove();
+    return !!done;
+  } catch {
+    return false;
+  }
+};
+
 /** A text file's contents. */
 export const readText = (file: Blob): Promise<string> =>
   typeof file.text === 'function'

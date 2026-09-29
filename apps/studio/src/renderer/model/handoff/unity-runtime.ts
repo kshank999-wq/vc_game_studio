@@ -1479,7 +1479,8 @@ namespace VCGS
     /// (or the row of buttons) to show one section, and S (or the sort buttons)
     /// to order each section; the arrows move a cursor (▶) and B bookmarks
     /// the entry it is on (★Bookmarks shows only those), N writes a note on it,
-    /// E saves every note as a text file, and I reads them back. Drawn with
+    /// E saves every note as a text file, I reads them back, Y copies them to
+    /// share them, and V takes in notes someone shared. Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1545,6 +1546,24 @@ namespace VCGS
                 Status = "Could not save the notes.";
                 return "";
             }
+        }
+
+        /// <summary>Share the notes (Y): put them on the clipboard, as the text the export writes. Returns it.</summary>
+        public string ShareNotes()
+        {
+            if (Book == null) return "";
+            var text = Book.NotesText();
+            GUIUtility.systemCopyBuffer = text;
+            Status = "Notes copied: paste them to share them (V takes them in, in another codex).";
+            return text;
+        }
+
+        /// <summary>Take in notes someone shared (V): read them from the clipboard.</summary>
+        public void PasteNotes()
+        {
+            if (Book == null) return;
+            var read = Book.ImportNotes(GUIUtility.systemCopyBuffer ?? "");
+            Status = "Imported " + read.notes.Count + " notes" + (read.skipped.Count > 0 ? ". Not in the codex (yet): " + string.Join("; ", read.skipped) : "");
         }
 
         /// <summary>Import notes from a text file (I; the one E saves when no path); false if it could not be read.</summary>
@@ -1637,6 +1656,16 @@ namespace VCGS
             else if (e.type == EventType.KeyDown && !typing && IsOpen && (e.keyCode == KeyCode.UpArrow || e.keyCode == KeyCode.DownArrow))
             {
                 MoveCursor(e.keyCode == KeyCode.DownArrow ? 1 : -1);
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.Y)
+            {
+                ShareNotes();
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.V)
+            {
+                PasteNotes();
                 e.Use();
             }
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.I)

@@ -55,7 +55,7 @@ public class VCGS : ModuleRules
     public VCGS(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "ProceduralMeshComponent" });
+        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "ApplicationCore", "ProceduralMeshComponent" });
     }
 }
 `,
@@ -274,6 +274,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 ImportCodexNotesText(const FString& Text, TArray<FString>& Skipped);
     /** The same from a text file (Saved/CodexNotes.txt when Path is empty); -1 if it could not be read. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 ImportCodexNotes(TArray<FString>& Skipped, const FString& Path = TEXT(""));
+    /** Share the notes: put them on the clipboard, as the text the export writes. Returns it. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") FString CopyCodexNotes();
+    /** Take in notes someone shared: read them from the clipboard (as ImportCodexNotesText does). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 PasteCodexNotes(TArray<FString>& Skipped);
     /** The codex entries shown (for a search, section and sort), in order, by key: what a cursor moves through. */
     UFUNCTION(BlueprintPure, Category = "VCGS|Codex") TArray<FString> GetCodexEntries(const FString& Search = TEXT(""), const FString& Section = TEXT(""), const FString& Sort = TEXT("")) const;
     /** Quest, character, location, item, object, mechanic, encounter and lore updates since the codex was last read. */
@@ -314,6 +318,7 @@ private:
   'Source/VCGS/Private/VcgsSubsystem.cpp': `${RUNTIME_HEAD}
 #include "VcgsSubsystem.h"
 #include "VcgsConvert.h"
+#include "HAL/PlatformApplicationMisc.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
@@ -409,6 +414,20 @@ int32 UVcgsSubsystem::ImportCodexNotesText(const FString& Text, TArray<FString>&
     for (const auto& Note : Read.Notes) Game->SetNote(Note.first, Note.second);
     for (const std::string& Head : Read.Skipped) Skipped.Add(ToF(Head));
     return static_cast<int32>(Read.Notes.size());
+}
+
+FString UVcgsSubsystem::CopyCodexNotes()
+{
+    const FString Text = GetCodexNotesText();
+    FPlatformApplicationMisc::ClipboardCopy(*Text);
+    return Text;
+}
+
+int32 UVcgsSubsystem::PasteCodexNotes(TArray<FString>& Skipped)
+{
+    FString Text;
+    FPlatformApplicationMisc::ClipboardPaste(Text);
+    return ImportCodexNotesText(Text, Skipped);
 }
 
 int32 UVcgsSubsystem::ImportCodexNotes(TArray<FString>& Skipped, const FString& Path)
@@ -548,6 +567,7 @@ namespace vcgs { class Codex; }
  * is on (★); Tab reaches the bookmarks alone too. N writes a note on it: type
  * it, Enter keeps it, Escape leaves it. E saves every note as a text file
  * (ExportCodexNotes on the subsystem), and I reads it back (ImportCodexNotes).
+ * Y copies the notes to share them, V takes in notes someone shared.
  */
 UCLASS()
 class VCGS_API AVcgsCodexHUD : public AHUD
@@ -688,10 +708,16 @@ void AVcgsCodexHUD::DrawHUD()
         const FString Where = Story->ExportCodexNotes();
         StatusText = Where.IsEmpty() ? std::string("Could not save the notes.") : "Notes saved to " + ToStd(Where);
     }
-    else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::I))
+    else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Y))
     {
+        Story->CopyCodexNotes();
+        StatusText = "Notes copied: paste them to share them (V takes them in, in another codex).";
+    }
+    else if (PlayerOwner && bCodexOpen && (PlayerOwner->WasInputKeyJustPressed(EKeys::I) || PlayerOwner->WasInputKeyJustPressed(EKeys::V)))
+    {
+        // I: from the file E saved; V: from the clipboard (notes someone shared).
         TArray<FString> Skipped;
-        const int32 Count = Story->ImportCodexNotes(Skipped);
+        const int32 Count = PlayerOwner->WasInputKeyJustPressed(EKeys::V) ? Story->PasteCodexNotes(Skipped) : Story->ImportCodexNotes(Skipped);
         std::string Missing;
         for (const FString& Head : Skipped) Missing += (Missing.empty() ? "" : "; ") + ToStd(Head);
         StatusText = Count < 0 ? std::string("No notes file to import.") : "Imported " + std::to_string(Count) + " notes" + (Missing.empty() ? "" : ". Not in the codex (yet): " + Missing);
@@ -776,7 +802,7 @@ void AVcgsCodexHUD::DrawHUD()
         DrawText(ToF(Line), Line == "CODEX" ? Gold : Ink, Left + 18.f, Y);
         Y += 22.f;
     }
-    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B bookmark, N note · E save, I load notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
+    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B, N · E save, I load, Y share, V paste notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
 }
 `,
 

@@ -377,6 +377,13 @@ func _initialize() -> void:
 	print("imported: ", read)
 	if read.is_empty() or read["notes"].size() != 2 or game.note_for("quests:open_the_vault") != "Key first,\nthen the lever" or game.note_for("items:vault_key") != "For the door" or read["skipped"] != ["LORE · THE LAST EXPEDITION"]:
 		fail("importing notes should match them by section and name, got " + str(read))
+	# Share: the same text as the export; and take in shared text.
+	if silt_player.share_codex_notes() != silt_player.codex_notes_text():
+		fail("sharing should give the export's text")
+	var taken: Dictionary = silt_player.take_codex_notes("CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nFrom a friend")
+	if taken["notes"].size() != 1 or game.note_for("lore:the_drowned_order") != "From a friend":
+		fail("taking in shared notes should set them, got " + str(taken))
+	game.set_note("lore:the_drowned_order", "")
 	if silt_player.codex_name_of("EEL SWARM (won)") != "eel swarm":
 		fail("the name should drop its state")
 	game.set_note("quests:open_the_vault", "")
