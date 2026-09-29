@@ -111,7 +111,7 @@ const EntryView = ({ entry }: { entry: Entry }) => {
   }
 };
 
-/** The codex as the player would read it: the quest log, the characters met, the items found, the mechanics, the encounters met, then the lore found. */
+/** The codex as the player would read it: the quest log, the characters met, the locations visited, the items found, the mechanics, the encounters met, then the lore found. */
 const CodexPanel = ({ project, world, onClose }: { project: Project; world: PlayWorld; onClose: () => void }) => {
   const c = codexOf(project, world);
   return (
@@ -157,6 +157,22 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
                 <Symbol type="character" size={11} /> {ch.name}
               </h4>
               <p>{ch.text}</p>
+            </article>
+          ))}
+        </section>
+      )}
+      {c.locationsTotal > 0 && (
+        <section aria-label="Locations">
+          <h3>
+            Locations <span className="play-note">· {c.locations.length} of {c.locationsTotal} visited</span>
+          </h3>
+          {!c.locations.length && <p className="play-note">None yet.</p>}
+          {c.locations.map((l) => (
+            <article key={l.id} className="play-codex-lore play-codex-location">
+              <h4>
+                <Symbol type="environment" size={11} /> {l.name}
+              </h4>
+              <p>{l.text}</p>
             </article>
           ))}
         </section>
@@ -417,7 +433,7 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   const [seen, setSeen] = useState(0);
   const progress = codexProgress(project, play.world);
   const book = codexOf(project, play.world);
-  const hasCodex = book.quests + book.charactersTotal + book.itemsTotal + book.mechanicsTotal + book.encountersTotal + book.loreTotal > 0;
+  const hasCodex = book.quests + book.charactersTotal + book.locationsTotal + book.itemsTotal + book.mechanicsTotal + book.encountersTotal + book.loreTotal > 0;
   const fresh = Math.max(0, progress - seen);
   useEffect(() => {
     // Read while open; after a step back there is less to have read.

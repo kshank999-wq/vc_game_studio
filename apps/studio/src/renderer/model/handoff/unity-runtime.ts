@@ -209,6 +209,8 @@ namespace VCGS
         public readonly Dictionary<string, Dictionary<string, object>> Mechanics = new Dictionary<string, Dictionary<string, object>>();
         /// <summary>Inventory items, by key: name, notes and fields (the codex entry is fields.codex).</summary>
         public readonly Dictionary<string, Dictionary<string, object>> ItemDefs = new Dictionary<string, Dictionary<string, object>>();
+        /// <summary>Locations (environments), by key: name, notes and fields (the codex entry is fields.codex).</summary>
+        public readonly Dictionary<string, Dictionary<string, object>> LocationDefs = new Dictionary<string, Dictionary<string, object>>();
 
         public static Story FromJson(string json) => new Story(D.Map(Json.Parse(json)));
 
@@ -234,6 +236,7 @@ namespace VCGS
             Index(root, "lore", Lore);
             Index(root, "mechanics", Mechanics);
             Index(root, "items", ItemDefs);
+            Index(root, "locations", LocationDefs);
             foreach (var l in D.List(root, "lines"))
             {
                 var line = D.Map(l);
@@ -260,6 +263,9 @@ namespace VCGS
         public string CharacterName(string key) => Characters.TryGetValue(key ?? "", out var c) ? D.Str(c, "name") : "";
         /// <summary>What the codex says about a character once met ("" keeps them out of it).</summary>
         public string CharacterCodex(string key) => Characters.TryGetValue(key ?? "", out var c) ? D.Str(c, "codex").Trim() : "";
+        /// <summary>What the codex says about a location once visited ("" keeps it out of it).</summary>
+        public string LocationCodex(string key) => LocationDefs.TryGetValue(key ?? "", out var l) ? D.Str(D.Map(l, "fields"), "codex").Trim() : "";
+        public string LocationName(string key) => LocationDefs.TryGetValue(key ?? "", out var l) ? D.Str(l, "name") : "";
         /// <summary>What the codex says about an item once found ("" keeps it out of it).</summary>
         public string ItemCodex(string key) => ItemDefs.TryGetValue(key ?? "", out var i) ? D.Str(D.Map(i, "fields"), "codex").Trim() : "";
         public string ItemName(string key) => ItemDefs.TryGetValue(key ?? "", out var i) ? D.Str(i, "name") : "";
@@ -303,6 +309,8 @@ namespace VCGS
         public readonly List<string> MetCharacters = new List<string>();
         /// <summary>Items the player has ever held, in the order found (carried or not now).</summary>
         public readonly List<string> FoundItems = new List<string>();
+        /// <summary>Locations the player has been to (a scene set there played), in the order visited.</summary>
+        public readonly List<string> VisitedLocations = new List<string>();
         /// <summary>Lore the player has come across, in the order they found it (the codex).</summary>
         public readonly List<string> KnownLore = new List<string>();
         /// <summary>Mechanics the player can use now.</summary>
@@ -321,6 +329,7 @@ namespace VCGS
         public event Action<string> EncounterWon;
         public event Action<string> CharacterMet;
         public event Action<string> ItemFound;
+        public event Action<string> LocationVisited;
         public bool AutoRules = true;
         bool settling;
 
@@ -334,7 +343,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -400,6 +409,14 @@ namespace VCGS
         public void MarkSolved(string puzzle)
         {
             if (Solved.Add(puzzle)) OnChanged();
+        }
+
+        /// <summary>The player is at a location (the scene player says so as a scene set there starts).</summary>
+        public void VisitLocation(string location)
+        {
+            if (string.IsNullOrEmpty(location) || VisitedLocations.Contains(location)) return;
+            VisitedLocations.Add(location);
+            LocationVisited?.Invoke(location);
         }
 
         public void Visit(string scene)
@@ -799,6 +816,7 @@ namespace VCGS
         public void Start()
         {
             game.Visit(SceneKey);
+            game.VisitLocation(D.Str(scene, "location"));
             track = Main;
             index = -1;
             branch = -1;
@@ -1080,11 +1098,11 @@ namespace VCGS
     /// <summary>
     /// The codex as the player reads it: the quest log (quests under way with
     /// their goals, then those done, in the order they started), the characters
-    /// met and items found (those with a codex entry), the mechanics
+    /// met, locations visited and items found (those with a codex entry), the mechanics
     /// available, the encounters met (with their enemies and weakness, and
     /// whether they were won) and the lore found, in the order found. New counts
     /// what has happened since the codex was last read (quests starting or
-    /// completing, characters met, items found, mechanics, encounters met or won, lore found), for a
+    /// completing, characters met, locations visited, items found, mechanics, encounters met or won, lore found), for a
     /// "new" badge. Plain C#: VcgsCodex draws it, or use it in your own UI.
     /// </summary>
     public sealed class Codex
@@ -1116,6 +1134,7 @@ namespace VCGS
             var n = game.KnownLore.Count + game.AvailableMechanics.Count + game.MetEncounters.Count + game.Won.Count;
             foreach (var c in game.MetCharacters) if (game.Story.CharacterCodex(c) != "") n++;
             foreach (var i in game.FoundItems) if (game.Story.ItemCodex(i) != "") n++;
+            foreach (var l in game.VisitedLocations) if (game.Story.LocationCodex(l) != "") n++;
             foreach (var state in game.Quests.Values) n += state == "done" ? 2 : 1;
             return n;
         }
@@ -1168,6 +1187,20 @@ namespace VCGS
                     cast.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + "\n" + game.Story.CharacterCodex(key));
                 }
                 parts.Add(cast.ToString());
+            }
+            var locationsWithEntry = 0;
+            foreach (var l in game.Story.LocationDefs.Keys) if (game.Story.LocationCodex(l) != "") locationsWithEntry++;
+            if (locationsWithEntry > 0)
+            {
+                var been = game.VisitedLocations.FindAll(l => game.Story.LocationCodex(l) != "");
+                var places = new StringBuilder("LOCATIONS · " + been.Count + " of " + locationsWithEntry + " visited");
+                if (been.Count == 0) places.Append("\nNone yet.");
+                foreach (var key in been)
+                {
+                    var name = game.Story.LocationName(key);
+                    places.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + "\n" + game.Story.LocationCodex(key));
+                }
+                parts.Add(places.ToString());
             }
             var itemsWithEntry = 0;
             foreach (var i in game.Story.ItemDefs.Keys) if (game.Story.ItemCodex(i) != "") itemsWithEntry++;

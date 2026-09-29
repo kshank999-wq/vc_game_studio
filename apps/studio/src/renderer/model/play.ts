@@ -29,6 +29,8 @@ export interface PlayWorld extends PlayState {
   metCharacters: Record<string, boolean>;
   /** Items the player has ever held, in the order found (for the codex). */
   found: Record<string, boolean>;
+  /** Locations the player has been to (a scene set there played), in the order visited (for the codex). */
+  been: Record<string, boolean>;
 }
 
 export type { QuestState };
@@ -106,7 +108,7 @@ const MAX_STEPS = 2000;
 // ---------------------------------------------------------------- the world
 
 export const startWorld = (project: Project): PlayWorld => {
-  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {}, met: {}, metCharacters: {}, found: {}, lore: {}, mechanics: {} };
+  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {}, met: {}, metCharacters: {}, found: {}, been: {}, lore: {}, mechanics: {} };
   for (const o of Object.values(project.objects)) {
     const initial = initialState(o);
     if (o.type === 'state' && initial !== undefined) world.flags[o.id] = initial;
@@ -279,6 +281,8 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
         return { at: 'end', outcome: 'ending', text: o.name || 'The End' };
       case 'scene': {
         d.world = { ...d.world, visited: { ...d.world.visited, [o.id]: true } };
+        const at = o.data.locationId as string | undefined;
+        if (at && project.objects[at] && !d.world.been[at]) d.world = { ...d.world, been: { ...d.world.been, [at]: true } };
         const location = o.data.locationId ? name(project, o.data.locationId as string).toUpperCase() : '';
         d.log.push({ kind: 'heading', id: o.id, text: label, sub: [location && `${o.data.intExt ?? 'INT.'} ${location} — ${o.data.time ?? 'DAY'}`, o.data.summary as string | undefined].filter(Boolean).join(' · ') });
         settle(d);
@@ -617,6 +621,8 @@ export interface Codex {
   done: { id: string; name: string }[];
   /** Characters met (heard speak) who have a codex entry, in the order met. */
   characters: { id: string; name: string; text: string }[];
+  /** Locations visited that have a codex entry, in the order visited. */
+  locations: { id: string; name: string; text: string }[];
   /** Items found that have a codex entry, in the order found, with how many are carried now. */
   items: { id: string; name: string; text: string; carried: number }[];
   /** Mechanics available, in the order they became available: how to use each. */
@@ -629,15 +635,16 @@ export interface Codex {
   quests: number;
   /** Characters with a codex entry (the others stay out of it). */
   charactersTotal: number;
-  /** Items with a codex entry. */
+  /** Locations and items with a codex entry. */
+  locationsTotal: number;
   itemsTotal: number;
   mechanicsTotal: number;
   encountersTotal: number;
   loreTotal: number;
 }
 
-/** A character's or item's codex entry, or undefined for anything else (or one without an entry). */
-const codexEntry = (o: StoryObject | undefined): string | undefined => ((o?.type === 'character' || o?.type === 'inventory') && String(o.data.codex ?? '').trim() ? String(o.data.codex).trim() : undefined);
+/** A character's, location's or item's codex entry, or undefined for anything else (or one without an entry). */
+const codexEntry = (o: StoryObject | undefined): string | undefined => ((o?.type === 'character' || o?.type === 'environment' || o?.type === 'inventory') && String(o.data.codex ?? '').trim() ? String(o.data.codex).trim() : undefined);
 
 /** Encounters met, in the order met (one won counts as met). */
 const metOf = (world: PlayWorld): string[] => [...new Set([...Object.keys(world.met).filter((id) => world.met[id]), ...Object.keys(world.won).filter((id) => world.won[id])])];
@@ -652,6 +659,9 @@ export const codexOf = (project: Project, world: PlayWorld): Codex => {
     done: quests.filter((id) => world.quests[id] === 'done').map((id) => ({ id, name: name(project, id) })),
     characters: Object.keys(world.metCharacters)
       .filter((id) => world.metCharacters[id] && codexEntry(project.objects[id]))
+      .map((id) => ({ id, name: name(project, id), text: codexEntry(project.objects[id])! })),
+    locations: Object.keys(world.been)
+      .filter((id) => world.been[id] && codexEntry(project.objects[id]))
       .map((id) => ({ id, name: name(project, id), text: codexEntry(project.objects[id])! })),
     items: Object.keys(world.found)
       .filter((id) => world.found[id] && codexEntry(project.objects[id]))
@@ -670,6 +680,7 @@ export const codexOf = (project: Project, world: PlayWorld): Codex => {
       .map((id) => ({ id, name: name(project, id), text: project.objects[id]!.notes })),
     quests: all.filter((o) => o.type === 'quest').length,
     charactersTotal: all.filter((o) => o.type === 'character' && codexEntry(o)).length,
+    locationsTotal: all.filter((o) => o.type === 'environment' && codexEntry(o)).length,
     itemsTotal: all.filter((o) => o.type === 'inventory' && codexEntry(o)).length,
     mechanicsTotal: all.filter((o) => o.type === 'mechanic').length,
     encountersTotal: all.filter((o) => o.type === 'encounter').length,
@@ -693,6 +704,12 @@ export const codexText = (project: Project, world: PlayWorld): string => {
     if (!c.characters.length) characters += '\nNone yet.';
     for (const ch of c.characters) characters += `\n\n${ch.name.toUpperCase()}\n${ch.text}`;
     parts.push(characters);
+  }
+  if (c.locationsTotal) {
+    let locations = `LOCATIONS · ${c.locations.length} of ${c.locationsTotal} visited`;
+    if (!c.locations.length) locations += '\nNone yet.';
+    for (const l of c.locations) locations += `\n\n${l.name.toUpperCase()}\n${l.text}`;
+    parts.push(locations);
   }
   if (c.itemsTotal) {
     let items = `ITEMS · ${c.items.length} of ${c.itemsTotal} found`;
@@ -722,10 +739,11 @@ export const codexText = (project: Project, world: PlayWorld): string => {
   return ['CODEX', ...parts].join('\n\n');
 };
 
-/** How far the codex has come (quests started and done, characters met, items found, mechanics available, encounters met and won, lore found), for counting what is new since it was read. */
+/** How far the codex has come (quests started and done, characters met, locations visited, items found, mechanics available, encounters met and won, lore found), for counting what is new since it was read. */
 export const codexProgress = (project: Project, world: PlayWorld): number =>
   Object.keys(world.metCharacters).filter((id) => world.metCharacters[id] && codexEntry(project.objects[id])).length +
   Object.keys(world.found).filter((id) => world.found[id] && codexEntry(project.objects[id])).length +
+  Object.keys(world.been).filter((id) => world.been[id] && codexEntry(project.objects[id])).length +
   Object.keys(world.lore).filter((id) => world.lore[id]).length +
   metOf(world).length + Object.keys(world.won).filter((id) => world.won[id]).length +
   Object.keys(world.mechanics).filter((id) => world.mechanics[id]).length + Object.values(world.quests).reduce((n, q) => n + (q === 'done' ? 2 : 1), 0);

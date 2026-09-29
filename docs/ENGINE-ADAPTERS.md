@@ -84,7 +84,8 @@ the studio's play-through:
   buttons, and have a codex: press C, or the Codex button (which counts what's
   new), for the quest log (quests under way with their goals, then those done),
   the characters met (anyone with a *Codex entry* in the Bible, once they have
-  spoken a line), the items found (any item with a *Codex entry*, once the
+  spoken a line), the locations visited (any location with a *Codex entry*,
+  once a scene set there has played), the items found (any item with a *Codex entry*, once the
   player has held it, marked while carried), the mechanics available (their controls and description), the encounters
   met (their enemies and weakness, and whether they were won) and the lore
   found so far, in the order found, with its text. The game state keeps the
@@ -96,7 +97,11 @@ the studio's play-through:
   and `Story.CharacterCodex`; Unreal `GetMetCharacters` and `OnCharacterMet`.
   And the items found: Godot `items_found()` and `item_found` (entries in
   `VCGSRules.ITEMS`); Unity `FoundItems`, `ItemFound` and `Story.ItemCodex`;
-  Unreal `GetFoundItems` and `OnItemFound`.
+  Unreal `GetFoundItems` and `OnItemFound`. And the locations visited: Godot
+  `visited_locations()` and `location_visited` (entries in
+  `VCGSRules.LOCATIONS`); Unity `VisitedLocations`, `LocationVisited` and
+  `Story.LocationCodex`; Unreal `GetVisitedLocations` and `OnLocationVisited`.
+  Each scene says where it is set (`location` in the IR).
   Unity has the
   same codex as `Codex` (plain C#) and a `VcgsCodex` screen to put next to
   `VcgsGame`; Unreal as `vcgs::Codex`, `GetCodexText` / `GetCodexNewCount` on

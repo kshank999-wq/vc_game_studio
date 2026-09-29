@@ -373,18 +373,18 @@ describe('effects that complete quests and make mechanics available', () => {
 });
 
 describe('the codex', () => {
-  it('reads the same as the engines\' codex: the quest log, the characters met, the items found, the mechanics, the encounters met, then the lore found', async () => {
+  it('reads the same as the engines\' codex: the quest log, the characters met, the locations visited, the items found, the mechanics, the encounters met, then the lore found', async () => {
     const { codexText, codexProgress } = await import('../play');
-    expect(codexText(p, startWorld(p))).toBe('CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nITEMS · 0 of 1 found\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nENCOUNTERS · 0 met, 0 won\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet.');
+    expect(codexText(p, startWorld(p))).toBe('CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 0 of 1 found\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nENCOUNTERS · 0 met, 0 won\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet.');
     // SC-01 lights the lantern at once.
     const start = startPlay(p);
     expect(codexText(p, start.world)).toContain('MECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water');
     const atVault = toTheVault(p);
     expect(codexText(p, atVault.world)).toBe(
-      'CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nCHARACTERS · 1 of 1 met\n\nMARA\nA guide who knows the flooded caves better than anyone alive. She carries the lantern.\n\nITEMS · 1 of 1 found\n\nVAULT KEY (carried)\nA heavy bronze key, green with age, stamped with the Order’s wave.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.',
+      'CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nCHARACTERS · 1 of 1 met\n\nMARA\nA guide who knows the flooded caves better than anyone alive. She carries the lantern.\n\nLOCATIONS · 1 of 1 visited\n\nVAULT CHAMBER\nA drowned hall under the old city, its bronze door sealed by the Order.\n\nITEMS · 1 of 1 found\n\nVAULT KEY (carried)\nA heavy bronze key, green with age, stamped with the Order’s wave.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.',
     );
-    // Since the start: Mara heard, the key found, the eels met and beaten, the quest started and the lore found (the oil was there already).
-    expect(codexProgress(p, atVault.world) - codexProgress(p, start.world)).toBe(6);
+    // Since the start: Mara heard, the chamber visited, the key found, the eels met and beaten, the quest started and the lore found (the oil was there already).
+    expect(codexProgress(p, atVault.world) - codexProgress(p, start.world)).toBe(7);
     const end = playThrough(p);
     expect(codexText(p, end.world)).toContain('QUESTS · 0 under way, 1 done\n• Open the vault (done)');
     // The key is spent at the door, but stays in the codex, no longer carried.
@@ -414,6 +414,16 @@ describe('the codex', () => {
     // Without an entry the key stays out of the codex (and the section with it).
     const plain = { ...p, objects: { ...p.objects, [key]: { ...p.objects[key]!, data: { ...p.objects[key]!.data, codex: '' } } } };
     expect(codexText(plain, two)).not.toContain('ITEMS');
+  });
+
+  it('lists a location once a scene set there plays, and only one with a codex entry', async () => {
+    const { codexText } = await import('../play');
+    const chamber = id(p, 'Vault Chamber');
+    expect(startPlay(p).world.been[chamber]).toBeUndefined();
+    const there = toTheVault(p).world;
+    expect(there.been[chamber]).toBe(true);
+    const plain = { ...p, objects: { ...p.objects, [chamber]: { ...p.objects[chamber]!, data: { ...p.objects[chamber]!.data, codex: '' } } } };
+    expect(codexText(plain, there)).not.toContain('LOCATIONS');
   });
 
   it('lists an encounter once met, before it is won, and once however often it is retried', async () => {

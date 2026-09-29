@@ -184,7 +184,7 @@ describe('the Unreal adapter', () => {
     expect(characters[0]).toBe('---,Key,Code,DisplayName,Description,Role,Arc,Color');
     expect(characters.find((l) => l.startsWith('mara,'))).toContain('(R=0.851,G=0.376,B=0.478,A=1.000)');
     // A cell with a comma or a line break is quoted as CSV.
-    expect(file('Content/VCGS/Generated/DataTables/Locations.csv')).toContain('"lighting: Lantern only\nambience: Dripping, a low echo"');
+    expect(file('Content/VCGS/Generated/DataTables/Locations.csv')).toContain('"codex: A drowned hall under the old city, its bronze door sealed by the Order.\nlighting: Lantern only\nambience: Dripping, a low echo"');
     expect(file('Content/VCGS/Generated/DataTables/Shots.csv').trim().split('\n')).toHaveLength(4);
     expect(file('Content/VCGS/Generated/import_datatables.py')).toContain('"Characters": "/Script/VCGS.VcgsCharacterRow",');
     expect(JSON.parse(file('Plugins/VCGS/VCGS.uplugin')).Modules[0]).toEqual({ Name: 'VCGS', Type: 'Runtime', LoadingPhase: 'Default' });

@@ -211,6 +211,7 @@ export const storySchema = () => ({
         slug: str,
         summary: str,
         contents: { type: 'object', additionalProperties: strings },
+        location: { type: ['string', 'null'], description: 'The key of the location it is set in (one of `locations`); playing the scene visits it.' },
         main: { type: 'array', items: ref('event') },
         branches: { type: 'array', items: obj({ label: str, from: num, events: { type: 'array', items: ref('event') }, rejoin: { type: ['number', 'null'] }, when: ref('rule'), effects: ref('effects'), after: { enum: ['gone', 'locked'] }, hide: { type: 'boolean' } }, ['label', 'from', 'events', 'rejoin']) },
         next: { type: ['string', 'null'] },

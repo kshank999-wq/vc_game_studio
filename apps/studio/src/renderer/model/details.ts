@@ -31,6 +31,7 @@ export const FIELDS: Partial<Record<ObjectType, readonly FieldSpec[]>> = {
     { key: 'appearance', label: 'Appearance', multiline: true, placeholder: 'Ankle-deep water, green bronze door' },
     { key: 'lighting', label: 'Lighting / weather', placeholder: 'Lantern only' },
     { key: 'ambience', label: 'Ambient audio', placeholder: 'Dripping, a low echo' },
+    { key: 'codex', label: 'Codex entry (as the player reads it, once there)', multiline: true, placeholder: 'A drowned hall beneath the old city' },
     { key: 'traversal', label: 'Traversable areas / obstacles', multiline: true },
   ],
   inventory: [

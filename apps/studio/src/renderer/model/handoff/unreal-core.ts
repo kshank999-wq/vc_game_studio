@@ -254,6 +254,7 @@ namespace vcgs
             Index("flags", Flags);
             Index("characters", Characters);
             Index("items", ItemDefs);
+            Index("locations", LocationDefs);
             Index("cinematics", Cinematics);
             Index("quests", Quests);
             Index("encounters", Encounters);
@@ -271,6 +272,15 @@ namespace vcgs
         }
         /** What the codex says about a character once met ("" keeps them out of it). */
         std::string CharacterCodex(const std::string& key) const { return Find(Characters, key)["codex"].Str(); }
+        /** What the codex says about a location once visited ("" keeps it out of it). */
+        std::string LocationCodex(const std::string& key) const { return Find(LocationDefs, key)["fields"]["codex"].Str(); }
+        /** How many locations have a codex entry. */
+        size_t CodexLocations() const
+        {
+            size_t n = 0;
+            for (const auto& l : LocationDefs) if (!(*l.second)["fields"]["codex"].Str().empty()) n++;
+            return n;
+        }
         /** What the codex says about an item once found ("" keeps it out of it). */
         std::string ItemCodex(const std::string& key) const { return Find(ItemDefs, key)["fields"]["codex"].Str(); }
         /** How many items have a codex entry. */
@@ -296,6 +306,8 @@ namespace vcgs
         std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines, Quests, Encounters, Lore, Mechanics;
         /** Inventory items, by key: name, notes and fields (the codex entry is fields.codex). */
         std::map<std::string, const Value*> ItemDefs;
+        /** Locations (environments), by key: name, notes and fields (the codex entry is fields.codex). */
+        std::map<std::string, const Value*> LocationDefs;
 
     private:
         void Index(const char* list, std::map<std::string, const Value*>& into)
@@ -343,6 +355,8 @@ namespace vcgs
         std::vector<std::string> MetCharacters;
         /** Items the player has ever held, in the order found (carried or not now). */
         std::vector<std::string> FoundItems;
+        /** Locations the player has been to (a scene set there played), in the order visited. */
+        std::vector<std::string> VisitedLocations;
         /** Lore the player has come across, in the order they found it (the codex). */
         std::vector<std::string> KnownLore;
         /** Mechanics the player can use now. */
@@ -359,11 +373,12 @@ namespace vcgs
         std::function<void(const std::string&)> OnEncounterWon;
         std::function<void(const std::string&)> OnCharacterMet;
         std::function<void(const std::string&)> OnItemFound;
+        std::function<void(const std::string&)> OnLocationVisited;
 
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -428,6 +443,13 @@ namespace vcgs
         void RememberChoice(const std::string& choice, const std::string& option) { Chosen[choice] = option; Changed(); }
         void MarkSolved(const std::string& puzzle) { if (Solved.insert(puzzle).second) Changed(); }
         void Visit(const std::string& scene) { if (Visited.insert(scene).second) Changed(); }
+        /** The player is at a location (the scene player says so as a scene set there starts). */
+        void VisitLocation(const std::string& location)
+        {
+            if (location.empty() || std::find(VisitedLocations.begin(), VisitedLocations.end(), location) != VisitedLocations.end()) return;
+            VisitedLocations.push_back(location);
+            if (OnLocationVisited) OnLocationVisited(location);
+        }
         void MarkPicked(const std::string& option) { Picked.insert(option); }
         bool WasPicked(const std::string& option) const { return Picked.count(option) > 0; }
 
@@ -774,6 +796,22 @@ namespace vcgs
                 if (!met) cast += "\nNone yet.";
                 parts.push_back(cast + entries);
             }
+            if (const size_t withEntry = game.StoryData.CodexLocations())
+            {
+                std::string entries;
+                size_t been = 0;
+                for (const std::string& key : game.VisitedLocations)
+                {
+                    const std::string codex = game.StoryData.LocationCodex(key);
+                    if (codex.empty()) continue;
+                    been++;
+                    const std::string name = Story::Find(game.StoryData.LocationDefs, key)["name"].Str();
+                    entries += "\n\n" + Upper(name.empty() ? key : name) + "\n" + codex;
+                }
+                std::string places = "LOCATIONS · " + std::to_string(been) + " of " + std::to_string(withEntry) + " visited";
+                if (!been) places += "\nNone yet.";
+                parts.push_back(places + entries);
+            }
             if (const size_t withEntry = game.StoryData.CodexItems())
             {
                 std::string entries;
@@ -871,6 +909,7 @@ namespace vcgs
             int n = static_cast<int>(game.KnownLore.size() + game.MechanicOrder.size() + game.MetEncounters.size() + game.Won.size());
             for (const std::string& c : game.MetCharacters) if (!game.StoryData.CharacterCodex(c).empty()) n++;
             for (const std::string& i : game.FoundItems) if (!game.StoryData.ItemCodex(i).empty()) n++;
+            for (const std::string& l : game.VisitedLocations) if (!game.StoryData.LocationCodex(l).empty()) n++;
             for (const auto& q : game.Quests) n += q.second == "done" ? 2 : 1;
             return n;
         }
@@ -964,6 +1003,7 @@ namespace vcgs
         void Start()
         {
             game.Visit(key);
+            game.VisitLocation(scene["location"].Str());
             track = &scene["main"];
             index = -1;
             branch = -1;

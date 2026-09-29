@@ -111,6 +111,7 @@ export const sunkenVault = (): Project => {
     return made.id;
   };
   const chamber = add('environment', 'Vault Chamber');
+  p = setField(p, chamber, 'codex', 'A drowned hall under the old city, its bronze door sealed by the Order.');
   p = setSceneData(p, vaultDoor, { intExt: 'INT.', time: 'NIGHT', locationId: chamber, summary: 'Drain the seam, turn the key.', purpose: 'Open the vault', status: 'inProgress' });
   p = setField(p, chamber, 'lighting', 'Lantern only');
   p = setField(p, chamber, 'ambience', 'Dripping, a low echo');

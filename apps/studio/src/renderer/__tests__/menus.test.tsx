@@ -175,8 +175,8 @@ describe('play-through', () => {
     // Finding the key starts the quest, and its seal tells the Order's story.
     expect(container.querySelector('.play-quest')?.textContent).toContain('New quest: Open the vault');
     expect(container.querySelector('.play-lore')?.textContent).toContain('Discovered: The Drowned Order');
-    // The codex counts those, Mara, the key, the lantern's oil and the eels (met, then beaten), and opens on the quest log, the characters, the items, the mechanics, the encounters and the lore (C, or its button).
-    expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex · 7 new');
+    // The codex counts those, Mara, the chamber, the key, the lantern's oil and the eels (met, then beaten), and opens on the quest log, the characters, the locations, the items, the mechanics, the encounters and the lore (C, or its button).
+    expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex · 8 new');
     act(() => {
       fireEvent.keyDown(window, { key: 'c' });
     });
@@ -185,6 +185,7 @@ describe('play-through', () => {
     expect(codex.textContent).toContain('Lantern oil · Hold to raise the lantern');
     expect(codex.textContent).toContain('MaraA guide who knows the flooded caves');
     expect(codex.textContent).toContain('Vault Key (carried)A heavy bronze key');
+    expect(codex.textContent).toContain('Vault ChamberA drowned hall under the old city');
     expect(codex.textContent).toContain('Eel swarm (won)Eels, a dozen or so · weak to lantern light');
     expect(codex.textContent).toContain('The Drowned OrderRiver priests who sealed the vault');
     expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex');

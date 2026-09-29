@@ -258,6 +258,8 @@ export interface IrScene {
   slug: string;
   summary: string;
   contents: Record<string, string[]>;
+  /** The key of the location (environment) it is set in, if any: playing the scene visits it. */
+  location: string | null;
   main: IrEvent[];
   branches: { label: string; from: number; events: IrEvent[]; rejoin: number | null; when?: IrRule; effects?: IrEffect[]; after?: 'gone' | 'locked'; hide?: boolean }[];
   next: string | null;
@@ -417,6 +419,7 @@ export const buildIR = (project: Project): HandoffIR => {
       contents: Object.fromEntries(
         CATEGORIES.filter((c) => c.key !== 'dialogue').map((c) => [c.key, elementsIn(project, s.id, c.key).map((o) => key(o.id)!)]),
       ),
+      location: key(s.data.locationId as string | undefined),
       main: main.map(toEvent),
       branches: tracks.slice(1).map((t) => ({
         label: t.branch!.label,
