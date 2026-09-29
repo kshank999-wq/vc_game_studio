@@ -8,6 +8,7 @@ export const VCGS_CORE_H = String.raw`// VCGS Runtime for Unreal: the story's lo
 // The same for every project; safe to commit. No exceptions, no RTTI.
 #pragma once
 
+#include <algorithm>
 #include <cstdlib>
 #include <functional>
 #include <map>
@@ -313,6 +314,8 @@ namespace vcgs
         std::vector<std::string> QuestOrder;
         /** Encounters won. */
         std::set<std::string> Won;
+        /** Encounters the player has come to, in the order met (the codex). */
+        std::vector<std::string> MetEncounters;
         /** Lore the player has come across, in the order they found it (the codex). */
         std::vector<std::string> KnownLore;
         /** Mechanics the player can use now. */
@@ -325,11 +328,13 @@ namespace vcgs
         std::function<void(const std::string&)> OnQuestCompleted;
         std::function<void(const std::string&)> OnLoreDiscovered;
         std::function<void(const std::string&)> OnMechanicAvailable;
+        std::function<void(const std::string&)> OnEncounterMet;
+        std::function<void(const std::string&)> OnEncounterWon;
 
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -423,7 +428,21 @@ namespace vcgs
         }
 
         bool WasWon(const std::string& encounter) const { return Won.count(encounter) > 0; }
-        void MarkWon(const std::string& encounter) { if (Won.insert(encounter).second) Changed(); }
+        void MarkWon(const std::string& encounter)
+        {
+            if (!Won.insert(encounter).second) return;
+            MeetEncounter(encounter);
+            if (OnEncounterWon) OnEncounterWon(encounter);
+            Changed();
+        }
+        bool HasMet(const std::string& encounter) const { return std::find(MetEncounters.begin(), MetEncounters.end(), encounter) != MetEncounters.end(); }
+        /** The player has come to an encounter (the scene flow says so as it starts). */
+        void MeetEncounter(const std::string& encounter)
+        {
+            if (HasMet(encounter)) return;
+            MetEncounters.push_back(encounter);
+            if (OnEncounterMet) OnEncounterMet(encounter);
+        }
 
     private:
         std::vector<std::pair<int, std::function<void()>>> listeners;
@@ -706,6 +725,23 @@ namespace vcgs
                 }
                 parts.push_back(mechanics);
             }
+            if (!game.StoryData.Encounters.empty())
+            {
+                std::string entries;
+                size_t won = 0;
+                for (const std::string& key : game.MetEncounters)
+                {
+                    const Value& e = Story::Find(game.StoryData.Encounters, key);
+                    const std::string name = e["name"].Str().empty() ? key : e["name"].Str();
+                    const std::string enemies = e["fields"]["enemies"].Str();
+                    const std::string weakness = e["fields"]["weakness"].Str();
+                    if (game.WasWon(key)) won++;
+                    entries += "\n\n" + Upper(name) + (game.WasWon(key) ? " (won)" : "") + (enemies.empty() ? "" : "\nEnemies: " + enemies) + (weakness.empty() ? "" : "\nWeak to: " + weakness) + "\n" + e["notes"].Str();
+                }
+                std::string encounters = "ENCOUNTERS · " + std::to_string(game.MetEncounters.size()) + " met, " + std::to_string(won) + " won";
+                if (game.MetEncounters.empty()) encounters += "\nNone yet.";
+                parts.push_back(encounters + entries);
+            }
             if (!game.StoryData.Lore.empty())
             {
                 std::string lore = "LORE · " + std::to_string(game.KnownLore.size()) + " of " + std::to_string(game.StoryData.Lore.size()) + " found";
@@ -752,7 +788,7 @@ namespace vcgs
 
         int Progress() const
         {
-            int n = static_cast<int>(game.KnownLore.size() + game.MechanicOrder.size());
+            int n = static_cast<int>(game.KnownLore.size() + game.MechanicOrder.size() + game.MetEncounters.size() + game.Won.size());
             for (const auto& q : game.Quests) n += q.second == "done" ? 2 : 1;
             return n;
         }
@@ -901,7 +937,7 @@ namespace vcgs
                 if (ev.Has("ends")) AwaitEnd(ev["ends"]);
             }
             else if (kind == "choice") { std::vector<std::string> options = OptionsAt(index); if (OnChoice) OnChoice(ev["ref"].Str(), options); }
-            else if (kind == "encounter") { if (OnEncounter) OnEncounter(ev["ref"].Str(), Rules::CanWin(ev["ref"].Str(), game)); }
+            else if (kind == "encounter") { if (!ev["ref"].Str().empty()) game.MeetEncounter(ev["ref"].Str()); if (OnEncounter) OnEncounter(ev["ref"].Str(), Rules::CanWin(ev["ref"].Str(), game)); }
             else if (kind == "trigger")
             {
                 // A trigger on the timeline fires as it is reached, and the scene moves on.

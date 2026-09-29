@@ -111,7 +111,7 @@ const EntryView = ({ entry }: { entry: Entry }) => {
   }
 };
 
-/** The codex as the player would read it: the quest log, then the lore found. */
+/** The codex as the player would read it: the quest log, the mechanics, the encounters met, then the lore found. */
 const CodexPanel = ({ project, world, onClose }: { project: Project; world: PlayWorld; onClose: () => void }) => {
   const c = codexOf(project, world);
   return (
@@ -158,6 +158,26 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
                 {m.controls && <span className="play-note"> · {m.controls}</span>}
               </h4>
               <p>{m.text}</p>
+            </article>
+          ))}
+        </section>
+      )}
+      {c.encountersTotal > 0 && (
+        <section aria-label="Encounters">
+          <h3>
+            Encounters <span className="play-note">· {c.encounters.length} met, {c.encounters.filter((e) => e.won).length} won</span>
+          </h3>
+          {!c.encounters.length && <p className="play-note">None yet.</p>}
+          {c.encounters.map((e) => (
+            <article key={e.id} className="play-codex-lore play-codex-encounter">
+              <h4>
+                <Symbol type="encounter" size={11} /> {e.name}
+                {e.won && <span className="play-note"> (won)</span>}
+              </h4>
+              {(e.enemies || e.weakness) && (
+                <p className="play-note">{[e.enemies, e.weakness && `weak to ${e.weakness.toLowerCase()}`].filter(Boolean).join(' · ')}</p>
+              )}
+              <p>{e.text}</p>
             </article>
           ))}
         </section>

@@ -227,6 +227,8 @@ public:
     /** "" (not started), "active" or "done". Quests start and complete by their rules. */
     UFUNCTION(BlueprintPure, Category = "VCGS|State") FString GetQuestState(const FString& Quest) const;
     UFUNCTION(BlueprintPure, Category = "VCGS|State") bool WasWon(const FString& Encounter) const;
+    /** Encounters the player has come to, in the order met (won or not): the codex. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|State") TArray<FString> GetMetEncounters() const;
     /** Lore the player has come across, in the order they found it: the codex. */
     UFUNCTION(BlueprintPure, Category = "VCGS|State") TArray<FString> GetKnownLore() const;
     UFUNCTION(BlueprintPure, Category = "VCGS|State") bool KnowsLore(const FString& Lore) const;
@@ -240,14 +242,16 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnLoreDiscovered;
 
-    /** The codex in words: the quest log, then the lore found (AVcgsCodexHUD draws it). */
+    /** The codex in words: the quest log, the mechanics, the encounters met, then the lore found (AVcgsCodexHUD draws it). */
     UFUNCTION(BlueprintPure, Category = "VCGS|Codex") FString GetCodexText() const;
-    /** Quest updates and lore found since the codex was last read. */
+    /** Quest, mechanic, encounter and lore updates since the codex was last read. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 GetCodexNewCount();
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") void MarkCodexRead();
     /** The core's codex, for C++ (null until a story is loaded). */
     vcgs::Codex* CodexState() const { return CodexData.get(); }
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnMechanicAvailable;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnEncounterMet;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnEncounterWon;
 
     /** Where a graph node goes next: its first route whose conditions hold, else on along the spine. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") FString Onward(const FString& Node);
@@ -325,6 +329,8 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     Game->OnQuestCompleted = [this](const std::string& Quest) { OnQuestCompleted.Broadcast(ToF(Quest)); };
     Game->OnLoreDiscovered = [this](const std::string& Lore) { OnLoreDiscovered.Broadcast(ToF(Lore)); };
     Game->OnMechanicAvailable = [this](const std::string& Mechanic) { OnMechanicAvailable.Broadcast(ToF(Mechanic)); };
+    Game->OnEncounterMet = [this](const std::string& Encounter) { OnEncounterMet.Broadcast(ToF(Encounter)); };
+    Game->OnEncounterWon = [this](const std::string& Encounter) { OnEncounterWon.Broadcast(ToF(Encounter)); };
     return true;
 }
 
@@ -352,6 +358,12 @@ bool UVcgsSubsystem::WasWon(const FString& Encounter) const { return Game && Gam
 FString UVcgsSubsystem::GetCodexText() const { return CodexData ? ToF(CodexData->Text()) : FString(); }
 int32 UVcgsSubsystem::GetCodexNewCount() { return CodexData ? CodexData->New() : 0; }
 void UVcgsSubsystem::MarkCodexRead() { if (CodexData) CodexData->MarkRead(); }
+TArray<FString> UVcgsSubsystem::GetMetEncounters() const
+{
+    TArray<FString> Met;
+    if (Game) for (const std::string& Encounter : Game->MetEncounters) Met.Add(ToF(Encounter));
+    return Met;
+}
 TArray<FString> UVcgsSubsystem::GetKnownLore() const
 {
     TArray<FString> Known;

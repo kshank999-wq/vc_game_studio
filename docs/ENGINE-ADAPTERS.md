@@ -83,8 +83,12 @@ the studio's play-through:
   scene. Godot's placeholder scenes stand in for the fight with Win and Lose
   buttons, and have a codex: press C, or the Codex button (which counts what's
   new), for the quest log (quests under way with their goals, then those done),
-  the mechanics available (their controls and description) and the lore found
-  so far, in the order found, with its text. Unity has the
+  the mechanics available (their controls and description), the encounters
+  met (their enemies and weakness, and whether they were won) and the lore
+  found so far, in the order found, with its text. The game state keeps the
+  encounters met in order: Godot `met_encounters()` with `encounter_met` and
+  `encounter_won`; Unity `MetEncounters`, `EncounterMet` and `EncounterWon`;
+  Unreal `GetMetEncounters`, `OnEncounterMet` and `OnEncounterWon`. Unity has the
   same codex as `Codex` (plain C#) and a `VcgsCodex` screen to put next to
   `VcgsGame`; Unreal as `vcgs::Codex`, `GetCodexText` / `GetCodexNewCount` on
   the subsystem and an `AVcgsCodexHUD` to set as the game mode's HUD. C opens

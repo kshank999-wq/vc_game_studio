@@ -152,10 +152,12 @@ int main()
         silt.OnEncounter = [&](const std::string& e, bool canWin) { encounters.push_back(e + (canWin ? "" : " (can't win)")); };
         silt.OnGameOver = [&](const std::string& e) { over.push_back(e); };
         vcgs::Codex codex(fresh);
-        if (codex.Text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet." || codex.New() != 0) Fail("the codex should start empty, got " + codex.Text());
+        if (codex.Text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nENCOUNTERS · 0 met, 0 won\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet." || codex.New() != 0) Fail("the codex should start empty, got " + codex.Text());
         silt.Start();
         silt.Lose();
         std::printf("encounter: %s\n", Join(encounters, ", ").c_str());
+        // Met once, however often it is played again; not won yet.
+        if (fresh.MetEncounters.size() != 1 || fresh.WasWon(Encounters::EelSwarm) || codex.New() != 1 || codex.Text().find("ENCOUNTERS · 1 met, 0 won\n\nEEL SWARM\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\n") == std::string::npos) Fail("the codex should show the eels met, not won, 1 new, got " + codex.Text());
         // The eels can only be beaten once the lantern's oil is in play (a mechanic condition).
         const std::string notYet = std::string(Encounters::EelSwarm) + " (can't win)";
         if (Join(encounters, ",") != notYet + "," + notYet || !over.empty()) Fail("losing the eels should play them again, not yet winnable, got " + Join(encounters, ","));
@@ -164,10 +166,10 @@ int main()
         if (!silt.Win()) Fail("with the lantern's oil, a win against the eels should count");
         if (!fresh.WasWon(Encounters::EelSwarm) || !fresh.HasItem(Items::VaultKey)) Fail("winning should mark the eels won, and the scene go on to find the key");
         if (fresh.QuestState(Quests::OpenTheVault) != "active" || !fresh.KnowsLore(Lore::TheDrownedOrder)) Fail("finding the key should start the quest and reveal the lore");
-        // The codex: the quest log and the lore, and what is new since it was read.
+        // The codex: the quest log, the mechanics, the encounters and the lore, and what is new since it was read.
         const std::string text = codex.Text();
         std::printf("codex: %s · new %d\n", text.substr(0, 80).c_str(), codex.New());
-        if (codex.ButtonText("C") != "Codex (C) · 3 new" || text.rfind("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault", 0) != 0) Fail("the codex should show the quest under way, the lantern's oil and The Drowned Order, 3 new, got " + text);
+        if (codex.ButtonText("C") != "Codex (C) · 5 new" || text.rfind("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault", 0) != 0) Fail("the codex should show the quest under way, the lantern's oil, the eels won and The Drowned Order, 5 new, got " + text);
         codex.MarkRead();
         vcgs::Rules::CompleteQuest(Quests::OpenTheVault, fresh);
         if (codex.ButtonText("C") != "Codex (C) · 1 new" || codex.Text().find("QUESTS · 0 under way, 1 done\n• Open the vault (done)") == std::string::npos) Fail("the quest log should show the quest done, 1 new, got " + codex.Text());

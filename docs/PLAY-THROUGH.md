@@ -46,7 +46,9 @@ monitor while you fix it on another.
 - **The codex** (the Codex button, or C) shows what the player has found, as
   the engines' codex screens do: the quest log (quests under way with their
   goals, then those done), the mechanics available (with their controls and
-  description) and the lore found, in the order found, with its text.
+  description), the encounters met (their enemies and weakness, and whether
+  they were won; one lost still shows, so its weakness is there to read) and
+  the lore found, in the order found, with its text.
   The button counts what's new since it was last opened; Escape closes it.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.

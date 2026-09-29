@@ -23,6 +23,8 @@ export interface PlayWorld extends PlayState {
   picked: Record<string, number>;
   /** Encounters won. */
   won: Record<string, boolean>;
+  /** Encounters the player has come to, in the order met (for the codex). */
+  met: Record<string, boolean>;
 }
 
 export type { QuestState };
@@ -100,7 +102,7 @@ const MAX_STEPS = 2000;
 // ---------------------------------------------------------------- the world
 
 export const startWorld = (project: Project): PlayWorld => {
-  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {}, lore: {}, mechanics: {} };
+  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {}, met: {}, lore: {}, mechanics: {} };
   for (const o of Object.values(project.objects)) {
     const initial = initialState(o);
     if (o.type === 'state' && initial !== undefined) world.flags[o.id] = initial;
@@ -376,6 +378,7 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
           break;
         }
         d.log.push({ kind: 'encounter', text: eventTitle(project, event), detail: [o.data.enemies, o.data.weakness && `weak to ${String(o.data.weakness).toLowerCase()}`].filter(Boolean).join(' · ') || undefined });
+        if (!d.world.met[o.id]) d.world = { ...d.world, met: { ...d.world.met, [o.id]: true } };
         next = { ...cursor, at: 'encounter' };
         break;
       }
@@ -532,7 +535,7 @@ export const choose = (project: Project, play: Play, index: number): Play => {
     const onward: Cursor = { at: 'event', sceneId: c.sceneId, track: c.track, index: c.index + 1 };
     if (index === 0) {
       d.log.push({ kind: 'picked', text: `Won: ${o.name}` });
-      d.world = { ...d.world, won: { ...d.world.won, [o.id]: true } };
+      d.world = { ...d.world, won: { ...d.world.won, [o.id]: true }, met: d.world.met[o.id] ? d.world.met : { ...d.world.met, [o.id]: true } };
       doEffects(d, effectsOf(o));
       settle(d);
       return run(project, { ...play, world: d.world, log: d.log, cursor: onward });
@@ -606,13 +609,19 @@ export interface Codex {
   done: { id: string; name: string }[];
   /** Mechanics available, in the order they became available: how to use each. */
   mechanics: { id: string; name: string; controls: string; text: string }[];
+  /** Encounters met, in the order met: who they are, what they are weak to, and whether they were won. */
+  encounters: { id: string; name: string; enemies: string; weakness: string; text: string; won: boolean }[];
   /** Lore found, in the order found, with its text. */
   lore: { id: string; name: string; text: string }[];
-  /** How many quests, mechanics and lore entries the project has (a section shows only when it has some). */
+  /** How many quests, mechanics, encounters and lore entries the project has (a section shows only when it has some). */
   quests: number;
   mechanicsTotal: number;
+  encountersTotal: number;
   loreTotal: number;
 }
+
+/** Encounters met, in the order met (one won counts as met). */
+const metOf = (world: PlayWorld): string[] => [...new Set([...Object.keys(world.met).filter((id) => world.met[id]), ...Object.keys(world.won).filter((id) => world.won[id])])];
 
 /** The codex as the player reads it, the same as the engines' codex screens show it. */
 export const codexOf = (project: Project, world: PlayWorld): Codex => {
@@ -625,11 +634,18 @@ export const codexOf = (project: Project, world: PlayWorld): Codex => {
     mechanics: Object.keys(world.mechanics)
       .filter((id) => world.mechanics[id] && known(id))
       .map((id) => ({ id, name: name(project, id), controls: String(project.objects[id]!.data.controls ?? ''), text: project.objects[id]!.notes })),
+    encounters: metOf(world)
+      .filter(known)
+      .map((id) => {
+        const o = project.objects[id]!;
+        return { id, name: o.name, enemies: String(o.data.enemies ?? ''), weakness: String(o.data.weakness ?? ''), text: o.notes, won: !!world.won[id] };
+      }),
     lore: Object.keys(world.lore)
       .filter((id) => world.lore[id] && known(id))
       .map((id) => ({ id, name: name(project, id), text: project.objects[id]!.notes })),
     quests: all.filter((o) => o.type === 'quest').length,
     mechanicsTotal: all.filter((o) => o.type === 'mechanic').length,
+    encountersTotal: all.filter((o) => o.type === 'encounter').length,
     loreTotal: all.filter((o) => o.type === 'lore').length,
   };
 };
@@ -651,6 +667,13 @@ export const codexText = (project: Project, world: PlayWorld): string => {
     for (const m of c.mechanics) mechanics += `\n\n${m.name.toUpperCase()}${m.controls ? `\nControls: ${m.controls}` : ''}\n${m.text}`;
     parts.push(mechanics);
   }
+  if (c.encountersTotal) {
+    let encounters = `ENCOUNTERS · ${c.encounters.length} met, ${c.encounters.filter((e) => e.won).length} won`;
+    if (!c.encounters.length) encounters += '\nNone yet.';
+    for (const e of c.encounters)
+      encounters += `\n\n${e.name.toUpperCase()}${e.won ? ' (won)' : ''}${e.enemies ? `\nEnemies: ${e.enemies}` : ''}${e.weakness ? `\nWeak to: ${e.weakness}` : ''}\n${e.text}`;
+    parts.push(encounters);
+  }
   if (c.loreTotal) {
     let lore = `LORE · ${c.lore.length} of ${c.loreTotal} found`;
     if (!c.lore.length) lore += '\nNothing found yet.';
@@ -660,9 +683,10 @@ export const codexText = (project: Project, world: PlayWorld): string => {
   return ['CODEX', ...parts].join('\n\n');
 };
 
-/** How far the codex has come (quests started and done, mechanics available, lore found), for counting what is new since it was read. */
+/** How far the codex has come (quests started and done, mechanics available, encounters met and won, lore found), for counting what is new since it was read. */
 export const codexProgress = (world: PlayWorld): number =>
   Object.keys(world.lore).filter((id) => world.lore[id]).length +
+  metOf(world).length + Object.keys(world.won).filter((id) => world.won[id]).length +
   Object.keys(world.mechanics).filter((id) => world.mechanics[id]).length + Object.values(world.quests).reduce((n, q) => n + (q === 'done' ? 2 : 1), 0);
 
 // ---------------------------------------------------------------- for the level's play mode

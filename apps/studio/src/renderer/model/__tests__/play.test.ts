@@ -373,19 +373,34 @@ describe('effects that complete quests and make mechanics available', () => {
 });
 
 describe('the codex', () => {
-  it('reads the same as the engines\' codex: the quest log, the mechanics, then the lore found', async () => {
+  it('reads the same as the engines\' codex: the quest log, the mechanics, the encounters met, then the lore found', async () => {
     const { codexText, codexProgress } = await import('../play');
-    expect(codexText(p, startWorld(p))).toBe('CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet.');
+    expect(codexText(p, startWorld(p))).toBe('CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nENCOUNTERS · 0 met, 0 won\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet.');
     // SC-01 lights the lantern at once.
     const start = startPlay(p);
     expect(codexText(p, start.world)).toContain('MECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water');
     const atVault = toTheVault(p);
     expect(codexText(p, atVault.world)).toBe(
-      'CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.',
+      'CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.',
     );
-    // Since the start: the quest started and the lore found (the oil was there already).
-    expect(codexProgress(atVault.world) - codexProgress(start.world)).toBe(2);
+    // Since the start: the eels met and beaten, the quest started and the lore found (the oil was there already).
+    expect(codexProgress(atVault.world) - codexProgress(start.world)).toBe(4);
     const end = playThrough(p);
     expect(codexText(p, end.world)).toContain('QUESTS · 0 under way, 1 done\n• Open the vault (done)');
+  });
+
+  it('lists an encounter once met, before it is won, and once however often it is retried', async () => {
+    const { codexText, codexProgress } = await import('../play');
+    // Without the lantern's oil the eels can't be beaten: lose, and they are met but not won.
+    const dark = { ...p, events: p.events.filter((e) => !(e.effects ?? []).some((x) => x.kind === 'enableMechanic')) };
+    let play = playToDecision(dark, choose(dark, playToDecision(dark, startPlay(dark)), 0));
+    expect(play.cursor.at).toBe('encounter');
+    const before = codexProgress(play.world);
+    expect(codexText(dark, play.world)).toContain('ENCOUNTERS · 1 met, 0 won\n\nEEL SWARM\nEnemies: Eels, a dozen or so\nWeak to: Lantern light');
+    play = choose(dark, play, 1);
+    play = choose(dark, play, 1);
+    expect(play.cursor.at).toBe('encounter');
+    expect(codexProgress(play.world)).toBe(before);
+    expect(codexText(dark, play.world)).toContain('ENCOUNTERS · 1 met, 0 won');
   });
 });

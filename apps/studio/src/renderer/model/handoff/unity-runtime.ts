@@ -287,6 +287,8 @@ namespace VCGS
         public readonly Dictionary<string, string> Quests = new Dictionary<string, string>();
         /// <summary>Encounters won.</summary>
         public readonly HashSet<string> Won = new HashSet<string>();
+        /// <summary>Encounters the player has come to, in the order met (the codex).</summary>
+        public readonly List<string> MetEncounters = new List<string>();
         /// <summary>Lore the player has come across, in the order they found it (the codex).</summary>
         public readonly List<string> KnownLore = new List<string>();
         /// <summary>Mechanics the player can use now.</summary>
@@ -301,6 +303,8 @@ namespace VCGS
         public event Action<string> QuestCompleted;
         public event Action<string> LoreDiscovered;
         public event Action<string> MechanicAvailable;
+        public event Action<string> EncounterMet;
+        public event Action<string> EncounterWon;
         public bool AutoRules = true;
         bool settling;
 
@@ -314,7 +318,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -418,7 +422,20 @@ namespace VCGS
 
         public void MarkWon(string encounter)
         {
-            if (Won.Add(encounter)) OnChanged();
+            if (!Won.Add(encounter)) return;
+            MeetEncounter(encounter);
+            EncounterWon?.Invoke(encounter);
+            OnChanged();
+        }
+
+        public bool HasMet(string encounter) => MetEncounters.Contains(encounter);
+
+        /// <summary>The player has come to an encounter (the scene flow says so as it starts).</summary>
+        public void MeetEncounter(string encounter)
+        {
+            if (HasMet(encounter)) return;
+            MetEncounters.Add(encounter);
+            EncounterMet?.Invoke(encounter);
         }
 
         public void MarkPicked(string option) => Picked.Add(option);
@@ -813,7 +830,7 @@ namespace VCGS
                     if (ev.ContainsKey("ends")) AwaitEnd(D.Get(ev, "ends"));
                     break;
                 case "choice": ChoiceRequested?.Invoke(D.Str(ev, "ref"), OptionsAt(index)); break;
-                case "encounter": EncounterRequested?.Invoke(D.Str(ev, "ref"), Rules.CanWin(D.Str(ev, "ref"), game)); break;
+                case "encounter": if (D.Str(ev, "ref") != "") game.MeetEncounter(D.Str(ev, "ref")); EncounterRequested?.Invoke(D.Str(ev, "ref"), Rules.CanWin(D.Str(ev, "ref"), game)); break;
                 case "trigger":
                     // A trigger on the timeline fires as it is reached, and the scene moves on.
                     var reference = D.Str(ev, "ref");
@@ -1030,8 +1047,10 @@ namespace VCGS
     /// <summary>
     /// The codex as the player reads it: the quest log (quests under way with
     /// their goals, then those done, in the order they started), the mechanics
-    /// available and the lore found, in the order found. New counts what has happened since the codex
-    /// was last read (quests starting or completing, lore found), for a
+    /// available, the encounters met (with their enemies and weakness, and
+    /// whether they were won) and the lore found, in the order found. New counts
+    /// what has happened since the codex was last read (quests starting or
+    /// completing, mechanics, encounters met or won, lore found), for a
     /// "new" badge. Plain C#: VcgsCodex draws it, or use it in your own UI.
     /// </summary>
     public sealed class Codex
@@ -1045,7 +1064,7 @@ namespace VCGS
             seen = Progress();
         }
 
-        /// <summary>Quest updates and lore found since MarkRead (a new game starts from nothing).</summary>
+        /// <summary>Quest, mechanic, encounter and lore updates since MarkRead (a new game starts from nothing).</summary>
         public int New
         {
             get
@@ -1060,7 +1079,7 @@ namespace VCGS
 
         int Progress()
         {
-            var n = game.KnownLore.Count + game.AvailableMechanics.Count;
+            var n = game.KnownLore.Count + game.AvailableMechanics.Count + game.MetEncounters.Count + game.Won.Count;
             foreach (var state in game.Quests.Values) n += state == "done" ? 2 : 1;
             return n;
         }
@@ -1112,6 +1131,23 @@ namespace VCGS
                     mechanics.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (controls != "" ? "\nControls: " + controls : "") + "\n" + D.Str(m, "notes"));
                 }
                 parts.Add(mechanics.ToString());
+            }
+            if (game.Story.Encounters.Count > 0)
+            {
+                var won = 0;
+                var entries = new StringBuilder();
+                foreach (var key in game.MetEncounters)
+                {
+                    game.Story.Encounters.TryGetValue(key, out var e);
+                    var name = D.Str(e, "name");
+                    var enemies = D.Str(D.Map(e, "fields"), "enemies");
+                    var weakness = D.Str(D.Map(e, "fields"), "weakness");
+                    if (game.WasWon(key)) won++;
+                    entries.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (game.WasWon(key) ? " (won)" : "") + (enemies != "" ? "\nEnemies: " + enemies : "") + (weakness != "" ? "\nWeak to: " + weakness : "") + "\n" + D.Str(e, "notes"));
+                }
+                var encounters = new StringBuilder("ENCOUNTERS · " + game.MetEncounters.Count + " met, " + won + " won");
+                if (game.MetEncounters.Count == 0) encounters.Append("\nNone yet.");
+                parts.Add(encounters.Append(entries).ToString());
             }
             if (game.Story.Lore.Count > 0)
             {
