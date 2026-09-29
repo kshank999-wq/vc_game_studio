@@ -9,6 +9,7 @@ import {
   eventKindFor,
   eventLine,
   eventTitle,
+  loseOf,
   rejoinTargets,
   removeBranch,
   removeEvent,
@@ -17,6 +18,8 @@ import {
   updateEvent,
 } from '../../model/timeline';
 import type { Project, TimelineEvent } from '../../model/types';
+import { setField, setValue } from '../../model/details';
+import type { Effect, Rule } from '../../model/rules';
 import { EffectsEditor, OptionBehaviourEditor, RuleEditor } from '../rules/RuleEditor';
 import { Symbol } from '../Symbol';
 import { KIND_SYMBOL } from './parts';
@@ -42,6 +45,7 @@ const KIND_NAME = {
   trigger: 'Trigger',
   choice: 'Choice',
   freePlay: 'Free play',
+  encounter: 'Encounter',
 } as const;
 
 /** A labelled field that saves when it loses focus. Keyed on its value so undo shows through. */
@@ -252,6 +256,24 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
           <RuleEditor project={project} rule={event.when} label="Plays when" onChange={(r) => save({ when: r })} />
           <EffectsEditor project={project} effects={event.effects} label="Then" onChange={(e) => save({ effects: e })} />
         </>
+      )}
+
+      {event.kind === 'encounter' && object && (
+        <div className="encounter-rules" role="group" aria-label="The encounter">
+          <p className="insp-note">The preview offers Win and Lose. These belong to {object.name} wherever it’s staged.</p>
+          <RuleEditor project={project} rule={object.data.rule as Rule | undefined} label="Can be won when" onChange={(r) => onCommit(setValue(project, object.id, 'rule', r))} />
+          <EffectsEditor project={project} effects={object.data.effects as Effect[] | undefined} label="On a win" onChange={(e) => onCommit(setValue(project, object.id, 'effects', e))} />
+          <EffectsEditor project={project} effects={object.data.loseEffects as Effect[] | undefined} label="On a loss" onChange={(e) => onCommit(setValue(project, object.id, 'loseEffects', e))} />
+          <label className="fld">
+            <span>If the player loses</span>
+            <select className="inp" value={loseOf(object)} onChange={(e) => onCommit(setField(project, object.id, 'onLose', e.currentTarget.value))}>
+              <option>Try again</option>
+              <option>Game over</option>
+              <option>Carry on</option>
+            </select>
+          </label>
+          <RuleEditor project={project} rule={event.when} label="Plays when" onChange={(r) => save({ when: r })} />
+        </div>
       )}
 
       {event.kind === 'choice' && (

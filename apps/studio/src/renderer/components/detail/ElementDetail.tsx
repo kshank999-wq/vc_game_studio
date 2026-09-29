@@ -39,11 +39,14 @@ const LEVEL_TYPES = new Set<ObjectType>(['plotPoint', 'scene', 'environment', 'c
 import { setValue } from '../../model/details';
 
 /** Which elements hold a rule, and what it and its effects are called. */
-const RULES: Partial<Record<StoryObject['type'], { rule: string; effects?: string }>> = {
+const RULES: Partial<Record<StoryObject['type'], { rule: string; effects?: string; starts?: string; loses?: string }>> = {
   gate: { rule: 'Opens when' },
   trigger: { rule: 'Fires when', effects: 'Then' },
   choice: { rule: 'Available when' },
   puzzle: { rule: 'Solved when', effects: 'When solved' },
+  // Quests and encounters play in the preview (docs/PLAY-THROUGH.md).
+  quest: { starts: 'Starts when (empty: from the beginning)', rule: 'Complete when', effects: 'Reward' },
+  encounter: { rule: 'Can be won when', effects: 'On a win', loses: 'On a loss' },
 };
 
 interface Props {
@@ -368,6 +371,9 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
 
       {RULES[object.type] && (
         <section className="detail-section">
+          {RULES[object.type]!.starts && (
+            <RuleEditor project={project} rule={object.data.starts as Rule | undefined} label={RULES[object.type]!.starts!} onChange={(r) => onCommit(setValue(project, id, 'starts', r))} />
+          )}
           <RuleEditor project={project} rule={object.data.rule as Rule | undefined} label={RULES[object.type]!.rule} onChange={(r) => onCommit(setValue(project, id, 'rule', r))} />
           {RULES[object.type]!.effects && (
             <EffectsEditor
@@ -375,6 +381,14 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
               effects={object.data.effects as Effect[] | undefined}
               label={RULES[object.type]!.effects!}
               onChange={(e) => onCommit(setValue(project, id, 'effects', e))}
+            />
+          )}
+          {RULES[object.type]!.loses && (
+            <EffectsEditor
+              project={project}
+              effects={object.data.loseEffects as Effect[] | undefined}
+              label={RULES[object.type]!.loses!}
+              onChange={(e) => onCommit(setValue(project, id, 'loseEffects', e))}
             />
           )}
         </section>

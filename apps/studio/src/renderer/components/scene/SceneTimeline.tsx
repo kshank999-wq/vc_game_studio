@@ -55,6 +55,7 @@ const KIND_LABEL: Record<EventKind, string> = {
   trigger: 'TRIGGER',
   choice: 'CHOICE',
   freePlay: 'FREE PLAY · OPEN-ENDED',
+  encounter: 'ENCOUNTER',
 };
 
 
@@ -71,6 +72,8 @@ const widthOf = (project: Project, event: TimelineEvent): number => {
       return 300;
     case 'trigger':
       return 110;
+    case 'encounter':
+      return 130;
     default:
       return 100;
   }
@@ -290,6 +293,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
   const mainRow = rows[0]!;
   const mainEnd = mainRow.blocks.at(-1) ? mainRow.blocks.at(-1)!.x + mainRow.blocks.at(-1)!.w + 12 : PAD_X;
   const candidates = sceneElements(project, sceneId).filter((o) => eventKindFor(o.type) && !all.some((e) => e.refId === o.id));
+  const encounters = Object.values(project.objects).filter((o) => o.type === 'encounter');
   let dialogueNumber = 0;
   const numbers = new Map<string, number>();
   for (const e of all.filter((x) => x.kind === 'dialogue')) numbers.set(e.id, ++dialogueNumber);
@@ -320,6 +324,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
                     ['cinematic', 'Cinematic'],
                     ['choice', 'Choice'],
                     ['trigger', 'Trigger'],
+                    ['encounter', 'Encounter'],
                   ] as const
                 ).map(([kind, label]) => (
                   <button
@@ -336,6 +341,25 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
                   >
                     <Symbol type={KIND_SYMBOL[kind]} size={11} />
                     {label}
+                  </button>
+                ))}
+                {encounters.length > 0 && <div className="menu-sep" />}
+                {encounters.length > 0 && <div className="menu-heading">ENCOUNTERS</div>}
+                {encounters.map((o) => (
+                  <button
+                    key={o.id}
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(false);
+                      const added = addEvent(project, sceneId, 'encounter', { refId: o.id });
+                      if (added) {
+                        props.onCommit(added.project);
+                        setSelected(added.id);
+                      }
+                    }}
+                  >
+                    <Symbol type="encounter" size={11} />
+                    {o.name}
                   </button>
                 ))}
                 {candidates.length > 0 && <div className="menu-sep" />}

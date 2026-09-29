@@ -189,15 +189,21 @@ export const sunkenVault = (): Project => {
   p = updateEvent(found.project, theKey, found.id, { effects: [{ kind: 'give', ref: key }] });
 
   // Design definitions in the Bible: the world's history, the goal, a system and a threat.
+  const design: Partial<Record<ObjectType, string>> = {};
   for (const [type, name, notes, fields] of [
     ['lore', 'The Drowned Order', 'River priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.', { era: 'Three centuries before the game' }],
     ['quest', 'Open the vault', 'Find the Vault Key and drain the seam, then turn the key in the vault door.', { goal: 'Reach the vault chamber and open the door' }],
     ['mechanic', 'Lantern oil', 'The lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.', { tuning: 'About a minute of deep water on a full lantern' }],
-    ['encounter', 'Eel swarm', 'Eels in the deep channels. They scatter from lantern light.', { weakness: 'Lantern light' }],
+    ['encounter', 'Eel swarm', 'Eels in the deep channels. They scatter from lantern light.', { enemies: 'Eels, a dozen or so', weakness: 'Lantern light', onLose: 'Try again' }],
   ] as const) {
     const object = makeObject(type, name, p.objects[mara]!.created, { code: nextCode(p, codeFormatFor(type)!), ...fields });
     p = setNotes({ ...p, objects: { ...p.objects, [object.id]: object } }, object.id, notes);
+    design[type] = object.id;
   }
+  // They play: the quest is under way from the start and done when the door is solved;
+  // the eels guard the silt where the key lies.
+  p = setValue(p, design.quest!, 'rule', { match: 'all', items: [{ kind: 'puzzle', ref: puzzle, op: 'solved' }] });
+  p = addEvent(p, theKey, 'encounter', { refId: design.encounter!, index: 0 })!.project;
 
   // Where it all happens: one level, tied to the scenes and the Bible.
   p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent });

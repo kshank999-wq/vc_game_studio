@@ -171,7 +171,7 @@ export const storySchema = () => ({
     event: {
       ...obj(
         {
-          kind: { enum: ['cinematic', 'dialogue', 'action', 'interaction', 'trigger', 'choice', 'freePlay'] },
+          kind: { enum: ['cinematic', 'dialogue', 'action', 'interaction', 'trigger', 'choice', 'freePlay', 'encounter'] },
           ref: str,
           line: str,
           dual: { type: 'string', description: 'Dual dialogue: the line this one is spoken at the same time as. When the next event is that line (or names this one), the two play as one beat.' },
@@ -222,7 +222,9 @@ export: change the story in the studio, not these files.
 
 \`lore\`, \`quests\`, \`mechanics\` and \`encounters\` are design definitions
 (a name, code, description and any other fields as \`fields\`) for the game to
-read, such as codex text or a quest log. They don't play on their own.
+read, such as codex text or a quest log. They don't play on their own. An
+\`encounter\` event in a scene is a beat for your game to play (a fight, a
+chase); its \`ref\` is the encounter's key.
 
 ## Playing it
 

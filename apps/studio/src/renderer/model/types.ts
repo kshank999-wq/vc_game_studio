@@ -153,7 +153,7 @@ export interface DialogueLine {
   notes: string;
 }
 
-export type EventKind = 'cinematic' | 'dialogue' | 'action' | 'interaction' | 'trigger' | 'choice' | 'freePlay';
+export type EventKind = 'cinematic' | 'dialogue' | 'action' | 'interaction' | 'trigger' | 'choice' | 'freePlay' | 'encounter';
 
 /**
  * One beat of a scene as it plays (spec §13). Events that stand for an

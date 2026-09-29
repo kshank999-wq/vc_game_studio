@@ -80,6 +80,20 @@ const EntryView = ({ entry }: { entry: Entry }) => {
           Skipped {entry.text} <span className="play-note">— needs {entry.needs}</span>
         </div>
       );
+    case 'quest':
+      return (
+        <div className={`play-quest ${entry.state}`}>
+          <Symbol type="quest" size={12} /> {entry.state === 'done' ? 'Quest complete' : 'New quest'}: {entry.text}
+          {entry.detail && <span className="play-note"> · {entry.detail}</span>}
+        </div>
+      );
+    case 'encounter':
+      return (
+        <div className="play-encounter">
+          <Symbol type="encounter" size={12} /> {entry.text}
+          {entry.detail && <span className="play-note"> · {entry.detail}</span>}
+        </div>
+      );
     case 'end':
       return <div className="play-end">{entry.text}</div>;
   }
@@ -95,6 +109,7 @@ const WorldPanel = ({ project, world, onChange }: { project: Project; world: Pla
   const items = of('inventory');
   const objects = of('object').filter((o) => statesOf(o).length);
   const characters = of('character');
+  const quests = of('quest');
   const chosen = Object.entries(world.chosen).filter(([id]) => project.objects[id]);
   const named = (record: Record<string, boolean>) => Object.keys(record).filter((id) => record[id] && project.objects[id]).map((id) => project.objects[id]!.name);
   return (
@@ -171,6 +186,34 @@ const WorldPanel = ({ project, world, onChange }: { project: Project; world: Pla
           ))}
         </section>
       )}
+      {quests.length > 0 && (
+        <section>
+          <h3>Quests</h3>
+          {quests.map((o) => (
+            <label key={o.id} className="play-row">
+              <span>{o.name}</span>
+              <select
+                className="inp"
+                aria-label={`Quest ${o.name}`}
+                value={world.quests[o.id] ?? ''}
+                onChange={(e) => {
+                  const state = e.currentTarget.value;
+                  onChange((w) => {
+                    const next = { ...w.quests };
+                    if (state === 'active' || state === 'done') next[o.id] = state;
+                    else delete next[o.id];
+                    return { ...w, quests: next };
+                  });
+                }}
+              >
+                <option value="">Not started</option>
+                <option value="active">Under way</option>
+                <option value="done">Done</option>
+              </select>
+            </label>
+          ))}
+        </section>
+      )}
       <section>
         <h3>So far</h3>
         <dl className="play-facts">
@@ -178,6 +221,8 @@ const WorldPanel = ({ project, world, onChange }: { project: Project; world: Pla
           <dd>{chosen.length ? chosen.map(([id, label]) => `${project.objects[id]!.name}: ${label}`).join(' · ') : 'none yet'}</dd>
           <dt>Solved</dt>
           <dd>{named(world.solved).join(' · ') || 'nothing yet'}</dd>
+          <dt>Won</dt>
+          <dd>{named(world.won).join(' · ') || 'no encounters yet'}</dd>
           <dt>Fired</dt>
           <dd>{named(world.fired).join(' · ') || 'nothing yet'}</dd>
           <dt>Visited</dt>
@@ -266,7 +311,7 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
           {prompt.kind === 'choice' && (
             <div className="play-choice">
               <div className="play-choice-title">
-                <Symbol type="choice" size={12} /> {prompt.prompt || prompt.title}
+                <Symbol type={prompt.symbol ?? 'choice'} size={12} /> {prompt.prompt || prompt.title}
               </div>
               {prompt.options.map((o, i) => (
                 <button key={i} className="play-option" disabled={!o.available} title={o.needs ? `Needs: ${o.needs}` : undefined} onClick={() => push(choose(project, play, i))}>

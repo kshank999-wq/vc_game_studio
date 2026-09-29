@@ -92,4 +92,5 @@ export const KIND_SYMBOL: Record<EventKind, ObjectType> = {
   trigger: 'trigger',
   choice: 'choice',
   freePlay: 'scene',
+  encounter: 'encounter',
 };

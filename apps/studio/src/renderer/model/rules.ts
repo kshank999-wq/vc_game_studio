@@ -229,6 +229,8 @@ export const everyRule = (project: Project): { rule?: Rule; effects?: Effect[]; 
   const out: { rule?: Rule; effects?: Effect[]; owner: string; where: string }[] = [];
   for (const o of Object.values(project.objects)) {
     if (o.data.rule || o.data.effects) out.push({ rule: o.data.rule as Rule | undefined, effects: o.data.effects as Effect[] | undefined, owner: o.id, where: o.name });
+    if (o.data.starts) out.push({ rule: o.data.starts as Rule, owner: o.id, where: `${o.name} · starts` });
+    if (o.data.loseEffects) out.push({ effects: o.data.loseEffects as Effect[], owner: o.id, where: `${o.name} · on a loss` });
     for (const i of (o.data.interactions as { verb: string; requires?: Rule; effects?: Effect[] }[] | undefined) ?? []) {
       out.push({ rule: i.requires, effects: i.effects, owner: o.id, where: `${o.name} · ${i.verb}` });
     }

@@ -1,9 +1,9 @@
 import { cinematicTiming } from './shots';
 import { spineSequence } from './layout';
-import { newId } from './project';
+import { codeFormatFor, makeObject, newId, nextCode } from './project';
 import { addElement, addLine, dualWith, inScene, removeLine, sceneElements, sceneLines, spokenTogether } from './scene';
 import type { DialogueLine, EventKind, ObjectType, Project, TimelineBranch, TimelineEvent } from './types';
-import { describeEffects, describeRule, isEmpty } from './rules';
+import { describeEffects, describeRule, isEmpty, type Rule } from './rules';
 import { plainInline } from './inline';
 
 /**
@@ -37,6 +37,8 @@ export const eventKindFor = (type: ObjectType): EventKind | null => {
       return 'interaction';
     case 'dialogue':
       return 'dialogue';
+    case 'encounter':
+      return 'encounter';
     default:
       return null;
   }
@@ -143,6 +145,7 @@ const DEFAULT_LABEL: Record<EventKind, string> = {
   trigger: 'Trigger',
   choice: 'Choice',
   freePlay: 'Free play',
+  encounter: 'Encounter',
 };
 
 /**
@@ -165,13 +168,19 @@ export const addEvent = (
     const added = addLine(project, sceneId, 'dialogue', lines[lines.length - 1]?.id, speaker);
     next = added.project;
     refId = added.id;
+  } else if (!refId && kind === 'encounter') {
+    // An encounter is the Bible's, not the scene's: a scene only stages it.
+    const object = makeObject('encounter', 'New encounter', new Date().toISOString(), { code: nextCode(next, codeFormatFor('encounter')!) });
+    next = { ...next, objects: { ...next.objects, [object.id]: object } };
+    refId = object.id;
   } else if (!refId && (kind === 'cinematic' || kind === 'choice' || kind === 'trigger')) {
     const made = addElement(next, sceneId, kind);
     if (!made) return null;
     next = made.project;
     refId = made.id;
   }
-  if (refId && kind !== 'dialogue' && !inScene(next, sceneId, refId)) return null;
+  if (kind === 'encounter' && next.objects[refId ?? '']?.type !== 'encounter') return null;
+  if (refId && kind !== 'dialogue' && kind !== 'encounter' && !inScene(next, sceneId, refId)) return null;
   const event: TimelineEvent =
     kind === 'dialogue'
       ? { id: dialogueId(refId!), sceneId, kind, track, order: 0, refId, label: '', detail: '' }
@@ -291,6 +300,11 @@ export const eventDetail = (project: Project, event: TimelineEvent): string => {
       const t = event.refId ? cinematicTiming(project, event.refId, event) : { seconds: event.seconds ?? 0, shots: event.shots ?? 1 };
       return `${t.seconds}s · ${t.shots} shot${t.shots === 1 ? '' : 's'}`;
     }
+    case 'encounter': {
+      const o = event.refId ? project.objects[event.refId] : undefined;
+      const win = o && !isEmpty(o.data.rule as Rule | undefined) ? `Won when ${describeRule(project, o.data.rule as Rule)}` : 'Win or lose';
+      return `${win} · a loss: ${loseOf(o).toLowerCase()}`;
+    }
     case 'freePlay':
       return !isEmpty(event.ends) ? `Ends when: ${describeRule(project, event.ends)}` : event.endsWhen ? `Ends when: ${event.endsWhen}` : 'Ends when…';
     default:
@@ -299,6 +313,12 @@ export const eventDetail = (project: Project, event: TimelineEvent): string => {
       return event.condition ? `If ${event.condition}` : event.detail;
   }
 };
+
+export type EncounterLoss = 'Try again' | 'Game over' | 'Carry on';
+
+/** What losing an encounter leads to (its "If the player loses" field): trying again, unless it says otherwise. */
+export const loseOf = (o: { data: Record<string, unknown> } | undefined): EncounterLoss =>
+  o?.data.onLose === 'Game over' || o?.data.onLose === 'Carry on' ? o.data.onLose : 'Try again';
 
 /** The script line behind a dialogue event. */
 export const eventLine = lineOf;

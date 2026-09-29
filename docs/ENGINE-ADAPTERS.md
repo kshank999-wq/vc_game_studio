@@ -50,8 +50,13 @@ Lore entries, quests, mechanics and encounters (often sorted out of raw notes;
 see [NOTE-SORTER.md](NOTE-SORTER.md)) go to every engine as data: the IR's
 `lore`, `quests`, `mechanics` and `encounters`, each with its key, code, name,
 description and other fields. They are for the game to read, such as a codex, a
-quest log or tuning. They don't play on their own; their logic is written with
-flags, triggers and gates, as for everything else.
+quest log or tuning. The studio's play-through plays quests (start, complete,
+reward) and encounters (win or lose), but the engine runtimes don't yet. Quests
+and encounters go to the engines as data only, without their rules. An
+encounter on a timeline arrives as an `encounter` event, which the runtimes
+treat as a plain beat: they report it with *event started*, like an action,
+and wait for the game to call *advance*. Logic that has to run in the engine is
+written with flags, triggers and gates, as for everything else.
 
 ## The Godot 4 adapter
 

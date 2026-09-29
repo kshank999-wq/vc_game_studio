@@ -18,11 +18,24 @@ monitor while you fix it on another.
 - **Triggers fire and puzzles solve themselves** when their conditions come
   true, after every change, as in the engine runtime. Routes out of a scene
   are taken in order: the first whose conditions hold, else on along the spine.
+- **Quests** start by their *Starts when* rule (at once when it's empty) and
+  complete when their *Complete when* rule holds, paying their *Reward*
+  effects. Both show in the transcript, and the world panel lists each quest
+  as not started, under way or done (change it to try a path). A quest with no
+  *Complete when* rule stays under way. Set these in the quest's Game Bible
+  entry.
+- **Encounters** go on a scene's timeline (**+ Event › Encounter**, new or one
+  from the Bible). The preview offers **Win**, only when the encounter's *Can be
+  won when* rule holds (otherwise it says what it needs), and **Lose**. A win
+  does its *On a win* effects and carries on. A loss does its *On a loss*
+  effects, then tries again, ends the game, or carries on, as its *If the
+  player loses* says. Edit them in the timeline inspector or the Game Bible.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.
 - **The world** panel shows every state, what is carried, object states, arcs,
-  choices made, puzzles solved, triggers fired and scenes visited. Change any
-  of it to try another path. **Step back** (Backspace) undoes one step.
+  quests, choices made, puzzles solved, encounters won, triggers fired and
+  scenes visited. Change any of it to try another path. **Step back**
+  (Backspace) undoes one step.
 - The story stops with a reason when it reaches an ending or game over, a node
   with nothing after it, or a loop that never stops for the player.
 

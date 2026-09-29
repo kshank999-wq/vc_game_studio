@@ -3,15 +3,16 @@ import { spineSequence } from './layout';
 import { apply, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type Rule } from './rules';
 import { dualWith, elementsIn, spokenTogether } from './scene';
 import { cinematicTiming, describeShot, shotsOf } from './shots';
-import { eventLine, eventTitle, MAIN, sceneTimeline } from './timeline';
-import type { DialogueLine, OptionBehaviour, Project, StoryObject, TimelineEvent } from './types';
+import { eventLine, eventTitle, loseOf, MAIN, sceneTimeline } from './timeline';
+import type { DialogueLine, ObjectType, OptionBehaviour, Project, StoryObject, TimelineEvent } from './types';
 
 /**
  * Play the story inside the studio, the way the generated engine code plays
  * it: from the Beginning along the spine, through each scene's timeline,
  * taking the options and routes whose conditions hold and doing what they
  * say. Triggers fire and puzzles solve themselves as their conditions come
- * true; a free play ends when its rule holds. Pure functions over the
+ * true; a free play ends when its rule holds. Quests start and complete by
+ * their rules; an encounter on a timeline is won or lost by the player. Pure functions over the
  * project: every step returns a new playthrough, so the player can step back.
  */
 
@@ -20,7 +21,13 @@ export interface PlayWorld extends PlayState {
   fired: Record<string, boolean>;
   /** How many times each option has been picked, by option key. */
   picked: Record<string, number>;
+  /** Quests under way or done; one not in here hasn't started. */
+  quests: Record<string, QuestState>;
+  /** Encounters won. */
+  won: Record<string, boolean>;
 }
+
+export type QuestState = 'active' | 'done';
 
 /** A second voice on a line: dual dialogue, spoken at the same time. */
 export interface Voice {
@@ -39,6 +46,8 @@ export type Entry =
   | { kind: 'did'; text: string }
   | { kind: 'effect'; text: string }
   | { kind: 'fired'; text: string }
+  | { kind: 'quest'; text: string; state: QuestState; detail?: string }
+  | { kind: 'encounter'; text: string; detail?: string }
   | { kind: 'skip'; text: string; needs: string }
   | { kind: 'end'; text: string };
 
@@ -50,6 +59,7 @@ type Cursor =
   | { at: 'graphChoice'; id: string }
   | { at: 'sceneChoice'; sceneId: string; track: string; index: number }
   | { at: 'freePlay'; sceneId: string; track: string; index: number }
+  | { at: 'encounter'; sceneId: string; track: string; index: number }
   | { at: 'end'; outcome: Outcome; text: string };
 
 export type Outcome = 'ending' | 'gameOver' | 'deadEnd' | 'loop';
@@ -80,7 +90,8 @@ export interface PlayVerb {
 
 export type Prompt =
   | { kind: 'continue' }
-  | { kind: 'choice'; title: string; prompt: string; options: PlayOption[] }
+  /** A choice, or an encounter (`symbol` says which): its options are Win and Lose. */
+  | { kind: 'choice'; title: string; prompt: string; options: PlayOption[]; symbol?: ObjectType }
   | { kind: 'freePlay'; title: string; ends: string; endsByRule: boolean; objects: { id: string; name: string; state?: string; verbs: PlayVerb[] }[] }
   | { kind: 'end'; outcome: Outcome; text: string };
 
@@ -89,7 +100,7 @@ const MAX_STEPS = 2000;
 // ---------------------------------------------------------------- the world
 
 export const startWorld = (project: Project): PlayWorld => {
-  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {} };
+  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {} };
   for (const o of Object.values(project.objects)) {
     const initial = initialState(o);
     if (o.type === 'state' && initial !== undefined) world.flags[o.id] = initial;
@@ -143,7 +154,18 @@ const solve = (d: Doing, id: string) => {
   doEffects(d, effectsOf(d.project.objects[id]));
 };
 
-/** Fire every trigger, and solve every puzzle, whose rule now holds (as the engine runtime does after each change). */
+const setQuest = (d: Doing, quest: StoryObject, state: QuestState) => {
+  d.world = { ...d.world, quests: { ...d.world.quests, [quest.id]: state } };
+  d.log.push({ kind: 'quest', text: quest.name, state, ...(state === 'active' && quest.data.goal ? { detail: String(quest.data.goal) } : {}) });
+  if (state === 'done') doEffects(d, effectsOf(quest));
+};
+
+/**
+ * Fire every trigger, and solve every puzzle, whose rule now holds (as the
+ * engine runtime does after each change). A quest starts when its start rule
+ * holds (at once, with none) and is done when its rule holds; its reward is
+ * its effects. A quest with no rule to complete it stays under way.
+ */
 const settle = (d: Doing) => {
   for (let round = 0; round < 8; round++) {
     let moved = false;
@@ -155,6 +177,16 @@ const settle = (d: Doing) => {
       if (o.type === 'puzzle' && !isEmpty(ruleOf(o)) && !d.world.solved[o.id] && evaluate(ruleOf(o), d.world)) {
         solve(d, o.id);
         moved = true;
+      }
+      if (o.type === 'quest') {
+        const state = d.world.quests[o.id];
+        if (!state && evaluate(o.data.starts as Rule | undefined, d.world)) {
+          setQuest(d, o, 'active');
+          moved = true;
+        } else if (state === 'active' && !isEmpty(ruleOf(o)) && evaluate(ruleOf(o), d.world)) {
+          setQuest(d, o, 'done');
+          moved = true;
+        }
       }
     }
     if (!moved) return;
@@ -311,6 +343,16 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
       case 'freePlay':
         next = { ...cursor, at: 'freePlay' };
         break;
+      case 'encounter': {
+        const o = event.refId ? project.objects[event.refId] : undefined;
+        if (!o) {
+          next = onward;
+          break;
+        }
+        d.log.push({ kind: 'encounter', text: eventTitle(project, event), detail: [o.data.enemies, o.data.weakness && `weak to ${String(o.data.weakness).toLowerCase()}`].filter(Boolean).join(' · ') || undefined });
+        next = { ...cursor, at: 'encounter' };
+        break;
+      }
       case 'choice':
         // A choice's effects belong to its options.
         if (!sceneOptions(project, d.world, cursor.sceneId, event).some((x) => x.available)) return stuck(d, eventTitle(project, event));
@@ -356,7 +398,10 @@ const run = (project: Project, play: Play, log: Entry[] = []): Play => {
 /** Start at the Beginning, or at a node on the graph (a scene, say) with a fresh world. */
 export const startPlay = (project: Project, from?: string): Play => {
   const begin = from && project.objects[from] ? from : Object.values(project.objects).find((o) => o.type === 'begin')?.id;
-  const play: Play = { world: startWorld(project), cursor: begin ? { at: 'node', id: begin } : { at: 'end', outcome: 'deadEnd', text: 'There is no Beginning.' }, log: [], where: { nodeId: null, sceneId: null, eventId: null } };
+  // Quests with nothing to wait for are under way from the first moment.
+  const d: Doing = { project, world: startWorld(project), log: [] };
+  settle(d);
+  const play: Play = { world: d.world, cursor: begin ? { at: 'node', id: begin } : { at: 'end', outcome: 'deadEnd', text: 'There is no Beginning.' }, log: d.log, where: { nodeId: null, sceneId: null, eventId: null } };
   return run(project, play);
 };
 
@@ -425,6 +470,15 @@ const sceneOptions = (project: Project, world: PlayWorld, sceneId: string, event
   return list;
 };
 
+/** An encounter's two outcomes: Win (only when its rule holds) and Lose, saying what losing leads to. */
+const encounterOptions = (project: Project, world: PlayWorld, o: StoryObject): PlayOption[] => {
+  const win = evaluate(ruleOf(o), world);
+  return [
+    { label: 'Win', available: win, ...(win ? {} : { needs: describeRule(project, ruleOf(o)) }) },
+    { label: `Lose · ${loseOf(o).toLowerCase()}`, available: true },
+  ];
+};
+
 const remember = (d: Doing, key: string) => {
   d.world = { ...d.world, picked: { ...d.world.picked, [key]: (d.world.picked[key] ?? 0) + 1 } };
 };
@@ -444,6 +498,31 @@ export const choose = (project: Project, play: Play, index: number): Play => {
     doEffects(d, option.effects);
     settle(d);
     return run(project, { ...play, world: d.world, log: d.log, cursor: { at: 'node', id: option.to } });
+  }
+  if (c.at === 'encounter') {
+    const event = eventAt(project, c);
+    const o = event?.refId ? project.objects[event.refId] : undefined;
+    if (!o || !encounterOptions(project, play.world, o)[index]?.available) return play;
+    const onward: Cursor = { at: 'event', sceneId: c.sceneId, track: c.track, index: c.index + 1 };
+    if (index === 0) {
+      d.log.push({ kind: 'picked', text: `Won: ${o.name}` });
+      d.world = { ...d.world, won: { ...d.world.won, [o.id]: true } };
+      doEffects(d, effectsOf(o));
+      settle(d);
+      return run(project, { ...play, world: d.world, log: d.log, cursor: onward });
+    }
+    d.log.push({ kind: 'picked', text: `Lost: ${o.name}` });
+    doEffects(d, o.data.loseEffects as Effect[] | undefined);
+    settle(d);
+    const loss = loseOf(o);
+    if (loss === 'Game over') {
+      const text = `Game over: lost to ${o.name}`;
+      d.log.push({ kind: 'end', text });
+      return { ...play, world: d.world, log: d.log, cursor: { at: 'end', outcome: 'gameOver', text } };
+    }
+    if (loss === 'Carry on') return run(project, { ...play, world: d.world, log: d.log, cursor: onward });
+    d.log.push({ kind: 'action', text: `${o.name}: try again` });
+    return { ...play, world: d.world, log: d.log };
   }
   if (c.at === 'sceneChoice') {
     const event = eventAt(project, c);
@@ -578,6 +657,11 @@ export const promptOf = (project: Project, play: Play): Prompt => {
       const event = eventAt(project, c)!;
       const o = event.refId ? project.objects[event.refId] : undefined;
       return { kind: 'choice', title: o?.name ?? eventTitle(project, event), prompt: String(o?.data.prompt ?? ''), options: sceneOptions(project, play.world, c.sceneId, event).map(({ label, available, needs }) => ({ label, available, needs })) };
+    }
+    case 'encounter': {
+      const event = eventAt(project, c)!;
+      const o = project.objects[event.refId!]!;
+      return { kind: 'choice', symbol: 'encounter', title: o.name, prompt: `Encounter: ${o.name}`, options: encounterOptions(project, play.world, o) };
     }
     case 'freePlay': {
       const event = eventAt(project, c)!;

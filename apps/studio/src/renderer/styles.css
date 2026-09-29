@@ -3042,6 +3042,15 @@ a:hover {
   border-radius: 14px;
 }
 
+.ev-encounter {
+  background: #2a1614;
+  border-color: var(--c-encounter);
+}
+
+.ev-encounter .ek {
+  color: #f19a93;
+}
+
 .ev-freePlay {
   background: repeating-linear-gradient(135deg, #1a2e2b 0 8px, #142321 8px 16px);
   border: 1.5px dashed var(--c-scene);
@@ -3229,6 +3238,13 @@ a:hover {
 
 .insp-remove {
   margin-left: auto;
+}
+
+.insp-note {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 .insp-empty {
@@ -5360,6 +5376,30 @@ kbd {
   color: var(--c-logic);
 }
 
+.play-quest,
+.play-encounter {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.play-quest {
+  color: var(--c-quest);
+}
+
+.play-quest.done {
+  font-weight: 600;
+}
+
+.play-encounter {
+  color: var(--c-encounter);
+  font-weight: 600;
+  margin-top: 6px;
+}
+
 .play-skip {
   opacity: 0.8;
   font-style: italic;
@@ -6934,18 +6974,18 @@ kbd {
   background: #07060a;
 }
 
-.play-view {
+.play-mode .play-view {
   position: absolute;
   inset: 0;
   cursor: grab;
   touch-action: none;
 }
 
-.play-view.locked {
+.play-mode .play-view.locked {
   cursor: none;
 }
 
-.play-view canvas {
+.play-mode .play-view canvas {
   display: block;
 }
 
@@ -7087,7 +7127,7 @@ kbd {
   pointer-events: none;
 }
 
-.play-prompt {
+.play-mode .play-prompt {
   position: absolute;
   left: 50%;
   bottom: 70px;
@@ -7105,7 +7145,7 @@ kbd {
   white-space: nowrap;
 }
 
-.play-prompt kbd,
+.play-mode .play-prompt kbd,
 .play-bind {
   font-family: var(--font-mono);
   font-size: 11.5px;
@@ -7116,7 +7156,7 @@ kbd {
   color: var(--gold-hi);
 }
 
-.play-prompt.blocked {
+.play-mode .play-prompt.blocked {
   border-color: #e0a64a;
   color: #f1c98a;
 }
@@ -7334,7 +7374,7 @@ kbd {
   margin: 0;
 }
 
-.play-row {
+.play-mode .play-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
@@ -7344,12 +7384,12 @@ kbd {
   min-height: 28px;
 }
 
-.play-row select {
+.play-mode .play-row select {
   width: auto;
   min-width: 90px;
 }
 
-.play-row .icon-btn.small {
+.play-mode .play-row .icon-btn.small {
   width: 24px;
   height: 24px;
 }
@@ -7375,7 +7415,7 @@ kbd {
   font-weight: 700;
 }
 
-.play-note {
+.play-mode .play-note {
   display: flex;
   flex-direction: column;
   gap: 8px;

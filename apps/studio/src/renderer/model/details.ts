@@ -60,6 +60,20 @@ export const FIELDS: Partial<Record<ObjectType, readonly FieldSpec[]>> = {
     { key: 'skippable', label: 'Can the player skip it?', options: ['Skippable', 'Not skippable'] },
   ],
   plotPoint: [{ key: 'turn', label: 'What turns here', placeholder: 'The way down is found' }],
+  lore: [{ key: 'era', label: 'Era / when', placeholder: 'Three centuries before the game' }],
+  quest: [
+    { key: 'goal', label: 'Goal (as the player reads it)', placeholder: 'Reach the vault chamber and open the door' },
+    { key: 'giver', label: 'Given by', placeholder: 'Mara' },
+  ],
+  mechanic: [
+    { key: 'controls', label: 'Controls', placeholder: 'Hold to raise the lantern' },
+    { key: 'tuning', label: 'Tuning', placeholder: 'About a minute of deep water on a full lantern' },
+  ],
+  encounter: [
+    { key: 'enemies', label: 'Enemies', placeholder: 'Eels, a dozen or so' },
+    { key: 'weakness', label: 'Weakness', placeholder: 'Lantern light' },
+    { key: 'onLose', label: 'If the player loses', options: ['Try again', 'Game over', 'Carry on'] },
+  ],
   scene: [
     { key: 'summary', label: 'Summary', multiline: true },
     { key: 'purpose', label: 'Purpose', placeholder: 'Open the vault' },
