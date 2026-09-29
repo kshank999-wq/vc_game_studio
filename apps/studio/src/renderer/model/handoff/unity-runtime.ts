@@ -205,6 +205,8 @@ namespace VCGS
         public readonly Dictionary<string, Dictionary<string, object>> Lines = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Quests = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Encounters = new Dictionary<string, Dictionary<string, object>>();
+        public readonly Dictionary<string, Dictionary<string, object>> Lore = new Dictionary<string, Dictionary<string, object>>();
+        public readonly Dictionary<string, Dictionary<string, object>> Mechanics = new Dictionary<string, Dictionary<string, object>>();
 
         public static Story FromJson(string json) => new Story(D.Map(Json.Parse(json)));
 
@@ -227,6 +229,8 @@ namespace VCGS
             Index(root, "cinematics", Cinematics);
             Index(root, "quests", Quests);
             Index(root, "encounters", Encounters);
+            Index(root, "lore", Lore);
+            Index(root, "mechanics", Mechanics);
             foreach (var l in D.List(root, "lines"))
             {
                 var line = D.Map(l);
@@ -242,6 +246,12 @@ namespace VCGS
                 into[D.Str(D.Map(d, "ident"), "key")] = d;
             }
         }
+
+        /// <summary>A lore entry's name and text, for a codex.</summary>
+        public (string name, string text) LoreEntry(string key) => Lore.TryGetValue(key ?? "", out var l) ? (D.Str(l, "name"), D.Str(l, "notes")) : ("", "");
+
+        /// <summary>A mechanic's field as written in the studio, such as its tuning ("" when it has none).</summary>
+        public string MechanicDetail(string key, string field) => Mechanics.TryGetValue(key ?? "", out var m) ? D.Str(D.Map(m, "fields"), field) : "";
 
         /// <summary>A character's name by key, for the speaker of a line.</summary>
         public string CharacterName(string key) => Characters.TryGetValue(key ?? "", out var c) ? D.Str(c, "name") : "";
@@ -277,12 +287,18 @@ namespace VCGS
         public readonly Dictionary<string, string> Quests = new Dictionary<string, string>();
         /// <summary>Encounters won.</summary>
         public readonly HashSet<string> Won = new HashSet<string>();
+        /// <summary>Lore the player has come across, in the order they found it (the codex).</summary>
+        public readonly List<string> KnownLore = new List<string>();
+        /// <summary>Mechanics the player can use now.</summary>
+        public readonly HashSet<string> Mechanics = new HashSet<string>();
 
         /// <summary>Anything the story's conditions can see has changed.</summary>
         public event Action Changed;
         public event Action<string> TriggerFired;
         public event Action<string> QuestStarted;
         public event Action<string> QuestCompleted;
+        public event Action<string> LoreDiscovered;
+        public event Action<string> MechanicAvailable;
         public bool AutoRules = true;
         bool settling;
 
@@ -296,7 +312,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); KnownLore.Clear(); Mechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -373,6 +389,25 @@ namespace VCGS
             Quests[quest] = state;
             if (state == "active") QuestStarted?.Invoke(quest);
             else if (state == "done") QuestCompleted?.Invoke(quest);
+            OnChanged();
+        }
+
+        public bool KnowsLore(string lore) => KnownLore.Contains(lore);
+
+        public void DiscoverLore(string lore)
+        {
+            if (KnowsLore(lore)) return;
+            KnownLore.Add(lore);
+            LoreDiscovered?.Invoke(lore);
+            OnChanged();
+        }
+
+        public bool HasMechanic(string mechanic) => Mechanics.Contains(mechanic);
+
+        public void EnableMechanic(string mechanic)
+        {
+            if (!Mechanics.Add(mechanic)) return;
+            MechanicAvailable?.Invoke(mechanic);
             OnChanged();
         }
 
@@ -499,6 +534,18 @@ namespace VCGS
             for (var round = 0; round < 8; round++)
             {
                 var moved = false;
+                foreach (var l in game.Story.Lore)
+                {
+                    if (game.KnowsLore(l.Key) || !Check(D.Get(l.Value, "discoveredWhen"), game)) continue;
+                    game.DiscoverLore(l.Key);
+                    moved = true;
+                }
+                foreach (var m in game.Story.Mechanics)
+                {
+                    if (game.HasMechanic(m.Key) || !Check(D.Get(m.Value, "availableWhen"), game)) continue;
+                    game.EnableMechanic(m.Key);
+                    moved = true;
+                }
                 foreach (var q in game.Story.Quests)
                 {
                     var state = game.QuestState(q.Key);

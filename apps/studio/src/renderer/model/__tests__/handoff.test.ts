@@ -387,3 +387,23 @@ describe('quests and encounters in the engines', () => {
     expect(VCGS_CORE_H).toContain('std::function<void(const std::string&, bool)> OnEncounter;');
   });
 });
+
+describe('lore and mechanics in the engines', () => {
+  it('carry their rules, and every runtime settles them', async () => {
+    const ir = buildIR(sunkenVault());
+    expect(ir.lore[0]).toMatchObject({ discoveredWhen: { match: 'all', items: [{ kind: 'visited', ref: 'sc_03_the_vault_door', op: 'visited' }] } });
+    expect(ir.mechanics[0]).toMatchObject({ availableWhen: { match: 'all', items: [{ kind: 'choice', ref: 'take_the_lantern', op: 'chose' }] }, fields: { tuning: 'About a minute of deep water on a full lantern' } });
+    const { generateGodot } = await import('../handoff/godot');
+    const { RUNTIME_FILES } = await import('../handoff/unity-runtime');
+    const { VCGS_CORE_H } = await import('../handoff/unreal-core');
+    const rules = generateGodot(ir, 'vcgs/generated').files.find((f) => f.path === 'vcgs/generated/logic/rules.gd')!.content;
+    expect(rules).toContain('const LORE := {\n\t"the_drowned_order": {');
+    expect(rules).toContain('static func mechanic_detail(mechanic_key: String, field: String) -> String:');
+    expect(RUNTIME_FILES['Rules.cs']).toContain('game.DiscoverLore(l.Key);');
+    expect(RUNTIME_FILES['Story.cs']).toContain('public string MechanicDetail(string key, string field)');
+    expect(VCGS_CORE_H).toContain('game.EnableMechanic(m.first);');
+    const { storySchema } = await import('../handoff/json');
+    const schema = JSON.parse(JSON.stringify(storySchema()));
+    expect(schema.properties.lore.items).toEqual({ $ref: '#/$defs/lore' });
+  });
+});

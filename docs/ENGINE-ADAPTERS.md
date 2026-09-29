@@ -50,8 +50,22 @@ Lore entries, quests, mechanics and encounters (often sorted out of raw notes;
 see [NOTE-SORTER.md](NOTE-SORTER.md)) go to every engine as data: the IR's
 `lore`, `quests`, `mechanics` and `encounters`, each with its key, code, name,
 description and other fields. They are for the game to read, such as a codex, a
-quest log or tuning. Quests and encounters also play in every runtime, the
-same way as in the studio's play-through:
+quest log or tuning. All four also play in every runtime, the same way as in
+the studio's play-through:
+
+- **Lore** is discovered when its *Discovered when* rule holds (known from a
+  new game when it's empty). The game state keeps the codex in the order the
+  player found things: Godot `known_lore()` and `lore_discovered`, with the
+  name and text in `VCGSRules.LORE`; Unity `KnownLore`, `LoreDiscovered` and
+  `Story.LoreEntry`; Unreal `GetKnownLore`, `OnLoreDiscovered` and
+  `GetLoreEntry`.
+- **Mechanics** become available when their *Available when* rule holds (from
+  a new game when it's empty), so a system can switch on with the story:
+  Godot `has_mechanic()` and `mechanic_available`; Unity `HasMechanic` and
+  `MechanicAvailable`; Unreal `HasMechanic` and `OnMechanicAvailable`. A
+  mechanic's fields, such as its tuning, are read with
+  `VCGSRules.mechanic_detail(key, "tuning")`, `Story.MechanicDetail` or
+  `GetMechanicDetail`.
 
 - **Quests** start when their *Starts when* rule holds (at once, on a new game,
   when it's empty) and complete when their *Complete when* rule holds, paying

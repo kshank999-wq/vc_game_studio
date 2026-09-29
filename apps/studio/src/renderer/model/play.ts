@@ -25,6 +25,10 @@ export interface PlayWorld extends PlayState {
   quests: Record<string, QuestState>;
   /** Encounters won. */
   won: Record<string, boolean>;
+  /** Lore the player has come across (their codex). */
+  lore: Record<string, boolean>;
+  /** Mechanics the player can use now. */
+  mechanics: Record<string, boolean>;
 }
 
 export type QuestState = 'active' | 'done';
@@ -48,6 +52,8 @@ export type Entry =
   | { kind: 'fired'; text: string }
   | { kind: 'quest'; text: string; state: QuestState; detail?: string }
   | { kind: 'encounter'; text: string; detail?: string }
+  | { kind: 'lore'; text: string }
+  | { kind: 'mechanic'; text: string }
   | { kind: 'skip'; text: string; needs: string }
   | { kind: 'end'; text: string };
 
@@ -100,7 +106,7 @@ const MAX_STEPS = 2000;
 // ---------------------------------------------------------------- the world
 
 export const startWorld = (project: Project): PlayWorld => {
-  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {} };
+  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {}, lore: {}, mechanics: {} };
   for (const o of Object.values(project.objects)) {
     const initial = initialState(o);
     if (o.type === 'state' && initial !== undefined) world.flags[o.id] = initial;
@@ -176,6 +182,13 @@ const settle = (d: Doing) => {
       }
       if (o.type === 'puzzle' && !isEmpty(ruleOf(o)) && !d.world.solved[o.id] && evaluate(ruleOf(o), d.world)) {
         solve(d, o.id);
+        moved = true;
+      }
+      // Lore is discovered, and a mechanic becomes available, once its rule holds (at once with none).
+      if ((o.type === 'lore' || o.type === 'mechanic') && !d.world[o.type === 'lore' ? 'lore' : 'mechanics'][o.id] && evaluate(ruleOf(o), d.world)) {
+        const key = o.type === 'lore' ? 'lore' : 'mechanics';
+        d.world = { ...d.world, [key]: { ...d.world[key], [o.id]: true } };
+        d.log.push({ kind: o.type, text: o.name });
         moved = true;
       }
       if (o.type === 'quest') {

@@ -42,9 +42,9 @@ export const storySchema = () => ({
     objects: { type: 'array', items: ref('object') },
     items: { type: 'array', items: ref('thing') },
     locations: { type: 'array', items: ref('thing') },
-    lore: { type: 'array', items: ref('thing'), description: 'Lore entries: history and world facts, for codex or journal text.' },
+    lore: { type: 'array', items: ref('lore'), description: 'Lore entries: history and world facts, for codex or journal text; each known once `discoveredWhen` holds.' },
     quests: { type: 'array', items: ref('quest'), description: 'Quests and objectives: each starts when `starts` holds (at once without it) and is done when `completes` holds, paying `reward`.' },
-    mechanics: { type: 'array', items: ref('thing'), description: 'Mechanic definitions: how a system works, in the designer\'s words.' },
+    mechanics: { type: 'array', items: ref('mechanic'), description: 'Mechanics: how a system works, in the designer\'s words, and its tuning in `fields`; each usable once `availableWhen` holds.' },
     encounters: { type: 'array', items: ref('encounter'), description: 'Encounters and enemies: played by the game where an `encounter` event puts them, then won or lost.' },
     cinematics: { type: 'array', items: ref('thing') },
     flags: { type: 'array', items: obj({ id: str, ident, name: str, values: strings, initial: str, setBy: strings }) },
@@ -158,6 +158,8 @@ export const storySchema = () => ({
       ...obj({ key: str, kind: str, name: str, onward: { type: ['string', 'null'] }, routes: { type: 'array', items: obj({ to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['to', 'label']) }, outcome: { enum: ['ending', 'gameOver'] } }, ['key', 'kind', 'name', 'onward', 'routes']),
       description: 'A node on the story graph. Where it goes: the first route whose conditions hold, else onward along the spine.',
     },
+    lore: { allOf: [ref('thing'), obj({ discoveredWhen: ref('rule') }, [])], description: 'A lore entry: known once `discoveredWhen` holds, from the start when there is none.' },
+    mechanic: { allOf: [ref('thing'), obj({ availableWhen: ref('rule') }, [])], description: 'A mechanic: usable once `availableWhen` holds, from the start when there is none.' },
     quest: {
       allOf: [ref('thing'), obj({ starts: ref('rule'), completes: ref('rule'), reward: ref('effects') }, [])],
       description: 'A quest: under way once `starts` holds (at once when there is none), done when `completes` holds (never without it), then its `reward` effects are done.',
@@ -230,8 +232,7 @@ export: change the story in the studio, not these files.
 
 \`lore\`, \`quests\`, \`mechanics\` and \`encounters\` are design definitions
 (a name, code, description and any other fields as \`fields\`) for the game to
-read, such as codex text or a quest log. Quests and encounters also play, as
-below.
+read, such as codex text, a quest log or tuning. All four also play, as below.
 
 ## Playing it
 
@@ -252,7 +253,10 @@ below.
    (once), and solve each puzzle whose \`solvedWhen\` holds, doing their effects.
    Start each quest not yet started whose \`starts\` holds (at once when it has
    none), and complete each quest under way whose \`completes\` holds, doing its
-   \`reward\`. Do this once when a new game begins too.
+   \`reward\`. Mark each lore entry known once its \`discoveredWhen\` holds, and
+   each mechanic usable once its \`availableWhen\` holds (at once when either has
+   none): a codex shows the lore known, and a system switches on with its
+   mechanic. Do this once when a new game begins too.
 6. **An \`encounter\` event** is a fight, chase or the like for your game to play;
    its \`ref\` is a key in \`encounters\`. A win counts only when \`winWhen\` holds;
    it does \`onWin\` and the scene goes on. A loss does \`onLose\`, then plays the

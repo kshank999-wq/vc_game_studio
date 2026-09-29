@@ -165,6 +165,9 @@ describe('play-through', () => {
     expect(container.querySelector('.play-quest')?.textContent).toContain('New quest: Open the vault');
     fireEvent.click(screen.getByRole('button', { name: /Carry on/ }));
     fireEvent.click(screen.getByRole('button', { name: /To the next decision/ }));
+    // Taking the lantern makes its oil a mechanic in play.
+    expect(container.querySelector('.play-mechanic')?.textContent).toContain('Now available: Lantern oil');
+    expect((screen.getByLabelText('Available: Lantern oil') as HTMLInputElement).checked).toBe(true);
     // SC-02 opens on an encounter: win it or lose it.
     expect(container.querySelector('.play-choice-title')?.textContent).toContain('Encounter: Eel swarm');
     fireEvent.click(screen.getByRole('button', { name: /Lose · try again/ }));

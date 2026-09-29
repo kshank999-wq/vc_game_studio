@@ -5377,7 +5377,9 @@ kbd {
 }
 
 .play-quest,
-.play-encounter {
+.play-encounter,
+.play-lore,
+.play-mechanic {
   font-family: var(--font-ui);
   font-size: 12.5px;
   display: flex;
@@ -5388,6 +5390,14 @@ kbd {
 
 .play-quest {
   color: var(--c-quest);
+}
+
+.play-lore {
+  color: var(--c-lore);
+}
+
+.play-mechanic {
+  color: var(--c-mechanic);
 }
 
 .play-quest.done {

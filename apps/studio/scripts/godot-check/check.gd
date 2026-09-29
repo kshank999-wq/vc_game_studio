@@ -62,6 +62,8 @@ func _initialize() -> void:
 	# The quest has no start rule: it is under way from the reset.
 	if game.quest_state("open_the_vault") != "active":
 		fail("Open the vault should be under way after reset, is " + game.quest_state("open_the_vault"))
+	if game.knows_lore("the_drowned_order") or game.has_mechanic("lantern_oil"):
+		fail("the Order's lore and the lantern's oil should wait for their rules")
 	var quest_done: Array = []
 	game.quest_completed.connect(func(k: String) -> void: quest_done.append(k))
 
@@ -87,6 +89,9 @@ func _initialize() -> void:
 	flow.start()
 	if not game.was_visited("sc_03_the_vault_door"):
 		fail("starting the scene should mark it visited")
+	# Reaching the vault door reveals the Order's story.
+	if game.known_lore() != ["the_drowned_order"] or load("res://vcgs/generated/logic/rules.gd").LORE["the_drowned_order"]["name"] != "The Drowned Order":
+		fail("the vault door should reveal The Drowned Order, got " + str(game.known_lore()))
 	# The cinematic, then Mara and the Explorer at once (dual dialogue: one beat), then the echo cue.
 	for i in 3:
 		flow.advance()
@@ -174,8 +179,14 @@ func _initialize() -> void:
 
 	var choice: GDScript = load("res://vcgs/generated/choices/take_the_lantern.gd")
 	print("C1 options: ", choice.OPTIONS)
+	var available: Array = []
+	game.mechanic_available.connect(func(k: String) -> void: available.append(k))
 	if choice.choose(1, game) != "sc_04_the_squeeze":
 		fail("Crawl through should lead to the squeeze")
+	# Taking the lantern (either way) makes its oil a mechanic in play, with its tuning.
+	print("mechanics: ", available, " tuning: ", rules.mechanic_detail("lantern_oil", "tuning"))
+	if available != ["lantern_oil"] or not game.has_mechanic("lantern_oil") or rules.mechanic_detail("lantern_oil", "tuning") != "About a minute of deep water on a full lantern":
+		fail("answering Take the lantern should make Lantern oil available, with its tuning")
 	if not game.was_picked("take_the_lantern:crawl_through"):
 		fail("the pick should be remembered by its option key")
 

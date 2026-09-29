@@ -24,6 +24,9 @@ monitor while you fix it on another.
   as not started, under way or done (change it to try a path). A quest with no
   *Complete when* rule stays under way. Set these in the quest's Game Bible
   entry.
+- **Lore** is discovered, and a **mechanic** becomes available, once its rule
+  holds (*Discovered when*, *Available when*; at once when it's empty). Both
+  show in the transcript, and the world panel lists them to switch by hand.
 - **Encounters** go on a scene's timeline (**+ Event › Encounter**, new or one
   from the Bible). The preview offers **Win**, only when the encounter's *Can be
   won when* rule holds (otherwise it says what it needs), and **Lose**. A win
@@ -33,7 +36,7 @@ monitor while you fix it on another.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.
 - **The world** panel shows every state, what is carried, object states, arcs,
-  quests, choices made, puzzles solved, encounters won, triggers fired and
+  quests, mechanics, lore, choices made, puzzles solved, encounters won, triggers fired and
   scenes visited. Change any of it to try another path. **Step back**
   (Backspace) undoes one step.
 - The story stops with a reason when it reaches an ending or game over, a node

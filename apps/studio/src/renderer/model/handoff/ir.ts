@@ -139,6 +139,16 @@ export interface IrQuest extends IrThing {
   reward?: IrEffect[];
 }
 
+/** Lore the player comes across: known once `discoveredWhen` holds (from the start without it). */
+export interface IrLore extends IrThing {
+  discoveredWhen?: IrRule;
+}
+
+/** A mechanic: usable once `availableWhen` holds (from the start without it); its tuning is in `fields`. */
+export interface IrMechanic extends IrThing {
+  availableWhen?: IrRule;
+}
+
 /** An encounter on a timeline: the game plays it and reports a win or a loss. */
 export interface IrEncounter extends IrThing {
   /** A win counts only when this holds. */
@@ -287,9 +297,9 @@ export interface HandoffIR {
   items: IrThing[];
   locations: IrThing[];
   /** Design definitions, most often sorted out of raw notes (docs/NOTE-SORTER.md): data for the game to read. */
-  lore: IrThing[];
+  lore: IrLore[];
   quests: IrQuest[];
-  mechanics: IrThing[];
+  mechanics: IrMechanic[];
   encounters: IrEncounter[];
   cinematics: IrThing[];
   flags: IrFlag[];
@@ -481,14 +491,14 @@ export const buildIR = (project: Project): HandoffIR => {
     })),
     items: of('inventory').map(thing),
     locations: of('environment').map(thing),
-    lore: of('lore').map(thing),
+    lore: of('lore').map((o): IrLore => ((when) => ({ ...thing(o), ...(when ? { discoveredWhen: when } : {}) }))(rule(o.data.rule as Rule | undefined))),
     quests: of('quest').map((o): IrQuest => {
       const starts = rule(o.data.starts as Rule | undefined);
       const completes = rule(o.data.rule as Rule | undefined);
       const reward = effects(o.data.effects as Effect[] | undefined);
       return { ...thing(o), ...(starts ? { starts } : {}), ...(completes ? { completes } : {}), ...(reward ? { reward } : {}) };
     }),
-    mechanics: of('mechanic').map(thing),
+    mechanics: of('mechanic').map((o): IrMechanic => ((when) => ({ ...thing(o), ...(when ? { availableWhen: when } : {}) }))(rule(o.data.rule as Rule | undefined))),
     encounters: of('encounter').map((o): IrEncounter => {
       const winWhen = rule(o.data.rule as Rule | undefined);
       const onWin = effects(o.data.effects as Effect[] | undefined);

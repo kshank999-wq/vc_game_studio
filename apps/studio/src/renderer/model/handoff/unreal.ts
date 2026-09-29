@@ -227,9 +227,19 @@ public:
     /** "" (not started), "active" or "done". Quests start and complete by their rules. */
     UFUNCTION(BlueprintPure, Category = "VCGS|State") FString GetQuestState(const FString& Quest) const;
     UFUNCTION(BlueprintPure, Category = "VCGS|State") bool WasWon(const FString& Encounter) const;
+    /** Lore the player has come across, in the order they found it: the codex. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|State") TArray<FString> GetKnownLore() const;
+    UFUNCTION(BlueprintPure, Category = "VCGS|State") bool KnowsLore(const FString& Lore) const;
+    /** A lore entry's name and text, for the codex. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Story") void GetLoreEntry(const FString& Lore, FString& Name, FString& Text) const;
+    UFUNCTION(BlueprintPure, Category = "VCGS|State") bool HasMechanic(const FString& Mechanic) const;
+    /** A mechanic's field as written in the studio, such as "tuning" (empty when it has none). */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetMechanicDetail(const FString& Mechanic, const FString& Field) const;
 
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestStarted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnLoreDiscovered;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnMechanicAvailable;
 
     /** Where a graph node goes next: its first route whose conditions hold, else on along the spine. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") FString Onward(const FString& Node);
@@ -302,6 +312,8 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     Game = std::make_unique<vcgs::GameState>(*StoryData);
     Game->OnQuestStarted = [this](const std::string& Quest) { OnQuestStarted.Broadcast(ToF(Quest)); };
     Game->OnQuestCompleted = [this](const std::string& Quest) { OnQuestCompleted.Broadcast(ToF(Quest)); };
+    Game->OnLoreDiscovered = [this](const std::string& Lore) { OnLoreDiscovered.Broadcast(ToF(Lore)); };
+    Game->OnMechanicAvailable = [this](const std::string& Mechanic) { OnMechanicAvailable.Broadcast(ToF(Mechanic)); };
     return true;
 }
 
@@ -326,6 +338,26 @@ bool UVcgsSubsystem::WasVisited(const FString& Scene) const { return Game && Gam
 bool UVcgsSubsystem::GateOpen(const FString& Gate) const { return !Game || vcgs::Rules::GateOpen(ToStd(Gate), *Game); }
 FString UVcgsSubsystem::GetQuestState(const FString& Quest) const { return Game ? ToF(Game->QuestState(ToStd(Quest))) : FString(); }
 bool UVcgsSubsystem::WasWon(const FString& Encounter) const { return Game && Game->WasWon(ToStd(Encounter)); }
+TArray<FString> UVcgsSubsystem::GetKnownLore() const
+{
+    TArray<FString> Known;
+    if (Game) for (const std::string& Lore : Game->KnownLore) Known.Add(ToF(Lore));
+    return Known;
+}
+bool UVcgsSubsystem::KnowsLore(const FString& Lore) const { return Game && Game->KnowsLore(ToStd(Lore)); }
+void UVcgsSubsystem::GetLoreEntry(const FString& Lore, FString& Name, FString& Text) const
+{
+    if (!StoryData) return;
+    const std::string Key = ToStd(Lore);
+    const vcgs::Value& Entry = vcgs::Story::Find(StoryData->Lore, Key);
+    Name = ToF(Entry["name"].Str());
+    Text = ToF(Entry["notes"].Str());
+}
+bool UVcgsSubsystem::HasMechanic(const FString& Mechanic) const { return Game && Game->HasMechanic(ToStd(Mechanic)); }
+FString UVcgsSubsystem::GetMechanicDetail(const FString& Mechanic, const FString& Field) const
+{
+    return StoryData ? ToF(vcgs::Story::Find(StoryData->Mechanics, ToStd(Mechanic))["fields"][ToStd(Field)].Str()) : FString();
+}
 
 FString UVcgsSubsystem::Onward(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Onward(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::NodeKind(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::KindOf(*Game, ToStd(Node))) : FString(); }
@@ -757,7 +789,9 @@ export. Change the story in VC Game Studio, not these files. The plugin
 
 The game state lives in the \`UVcgsSubsystem\` (flags, items, arcs and the rest,
 all Blueprint-callable). Quests start and complete by their rules (\`OnQuestStarted\`,
-\`OnQuestCompleted\`, \`GetQuestState\`). Triggers fire and puzzles solve themselves as their
+\`OnQuestCompleted\`, \`GetQuestState\`), lore is discovered (\`OnLoreDiscovered\`,
+\`GetKnownLore\`, \`GetLoreEntry\`) and mechanics become available (\`OnMechanicAvailable\`,
+\`HasMechanic\`, \`GetMechanicDetail\`). Triggers fire and puzzles solve themselves as their
 conditions come true; \`Onward\` and \`ChooseOnGraph\` follow the graph between
 scenes.
 `;

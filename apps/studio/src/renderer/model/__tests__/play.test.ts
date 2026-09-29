@@ -259,3 +259,29 @@ describe('quests and encounters', () => {
     expect(brokenReferences(broken)).toEqual([{ owner: quest, where: 'Open the vault · starts' }]);
   });
 });
+
+describe('lore and mechanics', () => {
+  const lore = id(p, 'The Drowned Order', 'lore');
+  const lantern = id(p, 'Lantern oil', 'mechanic');
+
+  it('discovers lore and makes a mechanic available once its rule holds, and says so', () => {
+    let play = startPlay(p);
+    expect(play.world.lore[lore]).toBeUndefined();
+    expect(play.world.mechanics[lantern]).toBeUndefined();
+    // Taking the lantern makes its oil matter.
+    play = choose(p, playToDecision(p, play), 0);
+    expect(play.world.mechanics[lantern]).toBe(true);
+    expect(play.log).toContainEqual({ kind: 'mechanic', text: 'Lantern oil' });
+    // The Order's story comes out at the vault door.
+    play = toTheVault(p);
+    expect(play.world.lore[lore]).toBe(true);
+    expect(play.log).toContainEqual({ kind: 'lore', text: 'The Drowned Order' });
+  });
+
+  it('knows lore, and has a mechanic, from the start when it has no rule', () => {
+    const open = { ...p, objects: { ...p.objects, [lore]: { ...p.objects[lore]!, data: { ...p.objects[lore]!.data, rule: undefined } } } };
+    const play = startPlay(open);
+    expect(play.world.lore[lore]).toBe(true);
+    expect(play.log[0]).toEqual({ kind: 'lore', text: 'The Drowned Order' });
+  });
+});

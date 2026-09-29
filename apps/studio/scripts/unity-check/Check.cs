@@ -26,6 +26,7 @@ static class Check
         if (game.GetObjectState(Objects.RustedLever) != "down") Fail("the lever should start down");
         // The quest has no start rule: it is under way from the start.
         if (game.QuestState(Quests.OpenTheVault) != "active") Fail("Open the vault should be under way from the start, is " + game.QuestState(Quests.OpenTheVault));
+        if (game.KnowsLore(Lore.TheDrownedOrder) || game.HasMechanic(Mechanics.LanternOil)) Fail("the Order's lore and the lantern's oil should wait for their rules");
         var questsDone = new List<string>();
         game.QuestCompleted += q => questsDone.Add(q);
 
@@ -47,6 +48,8 @@ static class Check
         player.DialogueRequested += l => singles.Add(l);
         player.Start();
         if (!game.Visited.Contains(Scenes.Sc03TheVaultDoor)) Fail("starting the scene should mark it visited");
+        // Reaching the vault door reveals the Order's story.
+        if (string.Join(",", game.KnownLore) != Lore.TheDrownedOrder || story.LoreEntry(Lore.TheDrownedOrder).name != "The Drowned Order") Fail("the vault door should reveal The Drowned Order, got " + string.Join(",", game.KnownLore));
         // The cinematic, then Mara and the Explorer at once (dual dialogue: one beat), then the echo cue.
         for (var i = 0; i < 3; i++) player.Advance();
         if (duals.Count != 1 || singles.Count != 0) Fail("Mara and the Explorer should speak at once, as one beat");
@@ -89,6 +92,14 @@ static class Check
         if (!silt.Win()) Fail("a win against the eels should count");
         if (!fresh.WasWon(Encounters.EelSwarm) || !fresh.HasItem(Items.VaultKey)) Fail("winning should mark the eels won, and the scene go on to find the key");
         if (silt.Win()) Fail("there is no encounter to win now");
+
+        // Taking the lantern makes its oil a mechanic in play, with its tuning.
+        var lit = new GameState(story);
+        var available = new List<string>();
+        lit.MechanicAvailable += m => available.Add(m);
+        StoryWalker.Choose(lit, Choices.TakeTheLantern, 0);
+        Console.WriteLine("mechanics: " + string.Join(",", available) + " · tuning: " + story.MechanicDetail(Mechanics.LanternOil, "tuning"));
+        if (string.Join(",", available) != Mechanics.LanternOil || story.MechanicDetail(Mechanics.LanternOil, "tuning") != "About a minute of deep water on a full lantern") Fail("answering Take the lantern should make Lantern oil available, with its tuning");
 
         // On along the graph: the cinematic, then the ring choice, to the ending.
         var ring = StoryWalker.Onward(game, finished[0]);

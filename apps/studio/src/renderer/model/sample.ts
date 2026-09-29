@@ -204,6 +204,9 @@ export const sunkenVault = (): Project => {
   // the eels guard the silt where the key lies.
   p = setValue(p, design.quest!, 'rule', { match: 'all', items: [{ kind: 'puzzle', ref: puzzle, op: 'solved' }] });
   p = addEvent(p, theKey, 'encounter', { refId: design.encounter!, index: 0 })!.project;
+  // The Order's story comes out at the vault door; the lantern's oil matters once the lantern is taken.
+  p = setValue(p, design.lore!, 'rule', { match: 'all', items: [{ kind: 'visited', ref: vaultDoor, op: 'visited' }] });
+  p = setValue(p, design.mechanic!, 'rule', { match: 'all', items: [{ kind: 'choice', ref: c1, op: 'chose', value: '' }] });
 
   // Where it all happens: one level, tied to the scenes and the Bible.
   p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent });

@@ -47,6 +47,8 @@ const RULES: Partial<Record<StoryObject['type'], { rule: string; effects?: strin
   // Quests and encounters play in the preview (docs/PLAY-THROUGH.md).
   quest: { starts: 'Starts when (empty: from the beginning)', rule: 'Complete when', effects: 'Reward' },
   encounter: { rule: 'Can be won when', effects: 'On a win', loses: 'On a loss' },
+  lore: { rule: 'Discovered when (empty: known from the beginning)' },
+  mechanic: { rule: 'Available when (empty: from the beginning)' },
 };
 
 interface Props {

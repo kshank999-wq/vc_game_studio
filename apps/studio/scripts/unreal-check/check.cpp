@@ -74,6 +74,7 @@ int main()
     if (vcgs::StoryWalker::Onward(game, story.Start) != Scenes::Sc01TheCaveMouth) Fail("the story should start at SC-01");
     // The quest has no start rule: it is under way from the start.
     if (game.QuestState(Quests::OpenTheVault) != "active") Fail("Open the vault should be under way from the start, is " + game.QuestState(Quests::OpenTheVault));
+    if (game.KnowsLore(Lore::TheDrownedOrder) || game.HasMechanic(Mechanics::LanternOil)) Fail("the Order's lore and the lantern's oil should wait for their rules");
     std::vector<std::string> questsDone;
     game.OnQuestCompleted = [&](const std::string& q) { questsDone.push_back(q); };
 
@@ -91,6 +92,8 @@ int main()
         player.OnDialogue = [&](const std::string& l) { singles.push_back(l); };
         player.Start();
         if (!game.Visited.count(Scenes::Sc03TheVaultDoor)) Fail("starting the scene should mark it visited");
+        // Reaching the vault door reveals the Order's story.
+        if (Join(game.KnownLore, ",") != Lore::TheDrownedOrder || vcgs::Story::Find(story.Lore, Lore::TheDrownedOrder)["name"].Str() != "The Drowned Order") Fail("the vault door should reveal The Drowned Order, got " + Join(game.KnownLore, ","));
         // The cinematic, then Mara and the Explorer at once (dual dialogue: one beat), then the echo cue.
         for (int i = 0; i < 3; i++) player.Advance();
         if (duals.size() != 1 || !singles.empty()) Fail("Mara and the Explorer should speak at once, as one beat");
@@ -137,6 +140,17 @@ int main()
         if (!silt.Win()) Fail("a win against the eels should count");
         if (!fresh.WasWon(Encounters::EelSwarm) || !fresh.HasItem(Items::VaultKey)) Fail("winning should mark the eels won, and the scene go on to find the key");
         if (silt.Win()) Fail("there is no encounter to win now");
+    }
+
+    // Taking the lantern makes its oil a mechanic in play, with its tuning.
+    {
+        vcgs::GameState lit(story);
+        std::vector<std::string> available;
+        lit.OnMechanicAvailable = [&](const std::string& m) { available.push_back(m); };
+        vcgs::StoryWalker::Choose(lit, Choices::TakeTheLantern, 0);
+        const std::string tuning = vcgs::Story::Find(story.Mechanics, Mechanics::LanternOil)["fields"]["tuning"].Str();
+        std::printf("mechanics: %s · tuning: %s\n", Join(available, ",").c_str(), tuning.c_str());
+        if (Join(available, ",") != Mechanics::LanternOil || tuning != "About a minute of deep water on a full lantern") Fail("answering Take the lantern should make Lantern oil available, with its tuning");
     }
 
     const std::string ring = vcgs::StoryWalker::Onward(game, finished.empty() ? "" : finished[0]);

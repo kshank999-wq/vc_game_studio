@@ -255,6 +255,8 @@ namespace vcgs
             Index("cinematics", Cinematics);
             Index("quests", Quests);
             Index("encounters", Encounters);
+            Index("lore", Lore);
+            Index("mechanics", Mechanics);
             for (const auto& l : Root["lines"].items) Lines[l["id"].Str()] = &l;
         }
         Story(const Story&) = delete;
@@ -269,7 +271,7 @@ namespace vcgs
         const Value Root;
         std::string Name;
         std::string Start;
-        std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines, Quests, Encounters;
+        std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines, Quests, Encounters, Lore, Mechanics;
 
     private:
         void Index(const char* list, std::map<std::string, const Value*>& into)
@@ -308,15 +310,21 @@ namespace vcgs
         std::map<std::string, std::string> Quests;
         /** Encounters won. */
         std::set<std::string> Won;
+        /** Lore the player has come across, in the order they found it (the codex). */
+        std::vector<std::string> KnownLore;
+        /** Mechanics the player can use now. */
+        std::set<std::string> Mechanics;
         bool AutoRules = true;
         std::function<void(const std::string&)> OnTriggerFired;
         std::function<void(const std::string&)> OnQuestStarted;
         std::function<void(const std::string&)> OnQuestCompleted;
+        std::function<void(const std::string&)> OnLoreDiscovered;
+        std::function<void(const std::string&)> OnMechanicAvailable;
 
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); Won.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); Won.clear(); KnownLore.clear(); Mechanics.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -383,6 +391,27 @@ namespace vcgs
             Quests[quest] = state;
             if (state == "active" && OnQuestStarted) OnQuestStarted(quest);
             else if (state == "done" && OnQuestCompleted) OnQuestCompleted(quest);
+            Changed();
+        }
+
+        bool KnowsLore(const std::string& lore) const
+        {
+            for (const auto& l : KnownLore) if (l == lore) return true;
+            return false;
+        }
+        void DiscoverLore(const std::string& lore)
+        {
+            if (KnowsLore(lore)) return;
+            KnownLore.push_back(lore);
+            if (OnLoreDiscovered) OnLoreDiscovered(lore);
+            Changed();
+        }
+
+        bool HasMechanic(const std::string& mechanic) const { return Mechanics.count(mechanic) > 0; }
+        void EnableMechanic(const std::string& mechanic)
+        {
+            if (!Mechanics.insert(mechanic).second) return;
+            if (OnMechanicAvailable) OnMechanicAvailable(mechanic);
             Changed();
         }
 
@@ -495,6 +524,18 @@ namespace vcgs
             for (int round = 0; round < 8; round++)
             {
                 bool moved = false;
+                for (const auto& l : game.StoryData.Lore)
+                {
+                    if (game.KnowsLore(l.first) || !Check((*l.second)["discoveredWhen"], game)) continue;
+                    game.DiscoverLore(l.first);
+                    moved = true;
+                }
+                for (const auto& m : game.StoryData.Mechanics)
+                {
+                    if (game.HasMechanic(m.first) || !Check((*m.second)["availableWhen"], game)) continue;
+                    game.EnableMechanic(m.first);
+                    moved = true;
+                }
                 for (const auto& q : game.StoryData.Quests)
                 {
                     const Value& quest = *q.second;

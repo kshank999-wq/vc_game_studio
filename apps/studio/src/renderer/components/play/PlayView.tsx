@@ -94,6 +94,18 @@ const EntryView = ({ entry }: { entry: Entry }) => {
           {entry.detail && <span className="play-note"> · {entry.detail}</span>}
         </div>
       );
+    case 'lore':
+      return (
+        <div className="play-lore">
+          <Symbol type="lore" size={12} /> Discovered: {entry.text}
+        </div>
+      );
+    case 'mechanic':
+      return (
+        <div className="play-mechanic">
+          <Symbol type="mechanic" size={12} /> Now available: {entry.text}
+        </div>
+      );
     case 'end':
       return <div className="play-end">{entry.text}</div>;
   }
@@ -110,6 +122,36 @@ const WorldPanel = ({ project, world, onChange }: { project: Project; world: Pla
   const objects = of('object').filter((o) => statesOf(o).length);
   const characters = of('character');
   const quests = of('quest');
+  const known = (type: 'lore' | 'mechanic') => of(type);
+  const toggles = (type: 'lore' | 'mechanic', title: string, label: string) => {
+    const list = known(type);
+    const key = type === 'lore' ? 'lore' : 'mechanics';
+    return list.length > 0 ? (
+      <section>
+        <h3>{title}</h3>
+        {list.map((o) => (
+          <label key={o.id} className="play-row">
+            <span>{o.name}</span>
+            <input
+              type="checkbox"
+              className="pref-switch"
+              aria-label={`${label} ${o.name}`}
+              checked={!!world[key][o.id]}
+              onChange={(e) => {
+                const on = e.currentTarget.checked;
+                onChange((w) => {
+                  const next = { ...w[key] };
+                  if (on) next[o.id] = true;
+                  else delete next[o.id];
+                  return { ...w, [key]: next };
+                });
+              }}
+            />
+          </label>
+        ))}
+      </section>
+    ) : null;
+  };
   const chosen = Object.entries(world.chosen).filter(([id]) => project.objects[id]);
   const named = (record: Record<string, boolean>) => Object.keys(record).filter((id) => record[id] && project.objects[id]).map((id) => project.objects[id]!.name);
   return (
@@ -214,6 +256,8 @@ const WorldPanel = ({ project, world, onChange }: { project: Project; world: Pla
           ))}
         </section>
       )}
+      {toggles('mechanic', 'Mechanics', 'Available:')}
+      {toggles('lore', 'Lore', 'Discovered:')}
       <section>
         <h3>So far</h3>
         <dl className="play-facts">

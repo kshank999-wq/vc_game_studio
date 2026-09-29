@@ -130,8 +130,11 @@ project.
 3. For an object, add **VcgsInteractable** with its key (\`VCGS.Keys.Objects\`)
    and call \`Interact("Pull")\` from your input code.
 4. \`VcgsGame.Instance.State\` is the playthrough: flags, items, arcs and the
-   rest. Triggers fire, puzzles solve themselves and quests start and complete
-   (\`QuestStarted\`, \`QuestCompleted\`) as their conditions come true;
+   rest. Triggers fire, puzzles solve themselves, quests start and complete
+   (\`QuestStarted\`, \`QuestCompleted\`), lore is discovered (\`LoreDiscovered\`,
+   \`KnownLore\`, \`Story.LoreEntry\`) and mechanics become available
+   (\`MechanicAvailable\`, \`HasMechanic\`, \`Story.MechanicDetail\`) as their
+   conditions come true;
    \`StoryWalker\` follows the graph between scenes.
 
 The Characters, Items, Locations and Cinematics folders hold a ScriptableObject
