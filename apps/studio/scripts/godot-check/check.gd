@@ -311,6 +311,17 @@ func _initialize() -> void:
 		fail("searching for lantern should show the oil and the eels, got " + silt_player.codex_text("LANTERN"))
 	if silt_player.codex_text("quests") != "CODEX\n\nNothing matches \"quests\".":
 		fail("a search with no match should say so, got " + silt_player.codex_text("quests"))
+	# Filter by section: only that one, alone or with the search.
+	if silt_player.codex_section_keys() != ["quests", "characters", "locations", "items", "objects", "mechanics", "encounters", "lore"]:
+		fail("the codex should offer every section, got " + str(silt_player.codex_section_keys()))
+	silt_player.set_codex_section("lore")
+	if silt_player.codex_section() != "lore" or silt_player.codex_text("", "lore") != "CODEX\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.":
+		fail("filtering to lore should show only the lore, got " + silt_player.codex_text("", "lore"))
+	if silt_player.codex_text("lantern", "lore") != "CODEX\n\nNothing matches \"lantern\" in Lore.":
+		fail("a search with no match in a section should say so, got " + silt_player.codex_text("lantern", "lore"))
+	if silt_player.codex_text("", "objects") != "CODEX\n\nOBJECTS · 0 of 1 used\nNone yet.":
+		fail("an empty section should say so, got " + silt_player.codex_text("", "objects"))
+	silt_player.set_codex_section("")
 	silt_player.set_codex_search("")
 	if silt_player.codex_search() != "":
 		fail("clearing the search should empty it")

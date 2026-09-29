@@ -713,12 +713,24 @@ export interface CodexSection {
 /** Whether a search finds an entry: the query, ignoring case, anywhere in the entry as written (its heading and counts aside). */
 export const codexMatches = (text: string, query: string) => !query.trim() || text.toLowerCase().includes(query.trim().toLowerCase());
 
+/** Each section's name, for a filter by section and for "Nothing matches … in Lore". */
+export const CODEX_SECTION_NAMES: Record<CodexSection['key'], string> = {
+  quests: 'Quests',
+  characters: 'Characters',
+  locations: 'Locations',
+  items: 'Items',
+  objects: 'Objects',
+  mechanics: 'Mechanics',
+  encounters: 'Encounters',
+  lore: 'Lore',
+};
+
 /**
  * The codex's sections in words, the same as Godot, Unity and Unreal write
  * them. With a search, only the entries it finds, and only the sections with
- * any (their headings still count everything).
+ * any (their headings still count everything). With a section, only that one.
  */
-export const codexSections = (project: Project, world: PlayWorld, query = ''): CodexSection[] => {
+export const codexSections = (project: Project, world: PlayWorld, query = '', section = ''): CodexSection[] => {
   const c = codexOf(project, world);
   const all: (CodexSection | false)[] = [
     !!c.quests && {
@@ -781,15 +793,19 @@ export const codexSections = (project: Project, world: PlayWorld, query = ''): C
       entries: c.lore.map((l) => ({ id: l.id, text: `${l.name.toUpperCase()}\n${l.text}` })),
     },
   ];
-  const sections = all.filter((x): x is CodexSection => !!x);
+  const sections = all.filter((x): x is CodexSection => !!x && (!section || x.key === section));
   if (!query.trim()) return sections;
   return sections.map((s) => ({ ...s, entries: s.entries.filter((e) => codexMatches(e.text, query)) })).filter((s) => s.entries.length);
 };
 
-/** The codex in words, exactly as Godot, Unity and Unreal write it; with a search, only what it finds. */
-export const codexText = (project: Project, world: PlayWorld, query = ''): string => {
-  const sections = codexSections(project, world, query);
-  if (query.trim() && !sections.length) return `CODEX\n\nNothing matches "${query.trim()}".`;
+/** The sections this codex has (those with anything to find), in order: what a filter by section offers. */
+export const codexSectionKeys = (project: Project, world: PlayWorld): CodexSection['key'][] => codexSections(project, world).map((s) => s.key);
+
+/** The codex in words, exactly as Godot, Unity and Unreal write it; with a search, only what it finds; with a section, only that one. */
+export const codexText = (project: Project, world: PlayWorld, query = '', section = ''): string => {
+  const sections = codexSections(project, world, query, section);
+  const within = section in CODEX_SECTION_NAMES ? ` in ${CODEX_SECTION_NAMES[section as CodexSection['key']]}` : '';
+  if (query.trim() && !sections.length) return `CODEX\n\nNothing matches "${query.trim()}"${within}.`;
   const parts = sections.map((s) => s.heading + (s.entries.length ? s.entries.map((e) => s.sep + e.text).join('') : `\n${s.empty}`));
   return ['CODEX', ...parts].join('\n\n');
 };

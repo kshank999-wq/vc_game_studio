@@ -252,7 +252,9 @@ public:
 
     /** The codex in words: the quest log, the characters met, the locations visited, the items found, the objects used, the mechanics, the encounters met, then the lore found (AVcgsCodexHUD draws it). */
     /** With a Search, only the entries it finds (ignoring case), in the sections that have any. */
-    UFUNCTION(BlueprintPure, Category = "VCGS|Codex") FString GetCodexText(const FString& Search = TEXT("")) const;
+    UFUNCTION(BlueprintPure, Category = "VCGS|Codex") FString GetCodexText(const FString& Search = TEXT(""), const FString& Section = TEXT("")) const;
+    /** The sections this story's codex has ("quests", "lore"…), in order: what a filter by section offers. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Codex") TArray<FString> GetCodexSections() const;
     /** Quest, character, location, item, object, mechanic, encounter and lore updates since the codex was last read. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 GetCodexNewCount();
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") void MarkCodexRead();
@@ -372,7 +374,13 @@ bool UVcgsSubsystem::WasVisited(const FString& Scene) const { return Game && Gam
 bool UVcgsSubsystem::GateOpen(const FString& Gate) const { return !Game || vcgs::Rules::GateOpen(ToStd(Gate), *Game); }
 FString UVcgsSubsystem::GetQuestState(const FString& Quest) const { return Game ? ToF(Game->QuestState(ToStd(Quest))) : FString(); }
 bool UVcgsSubsystem::WasWon(const FString& Encounter) const { return Game && Game->WasWon(ToStd(Encounter)); }
-FString UVcgsSubsystem::GetCodexText(const FString& Search) const { return CodexData ? ToF(CodexData->Text(ToStd(Search))) : FString(); }
+FString UVcgsSubsystem::GetCodexText(const FString& Search, const FString& Section) const { return CodexData ? ToF(CodexData->Text(ToStd(Search), ToStd(Section))) : FString(); }
+TArray<FString> UVcgsSubsystem::GetCodexSections() const
+{
+    TArray<FString> Keys;
+    if (CodexData) for (const std::string& Key : CodexData->SectionKeys()) Keys.Add(ToF(Key));
+    return Keys;
+}
 int32 UVcgsSubsystem::GetCodexNewCount() { return CodexData ? CodexData->New() : 0; }
 void UVcgsSubsystem::MarkCodexRead() { if (CodexData) CodexData->MarkRead(); }
 TArray<FString> UVcgsSubsystem::GetMetEncounters() const
@@ -476,7 +484,8 @@ class UVcgsSubsystem;
  * everything found so far. Set it as the game mode's HUD class; press CodexKey
  * (C) to open it, C or Escape to close, or call ToggleCodex. Press / to search:
  * type letters, digits and spaces (Backspace deletes), Enter to stop typing,
- * Escape to clear the search; or call SetCodexSearch from your own UI.
+ * Escape to clear the search; or call SetCodexSearch from your own UI. Tab
+ * shows the next section alone (then All again); or call SetCodexSection.
  */
 UCLASS()
 class VCGS_API AVcgsCodexHUD : public AHUD
@@ -491,6 +500,9 @@ public:
     /** Show only the codex entries that match ("" for everything). */
     UFUNCTION(BlueprintCallable, Category = "VCGS") void SetCodexSearch(const FString& Search);
     UFUNCTION(BlueprintPure, Category = "VCGS") FString GetCodexSearch() const;
+    /** Show only one section ("quests", "lore"…; "" for all of them). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") void SetCodexSection(const FString& Section);
+    UFUNCTION(BlueprintPure, Category = "VCGS") FString GetCodexSection() const;
     UFUNCTION(BlueprintPure, Category = "VCGS") bool IsTypingSearch() const { return bTypingSearch; }
 
     virtual void DrawHUD() override;
@@ -499,6 +511,7 @@ private:
     bool bCodexOpen = false;
     bool bTypingSearch = false;
     std::string SearchText;
+    std::string SectionKey;
     UVcgsSubsystem* Subsystem() const;
     /** While typing a search: add the keys just pressed to it. */
     void TypeSearch();
@@ -526,6 +539,8 @@ UVcgsSubsystem* AVcgsCodexHUD::Subsystem() const
 
 void AVcgsCodexHUD::SetCodexSearch(const FString& Search) { SearchText = ToStd(Search); }
 FString AVcgsCodexHUD::GetCodexSearch() const { return ToF(SearchText); }
+void AVcgsCodexHUD::SetCodexSection(const FString& Section) { SectionKey = ToStd(Section); }
+FString AVcgsCodexHUD::GetCodexSection() const { return ToF(SectionKey); }
 
 void AVcgsCodexHUD::TypeSearch()
 {
@@ -560,6 +575,15 @@ void AVcgsCodexHUD::DrawHUD()
     if (!Book || !Canvas) return;
     if (PlayerOwner && bCodexOpen && bTypingSearch) TypeSearch();
     else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Slash)) bTypingSearch = true;
+    else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Tab))
+    {
+        // The next section alone, then All again.
+        std::vector<std::string> Options = {""};
+        for (const std::string& Key : Book->SectionKeys()) Options.push_back(Key);
+        size_t At = 0;
+        while (At < Options.size() && Options[At] != SectionKey) At++;
+        SectionKey = Options[(At + 1) % Options.size()];
+    }
     else if (PlayerOwner && (PlayerOwner->WasInputKeyJustPressed(CodexKey) || (bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Escape)))) ToggleCodex();
 
     const float Width = Canvas->ClipX;
@@ -584,13 +608,18 @@ void AVcgsCodexHUD::DrawHUD()
         DrawText(ToF("Search: " + SearchText + (bTypingSearch ? "_" : "")), Gold, Left + 18.f, Y);
         Y += 30.f;
     }
-    for (const std::string& Line : vcgs::Codex::Wrap(Book->Text(SearchText), Columns > 20 ? Columns : 20))
+    if (!SectionKey.empty())
+    {
+        DrawText(ToF("Showing: " + vcgs::Codex::Title(SectionKey) + " (Tab for the next)"), Gold, Left + 18.f, Y);
+        Y += 30.f;
+    }
+    for (const std::string& Line : vcgs::Codex::Wrap(Book->Text(SearchText, SectionKey), Columns > 20 ? Columns : 20))
     {
         if (Y > Top + PanelHeight - 44.f) break;
         DrawText(ToF(Line), Line == "CODEX" ? Gold : Ink, Left + 18.f, Y);
         Y += 22.f;
     }
-    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ to search · C or Esc to close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
+    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ to search · Tab for a section · C or Esc to close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
 }
 `,
 

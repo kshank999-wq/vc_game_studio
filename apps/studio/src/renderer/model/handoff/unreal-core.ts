@@ -782,17 +782,43 @@ namespace vcgs
             return "Codex (" + key + ")" + (n > 0 ? " · " + std::to_string(n) + " new" : "");
         }
 
+        /** Every section a codex can have, in the order it shows them. */
+        static const std::vector<std::string>& Sections()
+        {
+            static const std::vector<std::string> all = {"quests", "characters", "locations", "items", "objects", "mechanics", "encounters", "lore"};
+            return all;
+        }
+
+        /** The sections this story's codex has (those with anything to find), in order: what a filter by section offers. */
+        std::vector<std::string> SectionKeys() const
+        {
+            const Story& s = game.StoryData;
+            const bool has[] = {!s.Quests.empty(), s.CodexCharacters() > 0, s.CodexLocations() > 0, s.CodexItems() > 0, s.CodexObjects() > 0, !s.Mechanics.empty(), !s.Encounters.empty(), !s.Lore.empty()};
+            std::vector<std::string> keys;
+            for (size_t i = 0; i < Sections().size(); i++) if (has[i]) keys.push_back(Sections()[i]);
+            return keys;
+        }
+
+        /** A section's name for the player: "lore" reads "Lore". */
+        static std::string Title(std::string key)
+        {
+            if (!key.empty() && key[0] >= 'a' && key[0] <= 'z') key[0] = static_cast<char>(key[0] - 'a' + 'A');
+            return key;
+        }
+
         /**
          * The whole codex in words, the same as Godot's placeholder scenes show it.
          * With a search, only the entries it finds (ignoring case), in the sections
-         * that have any; the headings still count everything.
+         * that have any; the headings still count everything. With a section
+         * ("quests", "lore"…, as SectionKeys lists them), only that one.
          */
-        std::string Text(const std::string& query = "") const
+        std::string Text(const std::string& query = "", const std::string& only = "") const
         {
             const std::string q = Lower(Trim(query));
             std::vector<std::string> parts;
-            auto section = [&](const std::string& heading, const std::vector<std::string>& entries, const char* sep, const char* empty)
+            auto section = [&](const char* key, const std::string& heading, const std::vector<std::string>& entries, const char* sep, const char* empty)
             {
+                if (!only.empty() && only != key) return;
                 std::vector<std::string> shown;
                 for (const std::string& e : entries) if (q.empty() || Lower(e).find(q) != std::string::npos) shown.push_back(e);
                 if (!q.empty() && shown.empty()) return;
@@ -815,7 +841,7 @@ namespace vcgs
                 }
                 const std::string heading = "QUESTS · " + std::to_string(active.size()) + " under way, " + std::to_string(done.size()) + " done";
                 active.insert(active.end(), done.begin(), done.end());
-                section(heading, active, "\n", "None yet.");
+                section("quests", heading, active, "\n", "None yet.");
             }
             if (const size_t withEntry = game.StoryData.CodexCharacters())
             {
@@ -825,7 +851,7 @@ namespace vcgs
                     const std::string codex = game.StoryData.CharacterCodex(key);
                     if (!codex.empty()) cast.push_back(title(Story::Find(game.StoryData.Characters, key)["name"].Str(), key) + "\n" + codex);
                 }
-                section("CHARACTERS · " + std::to_string(cast.size()) + " of " + std::to_string(withEntry) + " met", cast, "\n\n", "None yet.");
+                section("characters", "CHARACTERS · " + std::to_string(cast.size()) + " of " + std::to_string(withEntry) + " met", cast, "\n\n", "None yet.");
             }
             if (const size_t withEntry = game.StoryData.CodexLocations())
             {
@@ -835,7 +861,7 @@ namespace vcgs
                     const std::string codex = game.StoryData.LocationCodex(key);
                     if (!codex.empty()) places.push_back(title(Story::Find(game.StoryData.LocationDefs, key)["name"].Str(), key) + "\n" + codex);
                 }
-                section("LOCATIONS · " + std::to_string(places.size()) + " of " + std::to_string(withEntry) + " visited", places, "\n\n", "None yet.");
+                section("locations", "LOCATIONS · " + std::to_string(places.size()) + " of " + std::to_string(withEntry) + " visited", places, "\n\n", "None yet.");
             }
             if (const size_t withEntry = game.StoryData.CodexItems())
             {
@@ -848,7 +874,7 @@ namespace vcgs
                     const int count = held == game.Items.end() ? 0 : held->second;
                     things.push_back(title(Story::Find(game.StoryData.ItemDefs, key)["name"].Str(), key) + (count > 1 ? " (carried ×" + std::to_string(count) + ")" : count == 1 ? " (carried)" : "") + "\n" + codex);
                 }
-                section("ITEMS · " + std::to_string(things.size()) + " of " + std::to_string(withEntry) + " found", things, "\n\n", "None yet.");
+                section("items", "ITEMS · " + std::to_string(things.size()) + " of " + std::to_string(withEntry) + " found", things, "\n\n", "None yet.");
             }
             if (const size_t withEntry = game.StoryData.CodexObjects())
             {
@@ -860,7 +886,7 @@ namespace vcgs
                     const std::string now = game.GetObjectState(key);
                     props.push_back(title(Story::Find(game.StoryData.Objects, key)["name"].Str(), key) + (now.empty() ? "" : " (" + now + ")") + "\n" + codex);
                 }
-                section("OBJECTS · " + std::to_string(props.size()) + " of " + std::to_string(withEntry) + " used", props, "\n\n", "None yet.");
+                section("objects", "OBJECTS · " + std::to_string(props.size()) + " of " + std::to_string(withEntry) + " used", props, "\n\n", "None yet.");
             }
             if (!game.StoryData.Mechanics.empty())
             {
@@ -871,7 +897,7 @@ namespace vcgs
                     const std::string controls = m["fields"]["controls"].Str();
                     usable.push_back(title(m["name"].Str(), key) + (controls.empty() ? "" : "\nControls: " + controls) + "\n" + m["notes"].Str());
                 }
-                section("MECHANICS · " + std::to_string(usable.size()) + " of " + std::to_string(game.StoryData.Mechanics.size()) + " available", usable, "\n\n", "None yet.");
+                section("mechanics", "MECHANICS · " + std::to_string(usable.size()) + " of " + std::to_string(game.StoryData.Mechanics.size()) + " available", usable, "\n\n", "None yet.");
             }
             if (!game.StoryData.Encounters.empty())
             {
@@ -885,7 +911,7 @@ namespace vcgs
                     if (game.WasWon(key)) won++;
                     faced.push_back(title(e["name"].Str(), key) + (game.WasWon(key) ? " (won)" : "") + (enemies.empty() ? "" : "\nEnemies: " + enemies) + (weakness.empty() ? "" : "\nWeak to: " + weakness) + "\n" + e["notes"].Str());
                 }
-                section("ENCOUNTERS · " + std::to_string(faced.size()) + " met, " + std::to_string(won) + " won", faced, "\n\n", "None yet.");
+                section("encounters", "ENCOUNTERS · " + std::to_string(faced.size()) + " met, " + std::to_string(won) + " won", faced, "\n\n", "None yet.");
             }
             if (!game.StoryData.Lore.empty())
             {
@@ -895,9 +921,14 @@ namespace vcgs
                     const Value& entry = Story::Find(game.StoryData.Lore, key);
                     found.push_back(title(entry["name"].Str(), key) + "\n" + entry["notes"].Str());
                 }
-                section("LORE · " + std::to_string(found.size()) + " of " + std::to_string(game.StoryData.Lore.size()) + " found", found, "\n\n", "Nothing found yet.");
+                section("lore", "LORE · " + std::to_string(found.size()) + " of " + std::to_string(game.StoryData.Lore.size()) + " found", found, "\n\n", "Nothing found yet.");
             }
-            if (!q.empty() && parts.empty()) return "CODEX\n\nNothing matches \"" + Trim(query) + "\".";
+            if (!q.empty() && parts.empty())
+            {
+                const auto& all = Sections();
+                const bool known = std::find(all.begin(), all.end(), only) != all.end();
+                return "CODEX\n\nNothing matches \"" + Trim(query) + "\"" + (known ? " in " + Title(only) : std::string()) + ".";
+            }
             std::string out = "CODEX";
             for (size_t i = 0; i < parts.size(); i++) out += "\n\n" + parts[i];
             return out;

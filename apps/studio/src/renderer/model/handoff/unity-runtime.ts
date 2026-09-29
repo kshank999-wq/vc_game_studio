@@ -1154,6 +1154,24 @@ namespace VCGS
             return n;
         }
 
+        /// <summary>Every section a codex can have, in the order it shows them.</summary>
+        public static readonly string[] Sections = { "quests", "characters", "locations", "items", "objects", "mechanics", "encounters", "lore" };
+
+        /// <summary>The sections this story's codex has (those with anything to find), in order: what a filter by section offers.</summary>
+        public List<string> SectionKeys()
+        {
+            var s = game.Story;
+            bool Any(Dictionary<string, Dictionary<string, object>> all, Func<string, string> entry) { foreach (var k in all.Keys) if (entry(k) != "") return true; return false; }
+            var has = new[]
+            {
+                s.Quests.Count > 0, Any(s.Characters, s.CharacterCodex), Any(s.LocationDefs, s.LocationCodex), Any(s.ItemDefs, s.ItemCodex),
+                Any(s.Objects, s.ObjectCodex), s.Mechanics.Count > 0, s.Encounters.Count > 0, s.Lore.Count > 0,
+            };
+            var keys = new List<string>();
+            for (var i = 0; i < Sections.Length; i++) if (has[i]) keys.Add(Sections[i]);
+            return keys;
+        }
+
         /// <summary>Quests under way, each with its goal, in the order they started.</summary>
         public List<(string name, string goal)> UnderWay()
         {
@@ -1178,14 +1196,17 @@ namespace VCGS
         /// <summary>
         /// The whole codex in words, the same as Godot's placeholder scenes show it.
         /// With a search, only the entries it finds (ignoring case), in the sections
-        /// that have any; the headings still count everything.
+        /// that have any; the headings still count everything. With a section
+        /// ("quests", "lore"…, as SectionKeys lists them), only that one.
         /// </summary>
-        public string Text(string query = "")
+        public string Text(string query = "", string section = "")
         {
             var q = (query ?? "").Trim();
+            var only = section ?? "";
             var parts = new List<string>();
-            void Section(string heading, List<string> entries, string sep, string empty)
+            void Section(string key, string heading, List<string> entries, string sep, string empty)
             {
+                if (only != "" && only != key) return;
                 var shown = q == "" ? entries : entries.FindAll(e => e.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
                 if (q != "" && shown.Count == 0) return;
                 var text = new StringBuilder(heading);
@@ -1201,7 +1222,7 @@ namespace VCGS
                 var lines = new List<string>();
                 foreach (var (name, goal) in active) lines.Add("• " + name + (goal != "" ? " — " + goal : ""));
                 foreach (var name in done) lines.Add("• " + name + " (done)");
-                Section("QUESTS · " + active.Count + " under way, " + done.Count + " done", lines, "\n", "None yet.");
+                Section("quests", "QUESTS · " + active.Count + " under way, " + done.Count + " done", lines, "\n", "None yet.");
             }
             var withEntry = 0;
             foreach (var c in game.Story.Characters.Keys) if (game.Story.CharacterCodex(c) != "") withEntry++;
@@ -1210,7 +1231,7 @@ namespace VCGS
                 var cast = new List<string>();
                 foreach (var key in game.MetCharacters)
                     if (game.Story.CharacterCodex(key) != "") cast.Add(Title(game.Story.CharacterName(key), key) + "\n" + game.Story.CharacterCodex(key));
-                Section("CHARACTERS · " + cast.Count + " of " + withEntry + " met", cast, "\n\n", "None yet.");
+                Section("characters", "CHARACTERS · " + cast.Count + " of " + withEntry + " met", cast, "\n\n", "None yet.");
             }
             var locationsWithEntry = 0;
             foreach (var l in game.Story.LocationDefs.Keys) if (game.Story.LocationCodex(l) != "") locationsWithEntry++;
@@ -1219,7 +1240,7 @@ namespace VCGS
                 var places = new List<string>();
                 foreach (var key in game.VisitedLocations)
                     if (game.Story.LocationCodex(key) != "") places.Add(Title(game.Story.LocationName(key), key) + "\n" + game.Story.LocationCodex(key));
-                Section("LOCATIONS · " + places.Count + " of " + locationsWithEntry + " visited", places, "\n\n", "None yet.");
+                Section("locations", "LOCATIONS · " + places.Count + " of " + locationsWithEntry + " visited", places, "\n\n", "None yet.");
             }
             var itemsWithEntry = 0;
             foreach (var i in game.Story.ItemDefs.Keys) if (game.Story.ItemCodex(i) != "") itemsWithEntry++;
@@ -1232,7 +1253,7 @@ namespace VCGS
                     var count = game.Items.TryGetValue(key, out var n) ? n : 0;
                     things.Add(Title(game.Story.ItemName(key), key) + (count > 1 ? " (carried ×" + count + ")" : count == 1 ? " (carried)" : "") + "\n" + game.Story.ItemCodex(key));
                 }
-                Section("ITEMS · " + things.Count + " of " + itemsWithEntry + " found", things, "\n\n", "None yet.");
+                Section("items", "ITEMS · " + things.Count + " of " + itemsWithEntry + " found", things, "\n\n", "None yet.");
             }
             var objectsWithEntry = 0;
             foreach (var o in game.Story.Objects.Keys) if (game.Story.ObjectCodex(o) != "") objectsWithEntry++;
@@ -1246,7 +1267,7 @@ namespace VCGS
                     var now = game.GetObjectState(key);
                     props.Add(Title(D.Str(o, "name"), key) + (now != "" ? " (" + now + ")" : "") + "\n" + game.Story.ObjectCodex(key));
                 }
-                Section("OBJECTS · " + props.Count + " of " + objectsWithEntry + " used", props, "\n\n", "None yet.");
+                Section("objects", "OBJECTS · " + props.Count + " of " + objectsWithEntry + " used", props, "\n\n", "None yet.");
             }
             if (game.Story.Mechanics.Count > 0)
             {
@@ -1257,7 +1278,7 @@ namespace VCGS
                     var controls = game.Story.MechanicDetail(key, "controls");
                     usable.Add(Title(D.Str(m, "name"), key) + (controls != "" ? "\nControls: " + controls : "") + "\n" + D.Str(m, "notes"));
                 }
-                Section("MECHANICS · " + usable.Count + " of " + game.Story.Mechanics.Count + " available", usable, "\n\n", "None yet.");
+                Section("mechanics", "MECHANICS · " + usable.Count + " of " + game.Story.Mechanics.Count + " available", usable, "\n\n", "None yet.");
             }
             if (game.Story.Encounters.Count > 0)
             {
@@ -1271,7 +1292,7 @@ namespace VCGS
                     if (game.WasWon(key)) won++;
                     faced.Add(Title(D.Str(e, "name"), key) + (game.WasWon(key) ? " (won)" : "") + (enemies != "" ? "\nEnemies: " + enemies : "") + (weakness != "" ? "\nWeak to: " + weakness : "") + "\n" + D.Str(e, "notes"));
                 }
-                Section("ENCOUNTERS · " + faced.Count + " met, " + won + " won", faced, "\n\n", "None yet.");
+                Section("encounters", "ENCOUNTERS · " + faced.Count + " met, " + won + " won", faced, "\n\n", "None yet.");
             }
             if (game.Story.Lore.Count > 0)
             {
@@ -1281,15 +1302,17 @@ namespace VCGS
                     var (name, text) = game.Story.LoreEntry(key);
                     found.Add(Title(name, key) + "\n" + text);
                 }
-                Section("LORE · " + found.Count + " of " + game.Story.Lore.Count + " found", found, "\n\n", "Nothing found yet.");
+                Section("lore", "LORE · " + found.Count + " of " + game.Story.Lore.Count + " found", found, "\n\n", "Nothing found yet.");
             }
-            if (q != "" && parts.Count == 0) return "CODEX\n\nNothing matches \"" + q + "\".";
+            if (q != "" && parts.Count == 0) return "CODEX\n\nNothing matches \"" + q + "\"" + (Array.IndexOf(Sections, only) >= 0 ? " in " + char.ToUpperInvariant(only[0]) + only.Substring(1) : "") + ".";
             return "CODEX\n\n" + string.Join("\n\n", parts);
         }
     }
 }
 `,
   'VcgsCodex.cs': String.raw`${HEAD}
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace VCGS
@@ -1299,7 +1322,8 @@ namespace VCGS
     /// Codex button in the top corner (it counts what is new) and a panel with
     /// everything found so far, and a search box over it. Put it next to
     /// VcgsGame; press C (or the button) to open it, C or Escape to close, and
-    /// / to search (Escape clears the search, then leaves the box). Drawn with
+    /// / to search (Escape clears the search, then leaves the box), and Tab
+    /// (or the row of buttons) to show one section. Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1313,6 +1337,8 @@ namespace VCGS
 
         /// <summary>What the search box holds: the codex shows only the entries it finds ("" for everything).</summary>
         public string Search { get; set; } = "";
+        /// <summary>The section the codex is filtered to ("" for all of them; Tab picks the next).</summary>
+        public string Section { get; set; } = "";
 
         const string SearchControl = "vcgs-codex-search";
         Codex book;
@@ -1332,6 +1358,14 @@ namespace VCGS
         {
             if (IsOpen) Close();
             else Open();
+        }
+
+        /// <summary>All, then each section this story's codex has.</summary>
+        List<string> Options()
+        {
+            var options = new List<string> { "" };
+            options.AddRange(Book.SectionKeys());
+            return options;
         }
 
         /// <summary>What the button says: "Codex (C)", or with how many are new.</summary>
@@ -1354,6 +1388,12 @@ namespace VCGS
                 GUI.FocusControl(SearchControl);
                 e.Use();
             }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.Tab)
+            {
+                var options = Options();
+                Section = options[(options.IndexOf(Section ?? "") + (e.shift ? -1 : 1) + options.Count) % options.Count];
+                e.Use();
+            }
             else if (e.type == EventType.KeyDown && !typing && (e.keyCode == key || (IsOpen && e.keyCode == KeyCode.Escape)))
             {
                 Toggle();
@@ -1368,8 +1408,14 @@ namespace VCGS
             GUILayout.BeginArea(new Rect(area.x + 18, area.y + 18, area.width - 36, area.height - 36));
             GUI.SetNextControlName(SearchControl);
             Search = GUILayout.TextField(Search ?? "");
+            var sections = Options();
+            if (sections.Count > 2)
+            {
+                var names = sections.ConvertAll(k => k == "" ? "All" : char.ToUpperInvariant(k[0]) + k.Substring(1)).ToArray();
+                Section = sections[GUILayout.Toolbar(Math.Max(0, sections.IndexOf(Section ?? "")), names)];
+            }
             scroll = GUILayout.BeginScrollView(scroll);
-            GUILayout.Label(Book.Text(Search), text);
+            GUILayout.Label(Book.Text(Search, Section), text);
             GUILayout.EndScrollView();
             if (GUILayout.Button("Close")) Close();
             GUILayout.EndArea();

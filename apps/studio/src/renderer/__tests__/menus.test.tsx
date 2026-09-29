@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { fileNameFor, parse, serialize } from '../files';
@@ -204,6 +204,17 @@ describe('play-through', () => {
     expect(screen.getByRole('dialog', { name: 'Codex' })).toBeTruthy();
     fireEvent.change(search, { target: { value: 'nothing like it' } });
     expect(codex.textContent).toContain('Nothing matches “nothing like it”.');
+    // Filter by section: only Encounters, then with the search too, then All again.
+    const sections = within(codex).getByRole('group', { name: 'Codex sections' });
+    fireEvent.click(within(sections).getByRole('button', { name: 'Encounters' }));
+    expect(within(sections).getByRole('button', { name: 'Encounters' }).getAttribute('aria-pressed')).toBe('true');
+    expect(codex.textContent).toContain('Nothing matches “nothing like it” in Encounters.');
+    fireEvent.change(search, { target: { value: 'lantern' } });
+    expect(codex.textContent).toContain('Eel swarm');
+    expect(codex.textContent).not.toContain('MaraA guide');
+    fireEvent.click(within(sections).getByRole('button', { name: 'All' }));
+    expect(codex.textContent).toContain('MaraA guide');
+    fireEvent.change(search, { target: { value: 'nothing like it' } });
     // Escape clears the search, then leaves the box.
     fireEvent.keyDown(search, { key: 'Escape' });
     expect(search.value).toBe('');

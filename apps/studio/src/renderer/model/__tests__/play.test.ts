@@ -406,6 +406,23 @@ describe('the codex', () => {
     expect(codexText(p, world, 'vault')).toContain('QUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nLOCATIONS');
   });
 
+  it('filters the codex by section, alone or with a search', async () => {
+    const { codexText, codexSectionKeys } = await import('../play');
+    const world = toTheVault(p).world;
+    expect(codexSectionKeys(p, world)).toEqual(['quests', 'characters', 'locations', 'items', 'objects', 'mechanics', 'encounters', 'lore']);
+    expect(codexText(p, world, '', 'lore')).toBe(
+      'CODEX\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.',
+    );
+    // An empty section still shows, saying so.
+    expect(codexText(p, world, '', 'objects')).toBe('CODEX\n\nOBJECTS · 0 of 1 used\nNone yet.');
+    // With a search: only that section's matches, or where nothing matched.
+    expect(codexText(p, world, 'lantern', 'mechanics')).toBe(
+      'CODEX\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.',
+    );
+    expect(codexText(p, world, 'lantern', 'lore')).toBe('CODEX\n\nNothing matches "lantern" in Lore.');
+    expect(codexText(p, world, '', '')).toBe(codexText(p, world));
+  });
+
   it('lists a character once heard, and only one with a codex entry', async () => {
     const { codexText, codexProgress } = await import('../play');
     const mara = id(p, 'Mara');

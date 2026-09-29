@@ -117,7 +117,13 @@ the studio's play-through:
   `codex_text(query)`, `set_codex_search`); Unity's too (`Codex.Text(query)`,
   `VcgsCodex.Search`); Unreal's HUD takes / then typed letters, digits and
   spaces (Enter stops, Escape clears; `GetCodexText(Search)`,
-  `SetCodexSearch`).
+  `SetCodexSearch`). Each also filters by section ("quests", "characters",
+  "locations", "items", "objects", "mechanics", "encounters", "lore"; only
+  those the story has): Godot's screen has a row of buttons and Tab
+  (`codex_text(query, section)`, `set_codex_section`, `codex_section_keys()`);
+  Unity's a toolbar and Tab (`Codex.Text(query, section)`, `Codex.SectionKeys`,
+  `VcgsCodex.Section`); Unreal's HUD Tab (`GetCodexText(Search, Section)`,
+  `GetCodexSections`, `SetCodexSection`).
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

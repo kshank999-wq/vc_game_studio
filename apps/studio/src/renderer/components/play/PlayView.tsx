@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
-import { advance, choose, codexOf, codexProgress, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, choose, CODEX_SECTION_NAMES, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { Symbol } from '../Symbol';
 import { Inline } from '../Inline';
@@ -115,9 +115,11 @@ const EntryView = ({ entry }: { entry: Entry }) => {
 const CodexPanel = ({ project, world, onClose }: { project: Project; world: PlayWorld; onClose: () => void }) => {
   const c = codexOf(project, world);
   const [query, setQuery] = useState('');
+  const [section, setSection] = useState<CodexSection['key'] | ''>('');
   const search = useRef<HTMLInputElement>(null);
-  // With a search: the entries it finds, by section (the same rule as the engines' codex).
-  const found = query.trim() ? new Map(codexSections(project, world, query).map((s) => [s.key, new Set(s.entries.map((e) => e.id))])) : null;
+  const keys = codexSectionKeys(project, world);
+  // With a search or a section: the entries shown, by section (the same rule as the engines' codex).
+  const found = query.trim() || section ? new Map(codexSections(project, world, query, section).map((s) => [s.key, new Set(s.entries.map((e) => e.id))])) : null;
   const has = (key: CodexSection['key']) => !found || found.has(key);
   const keep = (key: CodexSection['key']) => (x: { id: string }) => !found || !!found.get(key)?.has(x.id);
   useEffect(() => {
@@ -159,7 +161,20 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           }
         }}
       />
-      {found && !found.size && <p className="play-note">Nothing matches “{query.trim()}”.</p>}
+      {keys.length > 1 && (
+        <div className="play-codex-filters" role="group" aria-label="Codex sections">
+          {(['', ...keys] as const).map((k) => (
+            <button key={k || 'all'} className={`play-codex-filter${section === k ? ' on' : ''}`} aria-pressed={section === k} onClick={() => setSection(k)}>
+              {k ? CODEX_SECTION_NAMES[k] : 'All'}
+            </button>
+          ))}
+        </div>
+      )}
+      {found && !found.size && query.trim() && (
+        <p className="play-note">
+          Nothing matches “{query.trim()}”{section ? ` in ${CODEX_SECTION_NAMES[section]}` : ''}.
+        </p>
+      )}
       {c.quests > 0 && has('quests') && (
         <section aria-label="Quests">
           <h3>

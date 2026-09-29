@@ -386,11 +386,11 @@ describe('quests and encounters in the engines', () => {
     expect(file('addons/vcgs_runtime/scene_flow.gd')).toContain('signal encounter_requested(encounter_key: String, can_win: bool)');
     // The placeholder scenes' player has a codex of the lore found.
     const player = file('addons/vcgs_runtime/debug_player.gd');
-    expect(player).toContain('func codex_text(query := "") -> String:');
+    expect(player).toContain('func codex_text(query := "", section := "") -> String:');
     expect(player).toContain('game.lore_discovered.connect(_on_codex_news)');
     expect(player).toContain('game.quest_started.connect(_on_codex_news)');
     // Unity and Unreal have one too: the same text, a screen to draw it.
-    expect(RUNTIME_FILES['Codex.cs']).toContain('public string Text(string query = "")');
+    expect(RUNTIME_FILES['Codex.cs']).toContain('public string Text(string query = "", string section = "")');
     expect(RUNTIME_FILES['VcgsCodex.cs']).toContain('public sealed class VcgsCodex : MonoBehaviour');
     expect(VCGS_CORE_H).toContain('class Codex');
     const { PLUGIN_FILES } = await import('../handoff/unreal');

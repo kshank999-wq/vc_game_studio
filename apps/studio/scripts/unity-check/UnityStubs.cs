@@ -256,7 +256,7 @@ namespace UnityEngine
         public Rect(float x, float y, float width, float height) { this.x = x; this.y = y; this.width = width; this.height = height; }
     }
 
-    public enum KeyCode { None, C, Escape, Return, Slash }
+    public enum KeyCode { None, C, Escape, Return, Slash, Tab }
     public enum EventType { KeyDown, KeyUp, Repaint, Layout }
 
     public sealed class Event
@@ -264,6 +264,7 @@ namespace UnityEngine
         public static Event current = new Event();
         public EventType type = EventType.Repaint;
         public KeyCode keyCode;
+        public bool shift;
         public void Use() { }
     }
 
@@ -307,6 +308,7 @@ namespace UnityEngine
         public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
         public static bool Button(string text, params GUILayoutOption[] options) => false;
         public static string TextField(string text, params GUILayoutOption[] options) => text;
+        public static int Toolbar(int selected, string[] texts, params GUILayoutOption[] options) => selected;
     }
 
     public static class Mathf

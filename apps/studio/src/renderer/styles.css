@@ -5332,6 +5332,35 @@ kbd {
   border-color: var(--gold);
 }
 
+.play-codex-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+
+.play-codex-filter {
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-soft);
+  background: var(--node);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.play-codex-filter:hover {
+  border-color: var(--gold-lo);
+  color: var(--text);
+}
+
+.play-codex-filter.on {
+  color: var(--ground);
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
 .play-codex h3 {
   margin: 14px 0 6px;
   font-size: 12px;
