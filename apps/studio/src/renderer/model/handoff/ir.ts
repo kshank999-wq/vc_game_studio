@@ -332,7 +332,11 @@ export const DESIGN_LISTS = [
 ] as const satisfies readonly { list: keyof HandoffIR; type: ObjectType; label: string; folder: string; group: string }[];
 
 const fieldsOf = (o: StoryObject): Record<string, string> =>
-  Object.fromEntries(Object.entries(o.data).filter(([k, v]) => typeof v === 'string' && !['code', 'color', 'initialState', 'setsFlag', 'fromNote'].includes(k)) as [string, string][]);
+  Object.fromEntries(
+    (Object.entries(o.data).filter(([k, v]) => typeof v === 'string' && !['code', 'color', 'initialState', 'setsFlag', 'fromNote'].includes(k)) as [string, string][])
+      // A codex entry reads as written, without stray blank lines around it.
+      .map(([k, v]) => [k, k === 'codex' ? v.trim() : v]),
+  );
 
 export const buildIR = (project: Project): HandoffIR => {
   const ids = identifiers(project);

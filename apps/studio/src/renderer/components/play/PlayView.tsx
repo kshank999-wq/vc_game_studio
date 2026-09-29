@@ -111,7 +111,7 @@ const EntryView = ({ entry }: { entry: Entry }) => {
   }
 };
 
-/** The codex as the player would read it: the quest log, the characters met, the mechanics, the encounters met, then the lore found. */
+/** The codex as the player would read it: the quest log, the characters met, the items found, the mechanics, the encounters met, then the lore found. */
 const CodexPanel = ({ project, world, onClose }: { project: Project; world: PlayWorld; onClose: () => void }) => {
   const c = codexOf(project, world);
   return (
@@ -157,6 +157,23 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
                 <Symbol type="character" size={11} /> {ch.name}
               </h4>
               <p>{ch.text}</p>
+            </article>
+          ))}
+        </section>
+      )}
+      {c.itemsTotal > 0 && (
+        <section aria-label="Items">
+          <h3>
+            Items <span className="play-note">· {c.items.length} of {c.itemsTotal} found</span>
+          </h3>
+          {!c.items.length && <p className="play-note">None yet.</p>}
+          {c.items.map((i) => (
+            <article key={i.id} className="play-codex-lore play-codex-item">
+              <h4>
+                <Symbol type="inventory" size={11} /> {i.name}
+                {i.carried > 0 && <span className="play-note"> (carried{i.carried > 1 ? ` ×${i.carried}` : ''})</span>}
+              </h4>
+              <p>{i.text}</p>
             </article>
           ))}
         </section>
@@ -400,7 +417,7 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   const [seen, setSeen] = useState(0);
   const progress = codexProgress(project, play.world);
   const book = codexOf(project, play.world);
-  const hasCodex = book.quests + book.charactersTotal + book.mechanicsTotal + book.encountersTotal + book.loreTotal > 0;
+  const hasCodex = book.quests + book.charactersTotal + book.itemsTotal + book.mechanicsTotal + book.encountersTotal + book.loreTotal > 0;
   const fresh = Math.max(0, progress - seen);
   useEffect(() => {
     // Read while open; after a step back there is less to have read.

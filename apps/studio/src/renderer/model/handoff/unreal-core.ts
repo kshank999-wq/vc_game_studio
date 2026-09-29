@@ -253,6 +253,7 @@ namespace vcgs
             Index("triggers", Triggers);
             Index("flags", Flags);
             Index("characters", Characters);
+            Index("items", ItemDefs);
             Index("cinematics", Cinematics);
             Index("quests", Quests);
             Index("encounters", Encounters);
@@ -270,6 +271,15 @@ namespace vcgs
         }
         /** What the codex says about a character once met ("" keeps them out of it). */
         std::string CharacterCodex(const std::string& key) const { return Find(Characters, key)["codex"].Str(); }
+        /** What the codex says about an item once found ("" keeps it out of it). */
+        std::string ItemCodex(const std::string& key) const { return Find(ItemDefs, key)["fields"]["codex"].Str(); }
+        /** How many items have a codex entry. */
+        size_t CodexItems() const
+        {
+            size_t n = 0;
+            for (const auto& i : ItemDefs) if (!(*i.second)["fields"]["codex"].Str().empty()) n++;
+            return n;
+        }
         /** A line's speaker key ("" for none). */
         std::string Speaker(const std::string& lineId) const { return Find(Lines, lineId)["speaker"].Str(); }
         /** How many characters have a codex entry. */
@@ -284,6 +294,8 @@ namespace vcgs
         std::string Name;
         std::string Start;
         std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines, Quests, Encounters, Lore, Mechanics;
+        /** Inventory items, by key: name, notes and fields (the codex entry is fields.codex). */
+        std::map<std::string, const Value*> ItemDefs;
 
     private:
         void Index(const char* list, std::map<std::string, const Value*>& into)
@@ -329,6 +341,8 @@ namespace vcgs
         std::vector<std::string> MetEncounters;
         /** Characters the player has met (heard speak), in the order met. */
         std::vector<std::string> MetCharacters;
+        /** Items the player has ever held, in the order found (carried or not now). */
+        std::vector<std::string> FoundItems;
         /** Lore the player has come across, in the order they found it (the codex). */
         std::vector<std::string> KnownLore;
         /** Mechanics the player can use now. */
@@ -344,11 +358,12 @@ namespace vcgs
         std::function<void(const std::string&)> OnEncounterMet;
         std::function<void(const std::string&)> OnEncounterWon;
         std::function<void(const std::string&)> OnCharacterMet;
+        std::function<void(const std::string&)> OnItemFound;
 
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -391,7 +406,16 @@ namespace vcgs
         }
 
         bool HasItem(const std::string& item) const { auto it = Items.find(item); return it != Items.end() && it->second > 0; }
-        void GiveItem(const std::string& item, int count = 1) { Items[item] += count; Changed(); }
+        void GiveItem(const std::string& item, int count = 1)
+        {
+            Items[item] += count;
+            if (Items[item] > 0 && std::find(FoundItems.begin(), FoundItems.end(), item) == FoundItems.end())
+            {
+                FoundItems.push_back(item);
+                if (OnItemFound) OnItemFound(item);
+            }
+            Changed();
+        }
         void TakeItem(const std::string& item, int count = 1)
         {
             int& n = Items[item];
@@ -750,6 +774,24 @@ namespace vcgs
                 if (!met) cast += "\nNone yet.";
                 parts.push_back(cast + entries);
             }
+            if (const size_t withEntry = game.StoryData.CodexItems())
+            {
+                std::string entries;
+                size_t found = 0;
+                for (const std::string& key : game.FoundItems)
+                {
+                    const std::string codex = game.StoryData.ItemCodex(key);
+                    if (codex.empty()) continue;
+                    found++;
+                    const std::string name = Story::Find(game.StoryData.ItemDefs, key)["name"].Str();
+                    auto held = game.Items.find(key);
+                    const int count = held == game.Items.end() ? 0 : held->second;
+                    entries += "\n\n" + Upper(name.empty() ? key : name) + (count > 1 ? " (carried ×" + std::to_string(count) + ")" : count == 1 ? " (carried)" : "") + "\n" + codex;
+                }
+                std::string things = "ITEMS · " + std::to_string(found) + " of " + std::to_string(withEntry) + " found";
+                if (!found) things += "\nNone yet.";
+                parts.push_back(things + entries);
+            }
             if (!game.StoryData.Mechanics.empty())
             {
                 std::string mechanics = "MECHANICS · " + std::to_string(game.MechanicOrder.size()) + " of " + std::to_string(game.StoryData.Mechanics.size()) + " available";
@@ -828,6 +870,7 @@ namespace vcgs
         {
             int n = static_cast<int>(game.KnownLore.size() + game.MechanicOrder.size() + game.MetEncounters.size() + game.Won.size());
             for (const std::string& c : game.MetCharacters) if (!game.StoryData.CharacterCodex(c).empty()) n++;
+            for (const std::string& i : game.FoundItems) if (!game.StoryData.ItemCodex(i).empty()) n++;
             for (const auto& q : game.Quests) n += q.second == "done" ? 2 : 1;
             return n;
         }

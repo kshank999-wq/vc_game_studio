@@ -47,6 +47,8 @@ monitor while you fix it on another.
   the engines' codex screens do: the quest log (quests under way with their
   goals, then those done), the characters met (anyone with a *Codex entry* in
   the Bible, once they speak a line; a character without one stays out of it),
+  the items found (the same, once held; marked while carried, and kept once
+  used up),
   the mechanics available (with their controls and
   description), the encounters met (their enemies and weakness, and whether
   they were won; one lost still shows, so its weakness is there to read) and

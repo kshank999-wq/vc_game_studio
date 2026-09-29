@@ -36,6 +36,7 @@ export const FIELDS: Partial<Record<ObjectType, readonly FieldSpec[]>> = {
   inventory: [
     { key: 'persists', label: 'Carried', options: ['Between scenes', 'This scene only'] },
     { key: 'use', label: 'How it’s used', placeholder: 'Opens the vault door; consumed' },
+    { key: 'codex', label: 'Codex entry (as the player reads it, once found)', multiline: true, placeholder: 'A heavy bronze key, green with age' },
   ],
   puzzle: [
     { key: 'solution', label: 'Solution', multiline: true, placeholder: 'Drain the seam, then turn the key' },

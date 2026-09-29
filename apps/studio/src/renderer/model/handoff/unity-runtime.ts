@@ -207,6 +207,8 @@ namespace VCGS
         public readonly Dictionary<string, Dictionary<string, object>> Encounters = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Lore = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Mechanics = new Dictionary<string, Dictionary<string, object>>();
+        /// <summary>Inventory items, by key: name, notes and fields (the codex entry is fields.codex).</summary>
+        public readonly Dictionary<string, Dictionary<string, object>> ItemDefs = new Dictionary<string, Dictionary<string, object>>();
 
         public static Story FromJson(string json) => new Story(D.Map(Json.Parse(json)));
 
@@ -231,6 +233,7 @@ namespace VCGS
             Index(root, "encounters", Encounters);
             Index(root, "lore", Lore);
             Index(root, "mechanics", Mechanics);
+            Index(root, "items", ItemDefs);
             foreach (var l in D.List(root, "lines"))
             {
                 var line = D.Map(l);
@@ -257,6 +260,9 @@ namespace VCGS
         public string CharacterName(string key) => Characters.TryGetValue(key ?? "", out var c) ? D.Str(c, "name") : "";
         /// <summary>What the codex says about a character once met ("" keeps them out of it).</summary>
         public string CharacterCodex(string key) => Characters.TryGetValue(key ?? "", out var c) ? D.Str(c, "codex").Trim() : "";
+        /// <summary>What the codex says about an item once found ("" keeps it out of it).</summary>
+        public string ItemCodex(string key) => ItemDefs.TryGetValue(key ?? "", out var i) ? D.Str(D.Map(i, "fields"), "codex").Trim() : "";
+        public string ItemName(string key) => ItemDefs.TryGetValue(key ?? "", out var i) ? D.Str(i, "name") : "";
         /// <summary>A line's speaker key ("" for none).</summary>
         public string Speaker(string lineId) => Lines.TryGetValue(lineId ?? "", out var l) ? D.Str(l, "speaker") : "";
     }
@@ -295,6 +301,8 @@ namespace VCGS
         public readonly List<string> MetEncounters = new List<string>();
         /// <summary>Characters the player has met (heard speak), in the order met.</summary>
         public readonly List<string> MetCharacters = new List<string>();
+        /// <summary>Items the player has ever held, in the order found (carried or not now).</summary>
+        public readonly List<string> FoundItems = new List<string>();
         /// <summary>Lore the player has come across, in the order they found it (the codex).</summary>
         public readonly List<string> KnownLore = new List<string>();
         /// <summary>Mechanics the player can use now.</summary>
@@ -312,6 +320,7 @@ namespace VCGS
         public event Action<string> EncounterMet;
         public event Action<string> EncounterWon;
         public event Action<string> CharacterMet;
+        public event Action<string> ItemFound;
         public bool AutoRules = true;
         bool settling;
 
@@ -325,7 +334,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -359,6 +368,11 @@ namespace VCGS
         public void GiveItem(string item, int count = 1)
         {
             Items[item] = (Items.TryGetValue(item, out var n) ? n : 0) + count;
+            if (Items[item] > 0 && !FoundItems.Contains(item))
+            {
+                FoundItems.Add(item);
+                ItemFound?.Invoke(item);
+            }
             OnChanged();
         }
 
@@ -1066,11 +1080,11 @@ namespace VCGS
     /// <summary>
     /// The codex as the player reads it: the quest log (quests under way with
     /// their goals, then those done, in the order they started), the characters
-    /// met (those with a codex entry), the mechanics
+    /// met and items found (those with a codex entry), the mechanics
     /// available, the encounters met (with their enemies and weakness, and
     /// whether they were won) and the lore found, in the order found. New counts
     /// what has happened since the codex was last read (quests starting or
-    /// completing, characters met, mechanics, encounters met or won, lore found), for a
+    /// completing, characters met, items found, mechanics, encounters met or won, lore found), for a
     /// "new" badge. Plain C#: VcgsCodex draws it, or use it in your own UI.
     /// </summary>
     public sealed class Codex
@@ -1101,6 +1115,7 @@ namespace VCGS
         {
             var n = game.KnownLore.Count + game.AvailableMechanics.Count + game.MetEncounters.Count + game.Won.Count;
             foreach (var c in game.MetCharacters) if (game.Story.CharacterCodex(c) != "") n++;
+            foreach (var i in game.FoundItems) if (game.Story.ItemCodex(i) != "") n++;
             foreach (var state in game.Quests.Values) n += state == "done" ? 2 : 1;
             return n;
         }
@@ -1153,6 +1168,21 @@ namespace VCGS
                     cast.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + "\n" + game.Story.CharacterCodex(key));
                 }
                 parts.Add(cast.ToString());
+            }
+            var itemsWithEntry = 0;
+            foreach (var i in game.Story.ItemDefs.Keys) if (game.Story.ItemCodex(i) != "") itemsWithEntry++;
+            if (itemsWithEntry > 0)
+            {
+                var found = game.FoundItems.FindAll(i => game.Story.ItemCodex(i) != "");
+                var things = new StringBuilder("ITEMS · " + found.Count + " of " + itemsWithEntry + " found");
+                if (found.Count == 0) things.Append("\nNone yet.");
+                foreach (var key in found)
+                {
+                    var name = game.Story.ItemName(key);
+                    var count = game.Items.TryGetValue(key, out var n) ? n : 0;
+                    things.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (count > 1 ? " (carried ×" + count + ")" : count == 1 ? " (carried)" : "") + "\n" + game.Story.ItemCodex(key));
+                }
+                parts.Add(things.ToString());
             }
             if (game.Story.Mechanics.Count > 0)
             {
