@@ -81,8 +81,9 @@ the studio's play-through:
   `Lose()`. A loss does its effects, then plays the encounter again, ends the
   game (`game_over` / `GameOver` / `OnGameOver`), or carries on through the
   scene. Godot's placeholder scenes stand in for the fight with Win and Lose
-  buttons, and have a codex: press C, or the Codex button (which counts new
-  entries), for the lore found so far, in the order found, with its text.
+  buttons, and have a codex: press C, or the Codex button (which counts what's
+  new), for the quest log (quests under way with their goals, then those done)
+  and the lore found so far, in the order found, with its text.
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

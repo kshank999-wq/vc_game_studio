@@ -254,6 +254,9 @@ func _initialize() -> void:
 	if player.mode != "end":
 		fail("carrying on should reach the ending, got " + player.text())
 	print("ending: ", player.text())
+	# Turning the key completed the quest: the quest log says so.
+	if not player.codex_text().contains("QUESTS · 0 under way, 1 done\n• Open the vault (done)"):
+		fail("the quest log should show Open the vault done, got " + player.codex_text())
 
 	# The whole story from its Beginning.
 	var story: Node = load("res://vcgs/generated/play_story.tscn").instantiate()
@@ -276,17 +279,18 @@ func _initialize() -> void:
 	if silt_player.text() != "[Encounter] Eel swarm" or silt_player.labels() != ["Win", "Lose"]:
 		fail("SC-02 should open on the eels with Win and Lose, got " + silt_player.text() + " " + str(silt_player.labels()))
 	# The codex, before anything is found.
-	if silt_player.codex_text() != "CODEX · 0 of 1 found\n\nNothing found yet." or silt_player.codex_button_text() != "Codex (C)":
+	if silt_player.codex_text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet." or silt_player.codex_button_text() != "Codex (C)":
 		fail("the codex should start empty, got " + silt_player.codex_text() + " / " + silt_player.codex_button_text())
 	silt_player.press(0)
 	if not game.was_won("eel_swarm") or silt_player.text() != "Find the key in the silt":
 		fail("Win should beat the eels and go on, got " + silt_player.text())
-	# The key's seal reveals the Order's story: the codex button says so, and the codex shows it.
-	if silt_player.codex_button_text() != "Codex (C) · 1 new":
+	# Finding the key starts the quest, and its seal reveals the Order's story: the codex button
+	# counts both, and the codex shows them.
+	if silt_player.codex_button_text() != "Codex (C) · 2 new":
 		fail("the codex button should mark the new entry, got " + silt_player.codex_button_text())
 	silt_player.open_codex()
 	print("codex: ", silt_player.codex_text().replace("\n", " | "))
-	if not silt_player.codex_open() or not silt_player.codex_text().begins_with("CODEX · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault") or silt_player.codex_button_text() != "Codex (C)":
+	if not silt_player.codex_open() or not silt_player.codex_text().begins_with("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault") or silt_player.codex_button_text() != "Codex (C)":
 		fail("the codex should show The Drowned Order, got " + silt_player.codex_text())
 	silt_player.close_codex()
 	if silt_player.codex_open():

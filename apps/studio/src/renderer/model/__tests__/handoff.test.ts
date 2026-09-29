@@ -387,7 +387,8 @@ describe('quests and encounters in the engines', () => {
     // The placeholder scenes' player has a codex of the lore found.
     const player = file('addons/vcgs_runtime/debug_player.gd');
     expect(player).toContain('func codex_text() -> String:');
-    expect(player).toContain('game.lore_discovered.connect(_on_lore)');
+    expect(player).toContain('game.lore_discovered.connect(_on_codex_news)');
+    expect(player).toContain('game.quest_started.connect(_on_codex_news)');
     expect(RUNTIME_FILES['ScenePlayer.cs']).toContain('public event Action<string, bool> EncounterRequested;');
     expect(RUNTIME_FILES['Rules.cs']).toContain('foreach (var q in game.Story.Quests)');
     expect(VCGS_CORE_H).toContain('std::function<void(const std::string&, bool)> OnEncounter;');
