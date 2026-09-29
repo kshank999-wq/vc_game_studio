@@ -226,6 +226,14 @@ describe('play-through', () => {
     fireEvent.click(within(sections).getByRole('button', { name: '★ Bookmarks' }));
     expect(codex.textContent).toContain('Eel swarm');
     expect(codex.textContent).not.toContain('MaraA guide');
+    // A note on it: the pencil opens a box, Enter keeps it, and it shows under the entry.
+    fireEvent.click(within(codex).getByRole('button', { name: 'Note on Eel swarm' }));
+    const box = within(codex).getByLabelText('Your note on Eel swarm');
+    fireEvent.change(box, { target: { value: 'Light the lantern first' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(within(codex).queryByLabelText('Your note on Eel swarm')).toBeNull();
+    expect(codex.textContent).toContain('Note: Light the lantern first');
+    expect(screen.getByRole('dialog', { name: 'Codex' })).toBeTruthy();
     fireEvent.change(search, { target: { value: 'lantern' } });
     fireEvent.click(within(sections).getByRole('button', { name: 'All' }));
     expect(codex.textContent).toContain('MaraA guide');

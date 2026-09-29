@@ -5393,6 +5393,19 @@ kbd {
   color: var(--gold-hi);
 }
 
+.play-codex-note {
+  margin: 4px 0 0;
+  padding-left: 8px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--gold-hi);
+  border-left: 2px solid var(--gold-lo);
+}
+
+.play-codex-note-edit {
+  margin-top: 4px;
+}
+
 .play-codex h3 {
   margin: 14px 0 6px;
   font-size: 12px;

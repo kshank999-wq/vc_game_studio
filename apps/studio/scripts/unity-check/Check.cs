@@ -146,6 +146,12 @@ static class Check
         if (book.Text("eels", "bookmarks") != "CODEX\n\nNothing matches \"eels\" in Bookmarks.") Fail("a search with no match in the bookmarks should say so, got " + book.Text("eels", "bookmarks"));
         if (string.Join(",", book.EntryKeys("", "lore")) != "lore:" + Lore.TheLastExpedition + ",lore:" + Lore.TheDrownedOrder) Fail("the cursor should move through the lore shown, got " + string.Join(",", book.EntryKeys("", "lore")));
         if (!book.Text("", "lore", "", "lore:" + Lore.TheLastExpedition).Contains("\n\n▶ THE LAST EXPEDITION\n")) Fail("the cursor entry should start with ▶, got " + book.Text("", "lore", "", "lore:" + Lore.TheLastExpedition));
+        // A note: it ends the entry, and a search finds it.
+        sorting.SetNote("lore:" + Lore.TheDrownedOrder, "  Priests, not monks  ");
+        if (sorting.NoteFor("lore:" + Lore.TheDrownedOrder) != "Priests, not monks" || !book.Text().Contains("They believed the water kept their secrets.\nNote: Priests, not monks")) Fail("the note should end the entry, got " + book.Text());
+        if (!book.Text("not monks").Contains("THE DROWNED ORDER")) Fail("a search should find the note, got " + book.Text("not monks"));
+        sorting.SetNote("lore:" + Lore.TheDrownedOrder, "");
+        if (book.Text().Contains("Note:")) Fail("an empty note should take the note off");
         if (sorting.ToggleBookmark("lore:" + Lore.TheDrownedOrder) || book.Text("", "bookmarks") != "CODEX\n\nNo bookmarks yet.") Fail("taking the bookmark off should leave none, got " + book.Text("", "bookmarks"));
         string Heads(string sort) => string.Join(",", Array.FindAll(new Codex(sorting).Text("", "lore", sort).Split('\n'), l => l.StartsWith("THE ")));
         if (Heads("") != "THE LAST EXPEDITION,THE DROWNED ORDER" || Heads("newest") != "THE DROWNED ORDER,THE LAST EXPEDITION" || Heads("name") != "THE DROWNED ORDER,THE LAST EXPEDITION") Fail("sorting the lore should order it as found, newest first and A–Z, got " + Heads("") + " / " + Heads("newest") + " / " + Heads("name"));

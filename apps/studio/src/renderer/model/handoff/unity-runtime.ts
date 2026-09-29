@@ -317,6 +317,8 @@ namespace VCGS
         public readonly List<string> UsedObjects = new List<string>();
         /// <summary>Codex entries the player has bookmarked, by key ("lore:the_drowned_order"), in the order bookmarked.</summary>
         public readonly List<string> Bookmarks = new List<string>();
+        /// <summary>The player's notes on codex entries, by key.</summary>
+        public readonly Dictionary<string, string> Notes = new Dictionary<string, string>();
         /// <summary>Lore the player has come across, in the order they found it (the codex).</summary>
         public readonly List<string> KnownLore = new List<string>();
         /// <summary>Mechanics the player can use now.</summary>
@@ -350,7 +352,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -427,6 +429,16 @@ namespace VCGS
         }
 
         public bool IsBookmarked(string entry) => Bookmarks.Contains(entry);
+
+        /// <summary>Keep the player's note on a codex entry ("" takes it off).</summary>
+        public void SetNote(string entry, string text)
+        {
+            text = (text ?? "").Trim();
+            if (text == "") Notes.Remove(entry);
+            else Notes[entry] = text;
+        }
+
+        public string NoteFor(string entry) => Notes.TryGetValue(entry, out var n) ? n : "";
 
         /// <summary>The player has used an object (Interactions.Interact says so).</summary>
         public void UseObject(string obj)
@@ -1212,7 +1224,8 @@ namespace VCGS
         /// ("quests", "lore"…, as SectionKeys lists them), only that one. With a
         /// sort ("found", the default; "newest"; "name", A–Z ignoring case), each
         /// section in that order (quests under way still before those done).
-        /// A bookmarked entry ends its first line with ★; the section
+        /// An entry the player has a note on ends with it ("Note: …"), and a
+        /// search looks in the notes too. A bookmarked entry ends its first line with ★; the section
         /// "bookmarks" shows only them. The cursor entry (a key, "lore:…")
         /// starts with ▶.
         /// </summary>
@@ -1238,7 +1251,7 @@ namespace VCGS
                 }
                 else if (only != "" && only != key) return;
                 if (key != "quests") entries = Sorted(entries);
-                var shown = q == "" ? entries : entries.FindAll(e => e.text.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
+                var shown = q == "" ? entries : entries.FindAll(e => e.text.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0 || game.NoteFor(e.key).IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
                 if (q != "" && shown.Count == 0) return;
                 var text = new StringBuilder(heading);
                 if (shown.Count == 0) text.Append("\n" + empty);
@@ -1251,6 +1264,7 @@ namespace VCGS
                         words = nl >= 0 ? words.Insert(nl, " ★") : words + " ★";
                     }
                     if (e.key == cursor) words = "▶ " + words;
+                    if (game.NoteFor(e.key) != "") words += "\nNote: " + game.NoteFor(e.key);
                     text.Append(sep + words);
                     shownKeys.Add(e.key);
                 }
@@ -1382,7 +1396,7 @@ namespace VCGS
     /// / to search (Escape clears the search, then leaves the box), Tab
     /// (or the row of buttons) to show one section, and S (or the sort buttons)
     /// to order each section; the arrows move a cursor (▶) and B bookmarks
-    /// the entry it is on (★Bookmarks shows only those). Drawn with
+    /// the entry it is on (★Bookmarks shows only those), and N writes a note on it. Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1409,6 +1423,24 @@ namespace VCGS
             if (keys.Count == 0) { Cursor = ""; return; }
             var at = keys.IndexOf(Cursor);
             Cursor = keys[at < 0 ? 0 : Math.Max(0, Math.Min(keys.Count - 1, at + step))];
+        }
+
+        /// <summary>The note being written on the entry under the cursor (N opens it, Enter keeps it, Escape leaves it), or null.</summary>
+        public string NoteDraft { get; private set; }
+
+        /// <summary>Start a note on the entry under the cursor (the first shown, if none).</summary>
+        public void EditNote()
+        {
+            if (Book == null || VcgsGame.Instance == null) return;
+            if (!Book.EntryKeys(Search, Section, Sort).Contains(Cursor)) MoveCursor(0);
+            if (Cursor != "") NoteDraft = VcgsGame.Instance.State.NoteFor(Cursor);
+        }
+
+        /// <summary>Keep the note on the entry under the cursor ("" takes it off).</summary>
+        public void KeepNote(string text)
+        {
+            if (VcgsGame.Instance != null && Cursor != "") VcgsGame.Instance.State.SetNote(Cursor, text);
+            NoteDraft = null;
         }
 
         /// <summary>Bookmark the entry under the cursor (the first shown, if none), or take its bookmark off.</summary>
@@ -1461,6 +1493,13 @@ namespace VCGS
             if (Book == null) return;
             var e = Event.current;
             var typing = GUI.GetNameOfFocusedControl() == SearchControl;
+            if (NoteDraft != null && e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.Escape))
+            {
+                if (e.keyCode == KeyCode.Return) KeepNote(NoteDraft);
+                else NoteDraft = null;
+                e.Use();
+            }
+            typing = typing || NoteDraft != null;
             if (e.type == EventType.KeyDown && typing && e.keyCode == KeyCode.Escape)
             {
                 // Escape clears the search, then leaves the box.
@@ -1476,6 +1515,11 @@ namespace VCGS
             else if (e.type == EventType.KeyDown && !typing && IsOpen && (e.keyCode == KeyCode.UpArrow || e.keyCode == KeyCode.DownArrow))
             {
                 MoveCursor(e.keyCode == KeyCode.DownArrow ? 1 : -1);
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.N)
+            {
+                EditNote();
                 e.Use();
             }
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.B)
@@ -1515,6 +1559,11 @@ namespace VCGS
                 Section = sections[GUILayout.Toolbar(Math.Max(0, sections.IndexOf(Section ?? "")), names)];
             }
             Sort = Sorts[GUILayout.Toolbar(Math.Max(0, Array.IndexOf(Sorts, Sort)), SortNames)];
+            if (NoteDraft != null)
+            {
+                GUILayout.Label("Your note (Enter to keep it, Esc to leave it):", text);
+                NoteDraft = GUILayout.TextField(NoteDraft);
+            }
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label(Book.Text(Search, Section, Sort, Cursor), text);
             GUILayout.EndScrollView();

@@ -137,7 +137,13 @@ the studio's play-through:
   `move_codex_cursor` and `toggle_codex_bookmark` on the screen; Unity
   `GameState.ToggleBookmark`, `Codex.EntryKeys`, `VcgsCodex.MoveCursor` and
   `ToggleBookmark`; Unreal `ToggleCodexBookmark`, `IsCodexBookmarked` and
-  `GetCodexEntries` on the subsystem.
+  `GetCodexEntries` on the subsystem. Notes the same way: the player's note on
+  an entry ends it ("Note: …"), a search looks in the notes too, and N on the
+  placeholder screens writes one on the cursor entry (Enter keeps it, Escape
+  leaves it). Godot `set_note` / `note_for` on the game state and
+  `edit_codex_note` / `set_codex_note` on the screen; Unity
+  `GameState.SetNote` / `NoteFor` and `VcgsCodex.EditNote` / `KeepNote`;
+  Unreal `SetCodexNote` / `GetCodexNote` on the subsystem.
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

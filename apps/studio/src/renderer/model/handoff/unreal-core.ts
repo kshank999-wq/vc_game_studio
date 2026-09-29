@@ -374,6 +374,8 @@ namespace vcgs
         std::vector<std::string> UsedObjects;
         /** Codex entries the player has bookmarked, by key ("lore:the_drowned_order"), in the order bookmarked. */
         std::vector<std::string> Bookmarks;
+        /** The player's notes on codex entries, by key. */
+        std::map<std::string, std::string> Notes;
         /** Lore the player has come across, in the order they found it (the codex). */
         std::vector<std::string> KnownLore;
         /** Mechanics the player can use now. */
@@ -396,7 +398,7 @@ namespace vcgs
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -470,6 +472,19 @@ namespace vcgs
             return true;
         }
         bool IsBookmarked(const std::string& entry) const { return std::find(Bookmarks.begin(), Bookmarks.end(), entry) != Bookmarks.end(); }
+        /** Keep the player's note on a codex entry ("" takes it off). */
+        void SetNote(const std::string& entry, std::string text)
+        {
+            const size_t start = text.find_first_not_of(" \t\n");
+            text = start == std::string::npos ? std::string() : text.substr(start, text.find_last_not_of(" \t\n") - start + 1);
+            if (text.empty()) Notes.erase(entry);
+            else Notes[entry] = text;
+        }
+        std::string NoteFor(const std::string& entry) const
+        {
+            auto it = Notes.find(entry);
+            return it == Notes.end() ? std::string() : it->second;
+        }
         /** The player has used an object (Interactions::Interact says so). */
         void UseObject(const std::string& obj)
         {
@@ -824,7 +839,8 @@ namespace vcgs
          * ("quests", "lore"…, as SectionKeys lists them), only that one. With a
          * sort ("found", the default; "newest"; "name", A–Z ignoring case), each
          * section in that order (quests under way still before those done).
-         * A bookmarked entry ends its first line with ★; the section "bookmarks"
+         * An entry the player has a note on ends with it ("Note: …"), and a
+         * search looks in the notes too. A bookmarked entry ends its first line with ★; the section "bookmarks"
          * shows only them. The cursor entry (a key, "lore:…") starts with ▶.
          */
         std::string Text(const std::string& query = "", const std::string& only = "", const std::string& sort = "", const std::string& cursor = "") const
@@ -850,7 +866,7 @@ namespace vcgs
                 else if (!only.empty() && only != key) return;
                 else entries = all;
                 Entries shown;
-                for (const auto& e : std::string(key) == "quests" ? entries : sorted(entries)) if (q.empty() || Lower(e.second).find(q) != std::string::npos) shown.push_back(e);
+                for (const auto& e : std::string(key) == "quests" ? entries : sorted(entries)) if (q.empty() || Lower(e.second).find(q) != std::string::npos || Lower(game.NoteFor(e.first)).find(q) != std::string::npos) shown.push_back(e);
                 if (!q.empty() && shown.empty()) return;
                 std::string text = heading;
                 if (shown.empty()) text += std::string("\n") + empty;
@@ -863,6 +879,7 @@ namespace vcgs
                         words = nl == std::string::npos ? words + " ★" : words.substr(0, nl) + " ★" + words.substr(nl);
                     }
                     if (e.first == cursor) words = "▶ " + words;
+                    if (!game.NoteFor(e.first).empty()) words += "\nNote: " + game.NoteFor(e.first);
                     text += sep + words;
                     ShownKeys.push_back(e.first);
                 }

@@ -352,6 +352,16 @@ func _initialize() -> void:
 	silt_player.toggle_codex_bookmark()
 	if silt_player.codex_cursor() != "lore:the_drowned_order" or not game.is_bookmarked("lore:the_drowned_order") or not silt_player.codex_text("", "lore", "", silt_player.codex_cursor()).contains("\n\n▶ THE DROWNED ORDER ★\n"):
 		fail("B should bookmark the entry under the cursor, got " + silt_player.codex_text("", "lore", "", silt_player.codex_cursor()))
+	# A note: N opens the box on the cursor entry, Enter keeps it; it ends the entry, and a search finds it.
+	silt_player.edit_codex_note()
+	silt_player.set_codex_note("  Priests, not monks  ")
+	if game.note_for("lore:the_drowned_order") != "Priests, not monks" or not silt_player.codex_text().contains("They believed the water kept their secrets.\nNote: Priests, not monks"):
+		fail("the note should end the entry, got " + silt_player.codex_text())
+	if not silt_player.codex_text("not monks").contains("THE DROWNED ORDER"):
+		fail("a search should find the note, got " + silt_player.codex_text("not monks"))
+	game.set_note("lore:the_drowned_order", "")
+	if silt_player.codex_text().contains("Note:"):
+		fail("an empty note should take the note off")
 	silt_player.toggle_codex_bookmark()
 	silt_player.set_codex_section("")
 	silt_player.set_codex_search("")

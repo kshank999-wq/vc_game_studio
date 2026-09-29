@@ -196,6 +196,12 @@ int main()
             if (book.Text("eels", "bookmarks") != "CODEX\n\nNothing matches \"eels\" in Bookmarks.") Fail("a search with no match in the bookmarks should say so, got " + book.Text("eels", "bookmarks"));
             if (Join(book.EntryKeys("", "lore"), ",") != std::string("lore:") + Lore::TheLastExpedition + ",lore:" + Lore::TheDrownedOrder) Fail("the cursor should move through the lore shown, got " + Join(book.EntryKeys("", "lore"), ","));
             if (book.Text("", "lore", "", std::string("lore:") + Lore::TheLastExpedition).find("\n\n▶ THE LAST EXPEDITION\n") == std::string::npos) Fail("the cursor entry should start with ▶, got " + book.Text("", "lore", "", std::string("lore:") + Lore::TheLastExpedition));
+            // A note: it ends the entry, and a search finds it.
+            sorting.SetNote(std::string("lore:") + Lore::TheDrownedOrder, "  Priests, not monks  ");
+            if (sorting.NoteFor(std::string("lore:") + Lore::TheDrownedOrder) != "Priests, not monks" || book.Text().find("They believed the water kept their secrets.\nNote: Priests, not monks") == std::string::npos) Fail("the note should end the entry, got " + book.Text());
+            if (book.Text("not monks").find("THE DROWNED ORDER") == std::string::npos) Fail("a search should find the note, got " + book.Text("not monks"));
+            sorting.SetNote(std::string("lore:") + Lore::TheDrownedOrder, "");
+            if (book.Text().find("Note:") != std::string::npos) Fail("an empty note should take the note off");
             if (sorting.ToggleBookmark(std::string("lore:") + Lore::TheDrownedOrder) || book.Text("", "bookmarks") != "CODEX\n\nNo bookmarks yet.") Fail("taking the bookmark off should leave none, got " + book.Text("", "bookmarks"));
             auto heads = [&](const char* sort)
             {

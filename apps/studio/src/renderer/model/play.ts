@@ -708,8 +708,11 @@ export interface CodexSection {
   /** Between the heading and each entry: quest lines sit close, the rest have a blank line. */
   sep: string;
   /** `key` names the entry for bookmarks: its section and its id ("lore:…"). */
-  entries: { id: string; key: string; text: string; bookmarked?: boolean }[];
+  entries: { id: string; key: string; text: string; bookmarked?: boolean; note?: string }[];
 }
+
+/** How a player's note on an entry reads, on its own line after the entry. */
+export const NOTE_LABEL = 'Note: ';
 
 /** The mark on a bookmarked entry, at the end of its first line. */
 export const BOOKMARK_MARK = ' ★';
@@ -750,9 +753,18 @@ const sortEntries = <T extends { text: string }>(entries: T[], sort: string): T[
  * any (their headings still count everything). With a section, only that one.
  * With a sort, each section's entries in that order. With bookmarks (entry
  * keys, "lore:…"), those entries are marked; the section "bookmarks" shows
- * only them, from every section.
+ * only them, from every section. With notes (by entry key), each entry carries
+ * the player's note, and a search looks in the notes too.
  */
-export const codexSections = (project: Project, world: PlayWorld, query = '', section = '', sort = '', bookmarks: ReadonlySet<string> = new Set()): CodexSection[] => {
+export const codexSections = (
+  project: Project,
+  world: PlayWorld,
+  query = '',
+  section = '',
+  sort = '',
+  bookmarks: ReadonlySet<string> = new Set(),
+  notes: ReadonlyMap<string, string> = new Map(),
+): CodexSection[] => {
   const c = codexOf(project, world);
   type Raw = Omit<CodexSection, 'entries'> & { entries: { id: string; text: string }[] };
   const all: (Raw | false)[] = [
@@ -823,24 +835,36 @@ export const codexSections = (project: Project, world: PlayWorld, query = '', se
   const sections = all
     .filter((x): x is Raw => !!x && (!section || onlyBookmarks || x.key === section))
     .map((x): CodexSection => {
-      const entries = (x.key === 'quests' ? x.entries : sortEntries(x.entries, sort)).map((e) => ({ ...e, key: `${x.key}:${e.id}`, bookmarked: bookmarks.has(`${x.key}:${e.id}`) }));
+      const entries = (x.key === 'quests' ? x.entries : sortEntries(x.entries, sort)).map((e) => {
+        const key = `${x.key}:${e.id}`;
+        const note = notes.get(key)?.trim();
+        return { ...e, key, bookmarked: bookmarks.has(key), ...(note ? { note } : {}) };
+      });
       return { ...x, entries: onlyBookmarks ? entries.filter((e) => e.bookmarked) : entries };
     })
     .filter((x) => !onlyBookmarks || x.entries.length);
   if (!query.trim()) return sections;
-  return sections.map((s) => ({ ...s, entries: s.entries.filter((e) => codexMatches(e.text, query)) })).filter((s) => s.entries.length);
+  return sections.map((s) => ({ ...s, entries: s.entries.filter((e) => codexMatches(e.text, query) || (!!e.note && codexMatches(e.note, query))) })).filter((s) => s.entries.length);
 };
 
 /** The sections this codex has (those with anything to find), in order: what a filter by section offers. */
 export const codexSectionKeys = (project: Project, world: PlayWorld): CodexSection['key'][] => codexSections(project, world).map((s) => s.key);
 
 /** The codex in words, exactly as Godot, Unity and Unreal write it; with a search, only what it finds; with a section, only that one; with a sort, in that order. */
-export const codexText = (project: Project, world: PlayWorld, query = '', section = '', sort = '', bookmarks: ReadonlySet<string> = new Set()): string => {
-  const sections = codexSections(project, world, query, section, sort, bookmarks);
+export const codexText = (
+  project: Project,
+  world: PlayWorld,
+  query = '',
+  section = '',
+  sort = '',
+  bookmarks: ReadonlySet<string> = new Set(),
+  notes: ReadonlyMap<string, string> = new Map(),
+): string => {
+  const sections = codexSections(project, world, query, section, sort, bookmarks, notes);
   const within = section in CODEX_SECTION_NAMES ? ` in ${CODEX_SECTION_NAMES[section as keyof typeof CODEX_SECTION_NAMES]}` : '';
   if (query.trim() && !sections.length) return `CODEX\n\nNothing matches "${query.trim()}"${within}.`;
   if (section === 'bookmarks' && !sections.length) return 'CODEX\n\nNo bookmarks yet.';
-  const parts = sections.map((s) => s.heading + (s.entries.length ? s.entries.map((e) => s.sep + (e.bookmarked ? marked(e.text) : e.text)).join('') : `\n${s.empty}`));
+  const parts = sections.map((s) => s.heading + (s.entries.length ? s.entries.map((e) => s.sep + (e.bookmarked ? marked(e.text) : e.text) + (e.note ? `\n${NOTE_LABEL}${e.note}` : '')).join('') : `\n${s.empty}`));
   return ['CODEX', ...parts].join('\n\n');
 };
 

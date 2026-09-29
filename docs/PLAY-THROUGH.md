@@ -67,7 +67,9 @@ monitor while you fix it on another.
   before those done. **Bookmark** an entry with its star (☆): it is marked ★,
   and **★ Bookmarks** among the section buttons shows only the bookmarked
   entries, from every section (searched and sorted as usual). The bookmarks
-  last the whole play-through, stepping back or not. The engines' codex
+  last the whole play-through, stepping back or not. **Notes**: the pencil (✎)
+  opens a box for the player's own note on an entry (Enter keeps it); it shows
+  under the entry as "Note: …", and a search finds it. An empty note is none. The engines' codex
   screens search, filter, sort and bookmark the same way.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.

@@ -475,6 +475,22 @@ describe('the codex', () => {
     expect(codexText(p, world, '★', '', '', marks)).toBe('CODEX\n\nNothing matches "★".');
   });
 
+  it('keeps the player\'s notes on entries: under the entry, and found by a search', async () => {
+    const { codexText } = await import('../play');
+    const world = toTheVault(p).world;
+    const notes = new Map([[`encounters:${id(p, 'Eel swarm')}`, 'Light the lantern first!'], [`lore:${id(p, 'The Drowned Order')}`, '  ']]);
+    expect(codexText(p, world, '', '', '', new Set(), notes)).toContain('\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\nNote: Light the lantern first!');
+    // A blank note is no note.
+    expect(codexText(p, world, '', 'lore', '', new Set(), notes)).not.toContain('Note:');
+    // The search looks in the notes too (not in the label).
+    expect(codexText(p, world, 'first!', '', '', new Set(), notes)).toContain('EEL SWARM (won)');
+    expect(codexText(p, world, 'note:', '', '', new Set(), notes)).toBe('CODEX\n\nNothing matches "note:".');
+    // With a bookmark too: the star on the first line, the note last.
+    const both = codexText(p, world, '', 'bookmarks', '', new Set([`encounters:${id(p, 'Eel swarm')}`]), notes);
+    expect(both).toContain('\n\nEEL SWARM (won) ★\nEnemies:');
+    expect(both.endsWith('\nNote: Light the lantern first!')).toBe(true);
+  });
+
   it('lists a character once heard, and only one with a codex entry', async () => {
     const { codexText, codexProgress } = await import('../play');
     const mara = id(p, 'Mara');
