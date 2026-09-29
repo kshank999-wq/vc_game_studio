@@ -24,6 +24,10 @@ static class Check
         Console.WriteLine("story: " + story.Name + " · " + story.Scenes.Count + " scenes · starts at " + story.Start);
         if (game.GetFlag(Flags.DoorSolved) != "no") Fail("door_solved should start at no");
         if (game.GetObjectState(Objects.RustedLever) != "down") Fail("the lever should start down");
+        // The quest has no start rule: it is under way from the start.
+        if (game.QuestState(Quests.OpenTheVault) != "active") Fail("Open the vault should be under way from the start, is " + game.QuestState(Quests.OpenTheVault));
+        var questsDone = new List<string>();
+        game.QuestCompleted += q => questsDone.Add(q);
 
         // The whole story from the Beginning to the vault door.
         var node = StoryWalker.Onward(game, story.Start);
@@ -69,6 +73,22 @@ static class Check
         if (choices.Count == 2 && string.Join(",", choices[1]) != "Turn the key") Fail("Force it should be gone the second time");
         if (finished.Count != 1 || finished[0] != Cinematics.TheVaultOpens) Fail("the scene should end into the cinematic");
         if (game.HasItem(Items.VaultKey) || game.Arc(Characters.Mara) != 1) Fail("turning the key should use it up and move Mara +1");
+        if (game.QuestState(Quests.OpenTheVault) != "done" || string.Join(",", questsDone) != Quests.OpenTheVault) Fail("solving the door should complete Open the vault once, got " + game.QuestState(Quests.OpenTheVault) + " " + string.Join(",", questsDone));
+
+        // SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
+        var fresh = new GameState(story);
+        var silt = new ScenePlayer(fresh, Scenes.Sc02TheKey);
+        var encounters = new List<string>();
+        var over = new List<string>();
+        silt.EncounterRequested += (e, canWin) => encounters.Add(e + (canWin ? "" : " (can't win)"));
+        silt.GameOver += e => over.Add(e);
+        silt.Start();
+        silt.Lose();
+        Console.WriteLine("encounter: " + string.Join(", ", encounters));
+        if (string.Join(",", encounters) != Encounters.EelSwarm + "," + Encounters.EelSwarm || over.Count != 0) Fail("losing the eels should play them again, got " + string.Join(",", encounters));
+        if (!silt.Win()) Fail("a win against the eels should count");
+        if (!fresh.WasWon(Encounters.EelSwarm) || !fresh.HasItem(Items.VaultKey)) Fail("winning should mark the eels won, and the scene go on to find the key");
+        if (silt.Win()) Fail("there is no encounter to win now");
 
         // On along the graph: the cinematic, then the ring choice, to the ending.
         var ring = StoryWalker.Onward(game, finished[0]);

@@ -2,7 +2,7 @@ import { interactionsOf, initialState, statesOf } from '../details';
 import { laneSequence, spineSequence } from '../layout';
 import { CATEGORIES, dualWith, elementsIn, sceneLines } from '../scene';
 import { hasInline, plainInline } from '../inline';
-import { eventTitle, sceneTimeline } from '../timeline';
+import { eventTitle, loseOf, sceneTimeline } from '../timeline';
 import { isEmpty, isRule, type Effect, type Rule } from '../rules';
 import { cinematicTiming, shotsOf } from '../shots';
 import type { ObjectType, Project, StoryObject } from '../types';
@@ -130,6 +130,23 @@ export interface IrThing {
   fields: Record<string, string>;
   /** A cinematic's shot list, in order. */
   shots?: IrShot[];
+}
+
+/** A quest as the runtimes play it: under way once `starts` holds (at once without it), done when `completes` holds, paying `reward`. */
+export interface IrQuest extends IrThing {
+  starts?: IrRule;
+  completes?: IrRule;
+  reward?: IrEffect[];
+}
+
+/** An encounter on a timeline: the game plays it and reports a win or a loss. */
+export interface IrEncounter extends IrThing {
+  /** A win counts only when this holds. */
+  winWhen?: IrRule;
+  onWin?: IrEffect[];
+  onLose?: IrEffect[];
+  /** What a loss leads to: the encounter again, the game over, or on through the scene. */
+  loss: 'retry' | 'gameOver' | 'carryOn';
 }
 
 export interface IrShot {
@@ -271,9 +288,9 @@ export interface HandoffIR {
   locations: IrThing[];
   /** Design definitions, most often sorted out of raw notes (docs/NOTE-SORTER.md): data for the game to read. */
   lore: IrThing[];
-  quests: IrThing[];
+  quests: IrQuest[];
   mechanics: IrThing[];
-  encounters: IrThing[];
+  encounters: IrEncounter[];
   cinematics: IrThing[];
   flags: IrFlag[];
   triggers: IrTrigger[];
@@ -465,9 +482,20 @@ export const buildIR = (project: Project): HandoffIR => {
     items: of('inventory').map(thing),
     locations: of('environment').map(thing),
     lore: of('lore').map(thing),
-    quests: of('quest').map(thing),
+    quests: of('quest').map((o): IrQuest => {
+      const starts = rule(o.data.starts as Rule | undefined);
+      const completes = rule(o.data.rule as Rule | undefined);
+      const reward = effects(o.data.effects as Effect[] | undefined);
+      return { ...thing(o), ...(starts ? { starts } : {}), ...(completes ? { completes } : {}), ...(reward ? { reward } : {}) };
+    }),
     mechanics: of('mechanic').map(thing),
-    encounters: of('encounter').map(thing),
+    encounters: of('encounter').map((o): IrEncounter => {
+      const winWhen = rule(o.data.rule as Rule | undefined);
+      const onWin = effects(o.data.effects as Effect[] | undefined);
+      const onLose = effects(o.data.loseEffects as Effect[] | undefined);
+      const loss = ({ 'Game over': 'gameOver', 'Carry on': 'carryOn' } as const)[loseOf(o) as 'Game over' | 'Carry on'] ?? 'retry';
+      return { ...thing(o), ...(winWhen ? { winWhen } : {}), ...(onWin ? { onWin } : {}), ...(onLose ? { onLose } : {}), loss };
+    }),
     cinematics: of('cinematic').map((o) => {
       const event = project.events.find((e) => e.refId === o.id);
       const timing = event || shotsOf(o).length ? cinematicTiming(project, o.id, event) : undefined;

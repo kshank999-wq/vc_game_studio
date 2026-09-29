@@ -50,13 +50,24 @@ Lore entries, quests, mechanics and encounters (often sorted out of raw notes;
 see [NOTE-SORTER.md](NOTE-SORTER.md)) go to every engine as data: the IR's
 `lore`, `quests`, `mechanics` and `encounters`, each with its key, code, name,
 description and other fields. They are for the game to read, such as a codex, a
-quest log or tuning. The studio's play-through plays quests (start, complete,
-reward) and encounters (win or lose), but the engine runtimes don't yet. Quests
-and encounters go to the engines as data only, without their rules. An
-encounter on a timeline arrives as an `encounter` event, which the runtimes
-treat as a plain beat: they report it with *event started*, like an action,
-and wait for the game to call *advance*. Logic that has to run in the engine is
-written with flags, triggers and gates, as for everything else.
+quest log or tuning. Quests and encounters also play in every runtime, the
+same way as in the studio's play-through:
+
+- **Quests** start when their *Starts when* rule holds (at once, on a new game,
+  when it's empty) and complete when their *Complete when* rule holds, paying
+  their reward. The game state keeps each one's state (`quest_state` /
+  `QuestState` / `GetQuestState`) and says when one starts or completes
+  (Godot `quest_started`, `quest_completed`; Unity `QuestStarted`,
+  `QuestCompleted`; Unreal `OnQuestStarted`, `OnQuestCompleted` on
+  `UVcgsSubsystem`).
+- **Encounters** on a timeline ask the game to play them: Godot
+  `encounter_requested(key, can_win)`, Unity `EncounterRequested`, Unreal
+  `OnEncounter`. The game plays the fight and then calls `win()` / `Win()`
+  (refused while the *Can be won when* rule doesn't hold) or `lose()` /
+  `Lose()`. A loss does its effects, then plays the encounter again, ends the
+  game (`game_over` / `GameOver` / `OnGameOver`), or carries on through the
+  scene. Godot's placeholder scenes stand in for the fight with Win and Lose
+  buttons.
 
 ## The Godot 4 adapter
 

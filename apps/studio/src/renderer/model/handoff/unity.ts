@@ -124,13 +124,15 @@ project.
 2. For a story scene, add **VcgsSceneFlow** with the scene's key
    (\`VCGS.Keys.Scenes\`), then connect to \`Player\`'s events
    (\`DialogueRequested\` — or \`DualRequested\` for two lines at once —, \`CinematicRequested\`, \`FreePlayStarted\`,
-   \`ChoiceRequested\`, \`SceneFinished\`) and call \`Player.Advance()\` or
-   \`Player.Choose(i)\`.
+   \`ChoiceRequested\`, \`EncounterRequested\` (and \`GameOver\`), \`SceneFinished\`)
+   and call \`Player.Advance()\` or \`Player.Choose(i)\`, or \`Player.Win()\` /
+   \`Player.Lose()\` once an encounter is played.
 3. For an object, add **VcgsInteractable** with its key (\`VCGS.Keys.Objects\`)
    and call \`Interact("Pull")\` from your input code.
 4. \`VcgsGame.Instance.State\` is the playthrough: flags, items, arcs and the
-   rest. Triggers fire and puzzles solve themselves as their conditions come
-   true; \`StoryWalker\` follows the graph between scenes.
+   rest. Triggers fire, puzzles solve themselves and quests start and complete
+   (\`QuestStarted\`, \`QuestCompleted\`) as their conditions come true;
+   \`StoryWalker\` follows the graph between scenes.
 
 The Characters, Items, Locations and Cinematics folders hold a ScriptableObject
 per element, for designers to find in the Project window. So do Lore, Quests,

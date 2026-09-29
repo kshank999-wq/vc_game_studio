@@ -43,9 +43,9 @@ export const storySchema = () => ({
     items: { type: 'array', items: ref('thing') },
     locations: { type: 'array', items: ref('thing') },
     lore: { type: 'array', items: ref('thing'), description: 'Lore entries: history and world facts, for codex or journal text.' },
-    quests: { type: 'array', items: ref('thing'), description: 'Quests and objectives, as designed; their logic lives in flags and triggers.' },
+    quests: { type: 'array', items: ref('quest'), description: 'Quests and objectives: each starts when `starts` holds (at once without it) and is done when `completes` holds, paying `reward`.' },
     mechanics: { type: 'array', items: ref('thing'), description: 'Mechanic definitions: how a system works, in the designer\'s words.' },
-    encounters: { type: 'array', items: ref('thing'), description: 'Encounters and enemies.' },
+    encounters: { type: 'array', items: ref('encounter'), description: 'Encounters and enemies: played by the game where an `encounter` event puts them, then won or lost.' },
     cinematics: { type: 'array', items: ref('thing') },
     flags: { type: 'array', items: obj({ id: str, ident, name: str, values: strings, initial: str, setBy: strings }) },
     triggers: { type: 'array', items: ref('trigger') },
@@ -158,6 +158,14 @@ export const storySchema = () => ({
       ...obj({ key: str, kind: str, name: str, onward: { type: ['string', 'null'] }, routes: { type: 'array', items: obj({ to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['to', 'label']) }, outcome: { enum: ['ending', 'gameOver'] } }, ['key', 'kind', 'name', 'onward', 'routes']),
       description: 'A node on the story graph. Where it goes: the first route whose conditions hold, else onward along the spine.',
     },
+    quest: {
+      allOf: [ref('thing'), obj({ starts: ref('rule'), completes: ref('rule'), reward: ref('effects') }, [])],
+      description: 'A quest: under way once `starts` holds (at once when there is none), done when `completes` holds (never without it), then its `reward` effects are done.',
+    },
+    encounter: {
+      allOf: [ref('thing'), obj({ winWhen: ref('rule'), onWin: ref('effects'), onLose: ref('effects'), loss: { enum: ['retry', 'gameOver', 'carryOn'] } }, ['loss'])],
+      description: 'An encounter: a win counts only when `winWhen` holds; a win does `onWin`, a loss does `onLose` and then plays it again (retry), ends the game (gameOver) or goes on through the scene (carryOn).',
+    },
     thing: obj({ id: str, ident, code: str, name: str, type: str, notes: str, fields: { type: 'object', additionalProperties: str }, shots: { type: 'array', items: ref('shot') } }, ['id', 'ident', 'code', 'name', 'type', 'notes', 'fields']),
     shot: obj({ framing: str, move: str, lens: str, characters: strings, action: str, line: str, audio: str, vfx: str, seconds: num, transition: str, notes: str }, ['framing', 'move', 'seconds', 'transition']),
     interaction: obj({ verb: str, when: str, becomes: str, sets: obj({ flag: str, value: str }), fires: str, requires: ref('rule'), effects: ref('effects') }, ['verb']),
@@ -222,9 +230,8 @@ export: change the story in the studio, not these files.
 
 \`lore\`, \`quests\`, \`mechanics\` and \`encounters\` are design definitions
 (a name, code, description and any other fields as \`fields\`) for the game to
-read, such as codex text or a quest log. They don't play on their own. An
-\`encounter\` event in a scene is a beat for your game to play (a fight, a
-chase); its \`ref\` is the encounter's key.
+read, such as codex text or a quest log. Quests and encounters also play, as
+below.
 
 ## Playing it
 
@@ -243,6 +250,14 @@ chase); its \`ref\` is the encounter's key.
    its \`when\` holds.
 5. **After every change** to the world, fire each trigger whose \`rule\` holds
    (once), and solve each puzzle whose \`solvedWhen\` holds, doing their effects.
+   Start each quest not yet started whose \`starts\` holds (at once when it has
+   none), and complete each quest under way whose \`completes\` holds, doing its
+   \`reward\`. Do this once when a new game begins too.
+6. **An \`encounter\` event** is a fight, chase or the like for your game to play;
+   its \`ref\` is a key in \`encounters\`. A win counts only when \`winWhen\` holds;
+   it does \`onWin\` and the scene goes on. A loss does \`onLose\`, then plays the
+   encounter again (\`loss: "retry"\`), ends the game (\`"gameOver"\`), or goes on
+   (\`"carryOn"\`).
 
 ## Rules and effects
 

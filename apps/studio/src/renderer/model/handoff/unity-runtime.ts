@@ -203,6 +203,8 @@ namespace VCGS
         public readonly Dictionary<string, Dictionary<string, object>> Characters = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Cinematics = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Lines = new Dictionary<string, Dictionary<string, object>>();
+        public readonly Dictionary<string, Dictionary<string, object>> Quests = new Dictionary<string, Dictionary<string, object>>();
+        public readonly Dictionary<string, Dictionary<string, object>> Encounters = new Dictionary<string, Dictionary<string, object>>();
 
         public static Story FromJson(string json) => new Story(D.Map(Json.Parse(json)));
 
@@ -223,6 +225,8 @@ namespace VCGS
             Index(root, "flags", Flags);
             Index(root, "characters", Characters);
             Index(root, "cinematics", Cinematics);
+            Index(root, "quests", Quests);
+            Index(root, "encounters", Encounters);
             foreach (var l in D.List(root, "lines"))
             {
                 var line = D.Map(l);
@@ -269,10 +273,16 @@ namespace VCGS
         public readonly HashSet<string> Visited = new HashSet<string>();
         public readonly HashSet<string> Fired = new HashSet<string>();
         public readonly HashSet<string> Picked = new HashSet<string>();
+        /// <summary>Quests under way ("active") or "done"; one not in here has not started.</summary>
+        public readonly Dictionary<string, string> Quests = new Dictionary<string, string>();
+        /// <summary>Encounters won.</summary>
+        public readonly HashSet<string> Won = new HashSet<string>();
 
         /// <summary>Anything the story's conditions can see has changed.</summary>
         public event Action Changed;
         public event Action<string> TriggerFired;
+        public event Action<string> QuestStarted;
+        public event Action<string> QuestCompleted;
         public bool AutoRules = true;
         bool settling;
 
@@ -286,13 +296,15 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
                 var initial = D.Str(o.Value, "initial");
                 if (D.Str(o.Value, "kind") == "object" && initial != "") ObjectStates[o.Key] = initial;
             }
+            // Quests with nothing to wait for start now; anything already true settles.
+            OnChanged();
         }
 
         public string GetFlag(string flag) => Flags.TryGetValue(flag, out var v) ? v : "";
@@ -350,6 +362,25 @@ namespace VCGS
         public void Visit(string scene)
         {
             if (Visited.Add(scene)) OnChanged();
+        }
+
+        /// <summary>"" (not started), "active" or "done".</summary>
+        public string QuestState(string quest) => Quests.TryGetValue(quest, out var s) ? s : "";
+
+        public void SetQuest(string quest, string state)
+        {
+            if (QuestState(quest) == state) return;
+            Quests[quest] = state;
+            if (state == "active") QuestStarted?.Invoke(quest);
+            else if (state == "done") QuestCompleted?.Invoke(quest);
+            OnChanged();
+        }
+
+        public bool WasWon(string encounter) => Won.Contains(encounter);
+
+        public void MarkWon(string encounter)
+        {
+            if (Won.Add(encounter)) OnChanged();
         }
 
         public void MarkPicked(string option) => Picked.Add(option);
@@ -458,12 +489,31 @@ namespace VCGS
             Apply(D.Get(p, "effects"), game);
         }
 
-        /// <summary>Fire every trigger, and solve every puzzle, whose rule now holds.</summary>
+        /// <summary>
+        /// Fire every trigger, and solve every puzzle, whose rule now holds. A quest
+        /// starts when its start rule holds (at once without one) and is done when
+        /// its completion rule holds, paying its reward.
+        /// </summary>
         public static void Settle(GameState game)
         {
             for (var round = 0; round < 8; round++)
             {
                 var moved = false;
+                foreach (var q in game.Story.Quests)
+                {
+                    var state = game.QuestState(q.Key);
+                    if (state == "" && Check(D.Get(q.Value, "starts"), game))
+                    {
+                        game.SetQuest(q.Key, "active");
+                        moved = true;
+                    }
+                    else if (state == "active" && q.Value.ContainsKey("completes") && Check(D.Get(q.Value, "completes"), game))
+                    {
+                        game.SetQuest(q.Key, "done");
+                        Apply(D.Get(q.Value, "reward"), game);
+                        moved = true;
+                    }
+                }
                 foreach (var t in game.Story.Triggers)
                 {
                     if (D.Str(t.Value, "kind") != "trigger" || !t.Value.ContainsKey("rule") || game.Fired.Contains(t.Key) || !Check(D.Get(t.Value, "rule"), game)) continue;
@@ -478,6 +528,26 @@ namespace VCGS
                 }
                 if (!moved) return;
             }
+        }
+
+        /// <summary>Whether a win against this encounter counts now (its win rule holds).</summary>
+        public static bool CanWin(string encounter, GameState game) =>
+            Check(D.Get(game.Story.Encounters.TryGetValue(encounter, out var e) ? e : null, "winWhen"), game);
+
+        public static void Win(string encounter, GameState game)
+        {
+            game.MarkWon(encounter);
+            game.Story.Encounters.TryGetValue(encounter, out var e);
+            Apply(D.Get(e, "onWin"), game);
+        }
+
+        /// <summary>Do a loss's effects; returns what it leads to: "retry", "gameOver" or "carryOn".</summary>
+        public static string Lose(string encounter, GameState game)
+        {
+            game.Story.Encounters.TryGetValue(encounter, out var e);
+            Apply(D.Get(e, "onLose"), game);
+            var loss = D.Str(e, "loss");
+            return loss == "" ? "retry" : loss;
         }
 
         /// <summary>A gate is open when its rule holds (a gate with no rule is open).</summary>
@@ -578,6 +648,13 @@ namespace VCGS
         public event Action<string> CinematicRequested;
         public event Action<string> FreePlayStarted;
         public event Action<string, List<string>> ChoiceRequested;
+        /// <summary>
+        /// An encounter: play it (a fight, a chase), then call Win() or Lose().
+        /// The bool says whether a win counts now (its win rule holds).
+        /// </summary>
+        public event Action<string, bool> EncounterRequested;
+        /// <summary>An encounter was lost, and that loss ends the game.</summary>
+        public event Action<string> GameOver;
         public event Action<string> SceneFinished;
 
         /// <summary>Every option in the list now: label, whether it can be picked, and why not.</summary>
@@ -669,6 +746,7 @@ namespace VCGS
                     if (ev.ContainsKey("ends")) AwaitEnd(D.Get(ev, "ends"));
                     break;
                 case "choice": ChoiceRequested?.Invoke(D.Str(ev, "ref"), OptionsAt(index)); break;
+                case "encounter": EncounterRequested?.Invoke(D.Str(ev, "ref"), Rules.CanWin(D.Str(ev, "ref"), game)); break;
                 case "trigger":
                     // A trigger on the timeline fires as it is reached, and the scene moves on.
                     var reference = D.Str(ev, "ref");
@@ -711,6 +789,39 @@ namespace VCGS
             track = D.List(b, "events");
             index = -1;
             Advance();
+        }
+
+        /// <summary>The player won the encounter on now. False (and nothing happens) when a win doesn't count yet.</summary>
+        public bool Win()
+        {
+            var encounter = EncounterNow();
+            if (encounter == "" || !Rules.CanWin(encounter, game)) return false;
+            Rules.Win(encounter, game);
+            Advance();
+            return true;
+        }
+
+        /// <summary>
+        /// The player lost the encounter on now: its loss effects, then it is played
+        /// again (EncounterRequested once more), the game is over, or the scene goes on.
+        /// </summary>
+        public void Lose()
+        {
+            var encounter = EncounterNow();
+            if (encounter == "") return;
+            switch (Rules.Lose(encounter, game))
+            {
+                case "gameOver": GameOver?.Invoke(encounter); break;
+                case "carryOn": Advance(); break;
+                default: EncounterRequested?.Invoke(encounter, Rules.CanWin(encounter, game)); break;
+            }
+        }
+
+        string EncounterNow()
+        {
+            if (index < 0 || index >= track.Count) return "";
+            var ev = D.Map(track[index]);
+            return D.Str(ev, "kind") == "encounter" ? D.Str(ev, "ref") : "";
         }
 
         /// <summary>Where the story goes after this scene: the first exit whose conditions hold, else onward.</summary>

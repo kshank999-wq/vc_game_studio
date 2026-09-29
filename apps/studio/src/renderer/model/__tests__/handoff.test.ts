@@ -357,3 +357,33 @@ describe('design definitions: lore, quests, mechanics and encounters', () => {
     expect(file(outputs.unreal, 'Plugins/VCGS/Source/VCGS/Public/Generated/VcgsStoryKeys.h')).toContain('namespace Quests');
   });
 });
+
+describe('quests and encounters in the engines', () => {
+  it('carry their rules in the handoff model, as the studio plays them', async () => {
+    const ir = buildIR(sunkenVault());
+    expect(ir.quests[0]).toMatchObject({ completes: { match: 'all', items: [{ kind: 'puzzle', ref: 'the_vault_door', op: 'solved' }] } });
+    expect(ir.quests[0]).not.toHaveProperty('starts');
+    expect(ir.encounters[0]).toMatchObject({ ident: { key: 'eel_swarm' }, loss: 'retry' });
+    const theKey = ir.scenes.find((s) => s.name === 'The Key')!;
+    expect(theKey.main[0]).toMatchObject({ kind: 'encounter', ref: 'eel_swarm', label: 'Eel swarm' });
+    const { storySchema } = await import('../handoff/json');
+    // Read as plain JSON, the way a game would.
+    const schema = JSON.parse(JSON.stringify(storySchema()));
+    expect(schema.$defs.encounter.allOf[1].properties.loss.enum).toEqual(['retry', 'gameOver', 'carryOn']);
+    expect(schema.$defs.event.properties.kind.enum).toContain('encounter');
+  });
+
+  it('are played by each runtime: quests settle with the rules, encounters wait for win or lose', async () => {
+    const { generateGodot } = await import('../handoff/godot');
+    const { RUNTIME_FILES } = await import('../handoff/unity-runtime');
+    const { VCGS_CORE_H } = await import('../handoff/unreal-core');
+    const godot = generateGodot(buildIR(sunkenVault()), 'vcgs/generated');
+    const file = (path: string) => godot.files.find((f) => f.path === path)!.content;
+    expect(file('vcgs/generated/logic/rules.gd')).toContain('const QUESTS := {\n\t"open_the_vault": {');
+    expect(file('vcgs/generated/logic/rules.gd')).toContain('"loss": "retry"');
+    expect(file('addons/vcgs_runtime/scene_flow.gd')).toContain('signal encounter_requested(encounter_key: String, can_win: bool)');
+    expect(RUNTIME_FILES['ScenePlayer.cs']).toContain('public event Action<string, bool> EncounterRequested;');
+    expect(RUNTIME_FILES['Rules.cs']).toContain('foreach (var q in game.Story.Quests)');
+    expect(VCGS_CORE_H).toContain('std::function<void(const std::string&, bool)> OnEncounter;');
+  });
+});

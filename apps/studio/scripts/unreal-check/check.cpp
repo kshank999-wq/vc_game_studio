@@ -72,6 +72,10 @@ int main()
     if (game.GetFlag(Flags::DoorSolved) != "no") Fail("door_solved should start at no");
     if (game.GetObjectState(Objects::RustedLever) != "down") Fail("the lever should start down");
     if (vcgs::StoryWalker::Onward(game, story.Start) != Scenes::Sc01TheCaveMouth) Fail("the story should start at SC-01");
+    // The quest has no start rule: it is under way from the start.
+    if (game.QuestState(Quests::OpenTheVault) != "active") Fail("Open the vault should be under way from the start, is " + game.QuestState(Quests::OpenTheVault));
+    std::vector<std::string> questsDone;
+    game.OnQuestCompleted = [&](const std::string& q) { questsDone.push_back(q); };
 
     game.GiveItem(Items::VaultKey);
     std::vector<std::string> trace, finished;
@@ -117,6 +121,23 @@ int main()
     if (choices.size() == 2 && Join(choices[1], ",") != "Turn the key") Fail("Force it should be gone the second time");
     if (finished.size() != 1 || finished[0] != Cinematics::TheVaultOpens) Fail("the scene should end into the cinematic");
     if (game.HasItem(Items::VaultKey) || game.Arc(Characters::Mara) != 1) Fail("turning the key should use it up and move Mara +1");
+    if (game.QuestState(Quests::OpenTheVault) != "done" || Join(questsDone, ",") != Quests::OpenTheVault) Fail("solving the door should complete Open the vault once, got " + game.QuestState(Quests::OpenTheVault) + " " + Join(questsDone, ","));
+
+    // SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
+    {
+        vcgs::GameState fresh(story);
+        vcgs::ScenePlayer silt(fresh, Scenes::Sc02TheKey);
+        std::vector<std::string> encounters, over;
+        silt.OnEncounter = [&](const std::string& e, bool canWin) { encounters.push_back(e + (canWin ? "" : " (can't win)")); };
+        silt.OnGameOver = [&](const std::string& e) { over.push_back(e); };
+        silt.Start();
+        silt.Lose();
+        std::printf("encounter: %s\n", Join(encounters, ", ").c_str());
+        if (Join(encounters, ",") != std::string(Encounters::EelSwarm) + "," + Encounters::EelSwarm || !over.empty()) Fail("losing the eels should play them again, got " + Join(encounters, ","));
+        if (!silt.Win()) Fail("a win against the eels should count");
+        if (!fresh.WasWon(Encounters::EelSwarm) || !fresh.HasItem(Items::VaultKey)) Fail("winning should mark the eels won, and the scene go on to find the key");
+        if (silt.Win()) Fail("there is no encounter to win now");
+    }
 
     const std::string ring = vcgs::StoryWalker::Onward(game, finished.empty() ? "" : finished[0]);
     if (vcgs::StoryWalker::KindOf(game, ring) != "choice") Fail("after the cinematic comes the ring choice");

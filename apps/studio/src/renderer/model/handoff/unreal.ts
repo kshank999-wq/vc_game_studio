@@ -187,6 +187,8 @@ struct VCGS_API FVcgsLineRow : public FTableRowBase
 #include <memory>
 #include "VcgsSubsystem.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsQuestSignature, const FString&, Quest);
+
 /**
  * The one playthrough of the story: reads story.json when the game starts and
  * keeps its state across levels. Everything here is callable from Blueprints.
@@ -222,6 +224,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "VCGS|State") bool IsSolved(const FString& Puzzle) const;
     UFUNCTION(BlueprintPure, Category = "VCGS|State") bool WasVisited(const FString& Scene) const;
     UFUNCTION(BlueprintPure, Category = "VCGS|State") bool GateOpen(const FString& Gate) const;
+    /** "" (not started), "active" or "done". Quests start and complete by their rules. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|State") FString GetQuestState(const FString& Quest) const;
+    UFUNCTION(BlueprintPure, Category = "VCGS|State") bool WasWon(const FString& Encounter) const;
+
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestStarted;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
 
     /** Where a graph node goes next: its first route whose conditions hold, else on along the spine. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") FString Onward(const FString& Node);
@@ -292,6 +300,8 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     Game.reset();
     StoryData = std::make_unique<vcgs::Story>(std::move(Root));
     Game = std::make_unique<vcgs::GameState>(*StoryData);
+    Game->OnQuestStarted = [this](const std::string& Quest) { OnQuestStarted.Broadcast(ToF(Quest)); };
+    Game->OnQuestCompleted = [this](const std::string& Quest) { OnQuestCompleted.Broadcast(ToF(Quest)); };
     return true;
 }
 
@@ -314,6 +324,8 @@ int32 UVcgsSubsystem::GetArc(const FString& Character) const { return Game ? Gam
 bool UVcgsSubsystem::IsSolved(const FString& Puzzle) const { return Game && Game->Solved.count(ToStd(Puzzle)) > 0; }
 bool UVcgsSubsystem::WasVisited(const FString& Scene) const { return Game && Game->Visited.count(ToStd(Scene)) > 0; }
 bool UVcgsSubsystem::GateOpen(const FString& Gate) const { return !Game || vcgs::Rules::GateOpen(ToStd(Gate), *Game); }
+FString UVcgsSubsystem::GetQuestState(const FString& Quest) const { return Game ? ToF(Game->QuestState(ToStd(Quest))) : FString(); }
+bool UVcgsSubsystem::WasWon(const FString& Encounter) const { return Game && Game->WasWon(ToStd(Encounter)); }
 
 FString UVcgsSubsystem::Onward(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Onward(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::NodeKind(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::KindOf(*Game, ToStd(Node))) : FString(); }
@@ -363,6 +375,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVcgsDialogueSignature, const FStr
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_EightParams(FVcgsDualSignature, const FString&, LineId, const FString&, Speaker, const FString&, Text, const FString&, Direction, const FString&, WithLineId, const FString&, WithSpeaker, const FString&, WithText, const FString&, WithDirection);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsKeySignature, const FString&, Key);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsChoiceSignature, const FString&, Choice, const TArray<FString>&, Options);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsEncounterSignature, const FString&, Encounter, bool, bCanWin);
 
 class UVcgsSubsystem;
 
@@ -389,12 +402,20 @@ public:
     /** Free play: how it ends, in words. It ends by itself when its rule holds. */
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsKeySignature OnFreePlay;
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsChoiceSignature OnChoice;
+    /** An encounter: play it (a fight, a chase), then call Win() or Lose(). bCanWin says whether a win counts now. */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsEncounterSignature OnEncounter;
+    /** An encounter was lost, and that loss ends the game. */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsKeySignature OnGameOver;
     /** The scene is over: the graph node that comes next. */
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsKeySignature OnFinished;
 
     UFUNCTION(BlueprintCallable, Category = "VCGS") void StartScene();
     UFUNCTION(BlueprintCallable, Category = "VCGS") void Advance();
     UFUNCTION(BlueprintCallable, Category = "VCGS") void Choose(int32 Option);
+    /** The player won the encounter on now; false (and nothing happens) when a win doesn't count yet. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") bool Win();
+    /** The player lost the encounter on now: it plays again, the game is over, or the scene goes on. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") void Lose();
     /** Every option of the choice on offer, including ones that can't be picked now. */
     UFUNCTION(BlueprintPure, Category = "VCGS") TArray<FVcgsOption> GetOptionsDetail() const;
 
@@ -473,6 +494,8 @@ void UVcgsSceneFlowComponent::StartScene()
         for (const std::string& Option : Options) Labels.Add(ToF(Option));
         OnChoice.Broadcast(ToF(Choice), Labels);
     };
+    Player->OnEncounter = [this](const std::string& Encounter, bool bCanWin) { OnEncounter.Broadcast(ToF(Encounter), bCanWin); };
+    Player->OnGameOver = [this](const std::string& Encounter) { OnGameOver.Broadcast(ToF(Encounter)); };
     Player->OnFinished = [this](const std::string& Next) { OnFinished.Broadcast(ToF(Next)); };
     Player->Start();
 }
@@ -485,6 +508,16 @@ void UVcgsSceneFlowComponent::Advance()
 void UVcgsSceneFlowComponent::Choose(int32 Option)
 {
     if (Player) Player->Choose(Option);
+}
+
+bool UVcgsSceneFlowComponent::Win()
+{
+    return Player && Player->Win();
+}
+
+void UVcgsSceneFlowComponent::Lose()
+{
+    if (Player) Player->Lose();
 }
 
 TArray<FVcgsOption> UVcgsSceneFlowComponent::GetOptionsDetail() const
@@ -712,7 +745,8 @@ export. Change the story in VC Game Studio, not these files. The plugin
    \`UVcgsSubsystem\` reads \`story.json\` from there when the game starts.
 3. **A story scene**: add \`UVcgsSceneFlowComponent\` to an actor in the level,
    set \`SceneKey\` (\`VcgsKeys::Scenes\`), bind \`OnDialogue\` (and \`OnDualDialogue\`, two lines at once), \`OnCinematic\`,
-   \`OnFreePlay\`, \`OnChoice\` and \`OnFinished\`, and call \`Advance\` / \`Choose\`.
+   \`OnFreePlay\`, \`OnChoice\`, \`OnEncounter\` (and \`OnGameOver\`) and \`OnFinished\`, and call \`Advance\` /
+   \`Choose\`, or \`Win\` / \`Lose\` for an encounter.
 4. **An object**: add \`UVcgsInteractableComponent\` with its \`ObjectKey\` and call
    \`Interact("Pull")\`.
 5. **DataTables** (optional, for designers and subtitles): run
@@ -722,7 +756,8 @@ export. Change the story in VC Game Studio, not these files. The plugin
    a quest log, tuning; their logic lives in flags and triggers).
 
 The game state lives in the \`UVcgsSubsystem\` (flags, items, arcs and the rest,
-all Blueprint-callable). Triggers fire and puzzles solve themselves as their
+all Blueprint-callable). Quests start and complete by their rules (\`OnQuestStarted\`,
+\`OnQuestCompleted\`, \`GetQuestState\`). Triggers fire and puzzles solve themselves as their
 conditions come true; \`Onward\` and \`ChooseOnGraph\` follow the graph between
 scenes.
 `;

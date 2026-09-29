@@ -253,6 +253,8 @@ namespace vcgs
             Index("flags", Flags);
             Index("characters", Characters);
             Index("cinematics", Cinematics);
+            Index("quests", Quests);
+            Index("encounters", Encounters);
             for (const auto& l : Root["lines"].items) Lines[l["id"].Str()] = &l;
         }
         Story(const Story&) = delete;
@@ -267,7 +269,7 @@ namespace vcgs
         const Value Root;
         std::string Name;
         std::string Start;
-        std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines;
+        std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines, Quests, Encounters;
 
     private:
         void Index(const char* list, std::map<std::string, const Value*>& into)
@@ -302,19 +304,27 @@ namespace vcgs
         std::map<std::string, std::string> Flags, ObjectStates, Chosen;
         std::map<std::string, int> Items, Arcs;
         std::set<std::string> Solved, Visited, Fired, Picked;
+        /** Quests under way ("active") or "done"; one not in here has not started. */
+        std::map<std::string, std::string> Quests;
+        /** Encounters won. */
+        std::set<std::string> Won;
         bool AutoRules = true;
         std::function<void(const std::string&)> OnTriggerFired;
+        std::function<void(const std::string&)> OnQuestStarted;
+        std::function<void(const std::string&)> OnQuestCompleted;
 
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); Won.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
                 std::string initial = (*o.second)["initial"].Str();
                 if ((*o.second)["kind"].Str() == "object" && !initial.empty()) ObjectStates[o.first] = initial;
             }
+            // Quests with nothing to wait for start now; anything already true settles.
+            Changed();
         }
 
         /** Listen for changes; returns an id to stop listening with. */
@@ -364,6 +374,20 @@ namespace vcgs
         void Visit(const std::string& scene) { if (Visited.insert(scene).second) Changed(); }
         void MarkPicked(const std::string& option) { Picked.insert(option); }
         bool WasPicked(const std::string& option) const { return Picked.count(option) > 0; }
+
+        /** "" (not started), "active" or "done". */
+        std::string QuestState(const std::string& quest) const { auto it = Quests.find(quest); return it == Quests.end() ? "" : it->second; }
+        void SetQuest(const std::string& quest, const std::string& state)
+        {
+            if (QuestState(quest) == state) return;
+            Quests[quest] = state;
+            if (state == "active" && OnQuestStarted) OnQuestStarted(quest);
+            else if (state == "done" && OnQuestCompleted) OnQuestCompleted(quest);
+            Changed();
+        }
+
+        bool WasWon(const std::string& encounter) const { return Won.count(encounter) > 0; }
+        void MarkWon(const std::string& encounter) { if (Won.insert(encounter).second) Changed(); }
 
     private:
         std::vector<std::pair<int, std::function<void()>>> listeners;
@@ -461,12 +485,32 @@ namespace vcgs
             Apply(Story::Find(game.StoryData.Objects, puzzle)["effects"], game);
         }
 
-        /** Fire every trigger, and solve every puzzle, whose rule now holds. */
+        /**
+         * Fire every trigger, and solve every puzzle, whose rule now holds. A quest
+         * starts when its start rule holds (at once without one) and is done when its
+         * completion rule holds, paying its reward.
+         */
         inline void Settle(GameState& game)
         {
             for (int round = 0; round < 8; round++)
             {
                 bool moved = false;
+                for (const auto& q : game.StoryData.Quests)
+                {
+                    const Value& quest = *q.second;
+                    const std::string state = game.QuestState(q.first);
+                    if (state.empty() && Check(quest["starts"], game))
+                    {
+                        game.SetQuest(q.first, "active");
+                        moved = true;
+                    }
+                    else if (state == "active" && quest.Has("completes") && Check(quest["completes"], game))
+                    {
+                        game.SetQuest(q.first, "done");
+                        Apply(quest["reward"], game);
+                        moved = true;
+                    }
+                }
                 for (const auto& t : game.StoryData.Triggers)
                 {
                     const Value& trig = *t.second;
@@ -483,6 +527,24 @@ namespace vcgs
                 }
                 if (!moved) return;
             }
+        }
+
+        /** Whether a win against this encounter counts now (its win rule holds). */
+        inline bool CanWin(const std::string& encounter, const GameState& game) { return Check(Story::Find(game.StoryData.Encounters, encounter)["winWhen"], game); }
+
+        inline void Win(const std::string& encounter, GameState& game)
+        {
+            game.MarkWon(encounter);
+            Apply(Story::Find(game.StoryData.Encounters, encounter)["onWin"], game);
+        }
+
+        /** Do a loss's effects; returns what it leads to: "retry", "gameOver" or "carryOn". */
+        inline std::string Lose(const std::string& encounter, GameState& game)
+        {
+            const Value& e = Story::Find(game.StoryData.Encounters, encounter);
+            Apply(e["onLose"], game);
+            const std::string loss = e["loss"].Str();
+            return loss.empty() ? "retry" : loss;
         }
 
         /** A gate is open when its rule holds (a gate with no rule is open). */
@@ -571,6 +633,10 @@ namespace vcgs
         std::function<void(const std::string&)> OnCinematic;
         std::function<void(const std::string&)> OnFreePlay;
         std::function<void(const std::string&, const std::vector<std::string>&)> OnChoice;
+        /** An encounter: play it (a fight, a chase), then call Win() or Lose(); the bool says whether a win counts now. */
+        std::function<void(const std::string&, bool)> OnEncounter;
+        /** An encounter was lost, and that loss ends the game. */
+        std::function<void(const std::string&)> OnGameOver;
         std::function<void(const std::string&)> OnFinished;
 
         /** Every option in the list now, for a UI that greys the ones that can't be picked. */
@@ -643,6 +709,7 @@ namespace vcgs
                 if (ev.Has("ends")) AwaitEnd(ev["ends"]);
             }
             else if (kind == "choice") { std::vector<std::string> options = OptionsAt(index); if (OnChoice) OnChoice(ev["ref"].Str(), options); }
+            else if (kind == "encounter") { if (OnEncounter) OnEncounter(ev["ref"].Str(), Rules::CanWin(ev["ref"].Str(), game)); }
             else if (kind == "trigger")
             {
                 // A trigger on the timeline fires as it is reached, and the scene moves on.
@@ -686,6 +753,27 @@ namespace vcgs
             Advance();
         }
 
+        /** The player won the encounter on now. False (and nothing happens) when a win doesn't count yet. */
+        bool Win()
+        {
+            const std::string encounter = EncounterNow();
+            if (encounter.empty() || !Rules::CanWin(encounter, game)) return false;
+            Rules::Win(encounter, game);
+            Advance();
+            return true;
+        }
+
+        /** The player lost the encounter on now: its loss effects, then it plays again, the game is over, or the scene goes on. */
+        void Lose()
+        {
+            const std::string encounter = EncounterNow();
+            if (encounter.empty()) return;
+            const std::string loss = Rules::Lose(encounter, game);
+            if (loss == "gameOver") { if (OnGameOver) OnGameOver(encounter); }
+            else if (loss == "carryOn") Advance();
+            else if (OnEncounter) OnEncounter(encounter, Rules::CanWin(encounter, game));
+        }
+
         /** Where the story goes after this scene: the first exit whose conditions hold, else onward. */
         std::string NextNode()
         {
@@ -708,6 +796,13 @@ namespace vcgs
         std::vector<int> offered;
         const Value* waiting = nullptr;
         int subscription = 0;
+
+        std::string EncounterNow() const
+        {
+            if (index < 0 || index >= static_cast<int>(track->items.size())) return "";
+            const Value& ev = (*track)[static_cast<size_t>(index)];
+            return ev["kind"].Str() == "encounter" ? ev["ref"].Str() : "";
+        }
 
         std::string MainKey(int at) const { return key + ":" + std::to_string(at); }
         std::string BranchKey(int b) const { return key + ":b" + std::to_string(b); }

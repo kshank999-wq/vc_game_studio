@@ -59,6 +59,11 @@ func _initialize() -> void:
 	load("res://vcgs/generated/logic/rules.gd").reset(game)
 	if game.get_flag("door_solved") != "no":
 		fail("door_solved should start at no")
+	# The quest has no start rule: it is under way from the reset.
+	if game.quest_state("open_the_vault") != "active":
+		fail("Open the vault should be under way after reset, is " + game.quest_state("open_the_vault"))
+	var quest_done: Array = []
+	game.quest_completed.connect(func(k: String) -> void: quest_done.append(k))
 
 	var lever: Node = load("res://vcgs/generated/objects/rusted_lever.gd").new()
 	root.add_child(lever)
@@ -133,6 +138,28 @@ func _initialize() -> void:
 		fail("turning the key should use it up and move Mara +1")
 	if game.chosen.get("turn_the_key", "") != "Turn the key":
 		fail("the pick should be remembered")
+	# Solving the door completed the quest, once.
+	if game.quest_state("open_the_vault") != "done" or quest_done != ["open_the_vault"]:
+		fail("solving the door should complete Open the vault once, got " + game.quest_state("open_the_vault") + " " + str(quest_done))
+
+	# SC-02 opens on an encounter: lose it (try again), then win it, and the scene goes on.
+	load("res://vcgs/generated/logic/rules.gd").reset(game)
+	var key_scene: Node = load("res://vcgs/generated/scenes/sc_02_the_key.gd").new()
+	root.add_child(key_scene)
+	var encounters: Array = []
+	key_scene.encounter_requested.connect(func(k: String, can_win: bool) -> void: encounters.append([k, can_win]))
+	var over: Array = []
+	key_scene.game_over.connect(func(k: String) -> void: over.append(k))
+	key_scene.start()
+	key_scene.lose()
+	if encounters != [["eel_swarm", true], ["eel_swarm", true]] or not over.is_empty():
+		fail("losing the eels should play them again, got " + str(encounters))
+	if not key_scene.win():
+		fail("a win against the eels should count")
+	if not game.was_won("eel_swarm") or not game.has_item("vault_key"):
+		fail("winning should mark the eels won, and the scene go on to find the key")
+	print("encounter: ", encounters, " won ", game.was_won("eel_swarm"), ", key ", game.has_item("vault_key"))
+	key_scene.queue_free()
 
 	# Without the key the choice is skipped.
 	var rules: GDScript = load("res://vcgs/generated/logic/rules.gd")
@@ -199,6 +226,21 @@ func _initialize() -> void:
 	story_player.start_now()
 	if story_player.labels() != ["Play The Cave Mouth"]:
 		fail("the story should start at SC-01, got " + str(story_player.labels()))
+
+	# SC-02's placeholder scene stands in for the eels with Win and Lose.
+	load("res://vcgs/generated/logic/rules.gd").reset(game)
+	var silt: Node = load("res://vcgs/generated/scenes/sc_02_the_key.tscn").instantiate()
+	var silt_player: Node = silt.get_node("DebugPlayer")
+	silt_player.autostart = false
+	root.add_child(silt)
+	silt_player.start_now()
+	print("encounter on screen: ", silt_player.text(), " ", silt_player.labels())
+	if silt_player.text() != "[Encounter] Eel swarm" or silt_player.labels() != ["Win", "Lose"]:
+		fail("SC-02 should open on the eels with Win and Lose, got " + silt_player.text() + " " + str(silt_player.labels()))
+	silt_player.press(0)
+	if not game.was_won("eel_swarm") or silt_player.text() != "Find the key in the silt":
+		fail("Win should beat the eels and go on, got " + silt_player.text())
+	silt.queue_free()
 
 	check_level(game)
 
