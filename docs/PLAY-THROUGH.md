@@ -72,7 +72,11 @@ monitor while you fix it on another.
   under the entry as "Note: …", and a search finds it. An empty note is none.
   **Export notes** (in the codex's header) saves them all as a text file: each
   entry with a note, section by section in the codex's order, under
-  "SECTION · the entry's first line". The engines' codex
+  "SECTION · the entry's first line". **Import notes** reads such a file back
+  (from the studio or any engine): each note goes to the entry of that section
+  and name, whatever state it is in now ("(won)", "(carried)", a quest's goal
+  aside), replacing the note it had; the others stay. Notes for entries not in
+  the codex yet are listed, not lost silently. The engines' codex
   screens search, filter, sort and bookmark the same way.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.

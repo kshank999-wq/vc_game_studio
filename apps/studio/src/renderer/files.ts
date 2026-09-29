@@ -145,6 +145,17 @@ export const downloadText = (name: string, text: string): void => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
+/** A text file's contents. */
+export const readText = (file: Blob): Promise<string> =>
+  typeof file.text === 'function'
+    ? file.text()
+    : new Promise((done, fail) => {
+        const reader = new FileReader();
+        reader.onload = () => done(String(reader.result));
+        reader.onerror = () => fail(reader.error);
+        reader.readAsText(file);
+      });
+
 /** The name for a project's exported codex notes. */
 export const notesFileNameFor = (project: Project): string => fileNameFor(project).replace(/\.[^.]+$/, '') + ' codex notes.txt';
 

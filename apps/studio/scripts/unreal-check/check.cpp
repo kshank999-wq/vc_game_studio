@@ -202,6 +202,10 @@ int main()
             if (book.Text("not monks").find("THE DROWNED ORDER") == std::string::npos) Fail("a search should find the note, got " + book.Text("not monks"));
             // Export them: each entry with a note, in the codex's order.
             if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nPriests, not monks") Fail("the notes export should list each noted entry, got " + book.NotesText());
+            // Import them back: matched by section and name, whatever the entry's state.
+            const vcgs::Codex::ReadNotes read = book.NotesFrom("CODEX NOTES · The Sunken Vault\r\n\r\nLORE · THE LAST EXPEDITION (seen)\r\nPry marks,\r\nby the lock\r\n\r\nENCOUNTERS · EEL SWARM (won)\r\nNot met here");
+            if (read.Notes.size() != 1 || read.Notes[0].first != std::string("lore:") + Lore::TheLastExpedition || read.Notes[0].second != "Pry marks,\nby the lock" || Join(read.Skipped, ",") != "ENCOUNTERS · EEL SWARM (won)") Fail("importing notes should match them by section and name");
+            if (vcgs::Codex::NameOf("• Open the vault — Reach it") != "open the vault" || vcgs::Codex::NameOf("VAULT KEY (carried ×2)") != "vault key") Fail("the name should drop the goal and the state");
             sorting.SetNote(std::string("lore:") + Lore::TheDrownedOrder, "");
             if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nNo notes yet.") Fail("with no notes, the export should say so, got " + book.NotesText());
             if (book.Text().find("Note:") != std::string::npos) Fail("an empty note should take the note off");

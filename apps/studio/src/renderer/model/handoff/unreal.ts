@@ -265,6 +265,15 @@ public:
     UFUNCTION(BlueprintPure, Category = "VCGS|Codex") FString GetCodexNotesText() const;
     /** Save the notes as a text file (Saved/CodexNotes.txt when Path is empty); returns where, or "" if it could not. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") FString ExportCodexNotes(const FString& Path = TEXT(""));
+    /**
+     * Import exported notes (from a codex here, the studio's or another engine's):
+     * each "SECTION · entry" block is matched to an entry by section and name,
+     * and those notes are set (the others stay). Returns how many; Skipped gets
+     * the headings that match nothing in the codex (yet).
+     */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 ImportCodexNotesText(const FString& Text, TArray<FString>& Skipped);
+    /** The same from a text file (Saved/CodexNotes.txt when Path is empty); -1 if it could not be read. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 ImportCodexNotes(TArray<FString>& Skipped, const FString& Path = TEXT(""));
     /** The codex entries shown (for a search, section and sort), in order, by key: what a cursor moves through. */
     UFUNCTION(BlueprintPure, Category = "VCGS|Codex") TArray<FString> GetCodexEntries(const FString& Search = TEXT(""), const FString& Section = TEXT(""), const FString& Sort = TEXT("")) const;
     /** Quest, character, location, item, object, mechanic, encounter and lore updates since the codex was last read. */
@@ -392,6 +401,24 @@ bool UVcgsSubsystem::IsCodexBookmarked(const FString& Entry) const { return Game
 void UVcgsSubsystem::SetCodexNote(const FString& Entry, const FString& Note) { if (Game) Game->SetNote(ToStd(Entry), ToStd(Note)); }
 FString UVcgsSubsystem::GetCodexNote(const FString& Entry) const { return Game ? ToF(Game->NoteFor(ToStd(Entry))) : FString(); }
 FString UVcgsSubsystem::GetCodexNotesText() const { return CodexData ? ToF(CodexData->NotesText()) : FString(); }
+int32 UVcgsSubsystem::ImportCodexNotesText(const FString& Text, TArray<FString>& Skipped)
+{
+    Skipped.Reset();
+    if (!CodexData || !Game) return 0;
+    const vcgs::Codex::ReadNotes Read = CodexData->NotesFrom(ToStd(Text));
+    for (const auto& Note : Read.Notes) Game->SetNote(Note.first, Note.second);
+    for (const std::string& Head : Read.Skipped) Skipped.Add(ToF(Head));
+    return static_cast<int32>(Read.Notes.size());
+}
+
+int32 UVcgsSubsystem::ImportCodexNotes(TArray<FString>& Skipped, const FString& Path)
+{
+    const FString Where = Path.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("CodexNotes.txt") : Path;
+    FString Text;
+    if (!FFileHelper::LoadFileToString(Text, *Where)) return -1;
+    return ImportCodexNotesText(Text, Skipped);
+}
+
 FString UVcgsSubsystem::ExportCodexNotes(const FString& Path)
 {
     if (!CodexData) return FString();
@@ -520,7 +547,7 @@ namespace vcgs { class Codex; }
  * arrow keys move a cursor (▶) through the entries and B bookmarks the one it
  * is on (★); Tab reaches the bookmarks alone too. N writes a note on it: type
  * it, Enter keeps it, Escape leaves it. E saves every note as a text file
- * (ExportCodexNotes on the subsystem).
+ * (ExportCodexNotes on the subsystem), and I reads it back (ImportCodexNotes).
  */
 UCLASS()
 class VCGS_API AVcgsCodexHUD : public AHUD
@@ -661,6 +688,14 @@ void AVcgsCodexHUD::DrawHUD()
         const FString Where = Story->ExportCodexNotes();
         StatusText = Where.IsEmpty() ? std::string("Could not save the notes.") : "Notes saved to " + ToStd(Where);
     }
+    else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::I))
+    {
+        TArray<FString> Skipped;
+        const int32 Count = Story->ImportCodexNotes(Skipped);
+        std::string Missing;
+        for (const FString& Head : Skipped) Missing += (Missing.empty() ? "" : "; ") + ToStd(Head);
+        StatusText = Count < 0 ? std::string("No notes file to import.") : "Imported " + std::to_string(Count) + " notes" + (Missing.empty() ? "" : ". Not in the codex (yet): " + Missing);
+    }
     else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::N))
     {
         const std::vector<std::string> Keys = Book->EntryKeys(SearchText, SectionKey, SortKey);
@@ -741,7 +776,7 @@ void AVcgsCodexHUD::DrawHUD()
         DrawText(ToF(Line), Line == "CODEX" ? Gold : Ink, Left + 18.f, Y);
         Y += 22.f;
     }
-    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B bookmark, N note, E save notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
+    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B bookmark, N note · E save, I load notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
 }
 `,
 

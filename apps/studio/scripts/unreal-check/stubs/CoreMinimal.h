@@ -36,6 +36,7 @@ class TArray
 {
 public:
     int32 Add(const T& item) { items.push_back(item); return static_cast<int32>(items.size()) - 1; }
+    void Reset() { items.clear(); }
     int32 Num() const { return static_cast<int32>(items.size()); }
     T& operator[](int32 i) { return items[static_cast<size_t>(i)]; }
     typename std::vector<T>::iterator begin() { return items.begin(); }

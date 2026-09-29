@@ -880,6 +880,45 @@ export const codexNotesText = (project: Project, world: PlayWorld, notes: Readon
   return [`CODEX NOTES · ${project.name}`, ...(parts.length ? parts : ['No notes yet.'])].join('\n\n');
 };
 
+/**
+ * An entry's name as notes are matched by: its first line without the quest
+ * bullet, a quest's goal, or states in brackets ("(won)", "(carried ×2)"),
+ * ignoring case. The same in the engines.
+ */
+export const codexNameOf = (firstLine: string): string => {
+  let name = firstLine.trim().replace(/^• /, '');
+  const dash = name.indexOf(' — ');
+  if (dash >= 0) name = name.slice(0, dash);
+  while (/ \([^()]*\)$/.test(name)) name = name.replace(/ \([^()]*\)$/, '');
+  return name.trim().toLowerCase();
+};
+
+/**
+ * Read notes exported from a codex (the studio's or an engine's): each
+ * "SECTION · entry" block is matched to an entry in this codex by section and
+ * name. Returns the notes matched, by entry key, and the headings of those
+ * that match nothing here (not in the codex yet, or from another story).
+ */
+export const codexNotesFrom = (project: Project, world: PlayWorld, text: string): { notes: Map<string, string>; skipped: string[] } => {
+  const byName = new Map<string, string>();
+  for (const s of codexSections(project, world))
+    for (const e of s.entries) byName.set(`${s.key}|${codexNameOf(e.text.split('\n')[0]!)}`, e.key);
+  const notes = new Map<string, string>();
+  const skipped: string[] = [];
+  for (const block of text.replace(/\r\n?/g, '\n').split(/\n\s*\n/)) {
+    const [head = '', ...rest] = block.trim().split('\n');
+    const at = head.indexOf(' · ');
+    if (at < 0 || head.startsWith('CODEX NOTES')) continue;
+    const section = head.slice(0, at).trim().toLowerCase();
+    const note = rest.join('\n').trim();
+    if (!note) continue;
+    const key = byName.get(`${section}|${codexNameOf(head.slice(at + 3))}`);
+    if (key) notes.set(key, note);
+    else skipped.push(head.trim());
+  }
+  return { notes, skipped };
+};
+
 /** How far the codex has come (quests started and done, characters met, locations visited, items found, objects used, mechanics available, encounters met and won, lore found), for counting what is new since it was read. */
 export const codexProgress = (project: Project, world: PlayWorld): number =>
   Object.keys(world.metCharacters).filter((id) => world.metCharacters[id] && codexEntry(project.objects[id])).length +

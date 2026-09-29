@@ -1377,6 +1377,69 @@ namespace VCGS
         readonly Dictionary<string, string> titles = new Dictionary<string, string>();
 
         /// <summary>
+        /// An entry's name as notes are matched by: its first line without the
+        /// quest bullet, a quest's goal, or states in brackets ("(won)",
+        /// "(carried ×2)"), ignoring case.
+        /// </summary>
+        public static string NameOf(string firstLine)
+        {
+            var name = (firstLine ?? "").Trim();
+            if (name.StartsWith("• ")) name = name.Substring(2);
+            var dash = name.IndexOf(" — ", StringComparison.Ordinal);
+            if (dash >= 0) name = name.Substring(0, dash);
+            while (name.EndsWith(")"))
+            {
+                var open = name.LastIndexOf(" (", StringComparison.Ordinal);
+                if (open < 0 || name.IndexOf('(', open + 2) >= 0) break;
+                name = name.Substring(0, open);
+            }
+            return name.Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Read notes exported from a codex (this one's, the studio's or another
+        /// engine's): each "SECTION · entry" block is matched to an entry here by
+        /// section and name. Returns the notes matched, by key, and the headings
+        /// that match nothing here (not in the codex yet, or another story's).
+        /// </summary>
+        public (Dictionary<string, string> notes, List<string> skipped) NotesFrom(string text)
+        {
+            Text();
+            var byName = new Dictionary<string, string>();
+            foreach (var t in titles)
+            {
+                var at = t.Value.IndexOf(" · ", StringComparison.Ordinal);
+                byName[t.Value.Substring(0, at).ToLowerInvariant() + "|" + NameOf(t.Value.Substring(at + 3))] = t.Key;
+            }
+            var notes = new Dictionary<string, string>();
+            var skipped = new List<string>();
+            var blocks = new List<List<string>> { new List<string>() };
+            foreach (var line in (text ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+                if (line.Trim() == "") blocks.Add(new List<string>());
+                else blocks[blocks.Count - 1].Add(line);
+            foreach (var lines in blocks)
+            {
+                if (lines.Count == 0) continue;
+                var head = lines[0];
+                var at = head.IndexOf(" · ", StringComparison.Ordinal);
+                if (at < 0 || head.StartsWith("CODEX NOTES")) continue;
+                var note = string.Join("\n", lines.GetRange(1, lines.Count - 1)).Trim();
+                if (note == "") continue;
+                if (byName.TryGetValue(head.Substring(0, at).Trim().ToLowerInvariant() + "|" + NameOf(head.Substring(at + 3)), out var key)) notes[key] = note;
+                else skipped.Add(head.Trim());
+            }
+            return (notes, skipped);
+        }
+
+        /// <summary>Import exported notes: the notes matched are set (the others stay). Returns what NotesFrom does.</summary>
+        public (Dictionary<string, string> notes, List<string> skipped) ImportNotes(string text)
+        {
+            var read = NotesFrom(text);
+            foreach (var n in read.notes) game.SetNote(n.Key, n.Value);
+            return read;
+        }
+
+        /// <summary>
         /// The player's notes in words, to export: each entry with a note, in
         /// the codex's order, under "SECTION · the entry's first line" (the
         /// same as the studio's play-through exports).
@@ -1416,7 +1479,7 @@ namespace VCGS
     /// (or the row of buttons) to show one section, and S (or the sort buttons)
     /// to order each section; the arrows move a cursor (▶) and B bookmarks
     /// the entry it is on (★Bookmarks shows only those), N writes a note on it,
-    /// and E saves every note as a text file. Drawn with
+    /// E saves every note as a text file, and I reads them back. Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1481,6 +1544,24 @@ namespace VCGS
             {
                 Status = "Could not save the notes.";
                 return "";
+            }
+        }
+
+        /// <summary>Import notes from a text file (I; the one E saves when no path); false if it could not be read.</summary>
+        public bool ImportNotes(string path = null)
+        {
+            if (Book == null) return false;
+            path = path ?? System.IO.Path.Combine(Application.persistentDataPath, "codex_notes.txt");
+            try
+            {
+                var read = Book.ImportNotes(System.IO.File.ReadAllText(path));
+                Status = "Imported " + read.notes.Count + " notes" + (read.skipped.Count > 0 ? ". Not in the codex (yet): " + string.Join("; ", read.skipped) : "");
+                return true;
+            }
+            catch (Exception)
+            {
+                Status = "No notes file at " + path;
+                return false;
             }
         }
 
@@ -1556,6 +1637,11 @@ namespace VCGS
             else if (e.type == EventType.KeyDown && !typing && IsOpen && (e.keyCode == KeyCode.UpArrow || e.keyCode == KeyCode.DownArrow))
             {
                 MoveCursor(e.keyCode == KeyCode.DownArrow ? 1 : -1);
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.I)
+            {
+                ImportNotes();
                 e.Use();
             }
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.E)

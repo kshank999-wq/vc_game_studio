@@ -154,6 +154,11 @@ static class Check
         sorting.SetNote("encounters:" + Encounters.EelSwarm, "Bring the lantern");
         if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nPriests, not monks") Fail("the notes export should list each noted entry (the eels are not met here), got " + book.NotesText());
         sorting.SetNote("encounters:" + Encounters.EelSwarm, "");
+        // Import them back: matched by section and name, whatever the entry's state.
+        var read = book.ImportNotes("CODEX NOTES · The Sunken Vault\r\n\r\nLORE · THE LAST EXPEDITION (seen)\r\nPry marks,\r\nby the lock\r\n\r\nENCOUNTERS · EEL SWARM (won)\r\nNot met here");
+        if (read.notes.Count != 1 || sorting.NoteFor("lore:" + Lore.TheLastExpedition) != "Pry marks,\nby the lock" || string.Join(",", read.skipped) != "ENCOUNTERS · EEL SWARM (won)") Fail("importing notes should match them by section and name, got " + read.notes.Count + " / " + string.Join(",", read.skipped));
+        if (Codex.NameOf("• Open the vault — Reach it") != "open the vault" || Codex.NameOf("VAULT KEY (carried ×2)") != "vault key") Fail("the name should drop the goal and the state");
+        sorting.SetNote("lore:" + Lore.TheLastExpedition, "");
         sorting.SetNote("lore:" + Lore.TheDrownedOrder, "");
         if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nNo notes yet.") Fail("with no notes, the export should say so, got " + book.NotesText());
         if (book.Text().Contains("Note:")) Fail("an empty note should take the note off");

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
-import { advance, choose, codexNotesText, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, choose, codexNotesFrom, codexNotesText, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
-import { downloadText, notesFileNameFor } from '../../files';
+import { downloadText, notesFileNameFor, readText } from '../../files';
 import { Symbol } from '../Symbol';
 import { Inline } from '../Inline';
 
@@ -121,6 +121,7 @@ const CodexPanel = ({
   onBookmark,
   notes,
   onNote,
+  onImportNotes,
 }: {
   project: Project;
   world: PlayWorld;
@@ -131,6 +132,8 @@ const CodexPanel = ({
   /** The player's notes on entries, by entry key. */
   notes: ReadonlyMap<string, string>;
   onNote: (key: string, text: string) => void;
+  /** Notes read from an exported file, by entry key, to set (the others stay). */
+  onImportNotes: (notes: ReadonlyMap<string, string>) => void;
 }) => {
   const c = codexOf(project, world);
   const [query, setQuery] = useState('');
@@ -140,6 +143,15 @@ const CodexPanel = ({
   const keys = codexSectionKeys(project, world);
   // The entries shown, by section and in order (the same rules as the engines' codex).
   const shown = new Map(codexSections(project, world, query, section, sort, bookmarks, notes).map((s) => [s.key, s.entries.map((e) => e.id)]));
+  // Importing notes: the file picker, and what the last import did.
+  const notesFile = useRef<HTMLInputElement>(null);
+  const [imported, setImported] = useState('');
+  const importNotes = async (file: File) => {
+    const read = codexNotesFrom(project, world, await readText(file));
+    onImportNotes(read.notes);
+    const got = `Imported ${read.notes.size} note${read.notes.size === 1 ? '' : 's'}`;
+    setImported(read.skipped.length ? `${got}. Not in the codex (yet): ${read.skipped.join('; ')}.` : `${got}.`);
+  };
   // The entry whose note is being written, by key.
   const [editing, setEditing] = useState('');
   /** A pencil to write (or change) the player's note on an entry. */
@@ -222,10 +234,30 @@ const CodexPanel = ({
         >
           Export notes
         </button>
+        <button className="tb-btn small" title="Read notes from an exported file" onClick={() => notesFile.current?.click()}>
+          Import notes
+        </button>
+        <input
+          ref={notesFile}
+          type="file"
+          accept=".txt,text/plain"
+          aria-label="Notes file to import"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) void importNotes(file);
+          }}
+        />
         <button className="tb-btn small" onClick={onClose}>
           Close <kbd>C</kbd>
         </button>
       </div>
+      {imported && (
+        <p className="play-note" role="status">
+          {imported}
+        </p>
+      )}
       <input
         ref={search}
         className="play-codex-search"
@@ -691,6 +723,13 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
             onClose={() => setCodexOpen(false)}
             bookmarks={bookmarks}
             notes={notes}
+            onImportNotes={(read) =>
+              setNotes((n) => {
+                const next = new Map(n);
+                for (const [key, text] of read) next.set(key, text);
+                return next;
+              })
+            }
             onNote={(key, text) =>
               setNotes((n) => {
                 const next = new Map(n);

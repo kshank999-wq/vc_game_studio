@@ -249,6 +249,14 @@ describe('play-through', () => {
     });
     expect(await read(saved[0]!)).toContain('ENCOUNTERS · EEL SWARM (won)\nLight the lantern first');
     click.mockRestore();
+    // Import notes back: the exported file, with one changed and one for the Order's story.
+    const file = new File([`CODEX NOTES · The Sunken Vault\n\nENCOUNTERS · EEL SWARM (won)\nBring the lantern\n\nLORE · THE DROWNED ORDER\nPriests\n\nLORE · THE LAST EXPEDITION\nWho?`], 'notes.txt', { type: 'text/plain' });
+    fireEvent.change(within(codex).getByLabelText('Notes file to import'), { target: { files: [file] } });
+    await waitFor(() => expect(within(codex).getByRole('status').textContent).toBe('Imported 2 notes. Not in the codex (yet): LORE · THE LAST EXPEDITION.'));
+    expect(codex.textContent).toContain('Note: Bring the lantern');
+    fireEvent.click(within(sections).getByRole('button', { name: 'All' }));
+    expect(codex.textContent).toContain('Note: Priests');
+    fireEvent.click(within(sections).getByRole('button', { name: '★ Bookmarks' }));
     URL.createObjectURL = created;
     URL.revokeObjectURL = revoked;
     expect(screen.getByRole('dialog', { name: 'Codex' })).toBeTruthy();

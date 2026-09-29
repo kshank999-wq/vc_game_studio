@@ -1000,6 +1000,77 @@ namespace vcgs
         }
 
         /**
+         * An entry's name as notes are matched by: its first line without the
+         * quest bullet, a quest's goal, or states in brackets ("(won)",
+         * "(carried ×2)"), ignoring case.
+         */
+        static std::string NameOf(std::string name)
+        {
+            name = Trim(name);
+            if (name.rfind("• ", 0) == 0) name = name.substr(std::string("• ").size());
+            const size_t dash = name.find(" — ");
+            if (dash != std::string::npos) name = name.substr(0, dash);
+            while (!name.empty() && name.back() == ')')
+            {
+                const size_t open = name.rfind(" (");
+                if (open == std::string::npos || name.find('(', open + 2) != std::string::npos) break;
+                name = name.substr(0, open);
+            }
+            return Lower(Trim(name));
+        }
+
+        /** What reading exported notes found: the notes matched, by key, and the headings that match nothing here. */
+        struct ReadNotes
+        {
+            std::vector<std::pair<std::string, std::string>> Notes;
+            std::vector<std::string> Skipped;
+        };
+
+        /**
+         * Read notes exported from a codex (this one's, the studio's or another
+         * engine's): each "SECTION · entry" block is matched to an entry here by
+         * section and name.
+         */
+        ReadNotes NotesFrom(const std::string& text) const
+        {
+            Text();
+            std::map<std::string, std::string> byName;
+            for (const auto& t : Titles)
+            {
+                const size_t at = t.second.find(" · ");
+                byName[Lower(t.second.substr(0, at)) + "|" + NameOf(t.second.substr(at + std::string(" · ").size()))] = t.first;
+            }
+            std::vector<std::vector<std::string>> blocks(1);
+            size_t start = 0;
+            while (start <= text.size())
+            {
+                size_t end = text.find('\n', start);
+                if (end == std::string::npos) end = text.size();
+                std::string line = text.substr(start, end - start);
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                if (Trim(line).empty()) blocks.emplace_back();
+                else blocks.back().push_back(line);
+                start = end + 1;
+            }
+            ReadNotes read;
+            for (const auto& lines : blocks)
+            {
+                if (lines.empty()) continue;
+                const std::string& head = lines[0];
+                const size_t at = head.find(" · ");
+                if (at == std::string::npos || head.rfind("CODEX NOTES", 0) == 0) continue;
+                std::string note;
+                for (size_t i = 1; i < lines.size(); i++) note += (i > 1 ? "\n" : "") + lines[i];
+                note = Trim(note);
+                if (note.empty()) continue;
+                auto it = byName.find(Lower(Trim(head.substr(0, at))) + "|" + NameOf(head.substr(at + std::string(" · ").size())));
+                if (it != byName.end()) read.Notes.push_back({it->second, note});
+                else read.Skipped.push_back(Trim(head));
+            }
+            return read;
+        }
+
+        /**
          * The player's notes in words, to export: each entry with a note, in the
          * codex's order, under "SECTION · the entry's first line" (the same as
          * the studio's play-through exports).

@@ -148,6 +148,12 @@ the studio's play-through:
   `codex_notes_text()` / `export_codex_notes()` (user://codex_notes.txt);
   Unity `Codex.NotesText` / `VcgsCodex.ExportNotes` (persistentDataPath);
   Unreal `GetCodexNotesText` / `ExportCodexNotes` (Saved/CodexNotes.txt).
+  And I reads such a file back, from any of them or the studio, matching each
+  note to an entry by section and name (states and a quest's goal aside):
+  Godot `codex_notes_from()` / `import_codex_notes()`; Unity
+  `Codex.NotesFrom` / `ImportNotes` and `VcgsCodex.ImportNotes`; Unreal
+  `ImportCodexNotes` / `ImportCodexNotesText` (with the headings it could not
+  match).
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

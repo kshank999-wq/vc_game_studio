@@ -505,6 +505,35 @@ describe('the codex', () => {
     );
   });
 
+  it('imports exported notes: matched by section and name, whatever the entry\'s state', async () => {
+    const { codexNotesFrom, codexNotesText, codexNameOf } = await import('../play');
+    expect(codexNameOf('• Open the vault — Reach the vault chamber')).toBe('open the vault');
+    expect(codexNameOf('VAULT KEY (carried ×2)')).toBe('vault key');
+    expect(codexNameOf('EEL SWARM (won)')).toBe('eel swarm');
+    const world = toTheVault(p).world;
+    const exported = [
+      `CODEX NOTES · ${p.name}`,
+      // Written before the eels were beaten, and the key used up: still theirs.
+      'ENCOUNTERS · EEL SWARM\nLight the lantern first',
+      'ITEMS · VAULT KEY\nFor the vault door',
+      'QUESTS · Open the vault\nKey first,\nthen the lever',
+      // Not met yet in this play-through, or from another story.
+      'LORE · THE LAST EXPEDITION\nWho were they?',
+      'LORE · SOMETHING ELSE\n',
+    ].join('\r\n\r\n');
+    const read = codexNotesFrom(p, world, exported);
+    expect([...read.notes]).toEqual([
+      [`encounters:${id(p, 'Eel swarm')}`, 'Light the lantern first'],
+      [`items:${id(p, 'Vault Key')}`, 'For the vault door'],
+      [`quests:${id(p, 'Open the vault')}`, 'Key first,\nthen the lever'],
+    ]);
+    expect(read.skipped).toEqual(['LORE · THE LAST EXPEDITION']);
+    // An export read back gives the same notes.
+    const again = codexNotesFrom(p, world, codexNotesText(p, world, read.notes));
+    expect([...again.notes].sort()).toEqual([...read.notes].sort());
+    expect(again.skipped).toEqual([]);
+  });
+
   it('lists a character once heard, and only one with a codex entry', async () => {
     const { codexText, codexProgress } = await import('../play');
     const mara = id(p, 'Mara');

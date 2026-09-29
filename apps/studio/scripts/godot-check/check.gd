@@ -369,6 +369,18 @@ func _initialize() -> void:
 	if saved == "" or FileAccess.get_file_as_string(saved) != notes:
 		fail("the notes should be saved as a text file, got " + saved)
 	game.set_note("quests:open_the_vault", "")
+	# Import them back: matched by section and name, whatever the entry's state now.
+	var file := FileAccess.open("user://vcgs_check_import.txt", FileAccess.WRITE)
+	file.store_string("CODEX NOTES · The Sunken Vault\r\n\r\nQUESTS · Open the vault\r\nKey first,\r\nthen the lever\r\n\r\nITEMS · VAULT KEY (carried ×2)\r\nFor the door\r\n\r\nLORE · THE LAST EXPEDITION\r\nWho?")
+	file.close()
+	var read: Dictionary = silt_player.import_codex_notes("user://vcgs_check_import.txt")
+	print("imported: ", read)
+	if read.is_empty() or read["notes"].size() != 2 or game.note_for("quests:open_the_vault") != "Key first,\nthen the lever" or game.note_for("items:vault_key") != "For the door" or read["skipped"] != ["LORE · THE LAST EXPEDITION"]:
+		fail("importing notes should match them by section and name, got " + str(read))
+	if silt_player.codex_name_of("EEL SWARM (won)") != "eel swarm":
+		fail("the name should drop its state")
+	game.set_note("quests:open_the_vault", "")
+	game.set_note("items:vault_key", "")
 	game.set_note("lore:the_drowned_order", "")
 	if silt_player.codex_text().contains("Note:"):
 		fail("an empty note should take the note off")
