@@ -151,6 +151,8 @@ int main()
         std::vector<std::string> encounters, over;
         silt.OnEncounter = [&](const std::string& e, bool canWin) { encounters.push_back(e + (canWin ? "" : " (can't win)")); };
         silt.OnGameOver = [&](const std::string& e) { over.push_back(e); };
+        vcgs::Codex codex(fresh);
+        if (codex.Text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet." || codex.New() != 0) Fail("the codex should start empty, got " + codex.Text());
         silt.Start();
         silt.Lose();
         std::printf("encounter: %s\n", Join(encounters, ", ").c_str());
@@ -162,6 +164,15 @@ int main()
         if (!silt.Win()) Fail("with the lantern's oil, a win against the eels should count");
         if (!fresh.WasWon(Encounters::EelSwarm) || !fresh.HasItem(Items::VaultKey)) Fail("winning should mark the eels won, and the scene go on to find the key");
         if (fresh.QuestState(Quests::OpenTheVault) != "active" || !fresh.KnowsLore(Lore::TheDrownedOrder)) Fail("finding the key should start the quest and reveal the lore");
+        // The codex: the quest log and the lore, and what is new since it was read.
+        const std::string text = codex.Text();
+        std::printf("codex: %s · new %d\n", text.substr(0, 80).c_str(), codex.New());
+        if (codex.ButtonText("C") != "Codex (C) · 2 new" || text.rfind("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault", 0) != 0) Fail("the codex should show the quest under way and The Drowned Order, 2 new, got " + text);
+        codex.MarkRead();
+        vcgs::Rules::CompleteQuest(Quests::OpenTheVault, fresh);
+        if (codex.ButtonText("C") != "Codex (C) · 1 new" || codex.Text().find("QUESTS · 0 under way, 1 done\n• Open the vault (done)") == std::string::npos) Fail("the quest log should show the quest done, 1 new, got " + codex.Text());
+        // The HUD draws it line by line: nothing wider than it asks for.
+        for (const std::string& line : vcgs::Codex::Wrap(codex.Text(), 40)) if (line.size() > 40) Fail("a wrapped line is too long: " + line);
         if (silt.Win()) Fail("there is no encounter to win now");
     }
 

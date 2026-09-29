@@ -103,6 +103,8 @@ static class Check
         var over = new List<string>();
         silt.EncounterRequested += (e, canWin) => encounters.Add(e + (canWin ? "" : " (can't win)"));
         silt.GameOver += e => over.Add(e);
+        var codex = new Codex(fresh);
+        if (codex.Text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nLORE · 0 of 1 found\nNothing found yet." || codex.New != 0) Fail("the codex should start empty, got " + codex.Text());
         silt.Start();
         silt.Lose();
         Console.WriteLine("encounter: " + string.Join(", ", encounters));
@@ -114,6 +116,15 @@ static class Check
         if (!silt.Win()) Fail("with the lantern's oil, a win against the eels should count");
         if (!fresh.WasWon(Encounters.EelSwarm) || !fresh.HasItem(Items.VaultKey)) Fail("winning should mark the eels won, and the scene go on to find the key");
         if (fresh.QuestState(Quests.OpenTheVault) != "active" || !fresh.KnowsLore(Lore.TheDrownedOrder)) Fail("finding the key should start the quest and reveal the lore");
+        // The codex: the quest log and the lore, and what is new since it was read.
+        Console.WriteLine("codex: " + codex.Text().Replace("\n", " | ") + " · new " + codex.New);
+        if (codex.New != 2 || !codex.Text().StartsWith("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nLORE · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault")) Fail("the codex should show the quest under way and The Drowned Order, 2 new, got " + codex.Text());
+        codex.MarkRead();
+        Rules.CompleteQuest(Quests.OpenTheVault, fresh);
+        if (codex.New != 1 || !codex.Text().Contains("QUESTS · 0 under way, 1 done\n• Open the vault (done)")) Fail("the quest log should show the quest done, 1 new, got " + codex.Text());
+        // The screen compiles with Unity's GUI; its button reads the same codex.
+        var screen = new UnityEngine.GameObject("Codex").AddComponent<VcgsCodex>();
+        if (screen.ButtonText() != "") Fail("the codex screen should wait for VcgsGame");
         if (silt.Win()) Fail("there is no encounter to win now");
 
         // SC-01 opens by lighting the lantern: its oil becomes a mechanic in play (an effect), with its tuning.

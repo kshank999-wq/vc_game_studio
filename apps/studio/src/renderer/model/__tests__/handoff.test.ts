@@ -389,6 +389,13 @@ describe('quests and encounters in the engines', () => {
     expect(player).toContain('func codex_text() -> String:');
     expect(player).toContain('game.lore_discovered.connect(_on_codex_news)');
     expect(player).toContain('game.quest_started.connect(_on_codex_news)');
+    // Unity and Unreal have one too: the same text, a screen to draw it.
+    expect(RUNTIME_FILES['Codex.cs']).toContain('public string Text()');
+    expect(RUNTIME_FILES['VcgsCodex.cs']).toContain('public sealed class VcgsCodex : MonoBehaviour');
+    expect(VCGS_CORE_H).toContain('class Codex');
+    const { PLUGIN_FILES } = await import('../handoff/unreal');
+    expect(PLUGIN_FILES['Source/VCGS/Public/VcgsCodexHUD.h']).toContain('class VCGS_API AVcgsCodexHUD : public AHUD');
+    expect(PLUGIN_FILES['VCGS.Build.cs'] ?? PLUGIN_FILES['Source/VCGS/VCGS.Build.cs']).toContain('"InputCore"');
     expect(RUNTIME_FILES['ScenePlayer.cs']).toContain('public event Action<string, bool> EncounterRequested;');
     expect(RUNTIME_FILES['Rules.cs']).toContain('foreach (var q in game.Story.Quests)');
     expect(VCGS_CORE_H).toContain('std::function<void(const std::string&, bool)> OnEncounter;');

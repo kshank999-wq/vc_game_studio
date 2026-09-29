@@ -137,6 +137,10 @@ project.
    conditions come true;
    \`StoryWalker\` follows the graph between scenes.
 
+To try the story before your game has its own screens, add **VcgsCodex** next
+to VcgsGame: a Codex button (and C) opens the quest log and the lore found. The
+same text is \`new Codex(state).Text()\` for your own UI.
+
 The Characters, Items, Locations and Cinematics folders hold a ScriptableObject
 per element, for designers to find in the Project window. So do Lore, Quests,
 Mechanics and Encounters (\`VcgsLore\`, \`VcgsQuest\`, \`VcgsMechanic\`,

@@ -244,6 +244,67 @@ namespace UnityEngine
         public static Color white => new Color(1, 1, 1, 1);
     }
 
+    public struct Vector2
+    {
+        public float x, y;
+        public Vector2(float x, float y) { this.x = x; this.y = y; }
+    }
+
+    public struct Rect
+    {
+        public float x, y, width, height;
+        public Rect(float x, float y, float width, float height) { this.x = x; this.y = y; this.width = width; this.height = height; }
+    }
+
+    public enum KeyCode { None, C, Escape, Return }
+    public enum EventType { KeyDown, KeyUp, Repaint, Layout }
+
+    public sealed class Event
+    {
+        public static Event current = new Event();
+        public EventType type = EventType.Repaint;
+        public KeyCode keyCode;
+        public void Use() { }
+    }
+
+    public static class Screen
+    {
+        public static int width = 1280;
+        public static int height = 720;
+    }
+
+    public sealed class GUIStyle
+    {
+        public bool wordWrap;
+        public int fontSize;
+        public GUIStyle() { }
+        public GUIStyle(GUIStyle other) { wordWrap = other.wordWrap; fontSize = other.fontSize; }
+    }
+
+    public sealed class GUISkin
+    {
+        public GUIStyle label = new GUIStyle();
+    }
+
+    public sealed class GUILayoutOption { }
+
+    public static class GUI
+    {
+        public static GUISkin skin = new GUISkin();
+        public static bool Button(Rect position, string text) => false;
+        public static void Box(Rect position, string text) { }
+    }
+
+    public static class GUILayout
+    {
+        public static void BeginArea(Rect screenRect) { }
+        public static void EndArea() { }
+        public static Vector2 BeginScrollView(Vector2 scrollPosition, params GUILayoutOption[] options) => scrollPosition;
+        public static void EndScrollView() { }
+        public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
+        public static bool Button(string text, params GUILayoutOption[] options) => false;
+    }
+
     public static class Mathf
     {
         public static float Abs(float v) => Math.Abs(v);

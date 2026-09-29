@@ -1017,6 +1017,170 @@ namespace VCGS
 }
 `,
 
+  'Codex.cs': String.raw`${HEAD}
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace VCGS
+{
+    /// <summary>
+    /// The codex as the player reads it: the quest log (quests under way with
+    /// their goals, then those done, in the order they started) and the lore
+    /// found, in the order found. New counts what has happened since the codex
+    /// was last read (quests starting or completing, lore found), for a
+    /// "new" badge. Plain C#: VcgsCodex draws it, or use it in your own UI.
+    /// </summary>
+    public sealed class Codex
+    {
+        readonly GameState game;
+        int seen;
+
+        public Codex(GameState game)
+        {
+            this.game = game;
+            seen = Progress();
+        }
+
+        /// <summary>Quest updates and lore found since MarkRead (a new game starts from nothing).</summary>
+        public int New
+        {
+            get
+            {
+                var now = Progress();
+                if (now < seen) seen = 0;
+                return now - seen;
+            }
+        }
+
+        public void MarkRead() => seen = Progress();
+
+        int Progress()
+        {
+            var n = game.KnownLore.Count;
+            foreach (var state in game.Quests.Values) n += state == "done" ? 2 : 1;
+            return n;
+        }
+
+        /// <summary>Quests under way, each with its goal, in the order they started.</summary>
+        public List<(string name, string goal)> UnderWay()
+        {
+            var list = new List<(string, string)>();
+            foreach (var q in game.Quests)
+                if (q.Value != "done") list.Add((QuestName(q.Key), QuestGoal(q.Key)));
+            return list;
+        }
+
+        /// <summary>Quests done, in the order they started.</summary>
+        public List<string> Done()
+        {
+            var list = new List<string>();
+            foreach (var q in game.Quests)
+                if (q.Value == "done") list.Add(QuestName(q.Key));
+            return list;
+        }
+
+        string QuestName(string key) => game.Story.Quests.TryGetValue(key, out var q) ? D.Str(q, "name") : key;
+        string QuestGoal(string key) => game.Story.Quests.TryGetValue(key, out var q) ? D.Str(D.Map(q, "fields"), "goal") : "";
+
+        /// <summary>The whole codex in words, the same as Godot's placeholder scenes show it.</summary>
+        public string Text()
+        {
+            var parts = new List<string>();
+            if (game.Story.Quests.Count > 0)
+            {
+                var active = UnderWay();
+                var done = Done();
+                var log = new StringBuilder("QUESTS · " + active.Count + " under way, " + done.Count + " done");
+                if (active.Count == 0 && done.Count == 0) log.Append("\nNone yet.");
+                foreach (var (name, goal) in active) log.Append("\n• " + name + (goal != "" ? " — " + goal : ""));
+                foreach (var name in done) log.Append("\n• " + name + " (done)");
+                parts.Add(log.ToString());
+            }
+            if (game.Story.Lore.Count > 0)
+            {
+                var lore = new StringBuilder("LORE · " + game.KnownLore.Count + " of " + game.Story.Lore.Count + " found");
+                if (game.KnownLore.Count == 0) lore.Append("\nNothing found yet.");
+                foreach (var key in game.KnownLore)
+                {
+                    var (name, text) = game.Story.LoreEntry(key);
+                    lore.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + "\n" + text);
+                }
+                parts.Add(lore.ToString());
+            }
+            return "CODEX\n\n" + string.Join("\n\n", parts);
+        }
+    }
+}
+`,
+  'VcgsCodex.cs': String.raw`${HEAD}
+using UnityEngine;
+
+namespace VCGS
+{
+    /// <summary>
+    /// A codex screen to try the story with before the game has its own: a
+    /// Codex button in the top corner (it counts what is new) and a panel with
+    /// the quest log and the lore found. Put it next to VcgsGame; press C (or
+    /// the button) to open it, C or Escape to close. Drawn with Unity's
+    /// immediate-mode GUI, so it needs no canvas or prefab.
+    /// </summary>
+    public sealed class VcgsCodex : MonoBehaviour
+    {
+        [Tooltip("The key that opens and closes the codex.")]
+        [SerializeField] KeyCode key = KeyCode.C;
+
+        public bool IsOpen { get; private set; }
+        /// <summary>The codex behind the screen, for your own UI (null until VcgsGame has a story).</summary>
+        public Codex Book => book ?? (VcgsGame.Instance != null && VcgsGame.Instance.State != null ? book = new Codex(VcgsGame.Instance.State) : null);
+
+        Codex book;
+        Vector2 scroll;
+        GUIStyle text;
+
+        public void Open()
+        {
+            if (Book == null) return;
+            IsOpen = true;
+            Book.MarkRead();
+        }
+
+        public void Close() => IsOpen = false;
+
+        public void Toggle()
+        {
+            if (IsOpen) Close();
+            else Open();
+        }
+
+        /// <summary>What the button says: "Codex (C)", or with how many are new.</summary>
+        public string ButtonText() => Book == null ? "" : Book.New > 0 ? "Codex (" + key + ") · " + Book.New + " new" : "Codex (" + key + ")";
+
+        void OnGUI()
+        {
+            if (Book == null) return;
+            var e = Event.current;
+            if (e.type == EventType.KeyDown && (e.keyCode == key || (IsOpen && e.keyCode == KeyCode.Escape)))
+            {
+                Toggle();
+                e.Use();
+            }
+            if (GUI.Button(new Rect(Screen.width - 210, 10, 200, 30), ButtonText())) Toggle();
+            if (!IsOpen) return;
+            Book.MarkRead();
+            if (text == null) text = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 16 };
+            var area = new Rect(60, 50, Screen.width - 120, Screen.height - 100);
+            GUI.Box(area, "");
+            GUILayout.BeginArea(new Rect(area.x + 18, area.y + 18, area.width - 36, area.height - 36));
+            scroll = GUILayout.BeginScrollView(scroll);
+            GUILayout.Label(Book.Text(), text);
+            GUILayout.EndScrollView();
+            if (GUILayout.Button("Close")) Close();
+            GUILayout.EndArea();
+        }
+    }
+}
+`,
   'VcgsGame.cs': String.raw`${HEAD}
 using UnityEngine;
 

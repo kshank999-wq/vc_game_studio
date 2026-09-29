@@ -309,6 +309,8 @@ namespace vcgs
         std::set<std::string> Solved, Visited, Fired, Picked;
         /** Quests under way ("active") or "done"; one not in here has not started. */
         std::map<std::string, std::string> Quests;
+        /** The quests in the order they started (or were completed without starting). */
+        std::vector<std::string> QuestOrder;
         /** Encounters won. */
         std::set<std::string> Won;
         /** Lore the player has come across, in the order they found it (the codex). */
@@ -325,7 +327,7 @@ namespace vcgs
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); Won.clear(); KnownLore.clear(); Mechanics.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); KnownLore.clear(); Mechanics.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -389,6 +391,7 @@ namespace vcgs
         void SetQuest(const std::string& quest, const std::string& state)
         {
             if (QuestState(quest) == state) return;
+            if (QuestState(quest).empty()) QuestOrder.push_back(quest);
             Quests[quest] = state;
             if (state == "active" && OnQuestStarted) OnQuestStarted(quest);
             else if (state == "done" && OnQuestCompleted) OnQuestCompleted(quest);
@@ -634,6 +637,116 @@ namespace vcgs
             return o;
         }
     }
+
+    // ------------------------------------------------------------ the codex
+
+    /**
+     * The codex as the player reads it: the quest log (quests under way with
+     * their goals, then those done, in the order they started) and the lore
+     * found, in the order found. New() counts what has happened since the codex
+     * was last read, for a "new" badge. AVcgsCodexHUD draws it; or use it in
+     * your own UI (UVcgsSubsystem::GetCodexText).
+     */
+    class Codex
+    {
+    public:
+        explicit Codex(const GameState& state) : game(state), seen(Progress()) {}
+
+        /** Quest updates and lore found since MarkRead (a new game starts from nothing). */
+        int New()
+        {
+            const int now = Progress();
+            if (now < seen) seen = 0;
+            return now - seen;
+        }
+
+        void MarkRead() { seen = Progress(); }
+
+        /** What a codex button says: "Codex (C)", or with how many are new. */
+        std::string ButtonText(const std::string& key)
+        {
+            const int n = New();
+            return "Codex (" + key + ")" + (n > 0 ? " · " + std::to_string(n) + " new" : "");
+        }
+
+        /** The whole codex in words, the same as Godot's placeholder scenes show it. */
+        std::string Text() const
+        {
+            std::vector<std::string> parts;
+            if (!game.StoryData.Quests.empty())
+            {
+                std::vector<std::string> active, done;
+                for (const std::string& key : game.QuestOrder)
+                {
+                    const Value& quest = Story::Find(game.StoryData.Quests, key);
+                    const std::string name = quest["name"].Str().empty() ? key : quest["name"].Str();
+                    const std::string goal = quest["fields"]["goal"].Str();
+                    if (game.QuestState(key) == "done") done.push_back("• " + name + " (done)");
+                    else active.push_back("• " + name + (goal.empty() ? "" : " — " + goal));
+                }
+                std::string log = "QUESTS · " + std::to_string(active.size()) + " under way, " + std::to_string(done.size()) + " done";
+                if (active.empty() && done.empty()) log += "\nNone yet.";
+                for (const auto& line : active) log += "\n" + line;
+                for (const auto& line : done) log += "\n" + line;
+                parts.push_back(log);
+            }
+            if (!game.StoryData.Lore.empty())
+            {
+                std::string lore = "LORE · " + std::to_string(game.KnownLore.size()) + " of " + std::to_string(game.StoryData.Lore.size()) + " found";
+                if (game.KnownLore.empty()) lore += "\nNothing found yet.";
+                for (const std::string& key : game.KnownLore)
+                {
+                    const Value& entry = Story::Find(game.StoryData.Lore, key);
+                    const std::string name = entry["name"].Str().empty() ? key : entry["name"].Str();
+                    lore += "\n\n" + Upper(name) + "\n" + entry["notes"].Str();
+                }
+                parts.push_back(lore);
+            }
+            std::string out = "CODEX";
+            for (size_t i = 0; i < parts.size(); i++) out += "\n\n" + parts[i];
+            return out;
+        }
+
+        /** The text broken into lines of at most width characters, for a screen that draws line by line. */
+        static std::vector<std::string> Wrap(const std::string& text, size_t width)
+        {
+            std::vector<std::string> lines;
+            size_t start = 0;
+            while (start <= text.size())
+            {
+                size_t end = text.find('\n', start);
+                if (end == std::string::npos) end = text.size();
+                std::string para = text.substr(start, end - start);
+                while (para.size() > width)
+                {
+                    size_t cut = para.rfind(' ', width);
+                    if (cut == std::string::npos || cut == 0) cut = width;
+                    lines.push_back(para.substr(0, cut));
+                    para = para.substr(cut == width ? cut : cut + 1);
+                }
+                lines.push_back(para);
+                start = end + 1;
+            }
+            return lines;
+        }
+
+    private:
+        const GameState& game;
+        int seen;
+
+        int Progress() const
+        {
+            int n = static_cast<int>(game.KnownLore.size());
+            for (const auto& q : game.Quests) n += q.second == "done" ? 2 : 1;
+            return n;
+        }
+
+        static std::string Upper(std::string s)
+        {
+            for (char& c : s) if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
+            return s;
+        }
+    };
 
     // ------------------------------------------------------------ objects
 

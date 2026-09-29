@@ -55,7 +55,7 @@ public class VCGS : ModuleRules
     public VCGS(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "ProceduralMeshComponent" });
+        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "ProceduralMeshComponent" });
     }
 }
 `,
@@ -239,6 +239,14 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestStarted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnLoreDiscovered;
+
+    /** The codex in words: the quest log, then the lore found (AVcgsCodexHUD draws it). */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Codex") FString GetCodexText() const;
+    /** Quest updates and lore found since the codex was last read. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 GetCodexNewCount();
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") void MarkCodexRead();
+    /** The core's codex, for C++ (null until a story is loaded). */
+    vcgs::Codex* CodexState() const { return CodexData.get(); }
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnMechanicAvailable;
 
     /** Where a graph node goes next: its first route whose conditions hold, else on along the spine. */
@@ -259,6 +267,7 @@ public:
 private:
     std::unique_ptr<vcgs::Story> StoryData;
     std::unique_ptr<vcgs::GameState> Game;
+    std::unique_ptr<vcgs::Codex> CodexData;
 };
 `,
 
@@ -307,9 +316,11 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
         UE_LOG(LogTemp, Error, TEXT("VCGS: story.json could not be read (%s)."), *ToF(Error));
         return false;
     }
+    CodexData.reset();
     Game.reset();
     StoryData = std::make_unique<vcgs::Story>(std::move(Root));
     Game = std::make_unique<vcgs::GameState>(*StoryData);
+    CodexData = std::make_unique<vcgs::Codex>(*Game);
     Game->OnQuestStarted = [this](const std::string& Quest) { OnQuestStarted.Broadcast(ToF(Quest)); };
     Game->OnQuestCompleted = [this](const std::string& Quest) { OnQuestCompleted.Broadcast(ToF(Quest)); };
     Game->OnLoreDiscovered = [this](const std::string& Lore) { OnLoreDiscovered.Broadcast(ToF(Lore)); };
@@ -338,6 +349,9 @@ bool UVcgsSubsystem::WasVisited(const FString& Scene) const { return Game && Gam
 bool UVcgsSubsystem::GateOpen(const FString& Gate) const { return !Game || vcgs::Rules::GateOpen(ToStd(Gate), *Game); }
 FString UVcgsSubsystem::GetQuestState(const FString& Quest) const { return Game ? ToF(Game->QuestState(ToStd(Quest))) : FString(); }
 bool UVcgsSubsystem::WasWon(const FString& Encounter) const { return Game && Game->WasWon(ToStd(Encounter)); }
+FString UVcgsSubsystem::GetCodexText() const { return CodexData ? ToF(CodexData->Text()) : FString(); }
+int32 UVcgsSubsystem::GetCodexNewCount() { return CodexData ? CodexData->New() : 0; }
+void UVcgsSubsystem::MarkCodexRead() { if (CodexData) CodexData->MarkRead(); }
 TArray<FString> UVcgsSubsystem::GetKnownLore() const
 {
     TArray<FString> Known;
@@ -389,6 +403,101 @@ void UVcgsSubsystem::GetLine(const FString& LineId, FString& Speaker, FString& T
     Speaker = ToF(Line.Speaker);
     Text = ToF(Line.Text);
     Direction = ToF(Line.Direction);
+}
+`,
+
+  'Source/VCGS/Public/VcgsCodexHUD.h': `${RUNTIME_HEAD}
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/HUD.h"
+#include "InputCoreTypes.h"
+#include "VcgsCodexHUD.generated.h"
+
+class UVcgsSubsystem;
+
+/**
+ * A codex screen to try the story with before the game has its own: a Codex
+ * label in the top corner (it counts what is new) and, when open, a panel with
+ * the quest log and the lore found. Set it as the game mode's HUD class; press
+ * CodexKey (C) to open it, C or Escape to close, or call ToggleCodex.
+ */
+UCLASS()
+class VCGS_API AVcgsCodexHUD : public AHUD
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") FKey CodexKey = EKeys::C;
+
+    UFUNCTION(BlueprintCallable, Category = "VCGS") void ToggleCodex();
+    UFUNCTION(BlueprintPure, Category = "VCGS") bool IsCodexOpen() const { return bCodexOpen; }
+
+    virtual void DrawHUD() override;
+
+private:
+    bool bCodexOpen = false;
+    UVcgsSubsystem* Subsystem() const;
+};
+`,
+
+  'Source/VCGS/Private/VcgsCodexHUD.cpp': `${RUNTIME_HEAD}
+#include "VcgsCodexHUD.h"
+#include "VcgsConvert.h"
+#include "VcgsSubsystem.h"
+#include "Engine/Canvas.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+
+using VcgsConvert::ToF;
+using VcgsConvert::ToStd;
+
+UVcgsSubsystem* AVcgsCodexHUD::Subsystem() const
+{
+    UWorld* World = GetWorld();
+    UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+    return GameInstance ? GameInstance->GetSubsystem<UVcgsSubsystem>() : nullptr;
+}
+
+void AVcgsCodexHUD::ToggleCodex()
+{
+    bCodexOpen = !bCodexOpen;
+    if (UVcgsSubsystem* Story = Subsystem()) Story->MarkCodexRead();
+}
+
+void AVcgsCodexHUD::DrawHUD()
+{
+    Super::DrawHUD();
+    UVcgsSubsystem* Story = Subsystem();
+    vcgs::Codex* Book = Story ? Story->CodexState() : nullptr;
+    if (!Book || !Canvas) return;
+    if (PlayerOwner && (PlayerOwner->WasInputKeyJustPressed(CodexKey) || (bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Escape)))) ToggleCodex();
+
+    const float Width = Canvas->ClipX;
+    const float Height = Canvas->ClipY;
+    const FLinearColor Gold(0.91f, 0.78f, 0.45f);
+    const FLinearColor Ink(0.95f, 0.92f, 0.85f);
+    DrawRect(FLinearColor(0.09f, 0.08f, 0.06f, 0.85f), Width - 230.f, 10.f, 220.f, 30.f);
+    DrawText(ToF(Book->ButtonText(ToStd(CodexKey.ToString()))), Gold, Width - 220.f, 16.f);
+    if (!bCodexOpen) return;
+    Book->MarkRead();
+
+    // The panel: the codex, line by line, as much as fits.
+    const float Left = 60.f;
+    const float Top = 50.f;
+    const float PanelWidth = Width - 120.f;
+    const float PanelHeight = Height - 100.f;
+    DrawRect(FLinearColor(0.09f, 0.08f, 0.06f, 0.97f), Left, Top, PanelWidth, PanelHeight);
+    const size_t Columns = static_cast<size_t>((PanelWidth - 36.f) / 9.f);
+    float Y = Top + 18.f;
+    for (const std::string& Line : vcgs::Codex::Wrap(Book->Text(), Columns > 20 ? Columns : 20))
+    {
+        if (Y > Top + PanelHeight - 44.f) break;
+        DrawText(ToF(Line), Line == "CODEX" ? Gold : Ink, Left + 18.f, Y);
+        Y += 22.f;
+    }
+    DrawText(ToF("C or Esc to close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
 }
 `,
 
@@ -786,6 +895,11 @@ export. Change the story in VC Game Studio, not these files. The plugin
    DT_Locations, DT_Cinematics, DT_Shots and DT_Lines, and the design
    definitions DT_Lore, DT_Quests, DT_Mechanics and DT_Encounters (codex text,
    a quest log, tuning; their logic lives in flags and triggers).
+
+To try the story before your game has its own screens, set **AVcgsCodexHUD** as
+the game mode's HUD class: C opens a codex with the quest log and the lore
+found. \`GetCodexText\` and \`GetCodexNewCount\` on the subsystem give the same
+for your own UMG widget.
 
 The game state lives in the \`UVcgsSubsystem\` (flags, items, arcs and the rest,
 all Blueprint-callable). Quests start and complete by their rules (\`OnQuestStarted\`,

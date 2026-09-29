@@ -83,7 +83,11 @@ the studio's play-through:
   scene. Godot's placeholder scenes stand in for the fight with Win and Lose
   buttons, and have a codex: press C, or the Codex button (which counts what's
   new), for the quest log (quests under way with their goals, then those done)
-  and the lore found so far, in the order found, with its text.
+  and the lore found so far, in the order found, with its text. Unity has the
+  same codex as `Codex` (plain C#) and a `VcgsCodex` screen to put next to
+  `VcgsGame`; Unreal as `vcgs::Codex`, `GetCodexText` / `GetCodexNewCount` on
+  the subsystem and an `AVcgsCodexHUD` to set as the game mode's HUD. C opens
+  each.
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic
