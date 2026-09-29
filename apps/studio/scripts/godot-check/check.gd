@@ -336,6 +336,24 @@ func _initialize() -> void:
 	silt_player.set_codex_sort("found")
 	game.lore.clear()
 	game.discover_lore("the_drowned_order")
+	# Bookmarks: a star on the entry, and a filter for them alone.
+	if not game.toggle_bookmark("lore:the_drowned_order") or not silt_player.codex_text().contains("\n\nTHE DROWNED ORDER ★\nRiver priests"):
+		fail("a bookmark should star the entry, got " + silt_player.codex_text())
+	if silt_player.codex_text("", "bookmarks") != "CODEX\n\nLORE · 1 of 2 found\n\nTHE DROWNED ORDER ★\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.":
+		fail("the bookmarks should show alone, got " + silt_player.codex_text("", "bookmarks"))
+	if silt_player.codex_text("eels", "bookmarks") != "CODEX\n\nNothing matches \"eels\" in Bookmarks.":
+		fail("a search with no match in the bookmarks should say so, got " + silt_player.codex_text("eels", "bookmarks"))
+	if game.toggle_bookmark("lore:the_drowned_order") or silt_player.codex_text("", "bookmarks") != "CODEX\n\nNo bookmarks yet.":
+		fail("taking the bookmark off should leave none, got " + silt_player.codex_text("", "bookmarks"))
+	# The cursor: the arrows move it, B bookmarks what it is on.
+	silt_player.set_codex_section("lore")
+	silt_player.set_codex_search("")
+	silt_player.move_codex_cursor(1)
+	silt_player.toggle_codex_bookmark()
+	if silt_player.codex_cursor() != "lore:the_drowned_order" or not game.is_bookmarked("lore:the_drowned_order") or not silt_player.codex_text("", "lore", "", silt_player.codex_cursor()).contains("\n\n▶ THE DROWNED ORDER ★\n"):
+		fail("B should bookmark the entry under the cursor, got " + silt_player.codex_text("", "lore", "", silt_player.codex_cursor()))
+	silt_player.toggle_codex_bookmark()
+	silt_player.set_codex_section("")
 	silt_player.set_codex_search("")
 	if silt_player.codex_search() != "":
 		fail("clearing the search should empty it")

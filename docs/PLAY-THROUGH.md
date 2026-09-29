@@ -64,8 +64,11 @@ monitor while you fix it on another.
   with the search inside it if there is one ("Nothing matches … in Lore").
   **Sort** each section with the Sort menu: in the order found (the default),
   newest first, or A–Z by name (ignoring case); quests under way still come
-  before those done. The engines' codex screens search, filter and sort the
-  same way.
+  before those done. **Bookmark** an entry with its star (☆): it is marked ★,
+  and **★ Bookmarks** among the section buttons shows only the bookmarked
+  entries, from every section (searched and sorted as usual). The bookmarks
+  last the whole play-through, stepping back or not. The engines' codex
+  screens search, filter, sort and bookmark the same way.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.
 - **The world** panel shows every state, what is carried, object states, arcs,

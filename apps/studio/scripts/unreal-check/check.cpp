@@ -189,6 +189,14 @@ int main()
             vcgs::GameState sorting(story);
             sorting.DiscoverLore(Lore::TheLastExpedition);
             sorting.DiscoverLore(Lore::TheDrownedOrder);
+            // Bookmarks: a star on the entry, a filter for them alone, and a cursor to pick one.
+            vcgs::Codex book(sorting);
+            if (!sorting.ToggleBookmark(std::string("lore:") + Lore::TheDrownedOrder) || book.Text().find("\n\nTHE DROWNED ORDER ★\nRiver priests") == std::string::npos) Fail("a bookmark should star the entry, got " + book.Text());
+            if (book.Text("", "bookmarks") != "CODEX\n\nLORE · 2 of 2 found\n\nTHE DROWNED ORDER ★\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.") Fail("the bookmarks should show alone, got " + book.Text("", "bookmarks"));
+            if (book.Text("eels", "bookmarks") != "CODEX\n\nNothing matches \"eels\" in Bookmarks.") Fail("a search with no match in the bookmarks should say so, got " + book.Text("eels", "bookmarks"));
+            if (Join(book.EntryKeys("", "lore"), ",") != std::string("lore:") + Lore::TheLastExpedition + ",lore:" + Lore::TheDrownedOrder) Fail("the cursor should move through the lore shown, got " + Join(book.EntryKeys("", "lore"), ","));
+            if (book.Text("", "lore", "", std::string("lore:") + Lore::TheLastExpedition).find("\n\n▶ THE LAST EXPEDITION\n") == std::string::npos) Fail("the cursor entry should start with ▶, got " + book.Text("", "lore", "", std::string("lore:") + Lore::TheLastExpedition));
+            if (sorting.ToggleBookmark(std::string("lore:") + Lore::TheDrownedOrder) || book.Text("", "bookmarks") != "CODEX\n\nNo bookmarks yet.") Fail("taking the bookmark off should leave none, got " + book.Text("", "bookmarks"));
             auto heads = [&](const char* sort)
             {
                 std::vector<std::string> out;

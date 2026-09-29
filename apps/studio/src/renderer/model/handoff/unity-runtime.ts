@@ -315,6 +315,8 @@ namespace VCGS
         public readonly List<string> VisitedLocations = new List<string>();
         /// <summary>Objects the player has used, in the order first used.</summary>
         public readonly List<string> UsedObjects = new List<string>();
+        /// <summary>Codex entries the player has bookmarked, by key ("lore:the_drowned_order"), in the order bookmarked.</summary>
+        public readonly List<string> Bookmarks = new List<string>();
         /// <summary>Lore the player has come across, in the order they found it (the codex).</summary>
         public readonly List<string> KnownLore = new List<string>();
         /// <summary>Mechanics the player can use now.</summary>
@@ -348,7 +350,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -415,6 +417,16 @@ namespace VCGS
         {
             if (Solved.Add(puzzle)) OnChanged();
         }
+
+        /// <summary>Bookmark a codex entry ("lore:the_drowned_order"), or take its bookmark off. Returns whether it is bookmarked now.</summary>
+        public bool ToggleBookmark(string entry)
+        {
+            if (Bookmarks.Remove(entry)) return false;
+            Bookmarks.Add(entry);
+            return true;
+        }
+
+        public bool IsBookmarked(string entry) => Bookmarks.Contains(entry);
 
         /// <summary>The player has used an object (Interactions.Interact says so).</summary>
         public void UseObject(string obj)
@@ -1200,71 +1212,93 @@ namespace VCGS
         /// ("quests", "lore"…, as SectionKeys lists them), only that one. With a
         /// sort ("found", the default; "newest"; "name", A–Z ignoring case), each
         /// section in that order (quests under way still before those done).
+        /// A bookmarked entry ends its first line with ★; the section
+        /// "bookmarks" shows only them. The cursor entry (a key, "lore:…")
+        /// starts with ▶.
         /// </summary>
-        public string Text(string query = "", string section = "", string sort = "")
+        public string Text(string query = "", string section = "", string sort = "", string cursor = "")
         {
             var q = (query ?? "").Trim();
             var only = section ?? "";
             var parts = new List<string>();
-            List<string> Sorted(List<string> entries)
+            shownKeys.Clear();
+            List<(string key, string text)> Sorted(List<(string key, string text)> entries)
             {
-                var list = new List<string>(entries);
+                var list = new List<(string key, string text)>(entries);
                 if (sort == "newest") list.Reverse();
-                else if (sort == "name") list.Sort((a, b) => string.CompareOrdinal(a.ToLowerInvariant(), b.ToLowerInvariant()));
+                else if (sort == "name") list.Sort((a, b) => string.CompareOrdinal(a.text.ToLowerInvariant(), b.text.ToLowerInvariant()));
                 return list;
             }
-            void Section(string key, string heading, List<string> entries, string sep, string empty)
+            void Section(string key, string heading, List<(string key, string text)> entries, string sep, string empty)
             {
-                if (only != "" && only != key) return;
+                if (only == "bookmarks")
+                {
+                    entries = entries.FindAll(e => game.IsBookmarked(e.key));
+                    if (entries.Count == 0) return;
+                }
+                else if (only != "" && only != key) return;
                 if (key != "quests") entries = Sorted(entries);
-                var shown = q == "" ? entries : entries.FindAll(e => e.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
+                var shown = q == "" ? entries : entries.FindAll(e => e.text.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
                 if (q != "" && shown.Count == 0) return;
                 var text = new StringBuilder(heading);
                 if (shown.Count == 0) text.Append("\n" + empty);
-                foreach (var e in shown) text.Append(sep + e);
+                foreach (var e in shown)
+                {
+                    var words = e.text;
+                    if (game.IsBookmarked(e.key))
+                    {
+                        var nl = words.IndexOf('\n');
+                        words = nl >= 0 ? words.Insert(nl, " ★") : words + " ★";
+                    }
+                    if (e.key == cursor) words = "▶ " + words;
+                    text.Append(sep + words);
+                    shownKeys.Add(e.key);
+                }
                 parts.Add(text.ToString());
             }
             string Title(string name, string key) => (name == "" ? key : name).ToUpperInvariant();
             if (game.Story.Quests.Count > 0)
             {
-                var active = UnderWay();
-                var done = Done();
-                var underWay = new List<string>();
-                var finished = new List<string>();
-                foreach (var (name, goal) in active) underWay.Add("• " + name + (goal != "" ? " — " + goal : ""));
-                foreach (var name in done) finished.Add("• " + name + " (done)");
+                var underWay = new List<(string key, string text)>();
+                var finished = new List<(string key, string text)>();
+                foreach (var quest in game.Quests)
+                {
+                    var goal = QuestGoal(quest.Key);
+                    if (quest.Value != "done") underWay.Add(("quests:" + quest.Key, "• " + QuestName(quest.Key) + (goal != "" ? " — " + goal : "")));
+                    else finished.Add(("quests:" + quest.Key, "• " + QuestName(quest.Key) + " (done)"));
+                }
                 var lines = Sorted(underWay);
                 lines.AddRange(Sorted(finished));
-                Section("quests", "QUESTS · " + active.Count + " under way, " + done.Count + " done", lines, "\n", "None yet.");
+                Section("quests", "QUESTS · " + underWay.Count + " under way, " + finished.Count + " done", lines, "\n", "None yet.");
             }
             var withEntry = 0;
             foreach (var c in game.Story.Characters.Keys) if (game.Story.CharacterCodex(c) != "") withEntry++;
             if (withEntry > 0)
             {
-                var cast = new List<string>();
+                var cast = new List<(string key, string text)>();
                 foreach (var key in game.MetCharacters)
-                    if (game.Story.CharacterCodex(key) != "") cast.Add(Title(game.Story.CharacterName(key), key) + "\n" + game.Story.CharacterCodex(key));
+                    if (game.Story.CharacterCodex(key) != "") cast.Add(("characters:" + key, Title(game.Story.CharacterName(key), key) + "\n" + game.Story.CharacterCodex(key)));
                 Section("characters", "CHARACTERS · " + cast.Count + " of " + withEntry + " met", cast, "\n\n", "None yet.");
             }
             var locationsWithEntry = 0;
             foreach (var l in game.Story.LocationDefs.Keys) if (game.Story.LocationCodex(l) != "") locationsWithEntry++;
             if (locationsWithEntry > 0)
             {
-                var places = new List<string>();
+                var places = new List<(string key, string text)>();
                 foreach (var key in game.VisitedLocations)
-                    if (game.Story.LocationCodex(key) != "") places.Add(Title(game.Story.LocationName(key), key) + "\n" + game.Story.LocationCodex(key));
+                    if (game.Story.LocationCodex(key) != "") places.Add(("locations:" + key, Title(game.Story.LocationName(key), key) + "\n" + game.Story.LocationCodex(key)));
                 Section("locations", "LOCATIONS · " + places.Count + " of " + locationsWithEntry + " visited", places, "\n\n", "None yet.");
             }
             var itemsWithEntry = 0;
             foreach (var i in game.Story.ItemDefs.Keys) if (game.Story.ItemCodex(i) != "") itemsWithEntry++;
             if (itemsWithEntry > 0)
             {
-                var things = new List<string>();
+                var things = new List<(string key, string text)>();
                 foreach (var key in game.FoundItems)
                 {
                     if (game.Story.ItemCodex(key) == "") continue;
                     var count = game.Items.TryGetValue(key, out var n) ? n : 0;
-                    things.Add(Title(game.Story.ItemName(key), key) + (count > 1 ? " (carried ×" + count + ")" : count == 1 ? " (carried)" : "") + "\n" + game.Story.ItemCodex(key));
+                    things.Add(("items:" + key, Title(game.Story.ItemName(key), key) + (count > 1 ? " (carried ×" + count + ")" : count == 1 ? " (carried)" : "") + "\n" + game.Story.ItemCodex(key)));
                 }
                 Section("items", "ITEMS · " + things.Count + " of " + itemsWithEntry + " found", things, "\n\n", "None yet.");
             }
@@ -1272,53 +1306,63 @@ namespace VCGS
             foreach (var o in game.Story.Objects.Keys) if (game.Story.ObjectCodex(o) != "") objectsWithEntry++;
             if (objectsWithEntry > 0)
             {
-                var props = new List<string>();
+                var props = new List<(string key, string text)>();
                 foreach (var key in game.UsedObjects)
                 {
                     if (game.Story.ObjectCodex(key) == "") continue;
                     game.Story.Objects.TryGetValue(key, out var o);
                     var now = game.GetObjectState(key);
-                    props.Add(Title(D.Str(o, "name"), key) + (now != "" ? " (" + now + ")" : "") + "\n" + game.Story.ObjectCodex(key));
+                    props.Add(("objects:" + key, Title(D.Str(o, "name"), key) + (now != "" ? " (" + now + ")" : "") + "\n" + game.Story.ObjectCodex(key)));
                 }
                 Section("objects", "OBJECTS · " + props.Count + " of " + objectsWithEntry + " used", props, "\n\n", "None yet.");
             }
             if (game.Story.Mechanics.Count > 0)
             {
-                var usable = new List<string>();
+                var usable = new List<(string key, string text)>();
                 foreach (var key in game.AvailableMechanics)
                 {
                     game.Story.Mechanics.TryGetValue(key, out var m);
                     var controls = game.Story.MechanicDetail(key, "controls");
-                    usable.Add(Title(D.Str(m, "name"), key) + (controls != "" ? "\nControls: " + controls : "") + "\n" + D.Str(m, "notes"));
+                    usable.Add(("mechanics:" + key, Title(D.Str(m, "name"), key) + (controls != "" ? "\nControls: " + controls : "") + "\n" + D.Str(m, "notes")));
                 }
                 Section("mechanics", "MECHANICS · " + usable.Count + " of " + game.Story.Mechanics.Count + " available", usable, "\n\n", "None yet.");
             }
             if (game.Story.Encounters.Count > 0)
             {
                 var won = 0;
-                var faced = new List<string>();
+                var faced = new List<(string key, string text)>();
                 foreach (var key in game.MetEncounters)
                 {
                     game.Story.Encounters.TryGetValue(key, out var e);
                     var enemies = D.Str(D.Map(e, "fields"), "enemies");
                     var weakness = D.Str(D.Map(e, "fields"), "weakness");
                     if (game.WasWon(key)) won++;
-                    faced.Add(Title(D.Str(e, "name"), key) + (game.WasWon(key) ? " (won)" : "") + (enemies != "" ? "\nEnemies: " + enemies : "") + (weakness != "" ? "\nWeak to: " + weakness : "") + "\n" + D.Str(e, "notes"));
+                    faced.Add(("encounters:" + key, Title(D.Str(e, "name"), key) + (game.WasWon(key) ? " (won)" : "") + (enemies != "" ? "\nEnemies: " + enemies : "") + (weakness != "" ? "\nWeak to: " + weakness : "") + "\n" + D.Str(e, "notes")));
                 }
                 Section("encounters", "ENCOUNTERS · " + faced.Count + " met, " + won + " won", faced, "\n\n", "None yet.");
             }
             if (game.Story.Lore.Count > 0)
             {
-                var found = new List<string>();
+                var found = new List<(string key, string text)>();
                 foreach (var key in game.KnownLore)
                 {
                     var (name, text) = game.Story.LoreEntry(key);
-                    found.Add(Title(name, key) + "\n" + text);
+                    found.Add(("lore:" + key, Title(name, key) + "\n" + text));
                 }
                 Section("lore", "LORE · " + found.Count + " of " + game.Story.Lore.Count + " found", found, "\n\n", "Nothing found yet.");
             }
-            if (q != "" && parts.Count == 0) return "CODEX\n\nNothing matches \"" + q + "\"" + (Array.IndexOf(Sections, only) >= 0 ? " in " + char.ToUpperInvariant(only[0]) + only.Substring(1) : "") + ".";
+            if (q != "" && parts.Count == 0) return "CODEX\n\nNothing matches \"" + q + "\"" + (Array.IndexOf(Sections, only) >= 0 || only == "bookmarks" ? " in " + char.ToUpperInvariant(only[0]) + only.Substring(1) : "") + ".";
+            if (only == "bookmarks" && parts.Count == 0) return "CODEX\n\nNo bookmarks yet.";
             return "CODEX\n\n" + string.Join("\n\n", parts);
+        }
+
+        readonly List<string> shownKeys = new List<string>();
+
+        /// <summary>The entries shown, in order, by key ("lore:…"): what a cursor moves through.</summary>
+        public List<string> EntryKeys(string query = "", string section = "", string sort = "")
+        {
+            Text(query, section, sort);
+            return new List<string>(shownKeys);
         }
     }
 }
@@ -1337,7 +1381,8 @@ namespace VCGS
     /// VcgsGame; press C (or the button) to open it, C or Escape to close, and
     /// / to search (Escape clears the search, then leaves the box), Tab
     /// (or the row of buttons) to show one section, and S (or the sort buttons)
-    /// to order each section. Drawn with
+    /// to order each section; the arrows move a cursor (▶) and B bookmarks
+    /// the entry it is on (★Bookmarks shows only those). Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1353,6 +1398,27 @@ namespace VCGS
         public string Search { get; set; } = "";
         /// <summary>The section the codex is filtered to ("" for all of them; Tab picks the next).</summary>
         public string Section { get; set; } = "";
+        /// <summary>The entry the cursor (▶) is on, by key ("lore:…"): the arrows move it, B bookmarks it.</summary>
+        public string Cursor { get; set; } = "";
+
+        /// <summary>Move the cursor to the next entry shown (step 1) or the one before (-1).</summary>
+        public void MoveCursor(int step)
+        {
+            if (Book == null) return;
+            var keys = Book.EntryKeys(Search, Section, Sort);
+            if (keys.Count == 0) { Cursor = ""; return; }
+            var at = keys.IndexOf(Cursor);
+            Cursor = keys[at < 0 ? 0 : Math.Max(0, Math.Min(keys.Count - 1, at + step))];
+        }
+
+        /// <summary>Bookmark the entry under the cursor (the first shown, if none), or take its bookmark off.</summary>
+        public void ToggleBookmark()
+        {
+            if (Book == null || VcgsGame.Instance == null) return;
+            if (!Book.EntryKeys(Search, Section, Sort).Contains(Cursor)) MoveCursor(0);
+            if (Cursor != "") VcgsGame.Instance.State.ToggleBookmark(Cursor);
+        }
+
         /// <summary>How each section is ordered: "found", "newest" or "name" (A–Z; S picks the next).</summary>
         public string Sort { get; set; } = "found";
 
@@ -1382,7 +1448,7 @@ namespace VCGS
         /// <summary>All, then each section this story's codex has.</summary>
         List<string> Options()
         {
-            var options = new List<string> { "" };
+            var options = new List<string> { "", "bookmarks" };
             options.AddRange(Book.SectionKeys());
             return options;
         }
@@ -1405,6 +1471,16 @@ namespace VCGS
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.Slash)
             {
                 GUI.FocusControl(SearchControl);
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && (e.keyCode == KeyCode.UpArrow || e.keyCode == KeyCode.DownArrow))
+            {
+                MoveCursor(e.keyCode == KeyCode.DownArrow ? 1 : -1);
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.B)
+            {
+                ToggleBookmark();
                 e.Use();
             }
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.S)
@@ -1433,14 +1509,14 @@ namespace VCGS
             GUI.SetNextControlName(SearchControl);
             Search = GUILayout.TextField(Search ?? "");
             var sections = Options();
-            if (sections.Count > 2)
+            if (sections.Count > 3)
             {
-                var names = sections.ConvertAll(k => k == "" ? "All" : char.ToUpperInvariant(k[0]) + k.Substring(1)).ToArray();
+                var names = sections.ConvertAll(k => k == "" ? "All" : k == "bookmarks" ? "★ Bookmarks" : char.ToUpperInvariant(k[0]) + k.Substring(1)).ToArray();
                 Section = sections[GUILayout.Toolbar(Math.Max(0, sections.IndexOf(Section ?? "")), names)];
             }
             Sort = Sorts[GUILayout.Toolbar(Math.Max(0, Array.IndexOf(Sorts, Sort)), SortNames)];
             scroll = GUILayout.BeginScrollView(scroll);
-            GUILayout.Label(Book.Text(Search, Section, Sort), text);
+            GUILayout.Label(Book.Text(Search, Section, Sort, Cursor), text);
             GUILayout.EndScrollView();
             if (GUILayout.Button("Close")) Close();
             GUILayout.EndArea();

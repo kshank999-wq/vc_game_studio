@@ -255,6 +255,11 @@ public:
     UFUNCTION(BlueprintPure, Category = "VCGS|Codex") FString GetCodexText(const FString& Search = TEXT(""), const FString& Section = TEXT(""), const FString& Sort = TEXT("")) const;
     /** The sections this story's codex has ("quests", "lore"…), in order: what a filter by section offers. */
     UFUNCTION(BlueprintPure, Category = "VCGS|Codex") TArray<FString> GetCodexSections() const;
+    /** Bookmark a codex entry ("lore:the_drowned_order"), or take its bookmark off; true when it is bookmarked now. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") bool ToggleCodexBookmark(const FString& Entry);
+    UFUNCTION(BlueprintPure, Category = "VCGS|Codex") bool IsCodexBookmarked(const FString& Entry) const;
+    /** The codex entries shown (for a search, section and sort), in order, by key: what a cursor moves through. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Codex") TArray<FString> GetCodexEntries(const FString& Search = TEXT(""), const FString& Section = TEXT(""), const FString& Sort = TEXT("")) const;
     /** Quest, character, location, item, object, mechanic, encounter and lore updates since the codex was last read. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") int32 GetCodexNewCount();
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") void MarkCodexRead();
@@ -375,6 +380,14 @@ bool UVcgsSubsystem::GateOpen(const FString& Gate) const { return !Game || vcgs:
 FString UVcgsSubsystem::GetQuestState(const FString& Quest) const { return Game ? ToF(Game->QuestState(ToStd(Quest))) : FString(); }
 bool UVcgsSubsystem::WasWon(const FString& Encounter) const { return Game && Game->WasWon(ToStd(Encounter)); }
 FString UVcgsSubsystem::GetCodexText(const FString& Search, const FString& Section, const FString& Sort) const { return CodexData ? ToF(CodexData->Text(ToStd(Search), ToStd(Section), ToStd(Sort))) : FString(); }
+bool UVcgsSubsystem::ToggleCodexBookmark(const FString& Entry) { return Game && Game->ToggleBookmark(ToStd(Entry)); }
+bool UVcgsSubsystem::IsCodexBookmarked(const FString& Entry) const { return Game && Game->IsBookmarked(ToStd(Entry)); }
+TArray<FString> UVcgsSubsystem::GetCodexEntries(const FString& Search, const FString& Section, const FString& Sort) const
+{
+    TArray<FString> Keys;
+    if (CodexData) for (const std::string& Key : CodexData->EntryKeys(ToStd(Search), ToStd(Section), ToStd(Sort))) Keys.Add(ToF(Key));
+    return Keys;
+}
 TArray<FString> UVcgsSubsystem::GetCodexSections() const
 {
     TArray<FString> Keys;
@@ -477,6 +490,7 @@ void UVcgsSubsystem::GetLine(const FString& LineId, FString& Speaker, FString& T
 #include "VcgsCodexHUD.generated.h"
 
 class UVcgsSubsystem;
+namespace vcgs { class Codex; }
 
 /**
  * A codex screen to try the story with before the game has its own: a Codex
@@ -486,7 +500,9 @@ class UVcgsSubsystem;
  * type letters, digits and spaces (Backspace deletes), Enter to stop typing,
  * Escape to clear the search; or call SetCodexSearch from your own UI. Tab
  * shows the next section alone (then All again); or call SetCodexSection. S
- * orders each section: as found, newest first, A–Z; or call SetCodexSort.
+ * orders each section: as found, newest first, A–Z; or call SetCodexSort. The
+ * arrow keys move a cursor (▶) through the entries and B bookmarks the one it
+ * is on (★); Tab reaches the bookmarks alone too.
  */
 UCLASS()
 class VCGS_API AVcgsCodexHUD : public AHUD
@@ -517,6 +533,9 @@ private:
     std::string SearchText;
     std::string SectionKey;
     std::string SortKey = "found";
+    std::string CursorKey;
+    /** Move the cursor to the next entry shown (1) or the one before (-1). */
+    void MoveCursor(vcgs::Codex& Book, int Step);
     UVcgsSubsystem* Subsystem() const;
     /** While typing a search: add the keys just pressed to it. */
     void TypeSearch();
@@ -571,6 +590,16 @@ void AVcgsCodexHUD::TypeSearch()
     }
 }
 
+void AVcgsCodexHUD::MoveCursor(vcgs::Codex& Book, int Step)
+{
+    const std::vector<std::string> Keys = Book.EntryKeys(SearchText, SectionKey, SortKey);
+    if (Keys.empty()) { CursorKey.clear(); return; }
+    int At = -1;
+    for (size_t i = 0; i < Keys.size(); i++) if (Keys[i] == CursorKey) At = static_cast<int>(i);
+    const int Next = At < 0 ? 0 : At + Step;
+    CursorKey = Keys[static_cast<size_t>(Next < 0 ? 0 : Next >= static_cast<int>(Keys.size()) ? static_cast<int>(Keys.size()) - 1 : Next)];
+}
+
 void AVcgsCodexHUD::ToggleCodex()
 {
     bCodexOpen = !bCodexOpen;
@@ -586,12 +615,20 @@ void AVcgsCodexHUD::DrawHUD()
     if (!Book || !Canvas) return;
     if (PlayerOwner && bCodexOpen && bTypingSearch) TypeSearch();
     else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Slash)) bTypingSearch = true;
+    else if (PlayerOwner && bCodexOpen && (PlayerOwner->WasInputKeyJustPressed(EKeys::Down) || PlayerOwner->WasInputKeyJustPressed(EKeys::Up)))
+        MoveCursor(*Book, PlayerOwner->WasInputKeyJustPressed(EKeys::Down) ? 1 : -1);
+    else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::B))
+    {
+        const std::vector<std::string> Keys = Book->EntryKeys(SearchText, SectionKey, SortKey);
+        if (std::find(Keys.begin(), Keys.end(), CursorKey) == Keys.end()) MoveCursor(*Book, 0);
+        if (!CursorKey.empty()) Story->ToggleCodexBookmark(ToF(CursorKey));
+    }
     else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::S))
         SortKey = SortKey == "found" ? "newest" : SortKey == "newest" ? "name" : "found";
     else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Tab))
     {
         // The next section alone, then All again.
-        std::vector<std::string> Options = {""};
+        std::vector<std::string> Options = {"", "bookmarks"};
         for (const std::string& Key : Book->SectionKeys()) Options.push_back(Key);
         size_t At = 0;
         while (At < Options.size() && Options[At] != SectionKey) At++;
@@ -631,13 +668,13 @@ void AVcgsCodexHUD::DrawHUD()
         DrawText(ToF("Showing: " + vcgs::Codex::Title(SectionKey) + " (Tab for the next)"), Gold, Left + 18.f, Y);
         Y += 30.f;
     }
-    for (const std::string& Line : vcgs::Codex::Wrap(Book->Text(SearchText, SectionKey, SortKey), Columns > 20 ? Columns : 20))
+    for (const std::string& Line : vcgs::Codex::Wrap(Book->Text(SearchText, SectionKey, SortKey, CursorKey), Columns > 20 ? Columns : 20))
     {
         if (Y > Top + PanelHeight - 44.f) break;
         DrawText(ToF(Line), Line == "CODEX" ? Gold : Ink, Left + 18.f, Y);
         Y += 22.f;
     }
-    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ to search · Tab for a section · S to sort · C or Esc to close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
+    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B bookmark · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
 }
 `,
 

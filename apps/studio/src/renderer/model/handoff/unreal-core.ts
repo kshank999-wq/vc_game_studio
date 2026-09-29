@@ -372,6 +372,8 @@ namespace vcgs
         std::vector<std::string> VisitedLocations;
         /** Objects the player has used, in the order first used. */
         std::vector<std::string> UsedObjects;
+        /** Codex entries the player has bookmarked, by key ("lore:the_drowned_order"), in the order bookmarked. */
+        std::vector<std::string> Bookmarks;
         /** Lore the player has come across, in the order they found it (the codex). */
         std::vector<std::string> KnownLore;
         /** Mechanics the player can use now. */
@@ -394,7 +396,7 @@ namespace vcgs
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -459,6 +461,15 @@ namespace vcgs
         void RememberChoice(const std::string& choice, const std::string& option) { Chosen[choice] = option; Changed(); }
         void MarkSolved(const std::string& puzzle) { if (Solved.insert(puzzle).second) Changed(); }
         void Visit(const std::string& scene) { if (Visited.insert(scene).second) Changed(); }
+        /** Bookmark a codex entry ("lore:the_drowned_order"), or take its bookmark off. Returns whether it is bookmarked now. */
+        bool ToggleBookmark(const std::string& entry)
+        {
+            auto it = std::find(Bookmarks.begin(), Bookmarks.end(), entry);
+            if (it != Bookmarks.end()) { Bookmarks.erase(it); return false; }
+            Bookmarks.push_back(entry);
+            return true;
+        }
+        bool IsBookmarked(const std::string& entry) const { return std::find(Bookmarks.begin(), Bookmarks.end(), entry) != Bookmarks.end(); }
         /** The player has used an object (Interactions::Interact says so). */
         void UseObject(const std::string& obj)
         {
@@ -813,39 +824,61 @@ namespace vcgs
          * ("quests", "lore"…, as SectionKeys lists them), only that one. With a
          * sort ("found", the default; "newest"; "name", A–Z ignoring case), each
          * section in that order (quests under way still before those done).
+         * A bookmarked entry ends its first line with ★; the section "bookmarks"
+         * shows only them. The cursor entry (a key, "lore:…") starts with ▶.
          */
-        std::string Text(const std::string& query = "", const std::string& only = "", const std::string& sort = "") const
+        std::string Text(const std::string& query = "", const std::string& only = "", const std::string& sort = "", const std::string& cursor = "") const
         {
             const std::string q = Lower(Trim(query));
             std::vector<std::string> parts;
-            auto sorted = [&](std::vector<std::string> entries)
+            ShownKeys.clear();
+            using Entries = std::vector<std::pair<std::string, std::string>>;
+            auto sorted = [&](Entries entries)
             {
                 if (sort == "newest") std::reverse(entries.begin(), entries.end());
-                else if (sort == "name") std::stable_sort(entries.begin(), entries.end(), [](const std::string& a, const std::string& b) { return Lower(a) < Lower(b); });
+                else if (sort == "name") std::stable_sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return Lower(a.second) < Lower(b.second); });
                 return entries;
             };
-            auto section = [&](const char* key, const std::string& heading, const std::vector<std::string>& entries, const char* sep, const char* empty)
+            auto section = [&](const char* key, const std::string& heading, const Entries& all, const char* sep, const char* empty)
             {
-                if (!only.empty() && only != key) return;
-                std::vector<std::string> shown;
-                for (const std::string& e : std::string(key) == "quests" ? entries : sorted(entries)) if (q.empty() || Lower(e).find(q) != std::string::npos) shown.push_back(e);
+                Entries entries;
+                if (only == "bookmarks")
+                {
+                    for (const auto& e : all) if (game.IsBookmarked(e.first)) entries.push_back(e);
+                    if (entries.empty()) return;
+                }
+                else if (!only.empty() && only != key) return;
+                else entries = all;
+                Entries shown;
+                for (const auto& e : std::string(key) == "quests" ? entries : sorted(entries)) if (q.empty() || Lower(e.second).find(q) != std::string::npos) shown.push_back(e);
                 if (!q.empty() && shown.empty()) return;
                 std::string text = heading;
                 if (shown.empty()) text += std::string("\n") + empty;
-                for (const std::string& e : shown) text += sep + e;
+                for (const auto& e : shown)
+                {
+                    std::string words = e.second;
+                    if (game.IsBookmarked(e.first))
+                    {
+                        const size_t nl = words.find('\n');
+                        words = nl == std::string::npos ? words + " ★" : words.substr(0, nl) + " ★" + words.substr(nl);
+                    }
+                    if (e.first == cursor) words = "▶ " + words;
+                    text += sep + words;
+                    ShownKeys.push_back(e.first);
+                }
                 parts.push_back(text);
             };
             auto title = [](const std::string& name, const std::string& key) { return Upper(name.empty() ? key : name); };
             if (!game.StoryData.Quests.empty())
             {
-                std::vector<std::string> active, done;
+                Entries active, done;
                 for (const std::string& key : game.QuestOrder)
                 {
                     const Value& quest = Story::Find(game.StoryData.Quests, key);
                     const std::string name = quest["name"].Str().empty() ? key : quest["name"].Str();
                     const std::string goal = quest["fields"]["goal"].Str();
-                    if (game.QuestState(key) == "done") done.push_back("• " + name + " (done)");
-                    else active.push_back("• " + name + (goal.empty() ? "" : " — " + goal));
+                    if (game.QuestState(key) == "done") done.push_back({"quests:" + key, "• " + name + " (done)"});
+                    else active.push_back({"quests:" + key, "• " + name + (goal.empty() ? "" : " — " + goal)});
                 }
                 const std::string heading = "QUESTS · " + std::to_string(active.size()) + " under way, " + std::to_string(done.size()) + " done";
                 active = sorted(active);
@@ -855,63 +888,63 @@ namespace vcgs
             }
             if (const size_t withEntry = game.StoryData.CodexCharacters())
             {
-                std::vector<std::string> cast;
+                Entries cast;
                 for (const std::string& key : game.MetCharacters)
                 {
                     const std::string codex = game.StoryData.CharacterCodex(key);
-                    if (!codex.empty()) cast.push_back(title(Story::Find(game.StoryData.Characters, key)["name"].Str(), key) + "\n" + codex);
+                    if (!codex.empty()) cast.push_back({"characters:" + key, title(Story::Find(game.StoryData.Characters, key)["name"].Str(), key) + "\n" + codex});
                 }
                 section("characters", "CHARACTERS · " + std::to_string(cast.size()) + " of " + std::to_string(withEntry) + " met", cast, "\n\n", "None yet.");
             }
             if (const size_t withEntry = game.StoryData.CodexLocations())
             {
-                std::vector<std::string> places;
+                Entries places;
                 for (const std::string& key : game.VisitedLocations)
                 {
                     const std::string codex = game.StoryData.LocationCodex(key);
-                    if (!codex.empty()) places.push_back(title(Story::Find(game.StoryData.LocationDefs, key)["name"].Str(), key) + "\n" + codex);
+                    if (!codex.empty()) places.push_back({"locations:" + key, title(Story::Find(game.StoryData.LocationDefs, key)["name"].Str(), key) + "\n" + codex});
                 }
                 section("locations", "LOCATIONS · " + std::to_string(places.size()) + " of " + std::to_string(withEntry) + " visited", places, "\n\n", "None yet.");
             }
             if (const size_t withEntry = game.StoryData.CodexItems())
             {
-                std::vector<std::string> things;
+                Entries things;
                 for (const std::string& key : game.FoundItems)
                 {
                     const std::string codex = game.StoryData.ItemCodex(key);
                     if (codex.empty()) continue;
                     auto held = game.Items.find(key);
                     const int count = held == game.Items.end() ? 0 : held->second;
-                    things.push_back(title(Story::Find(game.StoryData.ItemDefs, key)["name"].Str(), key) + (count > 1 ? " (carried ×" + std::to_string(count) + ")" : count == 1 ? " (carried)" : "") + "\n" + codex);
+                    things.push_back({"items:" + key, title(Story::Find(game.StoryData.ItemDefs, key)["name"].Str(), key) + (count > 1 ? " (carried ×" + std::to_string(count) + ")" : count == 1 ? " (carried)" : "") + "\n" + codex});
                 }
                 section("items", "ITEMS · " + std::to_string(things.size()) + " of " + std::to_string(withEntry) + " found", things, "\n\n", "None yet.");
             }
             if (const size_t withEntry = game.StoryData.CodexObjects())
             {
-                std::vector<std::string> props;
+                Entries props;
                 for (const std::string& key : game.UsedObjects)
                 {
                     const std::string codex = game.StoryData.ObjectCodex(key);
                     if (codex.empty()) continue;
                     const std::string now = game.GetObjectState(key);
-                    props.push_back(title(Story::Find(game.StoryData.Objects, key)["name"].Str(), key) + (now.empty() ? "" : " (" + now + ")") + "\n" + codex);
+                    props.push_back({"objects:" + key, title(Story::Find(game.StoryData.Objects, key)["name"].Str(), key) + (now.empty() ? "" : " (" + now + ")") + "\n" + codex});
                 }
                 section("objects", "OBJECTS · " + std::to_string(props.size()) + " of " + std::to_string(withEntry) + " used", props, "\n\n", "None yet.");
             }
             if (!game.StoryData.Mechanics.empty())
             {
-                std::vector<std::string> usable;
+                Entries usable;
                 for (const std::string& key : game.MechanicOrder)
                 {
                     const Value& m = Story::Find(game.StoryData.Mechanics, key);
                     const std::string controls = m["fields"]["controls"].Str();
-                    usable.push_back(title(m["name"].Str(), key) + (controls.empty() ? "" : "\nControls: " + controls) + "\n" + m["notes"].Str());
+                    usable.push_back({"mechanics:" + key, title(m["name"].Str(), key) + (controls.empty() ? "" : "\nControls: " + controls) + "\n" + m["notes"].Str()});
                 }
                 section("mechanics", "MECHANICS · " + std::to_string(usable.size()) + " of " + std::to_string(game.StoryData.Mechanics.size()) + " available", usable, "\n\n", "None yet.");
             }
             if (!game.StoryData.Encounters.empty())
             {
-                std::vector<std::string> faced;
+                Entries faced;
                 size_t won = 0;
                 for (const std::string& key : game.MetEncounters)
                 {
@@ -919,29 +952,37 @@ namespace vcgs
                     const std::string enemies = e["fields"]["enemies"].Str();
                     const std::string weakness = e["fields"]["weakness"].Str();
                     if (game.WasWon(key)) won++;
-                    faced.push_back(title(e["name"].Str(), key) + (game.WasWon(key) ? " (won)" : "") + (enemies.empty() ? "" : "\nEnemies: " + enemies) + (weakness.empty() ? "" : "\nWeak to: " + weakness) + "\n" + e["notes"].Str());
+                    faced.push_back({"encounters:" + key, title(e["name"].Str(), key) + (game.WasWon(key) ? " (won)" : "") + (enemies.empty() ? "" : "\nEnemies: " + enemies) + (weakness.empty() ? "" : "\nWeak to: " + weakness) + "\n" + e["notes"].Str()});
                 }
                 section("encounters", "ENCOUNTERS · " + std::to_string(faced.size()) + " met, " + std::to_string(won) + " won", faced, "\n\n", "None yet.");
             }
             if (!game.StoryData.Lore.empty())
             {
-                std::vector<std::string> found;
+                Entries found;
                 for (const std::string& key : game.KnownLore)
                 {
                     const Value& entry = Story::Find(game.StoryData.Lore, key);
-                    found.push_back(title(entry["name"].Str(), key) + "\n" + entry["notes"].Str());
+                    found.push_back({"lore:" + key, title(entry["name"].Str(), key) + "\n" + entry["notes"].Str()});
                 }
                 section("lore", "LORE · " + std::to_string(found.size()) + " of " + std::to_string(game.StoryData.Lore.size()) + " found", found, "\n\n", "Nothing found yet.");
             }
             if (!q.empty() && parts.empty())
             {
                 const auto& all = Sections();
-                const bool known = std::find(all.begin(), all.end(), only) != all.end();
+                const bool known = std::find(all.begin(), all.end(), only) != all.end() || only == "bookmarks";
                 return "CODEX\n\nNothing matches \"" + Trim(query) + "\"" + (known ? " in " + Title(only) : std::string()) + ".";
             }
+            if (only == "bookmarks" && parts.empty()) return "CODEX\n\nNo bookmarks yet.";
             std::string out = "CODEX";
             for (size_t i = 0; i < parts.size(); i++) out += "\n\n" + parts[i];
             return out;
+        }
+
+        /** The entries shown, in order, by key ("lore:…"): what a cursor moves through. */
+        std::vector<std::string> EntryKeys(const std::string& query = "", const std::string& only = "", const std::string& sort = "") const
+        {
+            Text(query, only, sort);
+            return ShownKeys;
         }
 
         /** The text broken into lines of at most width characters, for a screen that draws line by line. */
@@ -970,6 +1011,7 @@ namespace vcgs
     private:
         const GameState& game;
         int seen;
+        mutable std::vector<std::string> ShownKeys;
 
         int Progress() const
         {

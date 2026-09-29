@@ -139,6 +139,14 @@ static class Check
         var sorting = new GameState(story);
         sorting.DiscoverLore(Lore.TheLastExpedition);
         sorting.DiscoverLore(Lore.TheDrownedOrder);
+        // Bookmarks: a star on the entry, a filter for them alone, and a cursor to pick one.
+        var book = new Codex(sorting);
+        if (!sorting.ToggleBookmark("lore:" + Lore.TheDrownedOrder) || !book.Text().Contains("\n\nTHE DROWNED ORDER ★\nRiver priests")) Fail("a bookmark should star the entry, got " + book.Text());
+        if (book.Text("", "bookmarks") != "CODEX\n\nLORE · 2 of 2 found\n\nTHE DROWNED ORDER ★\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.") Fail("the bookmarks should show alone, got " + book.Text("", "bookmarks"));
+        if (book.Text("eels", "bookmarks") != "CODEX\n\nNothing matches \"eels\" in Bookmarks.") Fail("a search with no match in the bookmarks should say so, got " + book.Text("eels", "bookmarks"));
+        if (string.Join(",", book.EntryKeys("", "lore")) != "lore:" + Lore.TheLastExpedition + ",lore:" + Lore.TheDrownedOrder) Fail("the cursor should move through the lore shown, got " + string.Join(",", book.EntryKeys("", "lore")));
+        if (!book.Text("", "lore", "", "lore:" + Lore.TheLastExpedition).Contains("\n\n▶ THE LAST EXPEDITION\n")) Fail("the cursor entry should start with ▶, got " + book.Text("", "lore", "", "lore:" + Lore.TheLastExpedition));
+        if (sorting.ToggleBookmark("lore:" + Lore.TheDrownedOrder) || book.Text("", "bookmarks") != "CODEX\n\nNo bookmarks yet.") Fail("taking the bookmark off should leave none, got " + book.Text("", "bookmarks"));
         string Heads(string sort) => string.Join(",", Array.FindAll(new Codex(sorting).Text("", "lore", sort).Split('\n'), l => l.StartsWith("THE ")));
         if (Heads("") != "THE LAST EXPEDITION,THE DROWNED ORDER" || Heads("newest") != "THE DROWNED ORDER,THE LAST EXPEDITION" || Heads("name") != "THE DROWNED ORDER,THE LAST EXPEDITION") Fail("sorting the lore should order it as found, newest first and A–Z, got " + Heads("") + " / " + Heads("newest") + " / " + Heads("name"));
         codex.MarkRead();

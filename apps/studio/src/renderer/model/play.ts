@@ -707,14 +707,21 @@ export interface CodexSection {
   empty: string;
   /** Between the heading and each entry: quest lines sit close, the rest have a blank line. */
   sep: string;
-  entries: { id: string; text: string }[];
+  /** `key` names the entry for bookmarks: its section and its id ("lore:…"). */
+  entries: { id: string; key: string; text: string; bookmarked?: boolean }[];
 }
+
+/** The mark on a bookmarked entry, at the end of its first line. */
+export const BOOKMARK_MARK = ' ★';
+/** A bookmarked entry as the codex writes it: the mark at the end of its first line. */
+const marked = (text: string) => (text.includes('\n') ? text.replace('\n', `${BOOKMARK_MARK}\n`) : text + BOOKMARK_MARK);
 
 /** Whether a search finds an entry: the query, ignoring case, anywhere in the entry as written (its heading and counts aside). */
 export const codexMatches = (text: string, query: string) => !query.trim() || text.toLowerCase().includes(query.trim().toLowerCase());
 
-/** Each section's name, for a filter by section and for "Nothing matches … in Lore". */
-export const CODEX_SECTION_NAMES: Record<CodexSection['key'], string> = {
+/** Each section's name, for a filter by section and for "Nothing matches … in Lore" (and the bookmarks, a filter across them all). */
+export const CODEX_SECTION_NAMES: Record<CodexSection['key'] | 'bookmarks', string> = {
+  bookmarks: 'Bookmarks',
   quests: 'Quests',
   characters: 'Characters',
   locations: 'Locations',
@@ -741,11 +748,14 @@ const sortEntries = <T extends { text: string }>(entries: T[], sort: string): T[
  * The codex's sections in words, the same as Godot, Unity and Unreal write
  * them. With a search, only the entries it finds, and only the sections with
  * any (their headings still count everything). With a section, only that one.
- * With a sort, each section's entries in that order.
+ * With a sort, each section's entries in that order. With bookmarks (entry
+ * keys, "lore:…"), those entries are marked; the section "bookmarks" shows
+ * only them, from every section.
  */
-export const codexSections = (project: Project, world: PlayWorld, query = '', section = '', sort = ''): CodexSection[] => {
+export const codexSections = (project: Project, world: PlayWorld, query = '', section = '', sort = '', bookmarks: ReadonlySet<string> = new Set()): CodexSection[] => {
   const c = codexOf(project, world);
-  const all: (CodexSection | false)[] = [
+  type Raw = Omit<CodexSection, 'entries'> & { entries: { id: string; text: string }[] };
+  const all: (Raw | false)[] = [
     !!c.quests && {
       key: 'quests',
       heading: `QUESTS · ${c.underWay.length} under way, ${c.done.length} done`,
@@ -809,9 +819,14 @@ export const codexSections = (project: Project, world: PlayWorld, query = '', se
       entries: c.lore.map((l) => ({ id: l.id, text: `${l.name.toUpperCase()}\n${l.text}` })),
     },
   ];
+  const onlyBookmarks = section === 'bookmarks';
   const sections = all
-    .filter((x): x is CodexSection => !!x && (!section || x.key === section))
-    .map((x) => (x.key === 'quests' ? x : { ...x, entries: sortEntries(x.entries, sort) }));
+    .filter((x): x is Raw => !!x && (!section || onlyBookmarks || x.key === section))
+    .map((x): CodexSection => {
+      const entries = (x.key === 'quests' ? x.entries : sortEntries(x.entries, sort)).map((e) => ({ ...e, key: `${x.key}:${e.id}`, bookmarked: bookmarks.has(`${x.key}:${e.id}`) }));
+      return { ...x, entries: onlyBookmarks ? entries.filter((e) => e.bookmarked) : entries };
+    })
+    .filter((x) => !onlyBookmarks || x.entries.length);
   if (!query.trim()) return sections;
   return sections.map((s) => ({ ...s, entries: s.entries.filter((e) => codexMatches(e.text, query)) })).filter((s) => s.entries.length);
 };
@@ -820,11 +835,12 @@ export const codexSections = (project: Project, world: PlayWorld, query = '', se
 export const codexSectionKeys = (project: Project, world: PlayWorld): CodexSection['key'][] => codexSections(project, world).map((s) => s.key);
 
 /** The codex in words, exactly as Godot, Unity and Unreal write it; with a search, only what it finds; with a section, only that one; with a sort, in that order. */
-export const codexText = (project: Project, world: PlayWorld, query = '', section = '', sort = ''): string => {
-  const sections = codexSections(project, world, query, section, sort);
-  const within = section in CODEX_SECTION_NAMES ? ` in ${CODEX_SECTION_NAMES[section as CodexSection['key']]}` : '';
+export const codexText = (project: Project, world: PlayWorld, query = '', section = '', sort = '', bookmarks: ReadonlySet<string> = new Set()): string => {
+  const sections = codexSections(project, world, query, section, sort, bookmarks);
+  const within = section in CODEX_SECTION_NAMES ? ` in ${CODEX_SECTION_NAMES[section as keyof typeof CODEX_SECTION_NAMES]}` : '';
   if (query.trim() && !sections.length) return `CODEX\n\nNothing matches "${query.trim()}"${within}.`;
-  const parts = sections.map((s) => s.heading + (s.entries.length ? s.entries.map((e) => s.sep + e.text).join('') : `\n${s.empty}`));
+  if (section === 'bookmarks' && !sections.length) return 'CODEX\n\nNo bookmarks yet.';
+  const parts = sections.map((s) => s.heading + (s.entries.length ? s.entries.map((e) => s.sep + (e.bookmarked ? marked(e.text) : e.text)).join('') : `\n${s.empty}`));
   return ['CODEX', ...parts].join('\n\n');
 };
 

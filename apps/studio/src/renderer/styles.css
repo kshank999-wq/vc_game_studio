@@ -5378,6 +5378,21 @@ kbd {
   padding: 2px 6px;
 }
 
+.play-codex-star {
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.play-codex-star:hover,
+.play-codex-star.on {
+  color: var(--gold-hi);
+}
+
 .play-codex h3 {
   margin: 14px 0 6px;
   font-size: 12px;

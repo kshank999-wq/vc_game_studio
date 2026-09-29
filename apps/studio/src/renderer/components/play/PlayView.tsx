@@ -112,15 +112,37 @@ const EntryView = ({ entry }: { entry: Entry }) => {
 };
 
 /** The codex as the player would read it: the quest log, the characters met, the locations visited, the items found, the objects used, the mechanics, the encounters met, then the lore found. */
-const CodexPanel = ({ project, world, onClose }: { project: Project; world: PlayWorld; onClose: () => void }) => {
+const CodexPanel = ({
+  project,
+  world,
+  onClose,
+  bookmarks,
+  onBookmark,
+}: {
+  project: Project;
+  world: PlayWorld;
+  onClose: () => void;
+  /** Entry keys ("lore:…") the player has bookmarked. */
+  bookmarks: ReadonlySet<string>;
+  onBookmark: (key: string) => void;
+}) => {
   const c = codexOf(project, world);
   const [query, setQuery] = useState('');
-  const [section, setSection] = useState<CodexSection['key'] | ''>('');
+  const [section, setSection] = useState<CodexSection['key'] | 'bookmarks' | ''>('');
   const [sort, setSort] = useState<CodexSort>('found');
   const search = useRef<HTMLInputElement>(null);
   const keys = codexSectionKeys(project, world);
   // The entries shown, by section and in order (the same rules as the engines' codex).
-  const shown = new Map(codexSections(project, world, query, section, sort).map((s) => [s.key, s.entries.map((e) => e.id)]));
+  const shown = new Map(codexSections(project, world, query, section, sort, bookmarks).map((s) => [s.key, s.entries.map((e) => e.id)]));
+  /** A star to bookmark an entry (or take the bookmark off). */
+  const star = (key: CodexSection['key'], id: string, name: string) => {
+    const on = bookmarks.has(`${key}:${id}`);
+    return (
+      <button className={`play-codex-star${on ? ' on' : ''}`} aria-label={`Bookmark ${name}`} aria-pressed={on} title={on ? 'Remove the bookmark' : 'Bookmark it'} onClick={() => onBookmark(`${key}:${id}`)}>
+        {on ? '★' : '☆'}
+      </button>
+    );
+  };
   const found = query.trim() || section ? shown : null;
   const has = (key: CodexSection['key']) => !found || found.has(key);
   const keep = (key: CodexSection['key']) => (x: { id: string }) => !!shown.get(key)?.includes(x.id);
@@ -166,9 +188,9 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
       />
       {keys.length > 1 && (
         <div className="play-codex-filters" role="group" aria-label="Codex sections">
-          {(['', ...keys] as const).map((k) => (
+          {(['', 'bookmarks', ...keys] as const).map((k) => (
             <button key={k || 'all'} className={`play-codex-filter${section === k ? ' on' : ''}`} aria-pressed={section === k} onClick={() => setSection(k)}>
-              {k ? CODEX_SECTION_NAMES[k] : 'All'}
+              {k === 'bookmarks' ? `★ ${CODEX_SECTION_NAMES[k]}` : k ? CODEX_SECTION_NAMES[k] : 'All'}
             </button>
           ))}
         </div>
@@ -183,6 +205,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           ))}
         </select>
       </label>
+      {section === 'bookmarks' && !found?.size && !query.trim() && <p className="play-note">No bookmarks yet. Star an entry (☆) to keep it here.</p>}
       {found && !found.size && query.trim() && (
         <p className="play-note">
           Nothing matches “{query.trim()}”{section ? ` in ${CODEX_SECTION_NAMES[section]}` : ''}.
@@ -197,13 +220,13 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           <ul className="play-codex-quests">
             {c.underWay.filter(keep('quests')).sort(inOrder('quests')).map((q) => (
               <li key={q.id}>
-                <Symbol type="quest" size={11} /> <strong>{q.name}</strong>
+                {star('quests', q.id, q.name)} <Symbol type="quest" size={11} /> <strong>{q.name}</strong>
                 {q.goal && <span className="play-note"> — {q.goal}</span>}
               </li>
             ))}
             {c.done.filter(keep('quests')).sort(inOrder('quests')).map((q) => (
               <li key={q.id} className="done">
-                <Symbol type="quest" size={11} /> {q.name} <span className="play-note">(done)</span>
+                {star('quests', q.id, q.name)} <Symbol type="quest" size={11} /> {q.name} <span className="play-note">(done)</span>
               </li>
             ))}
           </ul>
@@ -218,7 +241,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           {c.characters.filter(keep('characters')).sort(inOrder('characters')).map((ch) => (
             <article key={ch.id} className="play-codex-lore play-codex-character">
               <h4>
-                <Symbol type="character" size={11} /> {ch.name}
+                {star('characters', ch.id, ch.name)} <Symbol type="character" size={11} /> {ch.name}
               </h4>
               <p>{ch.text}</p>
             </article>
@@ -234,7 +257,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           {c.locations.filter(keep('locations')).sort(inOrder('locations')).map((l) => (
             <article key={l.id} className="play-codex-lore play-codex-location">
               <h4>
-                <Symbol type="environment" size={11} /> {l.name}
+                {star('locations', l.id, l.name)} <Symbol type="environment" size={11} /> {l.name}
               </h4>
               <p>{l.text}</p>
             </article>
@@ -250,7 +273,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           {c.items.filter(keep('items')).sort(inOrder('items')).map((i) => (
             <article key={i.id} className="play-codex-lore play-codex-item">
               <h4>
-                <Symbol type="inventory" size={11} /> {i.name}
+                {star('items', i.id, i.name)} <Symbol type="inventory" size={11} /> {i.name}
                 {i.carried > 0 && <span className="play-note"> (carried{i.carried > 1 ? ` ×${i.carried}` : ''})</span>}
               </h4>
               <p>{i.text}</p>
@@ -267,7 +290,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           {c.objects.filter(keep('objects')).sort(inOrder('objects')).map((o) => (
             <article key={o.id} className="play-codex-lore play-codex-object">
               <h4>
-                <Symbol type="object" size={11} /> {o.name}
+                {star('objects', o.id, o.name)} <Symbol type="object" size={11} /> {o.name}
                 {o.state && <span className="play-note"> ({o.state})</span>}
               </h4>
               <p>{o.text}</p>
@@ -284,7 +307,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           {c.mechanics.filter(keep('mechanics')).sort(inOrder('mechanics')).map((m) => (
             <article key={m.id} className="play-codex-lore play-codex-mechanic">
               <h4>
-                <Symbol type="mechanic" size={11} /> {m.name}
+                {star('mechanics', m.id, m.name)} <Symbol type="mechanic" size={11} /> {m.name}
                 {m.controls && <span className="play-note"> · {m.controls}</span>}
               </h4>
               <p>{m.text}</p>
@@ -301,7 +324,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           {c.encounters.filter(keep('encounters')).sort(inOrder('encounters')).map((e) => (
             <article key={e.id} className="play-codex-lore play-codex-encounter">
               <h4>
-                <Symbol type="encounter" size={11} /> {e.name}
+                {star('encounters', e.id, e.name)} <Symbol type="encounter" size={11} /> {e.name}
                 {e.won && <span className="play-note"> (won)</span>}
               </h4>
               {(e.enemies || e.weakness) && (
@@ -321,7 +344,7 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           {c.lore.filter(keep('lore')).sort(inOrder('lore')).map((l) => (
             <article key={l.id} className="play-codex-lore">
               <h4>
-                <Symbol type="lore" size={11} /> {l.name}
+                {star('lore', l.id, l.name)} <Symbol type="lore" size={11} /> {l.name}
               </h4>
               <p>{l.text}</p>
             </article>
@@ -510,6 +533,8 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   const push = (next: Play) => next !== play && setHistory((h) => [...h, next]);
   const transcript = useRef<HTMLDivElement>(null);
   const [codexOpen, setCodexOpen] = useState(false);
+  // The player's bookmarks in the codex: kept for the whole play-through, stepping back or not.
+  const [bookmarks, setBookmarks] = useState<ReadonlySet<string>>(new Set());
   // What the codex had when last read, for its "new" count.
   const [seen, setSeen] = useState(0);
   const progress = codexProgress(project, play.world);
@@ -590,7 +615,21 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
             </button>
           )}
         </div>
-        {codexOpen && <CodexPanel project={project} world={play.world} onClose={() => setCodexOpen(false)} />}
+        {codexOpen && (
+          <CodexPanel
+            project={project}
+            world={play.world}
+            onClose={() => setCodexOpen(false)}
+            bookmarks={bookmarks}
+            onBookmark={(key) =>
+              setBookmarks((b) => {
+                const next = new Set(b);
+                if (!next.delete(key)) next.add(key);
+                return next;
+              })
+            }
+          />
+        )}
         <div className="play-transcript" ref={transcript} aria-live="polite">
           {play.log.map((entry, i) => (
             <EntryView key={i} entry={entry} />

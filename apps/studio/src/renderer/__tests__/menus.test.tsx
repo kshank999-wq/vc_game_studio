@@ -216,6 +216,17 @@ describe('play-through', () => {
     fireEvent.change(within(codex).getByLabelText('Sort the codex'), { target: { value: 'name' } });
     expect((within(codex).getByLabelText('Sort the codex') as HTMLSelectElement).value).toBe('name');
     expect(codex.textContent).toContain('Eel swarm');
+    // Bookmarks: star an entry, then show the bookmarks alone.
+    fireEvent.change(search, { target: { value: '' } });
+    fireEvent.click(within(sections).getByRole('button', { name: '★ Bookmarks' }));
+    expect(codex.textContent).toContain('No bookmarks yet.');
+    fireEvent.click(within(sections).getByRole('button', { name: 'All' }));
+    fireEvent.click(within(codex).getByRole('button', { name: 'Bookmark Eel swarm' }));
+    expect(within(codex).getByRole('button', { name: 'Bookmark Eel swarm' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(sections).getByRole('button', { name: '★ Bookmarks' }));
+    expect(codex.textContent).toContain('Eel swarm');
+    expect(codex.textContent).not.toContain('MaraA guide');
+    fireEvent.change(search, { target: { value: 'lantern' } });
     fireEvent.click(within(sections).getByRole('button', { name: 'All' }));
     expect(codex.textContent).toContain('MaraA guide');
     fireEvent.change(search, { target: { value: 'nothing like it' } });

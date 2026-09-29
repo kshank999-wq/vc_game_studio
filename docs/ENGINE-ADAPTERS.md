@@ -129,7 +129,15 @@ the studio's play-through:
   sort menu and S (`codex_text(query, section, sort)`, `set_codex_sort`);
   Unity sort buttons and S (`Codex.Text(query, section, sort)`,
   `VcgsCodex.Sort`); Unreal's HUD S (`GetCodexText(Search, Section, Sort)`,
-  `SetCodexSort`).
+  `SetCodexSort`). And each keeps bookmarks in the game state, by entry key
+  ("lore:the_drowned_order"): a bookmarked entry ends its first line with ★,
+  and the section "bookmarks" shows only them (or "No bookmarks yet."). The
+  placeholder screens have a cursor (▶, the arrow keys) and B to bookmark the
+  entry it is on. Godot `toggle_bookmark`, `is_bookmarked` on the game state,
+  `move_codex_cursor` and `toggle_codex_bookmark` on the screen; Unity
+  `GameState.ToggleBookmark`, `Codex.EntryKeys`, `VcgsCodex.MoveCursor` and
+  `ToggleBookmark`; Unreal `ToggleCodexBookmark`, `IsCodexBookmarked` and
+  `GetCodexEntries` on the subsystem.
 - **Conditions** can ask about all three, anywhere a rule goes (a gate, a
   choice, a trigger, an encounter's win): a quest *is done*, *is not done*, *is
   under way* or *has not started*; lore *is known* or *is not known*; a mechanic

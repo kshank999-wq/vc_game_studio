@@ -456,6 +456,25 @@ describe('the codex', () => {
     expect(play.world.lore[id(p, 'The Last Expedition')]).toBe(true);
   });
 
+  it('bookmarks entries: marked where they are, and a filter for them alone', async () => {
+    const { codexText } = await import('../play');
+    const world = toTheVault(p).world;
+    const marks = new Set([`lore:${id(p, 'The Drowned Order')}`, `mechanics:${id(p, 'Lantern oil')}`]);
+    // The mark goes at the end of the entry's first line.
+    expect(codexText(p, world, '', '', '', marks)).toContain('\n\nLANTERN OIL ★\nControls: Hold to raise the lantern');
+    expect(codexText(p, world, '', '', '', marks)).toContain('\n\nTHE DROWNED ORDER ★\nRiver priests');
+    expect(codexText(p, world, '', '', '', marks)).toContain('\n\nEEL SWARM (won)\n');
+    // The bookmarks alone: only those, each under its own section.
+    expect(codexText(p, world, '', 'bookmarks', '', marks)).toBe(
+      'CODEX\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL ★\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nLORE · 1 of 2 found\n\nTHE DROWNED ORDER ★\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.',
+    );
+    expect(codexText(p, world, 'priests', 'bookmarks', '', marks)).toBe('CODEX\n\nLORE · 1 of 2 found\n\nTHE DROWNED ORDER ★\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.');
+    expect(codexText(p, world, 'eels', 'bookmarks', '', marks)).toBe('CODEX\n\nNothing matches "eels" in Bookmarks.');
+    expect(codexText(p, world, '', 'bookmarks')).toBe('CODEX\n\nNo bookmarks yet.');
+    // The mark is not searched: a search for it finds nothing.
+    expect(codexText(p, world, '★', '', '', marks)).toBe('CODEX\n\nNothing matches "★".');
+  });
+
   it('lists a character once heard, and only one with a codex entry', async () => {
     const { codexText, codexProgress } = await import('../play');
     const mara = id(p, 'Mara');
