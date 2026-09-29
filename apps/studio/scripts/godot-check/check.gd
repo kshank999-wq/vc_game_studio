@@ -275,9 +275,22 @@ func _initialize() -> void:
 	print("encounter on screen: ", silt_player.text(), " ", silt_player.labels())
 	if silt_player.text() != "[Encounter] Eel swarm" or silt_player.labels() != ["Win", "Lose"]:
 		fail("SC-02 should open on the eels with Win and Lose, got " + silt_player.text() + " " + str(silt_player.labels()))
+	# The codex, before anything is found.
+	if silt_player.codex_text() != "CODEX · 0 of 1 found\n\nNothing found yet." or silt_player.codex_button_text() != "Codex (C)":
+		fail("the codex should start empty, got " + silt_player.codex_text() + " / " + silt_player.codex_button_text())
 	silt_player.press(0)
 	if not game.was_won("eel_swarm") or silt_player.text() != "Find the key in the silt":
 		fail("Win should beat the eels and go on, got " + silt_player.text())
+	# The key's seal reveals the Order's story: the codex button says so, and the codex shows it.
+	if silt_player.codex_button_text() != "Codex (C) · 1 new":
+		fail("the codex button should mark the new entry, got " + silt_player.codex_button_text())
+	silt_player.open_codex()
+	print("codex: ", silt_player.codex_text().replace("\n", " | "))
+	if not silt_player.codex_open() or not silt_player.codex_text().begins_with("CODEX · 1 of 1 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault") or silt_player.codex_button_text() != "Codex (C)":
+		fail("the codex should show The Drowned Order, got " + silt_player.codex_text())
+	silt_player.close_codex()
+	if silt_player.codex_open():
+		fail("the codex should close")
 	silt.queue_free()
 
 	check_level(game)

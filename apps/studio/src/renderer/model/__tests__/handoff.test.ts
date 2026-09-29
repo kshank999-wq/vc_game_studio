@@ -384,6 +384,10 @@ describe('quests and encounters in the engines', () => {
     expect(file('vcgs/generated/logic/rules.gd')).toContain('const QUESTS := {\n\t"open_the_vault": {');
     expect(file('vcgs/generated/logic/rules.gd')).toContain('"loss": "retry"');
     expect(file('addons/vcgs_runtime/scene_flow.gd')).toContain('signal encounter_requested(encounter_key: String, can_win: bool)');
+    // The placeholder scenes' player has a codex of the lore found.
+    const player = file('addons/vcgs_runtime/debug_player.gd');
+    expect(player).toContain('func codex_text() -> String:');
+    expect(player).toContain('game.lore_discovered.connect(_on_lore)');
     expect(RUNTIME_FILES['ScenePlayer.cs']).toContain('public event Action<string, bool> EncounterRequested;');
     expect(RUNTIME_FILES['Rules.cs']).toContain('foreach (var q in game.Story.Quests)');
     expect(VCGS_CORE_H).toContain('std::function<void(const std::string&, bool)> OnEncounter;');
