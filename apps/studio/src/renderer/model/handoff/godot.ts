@@ -1049,7 +1049,7 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
       '',
       '## Each mechanic: when the player can use it ("when"; from the start without',
       '## one), and its tuning and other fields as written in the studio.',
-      `const MECHANICS := ${gd(Object.fromEntries(ir.mechanics.map((m) => [m.ident.key, { name: m.name, details: m.fields, ...(m.byEffect ? { by_effect: true } : {}), ...(m.availableWhen ? { when: m.availableWhen } : {}) }])))}`,
+      `const MECHANICS := ${gd(Object.fromEntries(ir.mechanics.map((m) => [m.ident.key, { name: m.name, text: m.notes, details: m.fields, ...(m.byEffect ? { by_effect: true } : {}), ...(m.availableWhen ? { when: m.availableWhen } : {}) }])))}`,
       '',
       '## A mechanic\'s field, such as its tuning ("" when it has none).',
       'static func mechanic_detail(mechanic_key: String, field: String) -> String:',

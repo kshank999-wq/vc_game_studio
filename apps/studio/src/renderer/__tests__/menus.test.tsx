@@ -175,13 +175,14 @@ describe('play-through', () => {
     // Finding the key starts the quest, and its seal tells the Order's story.
     expect(container.querySelector('.play-quest')?.textContent).toContain('New quest: Open the vault');
     expect(container.querySelector('.play-lore')?.textContent).toContain('Discovered: The Drowned Order');
-    // The codex counts both, and opens on the quest log and the lore (C, or its button).
-    expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex · 2 new');
+    // The codex counts those and the lantern's oil, and opens on the quest log, the mechanics and the lore (C, or its button).
+    expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex · 3 new');
     act(() => {
       fireEvent.keyDown(window, { key: 'c' });
     });
     const codex = screen.getByRole('dialog', { name: 'Codex' });
     expect(codex.textContent).toContain('Open the vault — Reach the vault chamber and open the door');
+    expect(codex.textContent).toContain('Lantern oil · Hold to raise the lantern');
     expect(codex.textContent).toContain('The Drowned OrderRiver priests who sealed the vault');
     expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex');
     act(() => {

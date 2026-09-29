@@ -310,7 +310,7 @@ describe('design definitions: lore, quests, mechanics and encounters', () => {
   it('are in the handoff model with their codes and fields, without studio-only lineage', () => {
     const { lore, quests, mechanics, encounters } = ir();
     expect([lore, quests, mechanics, encounters].map((l) => l.map((t) => `${t.code} ${t.ident.key}`))).toEqual([['LORE-01 the_drowned_order'], ['QST-01 open_the_vault'], ['MEC-01 lantern_oil'], ['ENC-01 eel_swarm']]);
-    expect(mechanics[0]!.fields).toEqual({ tuning: 'About a minute of deep water on a full lantern' });
+    expect(mechanics[0]!.fields).toEqual({ controls: 'Hold to raise the lantern', tuning: 'About a minute of deep water on a full lantern' });
     const withLineage = { ...sunkenVault() };
     const id = Object.values(withLineage.objects).find((o) => o.type === 'mechanic')!.id;
     withLineage.objects = { ...withLineage.objects, [id]: { ...withLineage.objects[id]!, data: { ...withLineage.objects[id]!.data, fromNote: 'note_1' } } };
@@ -352,7 +352,7 @@ describe('design definitions: lore, quests, mechanics and encounters', () => {
     expect(file(outputs.unity, 'Assets/VCGS/Generated/StoryKeys.cs')).toContain('public static class Mechanics');
 
     // Unreal: a DataTable CSV each, imported by the script, and keys.
-    expect(file(outputs.unreal, 'Content/VCGS/Generated/DataTables/Mechanics.csv')!.split('\n')[1]).toBe('lantern_oil,lantern_oil,MEC-01,Lantern oil,The lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.,tuning: About a minute of deep water on a full lantern');
+    expect(file(outputs.unreal, 'Content/VCGS/Generated/DataTables/Mechanics.csv')!.split('\n').slice(1, 3).join('\n')).toBe('lantern_oil,lantern_oil,MEC-01,Lantern oil,The lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.,"controls: Hold to raise the lantern\ntuning: About a minute of deep water on a full lantern"');
     expect(file(outputs.unreal, 'Content/VCGS/Generated/import_datatables.py')).toContain('"Encounters": "/Script/VCGS.VcgsElementRow",');
     expect(file(outputs.unreal, 'Plugins/VCGS/Source/VCGS/Public/Generated/VcgsStoryKeys.h')).toContain('namespace Quests');
   });

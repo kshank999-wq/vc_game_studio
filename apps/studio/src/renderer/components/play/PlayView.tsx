@@ -145,6 +145,23 @@ const CodexPanel = ({ project, world, onClose }: { project: Project; world: Play
           </ul>
         </section>
       )}
+      {c.mechanicsTotal > 0 && (
+        <section aria-label="Mechanics">
+          <h3>
+            Mechanics <span className="play-note">· {c.mechanics.length} of {c.mechanicsTotal} available</span>
+          </h3>
+          {!c.mechanics.length && <p className="play-note">None yet.</p>}
+          {c.mechanics.map((m) => (
+            <article key={m.id} className="play-codex-lore play-codex-mechanic">
+              <h4>
+                <Symbol type="mechanic" size={11} /> {m.name}
+                {m.controls && <span className="play-note"> · {m.controls}</span>}
+              </h4>
+              <p>{m.text}</p>
+            </article>
+          ))}
+        </section>
+      )}
       {c.loreTotal > 0 && (
         <section aria-label="Lore">
           <h3>
@@ -346,7 +363,7 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   // What the codex had when last read, for its "new" count.
   const [seen, setSeen] = useState(0);
   const progress = codexProgress(play.world);
-  const hasCodex = Object.values(project.objects).some((o) => o.type === 'quest' || o.type === 'lore');
+  const hasCodex = Object.values(project.objects).some((o) => o.type === 'quest' || o.type === 'lore' || o.type === 'mechanic');
   const fresh = Math.max(0, progress - seen);
   useEffect(() => {
     // Read while open; after a step back there is less to have read.

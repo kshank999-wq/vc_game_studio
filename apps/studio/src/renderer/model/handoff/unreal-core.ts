@@ -317,6 +317,8 @@ namespace vcgs
         std::vector<std::string> KnownLore;
         /** Mechanics the player can use now. */
         std::set<std::string> Mechanics;
+        /** The same mechanics, in the order they became available. */
+        std::vector<std::string> MechanicOrder;
         bool AutoRules = true;
         std::function<void(const std::string&)> OnTriggerFired;
         std::function<void(const std::string&)> OnQuestStarted;
@@ -327,7 +329,7 @@ namespace vcgs
         void Reset()
         {
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); KnownLore.clear(); Mechanics.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -415,6 +417,7 @@ namespace vcgs
         void EnableMechanic(const std::string& mechanic)
         {
             if (!Mechanics.insert(mechanic).second) return;
+            MechanicOrder.push_back(mechanic);
             if (OnMechanicAvailable) OnMechanicAvailable(mechanic);
             Changed();
         }
@@ -642,8 +645,8 @@ namespace vcgs
 
     /**
      * The codex as the player reads it: the quest log (quests under way with
-     * their goals, then those done, in the order they started) and the lore
-     * found, in the order found. New() counts what has happened since the codex
+     * their goals, then those done, in the order they started), the mechanics
+     * available and the lore found, in the order found. New() counts what has happened since the codex
      * was last read, for a "new" badge. AVcgsCodexHUD draws it; or use it in
      * your own UI (UVcgsSubsystem::GetCodexText).
      */
@@ -689,6 +692,19 @@ namespace vcgs
                 for (const auto& line : active) log += "\n" + line;
                 for (const auto& line : done) log += "\n" + line;
                 parts.push_back(log);
+            }
+            if (!game.StoryData.Mechanics.empty())
+            {
+                std::string mechanics = "MECHANICS · " + std::to_string(game.MechanicOrder.size()) + " of " + std::to_string(game.StoryData.Mechanics.size()) + " available";
+                if (game.MechanicOrder.empty()) mechanics += "\nNone yet.";
+                for (const std::string& key : game.MechanicOrder)
+                {
+                    const Value& m = Story::Find(game.StoryData.Mechanics, key);
+                    const std::string name = m["name"].Str().empty() ? key : m["name"].Str();
+                    const std::string controls = m["fields"]["controls"].Str();
+                    mechanics += "\n\n" + Upper(name) + (controls.empty() ? "" : "\nControls: " + controls) + "\n" + m["notes"].Str();
+                }
+                parts.push_back(mechanics);
             }
             if (!game.StoryData.Lore.empty())
             {
@@ -736,7 +752,7 @@ namespace vcgs
 
         int Progress() const
         {
-            int n = static_cast<int>(game.KnownLore.size());
+            int n = static_cast<int>(game.KnownLore.size() + game.MechanicOrder.size());
             for (const auto& q : game.Quests) n += q.second == "done" ? 2 : 1;
             return n;
         }

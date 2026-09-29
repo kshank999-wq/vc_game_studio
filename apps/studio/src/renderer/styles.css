@@ -5350,6 +5350,10 @@ kbd {
   color: var(--text);
 }
 
+.play-codex-mechanic h4 {
+  color: var(--c-mechanic);
+}
+
 .play-codex-new {
   color: var(--gold-hi);
 }

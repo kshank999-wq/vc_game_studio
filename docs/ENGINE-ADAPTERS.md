@@ -82,8 +82,9 @@ the studio's play-through:
   game (`game_over` / `GameOver` / `OnGameOver`), or carries on through the
   scene. Godot's placeholder scenes stand in for the fight with Win and Lose
   buttons, and have a codex: press C, or the Codex button (which counts what's
-  new), for the quest log (quests under way with their goals, then those done)
-  and the lore found so far, in the order found, with its text. Unity has the
+  new), for the quest log (quests under way with their goals, then those done),
+  the mechanics available (their controls and description) and the lore found
+  so far, in the order found, with its text. Unity has the
   same codex as `Codex` (plain C#) and a `VcgsCodex` screen to put next to
   `VcgsGame`; Unreal as `vcgs::Codex`, `GetCodexText` / `GetCodexNewCount` on
   the subsystem and an `AVcgsCodexHUD` to set as the game mode's HUD. C opens

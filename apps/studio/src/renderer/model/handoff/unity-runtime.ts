@@ -291,6 +291,8 @@ namespace VCGS
         public readonly List<string> KnownLore = new List<string>();
         /// <summary>Mechanics the player can use now.</summary>
         public readonly HashSet<string> Mechanics = new HashSet<string>();
+        /// <summary>The same mechanics, in the order they became available.</summary>
+        public readonly List<string> AvailableMechanics = new List<string>();
 
         /// <summary>Anything the story's conditions can see has changed.</summary>
         public event Action Changed;
@@ -312,7 +314,7 @@ namespace VCGS
         public void Reset()
         {
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); KnownLore.Clear(); Mechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -407,6 +409,7 @@ namespace VCGS
         public void EnableMechanic(string mechanic)
         {
             if (!Mechanics.Add(mechanic)) return;
+            AvailableMechanics.Add(mechanic);
             MechanicAvailable?.Invoke(mechanic);
             OnChanged();
         }
@@ -1026,8 +1029,8 @@ namespace VCGS
 {
     /// <summary>
     /// The codex as the player reads it: the quest log (quests under way with
-    /// their goals, then those done, in the order they started) and the lore
-    /// found, in the order found. New counts what has happened since the codex
+    /// their goals, then those done, in the order they started), the mechanics
+    /// available and the lore found, in the order found. New counts what has happened since the codex
     /// was last read (quests starting or completing, lore found), for a
     /// "new" badge. Plain C#: VcgsCodex draws it, or use it in your own UI.
     /// </summary>
@@ -1057,7 +1060,7 @@ namespace VCGS
 
         int Progress()
         {
-            var n = game.KnownLore.Count;
+            var n = game.KnownLore.Count + game.AvailableMechanics.Count;
             foreach (var state in game.Quests.Values) n += state == "done" ? 2 : 1;
             return n;
         }
@@ -1096,6 +1099,19 @@ namespace VCGS
                 foreach (var (name, goal) in active) log.Append("\n• " + name + (goal != "" ? " — " + goal : ""));
                 foreach (var name in done) log.Append("\n• " + name + " (done)");
                 parts.Add(log.ToString());
+            }
+            if (game.Story.Mechanics.Count > 0)
+            {
+                var mechanics = new StringBuilder("MECHANICS · " + game.AvailableMechanics.Count + " of " + game.Story.Mechanics.Count + " available");
+                if (game.AvailableMechanics.Count == 0) mechanics.Append("\nNone yet.");
+                foreach (var key in game.AvailableMechanics)
+                {
+                    game.Story.Mechanics.TryGetValue(key, out var m);
+                    var name = D.Str(m, "name");
+                    var controls = game.Story.MechanicDetail(key, "controls");
+                    mechanics.Append("\n\n" + (name == "" ? key : name).ToUpperInvariant() + (controls != "" ? "\nControls: " + controls : "") + "\n" + D.Str(m, "notes"));
+                }
+                parts.Add(mechanics.ToString());
             }
             if (game.Story.Lore.Count > 0)
             {

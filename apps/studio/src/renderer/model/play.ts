@@ -604,10 +604,13 @@ export interface Codex {
   underWay: { id: string; name: string; goal: string }[];
   /** Quests done, in the order they started. */
   done: { id: string; name: string }[];
+  /** Mechanics available, in the order they became available: how to use each. */
+  mechanics: { id: string; name: string; controls: string; text: string }[];
   /** Lore found, in the order found, with its text. */
   lore: { id: string; name: string; text: string }[];
-  /** How many quests and lore entries the project has (a section shows only when it has some). */
+  /** How many quests, mechanics and lore entries the project has (a section shows only when it has some). */
   quests: number;
+  mechanicsTotal: number;
   loreTotal: number;
 }
 
@@ -619,10 +622,14 @@ export const codexOf = (project: Project, world: PlayWorld): Codex => {
   return {
     underWay: quests.filter((id) => world.quests[id] !== 'done').map((id) => ({ id, name: name(project, id), goal: String(project.objects[id]!.data.goal ?? '') })),
     done: quests.filter((id) => world.quests[id] === 'done').map((id) => ({ id, name: name(project, id) })),
+    mechanics: Object.keys(world.mechanics)
+      .filter((id) => world.mechanics[id] && known(id))
+      .map((id) => ({ id, name: name(project, id), controls: String(project.objects[id]!.data.controls ?? ''), text: project.objects[id]!.notes })),
     lore: Object.keys(world.lore)
       .filter((id) => world.lore[id] && known(id))
       .map((id) => ({ id, name: name(project, id), text: project.objects[id]!.notes })),
     quests: all.filter((o) => o.type === 'quest').length,
+    mechanicsTotal: all.filter((o) => o.type === 'mechanic').length,
     loreTotal: all.filter((o) => o.type === 'lore').length,
   };
 };
@@ -638,6 +645,12 @@ export const codexText = (project: Project, world: PlayWorld): string => {
     for (const q of c.done) lines.push(`• ${q.name} (done)`);
     parts.push(lines.join('\n'));
   }
+  if (c.mechanicsTotal) {
+    let mechanics = `MECHANICS · ${c.mechanics.length} of ${c.mechanicsTotal} available`;
+    if (!c.mechanics.length) mechanics += '\nNone yet.';
+    for (const m of c.mechanics) mechanics += `\n\n${m.name.toUpperCase()}${m.controls ? `\nControls: ${m.controls}` : ''}\n${m.text}`;
+    parts.push(mechanics);
+  }
   if (c.loreTotal) {
     let lore = `LORE · ${c.lore.length} of ${c.loreTotal} found`;
     if (!c.lore.length) lore += '\nNothing found yet.';
@@ -647,9 +660,10 @@ export const codexText = (project: Project, world: PlayWorld): string => {
   return ['CODEX', ...parts].join('\n\n');
 };
 
-/** How far the codex has come (quests started, quests done, lore found), for counting what is new since it was read. */
+/** How far the codex has come (quests started and done, mechanics available, lore found), for counting what is new since it was read. */
 export const codexProgress = (world: PlayWorld): number =>
-  Object.keys(world.lore).filter((id) => world.lore[id]).length + Object.values(world.quests).reduce((n, q) => n + (q === 'done' ? 2 : 1), 0);
+  Object.keys(world.lore).filter((id) => world.lore[id]).length +
+  Object.keys(world.mechanics).filter((id) => world.mechanics[id]).length + Object.values(world.quests).reduce((n, q) => n + (q === 'done' ? 2 : 1), 0);
 
 // ---------------------------------------------------------------- for the level's play mode
 
