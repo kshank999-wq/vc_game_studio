@@ -333,6 +333,10 @@ int main()
         if (saving.Loaded) Fail("starting the scene should end the load");
     }
 
+    // Custom code in VcgsStoryKeys.h's region was kept when the story was exported again.
+    if (std::string(VcgsKeys::CustomCheck) != "kept") Fail("custom code in VcgsStoryKeys.h should survive exporting again");
+    else std::printf("custom code: %s\n", VcgsKeys::CustomCheck);
+
     CheckLevel(story);
 
     std::printf("%s\n", failures == 0 ? "OK" : (std::to_string(failures) + " FAILED").c_str());

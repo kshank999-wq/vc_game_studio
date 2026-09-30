@@ -8,6 +8,7 @@ import { unreal } from './unreal';
 import { buildIR } from './ir';
 import { levelChanges, type IrLevel, type LevelChanges } from './levels';
 import { levelIssues } from '../level/validate';
+import { fileHash } from './review';
 
 /**
  * Every engine VC Game Studio hands off to: Godot, Unity, Unreal, and plain
@@ -112,7 +113,8 @@ export const engineEdits = (handoff: Handoff, last: ExportRecord | undefined, on
     .filter((f) => {
       const was = last.fileHashes![f.path];
       const now = onDisk[f.path];
-      return was !== undefined && typeof now === 'string' && fingerprint(now) !== was && now !== f.content;
+      // Edits inside the custom regions are the person's own: only the rest counts.
+      return was !== undefined && typeof now === 'string' && fingerprint(now) !== was && fileHash(now) !== was && fileHash(now) !== fileHash(f.content);
     })
     .map((f) => f.path);
 };
@@ -132,10 +134,12 @@ export const recordExport = (project: Project, handoff: Handoff, at = new Date()
     files: handoff.output.files.length,
     levelItems: Object.fromEntries(handoff.levels.flatMap((l) => l.items.map((i) => [i.guid, i.revision]))),
     fileHashes: Object.fromEntries(
-      handoff.output.files.filter((f) => f.kind === 'generated').map((f) => [f.path, kept.includes(f.path) && before[f.path] ? before[f.path]! : fingerprint(f.content)]),
+      handoff.output.files.filter((f) => f.kind === 'generated').map((f) => [f.path, kept.includes(f.path) && before[f.path] ? before[f.path]! : fileHash(f.content)]),
     ),
   };
   return { ...project, handoff: { target: handoff.target, last } };
 };
 
 export type { EngineAdapter, ElementOutput, EngineOutput } from './engines';
+export { reviewSend, lineDiff, hunksOf, type SendReview, type SendFile, type DiffLine } from './review';
+export { customRegion, keepCustom, customCode, withoutCustom } from './custom';

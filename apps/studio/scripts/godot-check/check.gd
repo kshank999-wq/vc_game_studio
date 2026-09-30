@@ -477,6 +477,13 @@ func _initialize() -> void:
 	game.loaded = false
 	silt.queue_free()
 
+	# Custom code in a generated script's region was kept when the story was exported again.
+	var graph_script: GDScript = load("res://vcgs/generated/story/story_graph.gd")
+	if not graph_script.has_method("custom_check") or graph_script.custom_check() != "kept":
+		fail("custom code in the story graph's region should survive exporting again")
+	else:
+		print("custom code: ", graph_script.custom_check())
+
 	check_level(game)
 
 	print("OK" if failures == 0 else str(failures) + " FAILED")

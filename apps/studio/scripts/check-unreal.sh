@@ -13,6 +13,15 @@ here="$(cd "$(dirname "$0")" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$work" unreal > /dev/null)
+# Custom code written in Unreal survives exporting again: a key of its own in VcgsStoryKeys.h's region.
+python3 - "$work/Plugins/VCGS/Source/VCGS/Public/Generated/VcgsStoryKeys.h" <<'PY'
+import sys
+path = sys.argv[1]
+text = open(path).read()
+text = text.replace("    // BEGIN CUSTOM: code\n", "    // BEGIN CUSTOM: code\n    inline constexpr const char* CustomCheck = \"kept\";\n", 1)
+open(path, "w").write(text)
+PY
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$work" unreal > /dev/null)
 cxx="${CXX:-g++}"
 flags=(-std=c++17 -Wall -Wextra -Werror -fno-exceptions -fno-rtti)
 public="$work/Plugins/VCGS/Source/VCGS/Public"

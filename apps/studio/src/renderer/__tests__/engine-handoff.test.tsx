@@ -89,4 +89,73 @@ describe('sending levels to the engine', () => {
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
+
+  it('keeps custom code written in a generated script', async () => {
+    const { project, disk } = sent();
+    const rules = Object.keys(disk).find((p) => p.endsWith('logic/rules.gd'))!;
+    disk[rules] = disk[rules]!.replace('# BEGIN CUSTOM: code\n', '# BEGIN CUSTOM: code\nstatic func mine() -> int:\n\treturn 7\n');
+    const writes = fakeDesktop(disk);
+    const says: string[] = [];
+    show(project, () => {}, says);
+    fireEvent.click(screen.getByText('SEND TO GODOT'));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    // Nothing else changed, so there was nothing to review.
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(disk[rules]).toContain('# BEGIN CUSTOM: code\nstatic func mine() -> int:\n\treturn 7\n# END CUSTOM: code');
+    expect(says.at(-1)).toContain('Kept your custom code in 1 place.');
+  });
+
+  it('reviews what changes before writing over an earlier export, with each file’s diff', async () => {
+    const { project, disk, tscn } = sent();
+    const items = planHandoff(project).levels[0]!.items;
+    const item = items.find((i) => !i.host && !items.some((o) => o.host?.guid === i.guid) && i.kind !== 'volume')!;
+    const moved = moveItems(project, [item.guid], 1, 0);
+    const writes = fakeDesktop(disk);
+    show(moved, () => {}, []);
+    fireEvent.click(screen.getByText('SEND TO GODOT'));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Review before sending' });
+    expect(writes).toHaveLength(0);
+    expect(dialog.textContent).toMatch(/\d+ of \d+ files in \/game change/);
+    const row = screen.getByRole('button', { name: new RegExp(tscn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) });
+    expect(row.textContent).toMatch(/\+\d+ −\d+/);
+    fireEvent.click(row);
+    const diff = screen.getByLabelText(`Changes to ${tscn}`);
+    expect(diff.querySelector('.review-line.add')).toBeTruthy();
+    expect(diff.querySelector('.review-line.del')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Send \d+ files?$/ }));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(disk[tscn]).toBe(planHandoff(moved).output!.files.find((f) => f.path === tscn)!.content);
+  });
+
+  it('sends to a folder in the browser, where it may use one', async () => {
+    const { project, disk } = sent();
+    // A folder handle over the in-memory disk, as the File System Access API gives.
+    const dir = (prefix: string): unknown => ({
+      name: prefix ? prefix.split('/').at(-2) : 'game',
+      getDirectoryHandle: async (name: string) => dir(`${prefix}${name}/`),
+      getFileHandle: async (name: string, options?: { create?: boolean }) => {
+        const path = `${prefix}${name}`;
+        if (!(path in disk) && !options?.create) throw new Error('NotFoundError');
+        return {
+          getFile: async () => new File([disk[path] ?? ''], name),
+          createWritable: async () => ({ write: async (t: string) => void (disk[path] = t), close: async () => {} }),
+        };
+      },
+    });
+    (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker = async () => dir('');
+    const rules = Object.keys(disk).find((p) => p.endsWith('logic/rules.gd'))!;
+    disk[rules] = disk[rules]!.replace('# BEGIN CUSTOM: code\n', '# BEGIN CUSTOM: code\nvar mine := 1\n');
+    const says: string[] = [];
+    try {
+      show(project, () => {}, says);
+      expect(screen.getByText('DOWNLOAD FOR GODOT')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
+      await screen.findByText('game/');
+      fireEvent.click(screen.getByText('SEND TO GODOT'));
+      await waitFor(() => expect(says.at(-1)).toMatch(/^Sent \d+ files to game\. Kept your custom code in 1 place\.$/));
+      expect(disk[rules]).toContain('var mine := 1');
+    } finally {
+      delete (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker;
+    }
+  });
 });

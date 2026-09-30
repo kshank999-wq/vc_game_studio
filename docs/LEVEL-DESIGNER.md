@@ -241,10 +241,13 @@ anything else you added in the engine:
 - **Removed items** are listed and left in place, for you to delete.
 - Items whose revision hasn't changed are skipped.
 
-**Files changed in the engine.** Before sending to a folder, the desktop app
-checks the files it wrote last time. If one was changed since, it asks
-whether to overwrite it or keep the engine's version; nothing is replaced
-silently. If you keep a file, it is pointed out again next time.
+**Files changed in the engine.** Before sending to a folder, the studio
+reads what is there and shows a review of each file that would change, with
+its diff. A file changed in the engine since the last export (outside its
+custom code region: see ENGINE-ADAPTERS.md) is flagged, and you choose to
+overwrite it or keep the engine's version; nothing is replaced silently. If
+you keep a file, it is pointed out again next time. Code in a generated
+script's custom region is always kept.
 
 ## The sample
 

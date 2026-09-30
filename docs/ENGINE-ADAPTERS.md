@@ -5,7 +5,50 @@ is the first; Unity 6, Unreal Engine 5 and a custom JSON engine are registered
 and shown as "coming later" on the handoff screen.
 
 Code is generated from the story and is never the source of truth (HANDOFF):
-every export rewrites the generated folder, and nobody edits it by hand.
+every export rewrites the generated folder. The one exception is each
+generated script's **custom code** region (below): code written there is
+the person's own, and survives every export.
+
+## Custom code, and the review before sending
+
+Each generated script ends with a region of its own, between two marker
+lines under a note:
+
+```gdscript
+# Your own code goes between these two lines: VC Game Studio keeps it when it exports again.
+# BEGIN CUSTOM: code
+static func my_helper() -> int:
+	return 7
+# END CUSTOM: code
+```
+
+- **Godot:** every generated `.gd` (scene flows, choices, the story graph,
+  the dialogue table, objects, rules, levels), at the end of the class: add
+  variables, functions, or overrides of the runtime's hooks.
+- **Unity:** `StoryKeys.cs`, inside `VCGS.Keys`; its key classes are
+  `partial`, so they can also be extended from a file of your own.
+- **Unreal:** `VcgsStoryKeys.h`, inside `VcgsKeys`; and the end of
+  `import_datatables.py` and `build_level.py`, run after the script.
+
+Exporting again writes each file afresh with the region's code carried over
+from the file already there (matched by the region's name). Code from a
+region the new file no longer has goes into its first region, marked; a file
+with no region at all can't take it, and the review says so. The markers use
+`#` or `//`, whatever the language comments with.
+
+**The review.** Sending to a folder that already holds an export (the desktop
+app's project folder, or a folder picked in a browser that allows it, such as
+Chrome or Edge) first reads what is there. When anything there would change,
+a review lists each file that changes (new, or its lines added and removed),
+whether its custom code is kept, and a diff of any file clicked; nothing is
+written until **Send**. A generated file changed in the engine *outside* its
+custom region since the last export is flagged in the review: keep the
+engine's version (it is left alone, and pointed out again next time) or
+overwrite it. Edits inside the regions never count as changes. The checks
+test this in each engine: `check-godot.sh`, `check-unity.sh` and
+`check-unreal.sh` export, write custom code into a region (a function in
+Godot, a key in a partial class in Unity, a constant in Unreal), export
+again over it, and use that code.
 
 ## How it fits together
 

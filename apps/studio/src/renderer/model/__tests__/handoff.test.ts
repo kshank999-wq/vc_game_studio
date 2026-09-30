@@ -350,7 +350,7 @@ describe('design definitions: lore, quests, mechanics and encounters', () => {
     expect(file(outputs.unity, 'Assets/VCGS/Runtime/VcgsLore.cs')).toContain('public sealed class VcgsLore : VcgsElement');
     expect(file(outputs.unity, 'Assets/VCGS/Generated/Lore/the_drowned_order.asset')).toContain('code: "LORE-01"');
     expect(file(outputs.unity, 'Assets/VCGS/Generated/Lore/the_drowned_order.asset.meta')).toBeDefined();
-    expect(file(outputs.unity, 'Assets/VCGS/Generated/StoryKeys.cs')).toContain('public static class Mechanics');
+    expect(file(outputs.unity, 'Assets/VCGS/Generated/StoryKeys.cs')).toContain('public static partial class Mechanics');
 
     // Unreal: a DataTable CSV each, imported by the script, and keys.
     expect(file(outputs.unreal, 'Content/VCGS/Generated/DataTables/Mechanics.csv')!.split('\n').slice(1, 3).join('\n')).toBe('lantern_oil,lantern_oil,MEC-01,Lantern oil,The lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.,"controls: Hold to raise the lantern\ntuning: About a minute of deep water on a full lantern"');

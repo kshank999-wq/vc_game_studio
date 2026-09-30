@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Destination } from '../../model/details';
-import { engineEdits, ENGINES, planHandoff, recordExport, setTarget, type Row } from '../../model/handoff';
+import { ENGINES, hunksOf, lineDiff, planHandoff, recordExport, reviewSend, setTarget, type Row, type SendFile, type SendReview } from '../../model/handoff';
 import { levelsOf } from '../../model/level/level';
 import type { OutputGroup } from '../../model/handoff/engines';
 import { zip } from '../../model/handoff/zip';
 import type { Project } from '../../model/types';
 import { desktop } from '../../desktop';
+import { canPickFolder, pickBrowserFolder, type FolderAccess } from '../../folder-access';
 import { isPreview, PURCHASE_URL } from '../../edition';
 import { useNav } from '../../nav';
 import { Symbol } from '../Symbol';
@@ -22,6 +23,39 @@ interface Props {
 
 const GROUPS: OutputGroup[] = ['Story', 'People + words', 'World', 'Logic'];
 const STATUS_LABEL = { ready: 'Ready', changed: 'Changed', issue: 'Issue' } as const;
+
+/** Where an export goes: the desktop app's folder, or one the browser may write to. */
+interface SendTarget {
+  label: string;
+  read: (paths: readonly string[]) => Promise<Record<string, string | null>>;
+  write: (files: readonly { path: string; content: string }[]) => Promise<number>;
+  /** The desktop folder's path, to remember as the project folder. */
+  folder?: string;
+  /** Whether the last export's record describes this folder (to notice edits made in the engine). */
+  sameAsLast: boolean;
+}
+
+/** A file's changes, a few lines around each. */
+const DiffView = ({ file }: { file: SendFile }) => {
+  const hunks = hunksOf(lineDiff(file.before ?? '', file.content));
+  return (
+    <div className="review-diff" aria-label={`Changes to ${file.path}`}>
+      {hunks.length === 0 && <p className="handoff-note">No changes.</p>}
+      {hunks.map((h, n) => (
+        <pre key={n} className="review-hunk">
+          <span className="review-at">Line {h.at}</span>
+          {h.lines.map((l, i) => (
+            <span key={i} className={`review-line ${l.kind}`}>
+              {l.kind === 'add' ? '+ ' : l.kind === 'del' ? '− ' : '  '}
+              {l.text}
+              {'\n'}
+            </span>
+          ))}
+        </pre>
+      ))}
+    </div>
+  );
+};
 
 const saveZip = (name: string, files: { path: string; content: string }[]) => {
   const blob = new Blob([zip(files)], { type: 'application/zip' });
@@ -49,7 +83,10 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
   const [codeHidden, setCodeHidden] = useState(false);
   const [folderState, setFolderState] = useState<{ exists: boolean; engineProject: boolean; unity?: boolean; unreal?: boolean } | null>(null);
   const [sending, setSending] = useState(false);
-  const [conflict, setConflict] = useState<{ folder: string; paths: string[] } | null>(null);
+  // The review before writing over an earlier export (spec §13), and the file whose changes are shown.
+  const [review, setReview] = useState<{ dest: SendTarget; review: SendReview; open: string | null } | null>(null);
+  // A folder the browser may write to, once picked (for this visit).
+  const [browserFolder, setBrowserFolder] = useState<FolderAccess | null>(null);
   const nav = useNav();
   const { adapter, target, output } = plan;
 
@@ -82,12 +119,32 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
     if (folder) onReplace(setTarget(project, { projectFolder: folder }));
   };
 
-  /** Write to the folder; files the engine changed and the person chose to keep are left out. */
-  const write = async (folder: string, kept: string[]) => {
-    const files = output!.files.filter((f) => !kept.includes(f.path));
-    const result = await bridge!.writeFiles(folder, files);
-    onReplace(recordExport(setTarget(project, { projectFolder: folder }), plan, undefined, kept));
-    onSay(`Sent ${result.written} files to ${folder}.${kept.length ? ` Left ${kept.length} as ${engineName} had ${kept.length === 1 ? 'it' : 'them'}.` : ''}`);
+  const desktopDest = (folder: string): SendTarget => ({
+    label: folder,
+    folder,
+    read: async (paths) => (bridge?.readFiles ? bridge.readFiles(folder, [...paths]) : {}),
+    write: async (files) => (await bridge!.writeFiles(folder, [...files])).written,
+    sameAsLast: folder === target.projectFolder,
+  });
+
+  /** Write what the review says: each file with the custom code carried over; files changed in the engine that the person keeps are left out. */
+  const writeReviewed = async (dest: SendTarget, r: SendReview, keepEdited: boolean) => {
+    const kept = keepEdited ? r.edited : [];
+    const written = await dest.write(r.files.filter((f) => !kept.includes(f.path)).map((f) => ({ path: f.path, content: f.content })));
+    onReplace(recordExport(dest.folder ? setTarget(project, { projectFolder: dest.folder }) : project, plan, undefined, kept));
+    const custom = r.kept ? ` Kept your custom code in ${r.kept} ${r.kept === 1 ? 'place' : 'places'}.` : '';
+    onSay(`Sent ${written} files to ${dest.label}.${kept.length ? ` Left ${kept.length} as ${engineName} had ${kept.length === 1 ? 'it' : 'them'}.` : ''}${custom}`);
+  };
+
+  /** Look at what is there first: writing over an earlier export is reviewed, and never replaces custom code or engine edits silently. */
+  const sendTo = async (dest: SendTarget) => {
+    const onDisk = await dest.read(output!.files.map((f) => f.path));
+    const r = reviewSend(output!.files, onDisk, dest.sameAsLast ? last : undefined);
+    if (r.files.some((f) => f.status === 'changed') || r.edited.length || r.lost.length) {
+      setReview({ dest, review: r, open: r.files.find((f) => f.edited)?.path ?? null });
+      return;
+    }
+    await writeReviewed(dest, r, false);
   };
 
   const send = async () => {
@@ -100,16 +157,9 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           folder = (await bridge.pickFolder()) ?? '';
           if (!folder) return;
         }
-        // Generated files edited in the engine since the last export are never overwritten silently (spec §11.4).
-        if (bridge.readFiles && last?.fileHashes && folder === target.projectFolder) {
-          const onDisk = await bridge.readFiles(folder, Object.keys(last.fileHashes));
-          const edited = engineEdits(plan, last, onDisk);
-          if (edited.length) {
-            setConflict({ folder, paths: edited });
-            return;
-          }
-        }
-        await write(folder, []);
+        await sendTo(desktopDest(folder));
+      } else if (browserFolder) {
+        await sendTo({ label: browserFolder.name, read: browserFolder.read, write: browserFolder.write, sameAsLast: true });
       } else {
         saveZip(`${plan.adapter.id}-${project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, output.files);
         onReplace(recordExport(project, plan));
@@ -122,13 +172,13 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
     }
   };
 
-  const resolve = async (keep: boolean) => {
-    if (!conflict) return;
-    const { folder, paths } = conflict;
-    setConflict(null);
+  const confirm = async (keepEdited: boolean) => {
+    if (!review) return;
+    const { dest, review: r } = review;
+    setReview(null);
     setSending(true);
     try {
-      await write(folder, keep ? paths : []);
+      await writeReviewed(dest, r, keepEdited);
     } catch (error) {
       onSay(error instanceof Error ? error.message : 'Sending failed.');
     } finally {
@@ -180,6 +230,15 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
                 {target.projectFolder ? target.projectFolder.split(/[\\/]/).filter(Boolean).pop() + '/' : 'Not chosen'}
               </span>
               <button className="tb-btn small" onClick={pickFolder}>
+                Choose…
+              </button>
+            </span>
+          ) : canPickFolder() ? (
+            <span className="kv-value">
+              <span className="mono folder" title={browserFolder ? browserFolder.name : 'Downloads as a .zip, or choose a folder to send to'}>
+                {browserFolder ? `${browserFolder.name}/` : 'A .zip download'}
+              </span>
+              <button className="tb-btn small" onClick={() => void pickBrowserFolder().then((f) => f && setBrowserFolder(f))}>
                 Choose…
               </button>
             </span>
@@ -303,7 +362,7 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           </a>
         ) : (
           <button className="send-btn" disabled={!output || plan.blocking.length > 0 || sending} onClick={() => void send()}>
-            {sending ? 'SENDING…' : bridge ? `SEND TO ${engineName.toUpperCase()}` : `DOWNLOAD FOR ${engineName.toUpperCase()}`}
+            {sending ? 'SENDING…' : bridge || browserFolder ? `SEND TO ${engineName.toUpperCase()}` : `DOWNLOAD FOR ${engineName.toUpperCase()}`}
           </button>
         )}
         <p className="handoff-note center">
@@ -393,7 +452,7 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
             {file?.content}
           </pre>
           <p className="code-foot">
-            You never have to touch this. Change {row?.label ?? 'the element'} in the story and the code regenerates on the next export.
+            You never have to touch this. Change {row?.label ?? 'the element'} in the story and the code regenerates on the next export; code of your own between its BEGIN CUSTOM and END CUSTOM lines is kept.
           </p>
         </aside>
       )}
@@ -402,40 +461,81 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           &lt;/&gt; Code
         </button>
       )}
-      {conflict && (
-        <div className="dialog-backdrop" onPointerDown={() => setConflict(null)}>
-          <div className="dialog" role="alertdialog" aria-modal="true" aria-label={`Changed in ${engineName}`} onPointerDown={(e) => e.stopPropagation()}>
-            <div className="dialog-head">
-              <h2>Changed in {engineName}</h2>
-              <button className="icon-btn small" aria-label="Close" onClick={() => setConflict(null)}>
-                ×
-              </button>
-            </div>
-            <p className="dialog-text">
-              {conflict.paths.length === 1 ? 'This file was' : `These ${conflict.paths.length} files were`} changed in {engineName} since the last export. VC Game Studio
-              makes {conflict.paths.length === 1 ? 'it' : 'them'}, so sending would replace the changes.
-            </p>
-            <ul className="dialog-list mono">
-              {conflict.paths.slice(0, 8).map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-              {conflict.paths.length > 8 && <li>and {conflict.paths.length - 8} more</li>}
-            </ul>
-            <div className="dialog-actions">
-              <button className="tb-btn" onClick={() => setConflict(null)}>
-                Cancel
-              </button>
-              <div className="grow" />
-              <button className="tb-btn" onClick={() => void resolve(true)}>
-                Keep {engineName}’s version
-              </button>
-              <button className="tb-btn primary" onClick={() => void resolve(false)}>
-                Overwrite them
-              </button>
+      {review && (() => {
+        const r = review.review;
+        const shown = r.files.filter((f) => f.status !== 'same');
+        const added = shown.filter((f) => f.status === 'new').length;
+        const openFile = r.files.find((f) => f.path === review.open);
+        return (
+          <div className="dialog-backdrop" onPointerDown={() => setReview(null)}>
+            <div className="dialog handoff-review" role="alertdialog" aria-modal="true" aria-label="Review before sending" onPointerDown={(e) => e.stopPropagation()}>
+              <div className="dialog-head">
+                <h2>Review before sending</h2>
+                <button className="icon-btn small" aria-label="Close" onClick={() => setReview(null)}>
+                  ×
+                </button>
+              </div>
+              <p className="dialog-text">
+                {shown.length} of {r.files.length} files in {review.dest.label} change{added ? ` (${added} new)` : ''}.
+                {r.kept ? ` Your custom code is kept in ${r.kept} ${r.kept === 1 ? 'place' : 'places'}.` : ' Code between BEGIN CUSTOM and END CUSTOM lines is kept on every export.'}
+              </p>
+              {r.edited.length > 0 && (
+                <div className="handoff-issue">
+                  <span className="issue-badge static">!</span>
+                  <span>
+                    {r.edited.length === 1 ? 'This file was' : `These ${r.edited.length} files were`} changed in {engineName} outside the custom code since the last export. VC Game Studio makes{' '}
+                    {r.edited.length === 1 ? 'it' : 'them'}, so sending would replace the changes. Keep {engineName}’s version, or overwrite{' '}
+                    {r.edited.length === 1 ? 'it' : 'them'}.
+                  </span>
+                </div>
+              )}
+              {r.lost.length > 0 && (
+                <div className="handoff-issue">
+                  <span className="issue-badge static">!</span>
+                  <span>Custom code in {r.lost.join(', ')} has nowhere to go in the new file. Copy it out before sending.</span>
+                </div>
+              )}
+              <ul className="review-files" aria-label="Files that change">
+                {shown.map((f) => (
+                  <li key={f.path}>
+                    <button className={`review-file${review.open === f.path ? ' on' : ''}`} onClick={() => setReview({ ...review, open: review.open === f.path ? null : f.path })} aria-expanded={review.open === f.path}>
+                      <span className="mono">{f.path}</span>
+                      <span className="review-counts">
+                        {f.status === 'new' ? <span className="st ok">new</span> : <>
+                          <span className="review-add">+{f.added}</span> <span className="review-del">−{f.removed}</span>
+                        </>}
+                        {f.kept.length > 0 && <span className="st ok">custom code kept</span>}
+                        {f.edited && <span className="st err">changed in {engineName}</span>}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {openFile && openFile.status !== 'new' && <DiffView file={openFile} />}
+              <div className="dialog-actions">
+                <button className="tb-btn" onClick={() => setReview(null)}>
+                  Cancel
+                </button>
+                <div className="grow" />
+                {r.edited.length > 0 ? (
+                  <>
+                    <button className="tb-btn" onClick={() => void confirm(true)}>
+                      Keep {engineName}’s version
+                    </button>
+                    <button className="tb-btn primary" onClick={() => void confirm(false)}>
+                      Overwrite them
+                    </button>
+                  </>
+                ) : (
+                  <button className="tb-btn primary" onClick={() => void confirm(false)}>
+                    Send {shown.length} {shown.length === 1 ? 'file' : 'files'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

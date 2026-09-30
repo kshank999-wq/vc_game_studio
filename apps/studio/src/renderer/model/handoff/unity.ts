@@ -1,3 +1,4 @@
+import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
 import { DESIGN_LISTS, type HandoffIR, type IrThing, type Ident } from './ir';
@@ -83,7 +84,7 @@ const keyClass = (name: string, summary: string, list: { ident: Ident }[]): stri
   list.length
     ? [
         `    /// <summary>${summary}</summary>`,
-        `    public static class ${name}`,
+        `    public static partial class ${name}`,
         '    {',
         ...list.map((x) => `        public const string ${x.ident.type} = ${JSON.stringify(x.ident.key)};`),
         '    }',
@@ -109,6 +110,7 @@ const storyKeys = (ir: HandoffIR): string =>
     ...keyClass('Flags', 'States the game remembers (GameState.GetFlag / SetFlag).', ir.flags),
     ...keyClass('Triggers', 'Triggers (Rules.Fire).', ir.triggers.filter((t) => t.kind === 'trigger')),
     ...keyClass('Gates', 'Gates (Rules.GateOpen).', ir.triggers.filter((t) => t.kind === 'gate')),
+    ...customRegion('//', 'code', '    ', 'Your own keys and helpers (or a partial class of your own in another file)'),
     '}',
     '',
   ].join('\n');

@@ -234,6 +234,10 @@ static class Check
         new ScenePlayer(saving, Scenes.Sc03TheVaultDoor).Start();
         if (saving.Loaded) Fail("starting the scene should end the load");
 
+        // Custom code in StoryKeys.cs's region was kept when the story was exported again.
+        if (!string.Equals(Scenes.Custom, "kept")) Fail("custom keys in StoryKeys.cs should survive exporting again");
+        else Console.WriteLine("custom code: " + Scenes.Custom);
+
         CheckLevel(story);
 
         Console.WriteLine(failures == 0 ? "OK" : failures + " FAILED");

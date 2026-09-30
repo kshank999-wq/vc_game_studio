@@ -1,3 +1,4 @@
+import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GenerateOptions, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
 import { DESIGN_LISTS, type HandoffIR, type IrEvent, type IrThing } from './ir';
@@ -968,7 +969,9 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
   const files: GeneratedFile[] = [...runtime(), ...sceneRuntime(), ...(ir.levels.length ? levelRuntime() : [])];
   const elements: ElementOutput[] = [];
   const add = (path: string, content: string) => {
-    files.push({ path: `${root}/${path}`, content: content.endsWith('\n') ? content : `${content}\n`, kind: 'generated' });
+    const text = content.endsWith('\n') ? content : `${content}\n`;
+    // Every generated script ends with a region of the person's own: exporting again keeps it (spec §13).
+    files.push({ path: `${root}/${path}`, content: path.endsWith('.gd') ? `${text}\n${customRegion('#').join('\n')}\n` : text, kind: 'generated' });
     return `${root}/${path}`;
   };
   const row = (e: Omit<ElementOutput, 'fingerprint'>, data: unknown) =>

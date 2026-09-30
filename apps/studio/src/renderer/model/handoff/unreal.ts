@@ -1,3 +1,4 @@
+import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
 import { DESIGN_LISTS, type HandoffIR, type Ident } from './ir';
@@ -1243,6 +1244,7 @@ export const storyKeysHeader = (ir: HandoffIR): string =>
     ...keySection('Flags', 'States the game remembers.', ir.flags),
     ...keySection('Triggers', 'Triggers.', ir.triggers.filter((t) => t.kind === 'trigger')),
     ...keySection('Gates', 'Gates.', ir.triggers.filter((t) => t.kind === 'gate')),
+    ...customRegion('//', 'code', '    ', 'Your own keys and helpers'),
     '}',
     '',
   ].join('\n');
@@ -1374,7 +1376,9 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
   const root = outputPath.replace(/\/+$/, '') || 'Content/VCGS/Generated';
   const files: GeneratedFile[] = [];
   const put = (path: string, content: string, kind: GeneratedFile['kind']) => {
-    files.push({ path, content: content.endsWith('\n') ? content : `${content}\n`, kind });
+    const text = content.endsWith('\n') ? content : `${content}\n`;
+    // A generated Python script ends with a region of the person's own: exporting again keeps it (spec §13).
+    files.push({ path, content: kind === 'generated' && path.endsWith('.py') ? `${text}\n${customRegion('#', 'code', '', 'Your own steps, run after the script').join('\n')}\n` : text, kind });
     return path;
   };
   for (const [name, content] of Object.entries(PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
