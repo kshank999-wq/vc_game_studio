@@ -7,6 +7,8 @@ import { lazy, Suspense, useState } from 'react';
 const SkillProgression = lazy(() => import('./SkillProgression').then((m) => ({ default: m.SkillProgression })));
 /** An item as a weapon, tool or something worn: loaded when an item is shown. */
 const EquipmentEditor = lazy(() => import('./EquipmentEditor').then((m) => ({ default: m.EquipmentEditor })));
+/** An item's recipe: loaded when an item is shown. */
+const RecipeEditor = lazy(() => import('./RecipeEditor').then((m) => ({ default: m.RecipeEditor })));
 
 import {
   FIELDS,
@@ -300,6 +302,14 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
         <section className="detail-section">
           <Suspense fallback={null}>
             <EquipmentEditor object={object} project={project} onCommit={onCommit} />
+          </Suspense>
+        </section>
+      )}
+
+      {object.type === 'inventory' && (
+        <section className="detail-section">
+          <Suspense fallback={null}>
+            <RecipeEditor object={object} project={project} onCommit={onCommit} />
           </Suspense>
         </section>
       )}

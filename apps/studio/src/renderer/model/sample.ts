@@ -241,6 +241,8 @@ export const sunkenVault = (): Project => {
   const knife = gearItem('Diving Knife', 'ITM-03', 'Mara’s spare, notched from the rocks.', { slot: 'Hand', stats: [{ name: 'Damage', value: 2 }], ammoPerUse: 1, durability: 3 });
   const pistol = gearItem('Flare Pistol', 'ITM-04', 'An old signal pistol from the last expedition.', { slot: 'Hand', stats: [{ name: 'Damage', value: 1 }, { name: 'Light', value: 3 }], ammo: flare, ammoPerUse: 1, durability: 0 });
   p = updateEvent(p, caveMouth, lit.id, { effects: [{ kind: 'enableMechanic', ref: design.mechanic! }, { kind: 'give', ref: knife }] });
+  // Crafting (spec §8): with the pistol in hand, a scrap of salvage packs two more flares.
+  p = setValue(p, flare, 'recipe', { ingredients: [{ item: salvage.id, amount: 1 }], makes: 2, rule: { match: 'all', items: [{ kind: 'item', ref: pistol, op: 'has' }] } });
   p = setValue(p, design.encounter!, 'effects', [
     { kind: 'give', ref: salvage.id },
     { kind: 'give', ref: salvage.id },

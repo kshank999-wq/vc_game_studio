@@ -26,4 +26,12 @@ describe('equipment in the play-through', () => {
     ]);
     expect(within(gear).getByText('No equipment carried.')).toBeTruthy();
   });
+
+  it('lists the recipes, with what is in the way', () => {
+    render(<PlayView project={sunkenVault()} onNavigate={() => {}} />);
+    const crafting = screen.getByRole('region', { name: 'Crafting' });
+    expect(within(crafting).getByText('1 × Salvage → 2 × Flare')).toBeTruthy();
+    expect((within(crafting).getByRole('button', { name: 'Craft Flare' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(crafting).getByText('Needs Flare Pistol is carried.')).toBeTruthy();
+  });
 });

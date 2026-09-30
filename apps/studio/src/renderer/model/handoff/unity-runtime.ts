@@ -209,6 +209,8 @@ namespace VCGS
         public readonly Dictionary<string, Dictionary<string, object>> Encounters = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Lore = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Mechanics = new Dictionary<string, Dictionary<string, object>>();
+        /// <summary>Items that can be crafted, by item key: name, makes, ingredients, when (and whenText).</summary>
+        public readonly Dictionary<string, Dictionary<string, object>> Recipes = new Dictionary<string, Dictionary<string, object>>();
         /// <summary>Items that can be equipped, by item key: name, slot, stats, ammo, ammoPerUse, durability.</summary>
         public readonly Dictionary<string, Dictionary<string, object>> Equipment = new Dictionary<string, Dictionary<string, object>>();
         /// <summary>Skills, abilities and upgrades, by key: ranks, cost, requires, learnWhen (and learnWhenText), onLearn.</summary>
@@ -243,6 +245,7 @@ namespace VCGS
             Index(root, "mechanics", Mechanics);
             Index(root, "skills", Skills);
             foreach (var e in D.List(root, "equipment")) { var d = D.Map(e); Equipment[D.Str(d, "item")] = d; }
+            foreach (var e in D.List(root, "recipes")) { var d = D.Map(e); Recipes[D.Str(d, "item")] = d; }
             Index(root, "items", ItemDefs);
             Index(root, "locations", LocationDefs);
             foreach (var l in D.List(root, "lines"))
@@ -355,6 +358,8 @@ namespace VCGS
         public event Action<string, string> ItemEquipped, ItemUnequipped;
         /// <summary>An item of equipment was used, or broke.</summary>
         public event Action<string> ItemUsed, ItemBroke;
+        /// <summary>Something was crafted: its key and how many were made.</summary>
+        public event Action<string, int> ItemCrafted;
         public event Action<string> EncounterMet;
         public event Action<string> EncounterWon;
         public event Action<string> CharacterMet;
@@ -505,6 +510,34 @@ namespace VCGS
                 TakeItem(item);
             }
             else OnChanged();
+            return "";
+        }
+
+        /// <summary>Why an item can't be crafted now, or "" when it can: no recipe, its conditions, or the first ingredient short.</summary>
+        public string CraftCheck(string item)
+        {
+            if (!Story.Recipes.TryGetValue(item ?? "", out var r)) return "Not craftable.";
+            if (D.Get(r, "when") != null && !Rules.Check(D.Get(r, "when"), this)) return "Needs " + D.Str(r, "whenText") + ".";
+            foreach (var i in D.List(r, "ingredients"))
+            {
+                var ing = D.Map(i);
+                var have = Items.TryGetValue(D.Str(ing, "item"), out var n) ? n : 0;
+                var amount = (int)D.Num(ing, "amount", 1);
+                if (have < amount) return "Needs " + amount + " × " + D.Str(ing, "name") + " (you have " + have + ").";
+            }
+            return "";
+        }
+
+        /// <summary>Craft an item: its ingredients used up, what it makes given. Returns why not ("" when crafted).</summary>
+        public string Craft(string item)
+        {
+            var why = CraftCheck(item);
+            if (why != "") return why;
+            var r = Story.Recipes[item];
+            foreach (var i in D.List(r, "ingredients")) TakeItem(D.Str(D.Map(i), "item"), (int)D.Num(D.Map(i), "amount", 1));
+            var makes = (int)D.Num(r, "makes", 1);
+            GiveItem(item, makes);
+            ItemCrafted?.Invoke(item, makes);
             return "";
         }
 

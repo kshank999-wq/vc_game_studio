@@ -1,3 +1,4 @@
+import { recipeOf } from '../crafting';
 import { equipmentOf } from '../equipment';
 import { costOf, ranksOf, requiresOf } from '../skills';
 import { describeTarget, whoLabel, type Who } from '../collab';
@@ -193,6 +194,19 @@ export interface IrEquipment {
   durability: number;
 }
 
+/**
+ * A recipe: crafting `item` needs `when` to hold (in words, `whenText`) and
+ * `amount` of each ingredient carried; it uses them up and gives `makes` of it.
+ */
+export interface IrRecipe {
+  item: string;
+  name: string;
+  makes: number;
+  ingredients: { item: string; name: string; amount: number }[];
+  when?: IrRule;
+  whenText?: string;
+}
+
 /** An encounter on a timeline: the game plays it and reports a win or a loss. */
 export interface IrEncounter extends IrThing {
   /** A win counts only when this holds. */
@@ -343,6 +357,8 @@ export interface HandoffIR {
   items: IrThing[];
   /** The items that can be equipped (spec §8), by item key: slot, stats, ammunition, durability. */
   equipment: IrEquipment[];
+  /** The items that can be crafted (spec §8), by item key: what each takes and makes, and when. */
+  recipes: IrRecipe[];
   locations: IrThing[];
   /** Design definitions, most often sorted out of raw notes (docs/NOTE-SORTER.md): data for the game to read. */
   lore: IrLore[];
@@ -571,6 +587,20 @@ export const buildIR = (project: Project): HandoffIR => {
       ...(o.type === 'puzzle' && effects(o.data.effects as Effect[] | undefined) ? { effects: effects(o.data.effects as Effect[] | undefined) } : {}),
     })),
     items: of('inventory').map(thing),
+    recipes: of('inventory').flatMap((o): IrRecipe[] => {
+      const r = recipeOf(o);
+      if (!r) return [];
+      const when = rule(r.rule);
+      return [
+        {
+          item: key(o.id)!,
+          name: o.name,
+          makes: r.makes,
+          ingredients: r.ingredients.flatMap((i) => (key(i.item) ? [{ item: key(i.item)!, name: project.objects[i.item]!.name, amount: i.amount }] : [])),
+          ...(when ? { when, whenText: describeRule(project, r.rule) } : {}),
+        },
+      ];
+    }),
     equipment: of('inventory').flatMap((o): IrEquipment[] => {
       const e = equipmentOf(o);
       if (!e) return [];

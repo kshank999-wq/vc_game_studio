@@ -421,6 +421,19 @@ Each engine's check equips the sample's knife and flare pistol, burns the
 flare, wears the knife out, equips a new one by an effect, and saves and
 loads the slots and wear.
 
+## Crafting
+
+The IR's `recipes` list the items that can be crafted (spec §8), by item key:
+`makes`, the `ingredients` (item key, name and amount), and `when` (with
+`whenText`, the rule in words). Every runtime checks the rule, then each
+ingredient, and says why not in the studio's words ("Needs Flare Pistol is
+carried.", "Needs 1 × Salvage (you have 0)."); crafting uses up the
+ingredients and gives what it makes (found as any item given is). Godot:
+`VCGSRules.craft(key, game)` / `craft_check`, signal `item_crafted`. Unity:
+`game.Craft` / `CraftCheck`, event `ItemCrafted`. Unreal: `CraftItem` /
+`GetCraftCheck` on the subsystem, `OnItemCrafted`. Each engine's check crafts
+the sample's flares.
+
 ## Comments and tasks
 
 The IR's `notes` are the project's open comments and tasks (spec §16), oldest

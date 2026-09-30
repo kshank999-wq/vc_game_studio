@@ -286,6 +286,18 @@ static class Check
             h.TakeItem("diving_knife");
             if (h.IsEquipped("diving_knife")) Fail("an item no longer carried should come out of its slot");
         }
+        // Crafting (spec §8): with the pistol, a scrap of salvage packs two flares.
+        {
+            var g = new GameState(story);
+            if (g.Craft("vault_key") != "Not craftable." || g.Craft("flare") != "Needs Flare Pistol is carried.") Fail("the flare should need the pistol, got " + g.CraftCheck("flare"));
+            g.GiveItem("flare_pistol");
+            if (g.CraftCheck("flare") != "Needs 1 × Salvage (you have 0).") Fail("the flare should need salvage, got " + g.CraftCheck("flare"));
+            g.GiveItem("salvage", 2);
+            var made = "";
+            g.ItemCrafted += (k, n) => made += k + " ×" + n;
+            if (g.Craft("flare") != "" || g.Items["salvage"] != 1 || g.Items["flare"] != 2 || made != "flare ×2" || !g.FoundItems.Contains("flare")) Fail("crafting should take a salvage and give two flares");
+            Console.WriteLine("crafted: " + made + ", salvage left " + g.Items["salvage"]);
+        }
 
         // Custom code in StoryKeys.cs's region was kept when the story was exported again.
         if (!string.Equals(Scenes.Custom, "kept")) Fail("custom keys in StoryKeys.cs should survive exporting again");

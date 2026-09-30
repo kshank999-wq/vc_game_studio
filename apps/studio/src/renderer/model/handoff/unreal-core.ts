@@ -266,6 +266,7 @@ namespace vcgs
             Index("mechanics", Mechanics);
             Index("skills", Skills);
             for (const auto& item : Root["equipment"].items) Equipment[item["item"].Str()] = &item;
+            for (const auto& item : Root["recipes"].items) Recipes[item["item"].Str()] = &item;
             for (const auto& l : Root["lines"].items) Lines[l["id"].Str()] = &l;
         }
         Story(const Story&) = delete;
@@ -325,6 +326,8 @@ namespace vcgs
         std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines, Quests, Encounters, Lore, Mechanics, Skills;
         /** Items that can be equipped, by item key: name, slot, stats, ammo, ammoPerUse, durability. */
         std::map<std::string, const Value*> Equipment;
+        /** Items that can be crafted, by item key: name, makes, ingredients, when (and whenText). */
+        std::map<std::string, const Value*> Recipes;
         /** Inventory items, by key: name, notes and fields (the codex entry is fields.codex). */
         std::map<std::string, const Value*> ItemDefs;
         /** Locations (environments), by key: name, notes and fields (the codex entry is fields.codex). */
@@ -405,6 +408,8 @@ namespace vcgs
         std::function<void(const std::string&, const std::string&)> OnItemEquipped, OnItemUnequipped;
         /** An item of equipment was used, or broke. */
         std::function<void(const std::string&)> OnItemUsed, OnItemBroke;
+        /** Something was crafted: its key and how many were made. */
+        std::function<void(const std::string&, int)> OnItemCrafted;
         /** A skill gained a rank: its key and new rank. */
         std::function<void(const std::string&, int)> OnSkillLearned;
         bool AutoRules = true;
@@ -589,6 +594,35 @@ namespace vcgs
                 TakeItem(item);
             }
             else Changed();
+            return "";
+        }
+
+        /** Why an item can't be crafted now, or "" when it can: no recipe, its conditions, or the first ingredient short. */
+        std::string CraftCheck(const std::string& item) const
+        {
+            if (!StoryData.Recipes.count(item)) return "Not craftable.";
+            const Value& r = Story::Find(StoryData.Recipes, item);
+            if (r["when"].IsObject() && !Rules::Check(r["when"], *this)) return "Needs " + r["whenText"].Str() + ".";
+            for (const Value& i : r["ingredients"].items)
+            {
+                auto it = Items.find(i["item"].Str());
+                const int have = it == Items.end() ? 0 : it->second;
+                const int amount = static_cast<int>(i["amount"].Num(1));
+                if (have < amount) return "Needs " + std::to_string(amount) + " \u00d7 " + i["name"].Str() + " (you have " + std::to_string(have) + ").";
+            }
+            return "";
+        }
+
+        /** Craft an item: its ingredients used up, what it makes given. Returns why not ("" when crafted). */
+        std::string Craft(const std::string& item)
+        {
+            std::string why = CraftCheck(item);
+            if (!why.empty()) return why;
+            const Value& r = Story::Find(StoryData.Recipes, item);
+            for (const Value& i : r["ingredients"].items) TakeItem(i["item"].Str(), static_cast<int>(i["amount"].Num(1)));
+            const int makes = static_cast<int>(r["makes"].Num(1));
+            GiveItem(item, makes);
+            if (OnItemCrafted) OnItemCrafted(item, makes);
             return "";
         }
 

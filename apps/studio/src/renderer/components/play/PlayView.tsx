@@ -3,8 +3,9 @@ import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
 import { checkAllPaths } from '../../model/paths';
 import { describeCost, kindOf, learnCheck, skillsOf, treeOf } from '../../model/skills';
+import { craftCheck, describeRecipe, recipesOf } from '../../model/crafting';
 import { describeStats, equipCheck, equipmentList, equipmentOf, isEquipped, statTotal, usesLeft, useCheck } from '../../model/equipment';
-import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, gear, interact, learn, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, craft, endFreePlay, gear, interact, learn, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { PathsPanel } from './PathsPanel';
 import { SavesPanel } from './SavesPanel';
@@ -129,9 +130,41 @@ const EntryView = ({ entry }: { entry: Entry }) => {
           {entry.detail && <span className="play-note"> · {entry.detail}</span>}
         </div>
       );
+    case 'craft':
+      return (
+        <div className="play-gear play-craft">
+          <Symbol type="inventory" size={12} /> {entry.text}
+          <span className="play-note"> · {entry.detail}</span>
+        </div>
+      );
     case 'end':
       return <div className="play-end">{entry.text}</div>;
   }
+};
+
+/** Crafting (spec §8): each recipe, with Craft, or what is missing. */
+const CraftSection = ({ project, world, onCraft }: { project: Project; world: PlayWorld; onCraft: (id: string) => void }) => {
+  const all = recipesOf(project);
+  if (!all.length) return null;
+  return (
+    <section aria-label="Crafting">
+      <h3>Crafting</h3>
+      {all.map((o) => {
+        const why = craftCheck(project, world, o.id);
+        return (
+          <div key={o.id} className="play-row play-gear-row">
+            <span className="play-skill-name">
+              <Symbol type="inventory" size={11} /> <span className="muted">{describeRecipe(project, o)}</span>
+            </span>
+            <button className="tb-btn small" disabled={!!why} title={why || `Craft ${o.name}`} aria-label={`Craft ${o.name}`} onClick={() => onCraft(o.id)}>
+              Craft
+            </button>
+            {why && <span className="pref-hint play-skill-needs">{why}</span>}
+          </div>
+        );
+      })}
+    </section>
+  );
 };
 
 /** Weapons and equipment (spec §8): what is in each slot, and every item of equipment carried, to equip, put away or use (or why not). */
@@ -725,7 +758,7 @@ const CodexPanel = ({
 };
 
 /** The world, which the designer can change by hand to try another path. */
-const WorldPanel = ({ project, world, onChange, onLearn, onGear }: { project: Project; world: PlayWorld; onChange: (change: (w: PlayWorld) => PlayWorld) => void; onLearn: (id: string) => void; onGear: (id: string, act: 'equip' | 'unequip' | 'use') => void }) => {
+const WorldPanel = ({ project, world, onChange, onLearn, onGear, onCraft }: { project: Project; world: PlayWorld; onChange: (change: (w: PlayWorld) => PlayWorld) => void; onLearn: (id: string) => void; onGear: (id: string, act: 'equip' | 'unequip' | 'use') => void; onCraft: (id: string) => void }) => {
   const of = (type: ObjectType) =>
     Object.values(project.objects)
       .filter((o) => o.type === type)
@@ -870,6 +903,7 @@ const WorldPanel = ({ project, world, onChange, onLearn, onGear }: { project: Pr
         </section>
       )}
       <GearSection project={project} world={world} onGear={onGear} />
+      <CraftSection project={project} world={world} onCraft={onCraft} />
       <SkillsSection project={project} world={world} onLearn={onLearn} />
       {toggles('mechanic', 'Mechanics', 'Available:')}
       {toggles('lore', 'Lore', 'Discovered:')}
@@ -1150,7 +1184,7 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
           )}
         </div>
       </section>
-      <WorldPanel project={project} world={play.world} onChange={(change) => push(setWorld(project, play, change))} onLearn={(id) => push(learn(project, play, id))} onGear={(id, act) => push(gear(project, play, id, act))} />
+      <WorldPanel project={project} world={play.world} onChange={(change) => push(setWorld(project, play, change))} onLearn={(id) => push(learn(project, play, id))} onGear={(id, act) => push(gear(project, play, id, act))} onCraft={(id) => push(craft(project, play, id))} />
     </div>
   );
 };

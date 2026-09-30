@@ -66,6 +66,15 @@ monitor while you fix it on another.
   the story. In the sample, the Diving Knife (Damage 2, three uses) comes with
   lighting the lantern, and the eels leave a Flare Pistol (Damage 1, Light 3,
   a flare a shot) and two flares.
+- **Crafting** (spec §8): an inventory item's Game Bible entry can give it a
+  **recipe**: what it **Takes** (so many of each ingredient), how many **One
+  craft makes**, and *Can be crafted when* (a rule; empty: any time). The
+  world panel's **Crafting** lists each recipe ("1 × Salvage → 2 × Flare")
+  with **Craft**, or what is in the way: its rule, or the first ingredient
+  short, with how many are carried. Crafting uses up the ingredients and gives
+  what it makes; it is a decision on the path, replayed when a path is
+  checked. In the sample, with the Flare Pistol carried, a Salvage makes two
+  Flares.
 - **Encounters** go on a scene's timeline (**+ Event › Encounter**, new or one
   from the Bible). The preview offers **Win**, only when the encounter's *Can be
   won when* rule holds (otherwise it says what it needs), and **Lose**. A win

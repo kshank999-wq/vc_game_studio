@@ -1,5 +1,6 @@
 import { describeCost, kindOf, learnCheck, payFor, ranksOf, treeOf } from './skills';
 import { equipCheck, equipmentOf, isEquipped, useCheck } from './equipment';
+import { craftCheck, recipeOf } from './crafting';
 import { initialState, interactionsOf, statesOf } from './details';
 import { spineSequence } from './layout';
 import { apply, dropEquipped, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
@@ -64,6 +65,8 @@ export type Entry =
   | { kind: 'skill'; text: string; rank: number; ranks: number }
   /** Equipment equipped, put away, used or broken (spec §8). */
   | { kind: 'gear'; text: string; detail?: string }
+  /** Something crafted: what it made, and what it took (spec §8). */
+  | { kind: 'craft'; text: string; detail: string }
   | { kind: 'skip'; text: string; needs: string }
   | { kind: 'end'; text: string };
 
@@ -95,7 +98,9 @@ export type Decision =
   /** An item of equipment equipped, put away or used (whenever, like learning). */
   | { kind: 'equip'; at: string }
   | { kind: 'unequip'; at: string }
-  | { kind: 'useItem'; at: string };
+  | { kind: 'useItem'; at: string }
+  /** Something crafted (whenever the player likes). */
+  | { kind: 'craft'; at: string };
 
 export interface Play {
   world: PlayWorld;
@@ -1219,6 +1224,29 @@ export const gearIn = (project: Project, world: PlayWorld, id: string, act: 'equ
   else gearUse(d, id);
   settle(d);
   return { world: d.world, log: d.log };
+};
+
+/** Craft an item: its ingredients used up, what it makes given, settled. Returns why not instead when it can't be. */
+export const craftIn = (project: Project, world: PlayWorld, id: string): Changed & { needs?: string } => {
+  const needs = craftCheck(project, world, id);
+  if (needs) return { world, log: [], needs };
+  const r = recipeOf(project.objects[id])!;
+  const next: PlayWorld = { ...world, items: { ...world.items }, equipped: { ...(world.equipped ?? {}) }, wear: { ...(world.wear ?? {}) } };
+  for (const i of r.ingredients) {
+    next.items[i.item] = Math.max(0, (next.items[i.item] ?? 0) - i.amount);
+    if (!next.items[i.item]) dropEquipped(next, i.item);
+  }
+  next.items[id] = (next.items[id] ?? 0) + r.makes;
+  const d: Doing = { project, world: next, log: [{ kind: 'craft', text: `Crafted ${r.makes > 1 ? `${r.makes} × ` : ''}${name(project, id)}`, detail: `from ${r.ingredients.map((i) => `${i.amount} × ${name(project, i.item)}`).join(' + ') || 'nothing'}` }] };
+  settle(d);
+  return { world: d.world, log: d.log };
+};
+
+/** Craft an item during the play-through, kept on its path as a decision. */
+export const craft = (project: Project, play: Play, id: string): Play => {
+  const r = craftIn(project, play.world, id);
+  if (r.needs) return play;
+  return { ...play, world: r.world, log: [...play.log, ...r.log], decisions: [...(play.decisions ?? []), { kind: 'craft', at: id }] };
 };
 
 /** Equip, put away or use an item during the play-through, kept on its path as a decision. */

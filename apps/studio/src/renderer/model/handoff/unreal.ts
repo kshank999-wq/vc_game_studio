@@ -268,6 +268,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "VCGS|Equipment") float GetStat(const FString& Stat) const;
     /** Uses left before an item breaks (-1 when it never does). */
     UFUNCTION(BlueprintPure, Category = "VCGS|Equipment") int32 GetUsesLeft(const FString& Item) const;
+    /** Craft an item: its ingredients used up, what it makes given; returns why not ("" when crafted). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Crafting") FString CraftItem(const FString& Item);
+    UFUNCTION(BlueprintPure, Category = "VCGS|Crafting") FString GetCraftCheck(const FString& Item) const;
 
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestStarted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
@@ -355,6 +358,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS|Equipment") FVcgsGearSignature OnItemUnequipped;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|Equipment") FVcgsQuestSignature OnItemUsed;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|Equipment") FVcgsQuestSignature OnItemBroke;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Crafting") FVcgsSkillSignature OnItemCrafted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnEncounterMet;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnEncounterWon;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnCharacterMet;
@@ -445,6 +449,7 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     Game->OnItemUnequipped = [this](const std::string& Item, const std::string& Slot) { OnItemUnequipped.Broadcast(ToF(Item), ToF(Slot)); };
     Game->OnItemUsed = [this](const std::string& Item) { OnItemUsed.Broadcast(ToF(Item)); };
     Game->OnItemBroke = [this](const std::string& Item) { OnItemBroke.Broadcast(ToF(Item)); };
+    Game->OnItemCrafted = [this](const std::string& Item, int Count) { OnItemCrafted.Broadcast(ToF(Item), Count); };
     Game->OnEncounterMet = [this](const std::string& Encounter) { OnEncounterMet.Broadcast(ToF(Encounter)); };
     Game->OnEncounterWon = [this](const std::string& Encounter) { OnEncounterWon.Broadcast(ToF(Encounter)); };
     Game->OnCharacterMet = [this](const std::string& Character) { OnCharacterMet.Broadcast(ToF(Character)); };
@@ -656,6 +661,8 @@ FString UVcgsSubsystem::GetEquippedIn(const FString& Slot) const { return Game ?
 bool UVcgsSubsystem::IsItemEquipped(const FString& Item) const { return Game && Game->IsEquipped(ToStd(Item)); }
 float UVcgsSubsystem::GetStat(const FString& Stat) const { return Game ? static_cast<float>(Game->Stat(ToStd(Stat))) : 0.f; }
 int32 UVcgsSubsystem::GetUsesLeft(const FString& Item) const { return Game ? Game->UsesLeft(ToStd(Item)) : 0; }
+FString UVcgsSubsystem::CraftItem(const FString& Item) { return Game ? ToF(Game->Craft(ToStd(Item))) : FString(); }
+FString UVcgsSubsystem::GetCraftCheck(const FString& Item) const { return Game ? ToF(Game->CraftCheck(ToStd(Item))) : FString(); }
 
 FString UVcgsSubsystem::Onward(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Onward(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::NodeKind(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::KindOf(*Game, ToStd(Node))) : FString(); }

@@ -1,6 +1,6 @@
 import { interactionsOf } from './details';
 import { learnCheck } from './skills';
-import { advance, choose, endFreePlay, gear, gearIn, interact, learn, decisionAt, playToDecision, promptOf, startPlay, type Decision, type Outcome, type Play } from './play';
+import { advance, choose, craft, craftIn, endFreePlay, gear, gearIn, interact, learn, decisionAt, playToDecision, promptOf, startPlay, type Decision, type Outcome, type Play } from './play';
 import type { Project } from './types';
 
 /**
@@ -67,6 +67,8 @@ export const describeDecision = (project: Project, d: Decision): string => {
       return `put away ${nameOf(project, d.at)}`;
     case 'useItem':
       return `used ${nameOf(project, d.at)}`;
+    case 'craft':
+      return `crafted ${nameOf(project, d.at)}`;
   }
 };
 
@@ -82,6 +84,11 @@ const offeredNow = (project: Project, play: Play): string => {
 
 /** Make one decision again on the story as it is now; the play after it, or why it can't be made. */
 const redo = (project: Project, play: Play, d: Decision): { play: Play } | { why: string } => {
+  // So is crafting.
+  if (d.kind === 'craft') {
+    const r = craftIn(project, play.world, d.at);
+    return r.needs ? { why: `${nameOf(project, d.at)} can't be crafted: ${r.needs}` } : { play: craft(project, play, d.at) };
+  }
   // Equipment is equipped, put away and used whenever the player likes, too.
   if (d.kind === 'equip' || d.kind === 'unequip' || d.kind === 'useItem') {
     const act = d.kind === 'useItem' ? 'use' : d.kind;

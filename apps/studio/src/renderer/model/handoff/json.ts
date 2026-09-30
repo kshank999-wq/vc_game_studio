@@ -60,6 +60,21 @@ export const storySchema = () => ({
         durability: { type: 'integer', minimum: 0, description: 'Uses before it breaks; 0 never breaks.' },
       }),
     },
+    recipes: {
+      type: 'array',
+      description: 'Items that can be crafted: see the README.',
+      items: obj(
+        {
+          item: str,
+          name: str,
+          makes: { type: 'integer', minimum: 1 },
+          ingredients: { type: 'array', items: obj({ item: str, name: str, amount: { type: 'integer', minimum: 1 } }) },
+          when: ref('rule'),
+          whenText: { type: 'string', description: 'when in words, for "Needs …".' },
+        },
+        ['item', 'name', 'makes', 'ingredients'],
+      ),
+    },
     skills: { type: 'array', items: ref('skill'), description: 'Skills, abilities and upgrades (their kind, tree and use in `fields`), learned in ranks: see the README.' },
     cinematics: { type: 'array', items: ref('thing') },
     flags: { type: 'array', items: obj({ id: str, ident, name: str, values: strings, initial: str, setBy: strings }) },
@@ -344,6 +359,9 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
    uses (0: never) it breaks: one is taken, and a new one starts unworn. An item
    no longer carried comes out of its slot. Keep \`equipped\` (slot to item) and
    \`wear\` (uses so far) in a save.
+9. **Crafting** (\`recipes\`, by item key): an item can be crafted when \`when\`
+   holds and the player carries \`amount\` of each ingredient. Crafting takes
+   them and gives \`makes\` of the item.
 
 ## Rules and effects
 

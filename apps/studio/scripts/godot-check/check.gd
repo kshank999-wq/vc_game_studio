@@ -565,6 +565,24 @@ func _initialize() -> void:
 	game.load_text(before_gear)
 	game.loaded = false
 
+	# Crafting (spec §8): with the pistol, a scrap of salvage packs two flares.
+	var before_craft: String = JSON.stringify(game.save_data(""))
+	var crafting = load("res://vcgs/generated/logic/rules.gd")
+	crafting.reset(game)
+	if crafting.craft("vault_key", game) != "Not craftable." or crafting.craft("flare", game) != "Needs Flare Pistol is carried.":
+		fail("the flare should need the pistol, got " + crafting.craft_check("flare", game))
+	game.give_item("flare_pistol")
+	if crafting.craft_check("flare", game) != "Needs 1 × Salvage (you have 0).":
+		fail("the flare should need salvage, got " + crafting.craft_check("flare", game))
+	game.give_item("salvage", 2)
+	var made: Array = []
+	game.item_crafted.connect(func(k: String, n: int) -> void: made.append([k, n]))
+	if crafting.craft("flare", game) != "" or int(game.items["salvage"]) != 1 or int(game.items["flare"]) != 2 or made != [["flare", 2]] or not game.found_items.has("flare"):
+		fail("crafting should take a salvage and give two flares")
+	print("crafted: ", made, " salvage left ", game.items["salvage"])
+	game.load_text(before_craft)
+	game.loaded = false
+
 	check_level(game)
 
 	print("OK" if failures == 0 else str(failures) + " FAILED")

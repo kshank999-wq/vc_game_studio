@@ -412,6 +412,19 @@ int main()
         if (h.IsEquipped("diving_knife")) Fail("an item no longer carried should come out of its slot");
     }
 
+    // Crafting (spec §8): with the pistol, a scrap of salvage packs two flares.
+    {
+        vcgs::GameState g(story);
+        if (g.Craft("vault_key") != "Not craftable." || g.Craft("flare") != "Needs Flare Pistol is carried.") Fail("the flare should need the pistol, got " + g.CraftCheck("flare"));
+        g.GiveItem("flare_pistol");
+        if (g.CraftCheck("flare") != "Needs 1 \u00d7 Salvage (you have 0).") Fail("the flare should need salvage, got " + g.CraftCheck("flare"));
+        g.GiveItem("salvage", 2);
+        std::string made;
+        g.OnItemCrafted = [&made](const std::string& k, int n) { made += k + " x" + std::to_string(n); };
+        if (g.Craft("flare") != "" || g.Items["salvage"] != 1 || g.Items["flare"] != 2 || made != "flare x2" || std::find(g.FoundItems.begin(), g.FoundItems.end(), "flare") == g.FoundItems.end()) Fail("crafting should take a salvage and give two flares");
+        std::printf("crafted: %s, salvage left %d\n", made.c_str(), g.Items["salvage"]);
+    }
+
     // Custom code in VcgsStoryKeys.h's region was kept when the story was exported again.
     if (std::string(VcgsKeys::CustomCheck) != "kept") Fail("custom code in VcgsStoryKeys.h should survive exporting again");
     else std::printf("custom code: %s\n", VcgsKeys::CustomCheck);
