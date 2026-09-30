@@ -911,17 +911,23 @@ export const notesPrintHtml = (notesText: string): string => {
   return `<!doctype html>\n<html><head><meta charset="utf-8"><title>${escapeHtml(name)} · codex notes</title><style>${NOTES_PRINT_STYLE}</style></head>\n<body><h1>${escapeHtml(name)}</h1><p class="sub">Codex notes</p>\n${body.join('\n')}\n</body></html>\n`;
 };
 
-/** The longest mail link the codex writes: longer ones are cut short by some mail apps and browsers. */
+/** The longest mail or text link the codex writes: longer ones are cut short by some apps and browsers. */
 export const MAILTO_LIMIT = 2000;
-/** A mail's body when the notes are too long for its link: they go on the clipboard instead. */
+/** A mail's or text's body when the notes are too long for its link: they go on the clipboard instead. */
 export const MAIL_ON_CLIPBOARD = 'The notes are on the clipboard: paste them here.';
 
-/** Percent-encoded as a mail link wants (UTF-8; letters, digits and - _ . ~ as they are). The same in the engines. */
-const mailEncode = (s: string): string =>
+/** Percent-encoded as a mail or text link wants (UTF-8; letters, digits and - _ . ~ as they are). The same in the engines. */
+const linkEncode = (s: string): string =>
   Array.from(new TextEncoder().encode(s), (b) => {
     const c = String.fromCharCode(b);
     return /[A-Za-z0-9\-_.~]/.test(c) ? c : `%${b.toString(16).toUpperCase().padStart(2, '0')}`;
   }).join('');
+
+/** A link of head and body, or (whole false) of head and the clipboard note when that is too long. */
+const notesLink = (head: string, body: string): { url: string; whole: boolean } => {
+  const url = head + linkEncode(body);
+  return url.length <= MAILTO_LIMIT ? { url, whole: true } : { url: head + linkEncode(MAIL_ON_CLIPBOARD), whole: false };
+};
 
 /**
  * A mail of exported notes (codexNotesText), as a link that opens the
@@ -931,10 +937,16 @@ const mailEncode = (s: string): string =>
  */
 export const notesMailto = (notesText: string): { url: string; whole: boolean } => {
   const text = notesText.replace(/\r\n?/g, '\n');
-  const subject = `mailto:?subject=${mailEncode(`${text.split('\n')[0]!.replace(/^CODEX NOTES · /, '')} codex notes`)}&body=`;
-  const url = subject + mailEncode(text.replace(/\n/g, '\r\n'));
-  return url.length <= MAILTO_LIMIT ? { url, whole: true } : { url: subject + mailEncode(MAIL_ON_CLIPBOARD), whole: false };
+  return notesLink(`mailto:?subject=${linkEncode(`${text.split('\n')[0]!.replace(/^CODEX NOTES · /, '')} codex notes`)}&body=`, text.replace(/\n/g, '\r\n'));
 };
+
+/**
+ * A text message of exported notes, as a link that opens the player's
+ * messages app (sms:, which phones and most desktops with a messages app
+ * take): the notes as the message, for the player to pick who to. Too long
+ * for a link, as notesMailto. The engines' codex screens write the same.
+ */
+export const notesSms = (notesText: string): { url: string; whole: boolean } => notesLink('sms:?&body=', notesText.replace(/\r\n?/g, '\n'));
 
 /**
  * An entry's name as notes are matched by: its first line without the quest

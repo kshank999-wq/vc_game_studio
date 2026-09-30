@@ -164,7 +164,11 @@ the studio's play-through:
   and the mail says to paste them: Godot `email_codex_notes()` and
   `codex_notes_mailto()`; Unity `VcgsCodex.EmailNotes()` and
   `Codex.NotesMailto()`; Unreal `EmailCodexNotes` and
-  `vcgs::Codex::NotesMailto()`. P prints them: the same page as the studio prints (the story's
+  `vcgs::Codex::NotesMailto()`. T texts them: the same text-message link as
+  the studio's (`sms:?&body=` and the notes), opened in the messages app,
+  with the same clipboard fallback: Godot `text_codex_notes()` and
+  `codex_notes_sms()`; Unity `VcgsCodex.TextNotes()` and `Codex.NotesSms()`;
+  Unreal `TextCodexNotes` and `vcgs::Codex::NotesSms()`. P prints them: the same page as the studio prints (the story's
   name, then each section's notes), saved as an HTML file and opened in the
   browser to print from: Godot `print_codex_notes()` (user://codex_notes.html)
   and `codex_notes_page()`; Unity `VcgsCodex.PrintNotes()` (persistentDataPath)

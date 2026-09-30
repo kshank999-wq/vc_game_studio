@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advance, choose, endFreePlay, MAILTO_LIMIT, notesMailto, notesPrintHtml, NOTES_PRINT_STYLE, interact, playToDecision, promptOf, settleWorld, setWorld, startPlay, startWorld, type Play } from '../play';
+import { advance, choose, endFreePlay, MAILTO_LIMIT, notesMailto, notesSms, notesPrintHtml, NOTES_PRINT_STYLE, interact, playToDecision, promptOf, settleWorld, setWorld, startPlay, startWorld, type Play } from '../play';
 import { setConnectionRules } from '../project';
 import { sunkenVault } from '../sample';
 import type { Project } from '../types';
@@ -617,6 +617,17 @@ describe('notesMailto', () => {
     const long = notesMailto(`CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\n${'x'.repeat(MAILTO_LIMIT)}`);
     expect(long.whole).toBe(false);
     expect(long.url).toBe('mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.');
+  });
+});
+
+describe('notesSms', () => {
+  it('is a text-message link with the notes as the message', () => {
+    // The same link as the engines' checks expect.
+    expect(notesSms('CODEX NOTES · The Sunken Vault\r\n\r\nLORE · THE DROWNED ORDER\r\nPriests, not monks')).toEqual({
+      url: 'sms:?&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0A%0ALORE%20%C2%B7%20THE%20DROWNED%20ORDER%0APriests%2C%20not%20monks',
+      whole: true,
+    });
+    expect(notesSms(`CODEX NOTES · X\n\nLORE · Y\n${'x'.repeat(MAILTO_LIMIT)}`)).toEqual({ url: 'sms:?&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.', whole: false });
   });
 });
 

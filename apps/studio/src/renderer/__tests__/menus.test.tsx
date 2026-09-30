@@ -282,6 +282,14 @@ describe('play-through', () => {
     fireEvent.click(email);
     noNav.mockRestore();
     await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('Opening your mail app with the notes.'));
+    // Text them: a text-message link with the notes, for the messages app.
+    const text = within(codex).getByRole('link', { name: 'Text notes' }) as HTMLAnchorElement;
+    expect(text.href).toMatch(/^sms:\?&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0A%0A/);
+    expect(decodeURIComponent(text.href)).toContain('LORE · THE DROWNED ORDER\nPriests');
+    const noText = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fireEvent.click(text);
+    noText.mockRestore();
+    await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('Opening your messages app with the notes.'));
     // Print them: the notes as a page, in a hidden frame that asks for the print dialog.
     const quiet = vi.spyOn(console, 'error').mockImplementation(() => {}); // jsdom has no print dialog
     fireEvent.click(within(codex).getByRole('button', { name: 'Print notes' }));

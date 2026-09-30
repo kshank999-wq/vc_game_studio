@@ -375,7 +375,13 @@ func _initialize() -> void:
 	var mail: Dictionary = silt_player.codex_notes_mailto()
 	if mail["url"] != "mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0D%0A%0D%0ALORE%20%C2%B7%20THE%20DROWNED%20ORDER%0D%0APriests%2C%20not%20monks" or not mail["whole"]:
 		fail("the mail link should carry the notes, got " + str(mail))
+	var sms: Dictionary = silt_player.codex_notes_sms()
+	if sms["url"] != "sms:?&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0A%0ALORE%20%C2%B7%20THE%20DROWNED%20ORDER%0APriests%2C%20not%20monks" or not sms["whole"]:
+		fail("the text link should carry the notes, got " + str(sms))
 	game.set_note("lore:the_drowned_order", "x".repeat(2000))
+	var long_text: Dictionary = silt_player.text_codex_notes(false)
+	if long_text["whole"] or long_text["url"] != "sms:?&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.":
+		fail("notes too long for a text link should go on the clipboard, got " + str(long_text))
 	var long: Dictionary = silt_player.email_codex_notes(false)
 	if long["whole"] or long["url"] != "mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.":
 		fail("notes too long for a mail link should go on the clipboard, got " + str(long))

@@ -5315,8 +5315,16 @@ kbd {
   margin-bottom: 10px;
 }
 
-.play-codex-head .pref-hint {
+.play-codex-head > .pref-hint {
   flex: 1 1 calc(100% - 180px); /* a line with Close: the notes buttons share the next */
+}
+
+.play-codex-notes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
 }
 
 .play-codex-search {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
-import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { copyText, downloadText, notesFileNameFor, notesPageNameFor, printHtml, readText } from '../../files';
 import { liveNotes, mergeNotes, notesFromSync, notesStorageKey, notesSyncText, type StampedNote } from '../../model/codex-sync';
@@ -196,18 +196,32 @@ const CodexPanel = ({
     downloadText(notesPageNameFor(project), notesPrintHtml(codexNotesText(project, world, notes)), 'text/html');
     setImported('This page cannot print by itself: the notes are saved as a page. Open it and print it.');
   };
-  // Emailing: a mail link with the notes, for the player's mail app; too long for a link, they go on the clipboard.
-  const mail = notes.size ? notesMailto(codexNotesText(project, world, notes)) : null;
-  const emailNotes = async () => {
+  // Emailing or texting: a mail or text link with the notes, for the player's app; too long for a link, they go on the clipboard.
+  const links = notes.size ? { mail: notesMailto(codexNotesText(project, world, notes)), sms: notesSms(codexNotesText(project, world, notes)) } : null;
+  const APP = { mail: 'mail app', sms: 'messages app' } as const;
+  const sendNotes = async (kind: 'mail' | 'sms') => {
     setToCopy('');
-    if (mail?.whole) return setImported('Opening your mail app with the notes. None opened? Share notes copies them, to paste into a mail.');
+    const into = kind === 'mail' ? 'the mail' : 'the message';
+    if (links?.[kind].whole) return setImported(`Opening your ${APP[kind]} with the notes. None opened? Share notes copies them, to paste into ${kind === 'mail' ? 'a mail' : 'a message'}.`);
     const text = codexNotesText(project, world, notes);
-    if (await copyText(text)) setImported('The notes are too long for a mail link: they are on the clipboard. Paste them into the mail.');
+    const tooLong = `The notes are too long for a ${kind === 'mail' ? 'mail' : 'text'} link`;
+    if (await copyText(text)) setImported(`${tooLong}: they are on the clipboard. Paste them into ${into}.`);
     else {
       setToCopy(text);
-      setImported('The notes are too long for a mail link: they are below, selected. Copy them (Ctrl+C or ⌘C) and paste them into the mail.');
+      setImported(`${tooLong}: they are below, selected. Copy them (Ctrl+C or ⌘C) and paste them into ${into}.`);
     }
   };
+  /** A link that opens the mail or messages app with the notes (a disabled button with none). */
+  const sendLink = (kind: 'mail' | 'sms', name: string, label: string, title: string) =>
+    links ? (
+      <a className="tb-btn small" aria-label={name} href={links[kind].url} target="_blank" rel="noopener noreferrer" title={title} onClick={() => void sendNotes(kind)}>
+        {label}
+      </a>
+    ) : (
+      <button className="tb-btn small" aria-label={name} disabled title="Write a note (✎) first">
+        {label}
+      </button>
+    );
   // The entry whose note is being written, by key.
   const [editing, setEditing] = useState('');
   /** A pencil to write (or change) the player's note on an entry. */
@@ -284,35 +298,32 @@ const CodexPanel = ({
         <button className="tb-btn small" onClick={onClose}>
           Close <kbd>C</kbd>
         </button>
-        <button
-          className="tb-btn small"
-          disabled={!notes.size}
-          title={notes.size ? 'Save every note as a text file' : 'Write a note (✎) first'}
-          onClick={() => downloadText(notesFileNameFor(project), codexNotesText(project, world, notes))}
-        >
-          Export notes
-        </button>
-        <button className="tb-btn small" title="Read notes from an exported file" onClick={() => notesFile.current?.click()}>
-          Import notes
-        </button>
-        <button className="tb-btn small" disabled={!notes.size} title={notes.size ? 'Share every note (or copy them)' : 'Write a note (✎) first'} onClick={() => void shareNotes()}>
-          Share notes
-        </button>
-        {mail ? (
-          <a className="tb-btn small" href={mail.url} target="_blank" rel="noopener noreferrer" title="Email every note (from your mail app)" onClick={() => void emailNotes()}>
-            Email notes
-          </a>
-        ) : (
-          <button className="tb-btn small" disabled title="Write a note (✎) first">
-            Email notes
+        <div className="play-codex-notes-actions" role="group" aria-label="Notes">
+          <span className="pref-hint">Notes</span>
+          <button
+            className="tb-btn small"
+            aria-label="Export notes"
+            disabled={!notes.size}
+            title={notes.size ? 'Save every note as a text file' : 'Write a note (✎) first'}
+            onClick={() => downloadText(notesFileNameFor(project), codexNotesText(project, world, notes))}
+          >
+            Export
           </button>
-        )}
-        <button className="tb-btn small" disabled={!notes.size} title={notes.size ? 'Print every note' : 'Write a note (✎) first'} onClick={() => void printNotes()}>
-          Print notes
-        </button>
-        <button className="tb-btn small" aria-expanded={pasting} title="Take in notes someone shared with you" onClick={() => setPasting((o) => !o)}>
-          Paste notes
-        </button>
+          <button className="tb-btn small" aria-label="Import notes" title="Read notes from an exported file" onClick={() => notesFile.current?.click()}>
+            Import
+          </button>
+          <button className="tb-btn small" aria-label="Share notes" disabled={!notes.size} title={notes.size ? 'Share every note (or copy them)' : 'Write a note (✎) first'} onClick={() => void shareNotes()}>
+            Share
+          </button>
+          {sendLink('mail', 'Email notes', 'Email', 'Email every note (from your mail app)')}
+          {sendLink('sms', 'Text notes', 'Text', 'Text every note (from your messages app)')}
+          <button className="tb-btn small" aria-label="Print notes" disabled={!notes.size} title={notes.size ? 'Print every note' : 'Write a note (✎) first'} onClick={() => void printNotes()}>
+            Print
+          </button>
+          <button className="tb-btn small" aria-label="Paste notes" aria-expanded={pasting} title="Take in notes someone shared with you" onClick={() => setPasting((o) => !o)}>
+            Paste
+          </button>
+        </div>
         <input
           ref={notesFile}
           type="file"

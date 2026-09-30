@@ -395,6 +395,9 @@ describe('quests and encounters in the engines', () => {
     // M emails them: the same mail link as the studio's.
     expect(player).toContain('func email_codex_notes(open := true) -> Dictionary:');
     expect(RUNTIME_FILES['VcgsCodex.cs']).toContain('public string EmailNotes(bool open = true)');
+    // T texts them: the same text-message link as the studio's.
+    expect(player).toContain('func text_codex_notes(open := true) -> Dictionary:');
+    expect(RUNTIME_FILES['VcgsCodex.cs']).toContain('public string TextNotes(bool open = true)');
     expect(player).toContain('game.quest_started.connect(_on_codex_news)');
     // Unity and Unreal have one too: the same text, a screen to draw it.
     expect(RUNTIME_FILES['Codex.cs']).toContain('public string Text(string query = "", string section = "", string sort = "", string cursor = "")');

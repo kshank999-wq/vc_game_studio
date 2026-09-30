@@ -82,7 +82,11 @@ monitor while you fix it on another.
   someone shared, the same way Import notes does. **Email notes** opens your
   mail app with a mail of them ("The Sunken Vault codex notes", the same
   text); when they are too long for a mail link, they go on the clipboard to
-  paste into the mail instead. **Print notes** lays them
+  paste into the mail instead. **Text** opens your messages app with a text
+  of them (an `sms:` link: phones, and computers with a messages app), for
+  you to pick who to send it to; too long for a link, the same way as email.
+  The notes buttons sit together under **Notes** (Export, Import, Share,
+  Email, Text, Print, Paste). **Print notes** lays them
   out as a page (the story's name, then each section's notes, entry by entry)
   and opens the print dialog; where the page may not print (an embedded page,
   say) it saves that page as an .html file to open and print instead. The

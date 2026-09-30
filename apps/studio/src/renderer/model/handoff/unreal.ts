@@ -272,6 +272,12 @@ public:
      */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") FString EmailCodexNotes(bool& bWhole, bool bOpen = true);
     /**
+     * Text the notes: open the messages app with them (an sms: link). When they
+     * are too long for a text link (bWhole false), they go on the clipboard and
+     * the message says so. Returns the link, or "" with no codex.
+     */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") FString TextCodexNotes(bool& bWhole, bool bOpen = true);
+    /**
      * Print the notes: save them as a page (Saved/CodexNotes.html when Path is
      * empty) and, with bOpen, open it in the browser to print from. Returns
      * where, or "" if it could not.
@@ -488,6 +494,17 @@ FString UVcgsSubsystem::EmailCodexNotes(bool& bWhole, bool bOpen)
     if (bOpen) FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
     return Url;
 }
+FString UVcgsSubsystem::TextCodexNotes(bool& bWhole, bool bOpen)
+{
+    bWhole = false;
+    if (!CodexData) return FString();
+    const std::pair<std::string, bool> Sms = CodexData->NotesSms();
+    bWhole = Sms.second;
+    if (!bWhole) CopyCodexNotes();
+    const FString Url = ToF(Sms.first);
+    if (bOpen) FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
+    return Url;
+}
 FString UVcgsSubsystem::PrintCodexNotes(const FString& Path, bool bOpen)
 {
     if (!CodexData) return FString();
@@ -620,7 +637,8 @@ namespace vcgs { class Codex; }
  * it, Enter keeps it, Escape leaves it. E saves every note as a text file
  * (ExportCodexNotes on the subsystem), and I reads it back (ImportCodexNotes).
  * Y copies the notes to share them, V takes in notes someone shared, M emails
- * them (EmailCodexNotes), and P opens them as a page to print (PrintCodexNotes). The notes
+ * them (EmailCodexNotes), T texts them (TextCodexNotes), and P opens them as a
+ * page to print (PrintCodexNotes). The notes
  * sync with Saved/CodexNotesSync.json (SyncCodexNotes) when the codex opens,
  * every few seconds while it is open, and after each note.
  */
@@ -783,6 +801,12 @@ void AVcgsCodexHUD::DrawHUD()
         Story->EmailCodexNotes(bWhole);
         StatusText = bWhole ? "Opening your mail app with the notes." : "The notes are too long for a mail link: they are on the clipboard. Paste them into the mail.";
     }
+    else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::T))
+    {
+        bool bWhole = false;
+        Story->TextCodexNotes(bWhole);
+        StatusText = bWhole ? "Opening your messages app with the notes." : "The notes are too long for a text link: they are on the clipboard. Paste them into the message.";
+    }
     else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::P))
     {
         const FString Where = Story->PrintCodexNotes();
@@ -884,7 +908,7 @@ void AVcgsCodexHUD::DrawHUD()
         DrawText(ToF(Line), Line == "CODEX" ? Gold : Ink, Left + 18.f, Y);
         Y += 22.f;
     }
-    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B, N · E save, I load, Y share, V paste, M mail, P print notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
+    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B, N · E save, I load, Y share, V paste, M mail, T text, P print notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
 }
 `,
 

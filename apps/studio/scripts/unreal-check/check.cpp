@@ -207,6 +207,11 @@ int main()
             if (mail.first != "mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0D%0A%0D%0ALORE%20%C2%B7%20THE%20DROWNED%20ORDER%0D%0APriests%2C%20not%20monks" || !mail.second) Fail("the mail link should carry the notes, got " + mail.first);
             const std::pair<std::string, bool> tooLong = vcgs::Codex::MailtoOf("CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\n" + std::string(2000, 'x'));
             if (tooLong.second || tooLong.first != "mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.") Fail("notes too long for a mail link should say they are on the clipboard, got " + tooLong.first);
+            // Text them: a text-message link with the notes as the message.
+            const std::pair<std::string, bool> sms = book.NotesSms();
+            if (sms.first != "sms:?&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0A%0ALORE%20%C2%B7%20THE%20DROWNED%20ORDER%0APriests%2C%20not%20monks" || !sms.second) Fail("the text link should carry the notes, got " + sms.first);
+            const std::pair<std::string, bool> longSms = vcgs::Codex::SmsOf("CODEX NOTES · X\r\n\r\nLORE · Y\r\n" + std::string(2000, 'x'));
+            if (longSms.second || longSms.first != "sms:?&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.") Fail("notes too long for a text link should say they are on the clipboard, got " + longSms.first);
             // Print them: the same notes as a page, section by section.
             const std::string page = book.NotesPage();
             const std::string pageEnd = "<h1>The Sunken Vault</h1><p class=\"sub\">Codex notes</p>\n<h2>Lore</h2>\n<div class=\"note\"><h3>THE DROWNED ORDER</h3><p>Priests, not monks</p></div>\n</body></html>\n";

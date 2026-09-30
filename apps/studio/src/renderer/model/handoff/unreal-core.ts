@@ -1230,36 +1230,60 @@ namespace vcgs
          */
         std::pair<std::string, bool> NotesMailto() const { return MailtoOf(NotesText()); }
 
+        /** Percent-encoded as a mail or text link wants (UTF-8; letters, digits and - _ . ~ as they are). */
+        static std::string UriEncode(const std::string& s)
+        {
+            static const char* hex = "0123456789ABCDEF";
+            std::string out;
+            for (unsigned char c : s)
+            {
+                if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') out += static_cast<char>(c);
+                else { out += '%'; out += hex[c >> 4]; out += hex[c & 15]; }
+            }
+            return out;
+        }
+
+        /** The text with its line breaks as "\n" alone. */
+        static std::string Lf(const std::string& in)
+        {
+            std::string text;
+            for (size_t i = 0; i < in.size(); ++i)
+            {
+                if (in[i] != '\r') text += in[i];
+                else if (i + 1 >= in.size() || in[i + 1] != '\n') text += '\n';
+            }
+            return text;
+        }
+
+        /** A link of head and body, or (second false) of head and the clipboard note when that is too long. */
+        static std::pair<std::string, bool> LinkOf(const std::string& head, const std::string& body)
+        {
+            const std::string url = head + UriEncode(body);
+            if (url.size() <= MailtoLimit) return {url, true};
+            return {head + UriEncode(MailOnClipboard), false};
+        }
+
         /** Exported notes (NotesText) as a mail link. */
         static std::pair<std::string, bool> MailtoOf(const std::string& notesText)
         {
-            auto enc = [](const std::string& s)
-            {
-                static const char* hex = "0123456789ABCDEF";
-                std::string out;
-                for (unsigned char c : s)
-                {
-                    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') out += static_cast<char>(c);
-                    else { out += '%'; out += hex[c >> 4]; out += hex[c & 15]; }
-                }
-                return out;
-            };
-            std::string text;
-            for (size_t i = 0; i < notesText.size(); ++i)
-            {
-                if (notesText[i] != '\r') text += notesText[i];
-                else if (i + 1 >= notesText.size() || notesText[i + 1] != '\n') text += '\n';
-            }
+            const std::string text = Lf(notesText);
             std::string first = text.substr(0, text.find('\n'));
             const std::string prefix = "CODEX NOTES · ";
             if (first.rfind(prefix, 0) == 0) first = first.substr(prefix.size());
-            const std::string head = "mailto:?subject=" + enc(first + " codex notes") + "&body=";
             std::string crlf;
             for (char c : text) crlf += c == '\n' ? std::string("\r\n") : std::string(1, c);
-            const std::string url = head + enc(crlf);
-            if (url.size() <= MailtoLimit) return {url, true};
-            return {head + enc(MailOnClipboard), false};
+            return LinkOf("mailto:?subject=" + UriEncode(first + " codex notes") + "&body=", crlf);
         }
+
+        /**
+         * The notes as a text-message link (sms:), for the messages app: the
+         * notes as the message (the same link as the studio's). Too long for a
+         * link, as NotesMailto.
+         */
+        std::pair<std::string, bool> NotesSms() const { return SmsOf(NotesText()); }
+
+        /** Exported notes (NotesText) as a text-message link. */
+        static std::pair<std::string, bool> SmsOf(const std::string& notesText) { return LinkOf("sms:?&body=", Lf(notesText)); }
 
         /** The entries shown, in order, by key ("lore:…"): what a cursor moves through. */
         std::vector<std::string> EntryKeys(const std::string& query = "", const std::string& only = "", const std::string& sort = "") const
