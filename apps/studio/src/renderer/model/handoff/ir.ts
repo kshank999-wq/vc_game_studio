@@ -435,7 +435,7 @@ export const buildIR = (project: Project): HandoffIR => {
         const inner = rule(i);
         return inner ? [inner] : [];
       }
-      const ref = key(i.ref);
+      const ref = i.kind === 'stat' ? i.ref.trim() : key(i.ref); // A stat condition names its stat.
       if (!ref) return [];
       return [{ kind: i.kind, ref, op: i.op, ...('value' in i && i.value !== '' ? { value: i.value } : {}) }];
     });

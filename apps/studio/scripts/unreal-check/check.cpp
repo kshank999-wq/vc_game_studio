@@ -397,9 +397,15 @@ int main()
         g.Equip("diving_knife");
         for (int i = 0; i < 3; i++) g.UseItem("diving_knife");
         if (g.HasItem("diving_knife") || g.IsEquipped("diving_knife") || g.UseCheck("diving_knife") != "Equip Diving Knife first.") Fail("the knife should break after three uses, and be gone");
-        g.GiveItem("diving_knife");
         std::string err;
+        // Stat conditions read what the equipped items add up to, by name in any case.
+        const vcgs::Value strong = vcgs::JsonReader::Parse("{\"match\": \"all\", \"items\": [{\"kind\": \"stat\", \"ref\": \"Damage\", \"op\": \"atLeast\", \"value\": 2}]}", &err);
+        const vcgs::Value dim = vcgs::JsonReader::Parse("{\"match\": \"all\", \"items\": [{\"kind\": \"stat\", \"ref\": \"light\", \"op\": \"below\", \"value\": 1}]}", &err);
+        if (vcgs::Rules::Check(strong, g) || !vcgs::Rules::Check(dim, g)) Fail("with nothing equipped, Damage should be below 2 and Light below 1");
+        g.GiveItem("diving_knife");
         vcgs::Rules::Apply(vcgs::JsonReader::Parse("[{\"kind\": \"equip\", \"ref\": \"diving_knife\"}]", &err), g);
+        if (!vcgs::Rules::Check(strong, g) || !vcgs::Rules::Check(dim, g)) Fail("with the knife equipped, Damage should be at least 2");
+        std::printf("stat conditions: Damage %g at least 2: %d\n", g.Stat("Damage"), vcgs::Rules::Check(strong, g) ? 1 : 0);
         const vcgs::Value armed = vcgs::JsonReader::Parse("{\"match\": \"all\", \"items\": [{\"kind\": \"equipped\", \"ref\": \"diving_knife\", \"op\": \"equipped\"}]}", &err);
         if (!vcgs::Rules::Check(armed, g) || g.UsesLeft("diving_knife") != 3) Fail("an effect should equip a new knife, unworn, and conditions should see it");
         g.UseItem("diving_knife");

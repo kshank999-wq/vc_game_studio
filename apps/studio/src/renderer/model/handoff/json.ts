@@ -199,8 +199,8 @@ export const storySchema = () => ({
       type: 'object',
       required: ['kind', 'ref', 'op'],
       properties: {
-        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill', 'equipped'] },
-        ref: { description: 'The key of the flag, item, object, choice, character, puzzle or scene it is about.', ...str },
+        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill', 'equipped', 'stat'] },
+        ref: { description: 'The key of the flag, item, object, choice, character, puzzle or scene it is about (for a stat condition, the stat\'s name).', ...str },
         op: { enum: ['is', 'isNot', 'has', 'hasNot', 'chose', 'didNotChoose', 'atLeast', 'atMost', 'solved', 'unsolved', 'visited', 'notVisited', 'done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable', 'below', 'equipped', 'notEquipped'] },
         value: { type: ['string', 'number'] },
       },
@@ -379,6 +379,7 @@ rules; an empty rule holds. A condition is \`{ kind, ref, op, value? }\`:
 | visited | a scene key | visited, notVisited | |
 | skill | a skill key | atLeast, below | a rank (1 is learned) |
 | equipped | an item key | equipped, notEquipped | |
+| stat | a stat's name (Damage) | atLeast, below | a number: the equipped items' stats added up |
 
 An effect is \`{ kind, ref, value?, amount? }\`: \`setFlag\` (value), \`give\`,
 \`take\`, \`setObject\` (value), \`arc\` (amount), \`solve\`, \`fire\`, \`learnSkill\`, \`equip\`, \`unequip\`.

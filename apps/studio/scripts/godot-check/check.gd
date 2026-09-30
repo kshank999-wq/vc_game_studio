@@ -548,8 +548,16 @@ func _initialize() -> void:
 		gear.use_item("diving_knife", game)
 	if game.has_item("diving_knife") or game.is_equipped("diving_knife") or gear.use_check("diving_knife", game) != "Equip Diving Knife first.":
 		fail("the knife should break after three uses, and be gone")
+	# Stat conditions read what the equipped items add up to, by name in any case.
+	var strong := { "match": "all", "items": [{ "kind": "stat", "ref": "Damage", "op": "atLeast", "value": 2 }] }
+	var dim := { "match": "all", "items": [{ "kind": "stat", "ref": "light", "op": "below", "value": 1 }] }
+	if VCGSRuleEngine.check(strong, game) or not VCGSRuleEngine.check(dim, game):
+		fail("with nothing equipped, Damage should be below 2 and Light below 1")
 	game.give_item("diving_knife")
 	VCGSRuleEngine.apply([{ "kind": "equip", "ref": "diving_knife" }], game)
+	if not VCGSRuleEngine.check(strong, game) or not VCGSRuleEngine.check(dim, game):
+		fail("with the knife equipped, Damage should be at least 2")
+	print("stat conditions: Damage ", gear.stat("Damage", game), " at least 2: ", VCGSRuleEngine.check(strong, game))
 	if not VCGSRuleEngine.check({ "match": "all", "items": [{ "kind": "equipped", "ref": "diving_knife", "op": "equipped" }] }, game) or gear.uses_left("diving_knife", game) != 3:
 		fail("an effect should equip a new knife, unworn, and conditions should see it")
 	gear.use_item("diving_knife", game)

@@ -1,3 +1,4 @@
+import { statNames } from '../../model/equipment';
 import { statesOf } from '../../model/details';
 import {
   EFFECTS,
@@ -37,15 +38,20 @@ const valueChoices = (project: Project, ref: string, kind: 'states' | 'options')
 
 const ConditionRow = ({ project, condition, onChange, onRemove }: { project: Project; condition: Condition; onChange: (c: Condition) => void; onRemove: () => void }) => {
   const subject = subjectOf(condition.kind);
-  const targets = objectsOf(project, subject.type);
-  const missing = condition.ref && !project.objects[condition.ref];
+  // A stat condition is about a stat's name (Damage, Light), not an element.
+  const stats = condition.kind === 'stat' ? [...new Set([...statNames(project), ...(condition.ref ? [condition.ref] : [])])] : [];
+  const targets = condition.kind === 'stat' ? stats.map((n) => ({ id: n, name: n })) : objectsOf(project, subject.type);
+  const missing = condition.kind !== 'stat' && condition.ref && !project.objects[condition.ref];
   return (
     <div className={`rule-row${missing ? ' broken' : ''}`}>
       <select
         className="inp"
         aria-label="About"
         value={condition.kind}
-        onChange={(e) => onChange(newCondition(e.currentTarget.value as Condition['kind'], objectsOf(project, subjectOf(e.currentTarget.value as Condition['kind']).type)[0]?.id ?? ''))}
+        onChange={(e) => {
+          const kind = e.currentTarget.value as Condition['kind'];
+          onChange(newCondition(kind, kind === 'stat' ? (statNames(project)[0] ?? 'Damage') : (objectsOf(project, subjectOf(kind).type)[0]?.id ?? '')));
+        }}
       >
         {SUBJECTS.map((s) => (
           <option key={s.kind} value={s.kind}>
@@ -79,12 +85,12 @@ const ConditionRow = ({ project, condition, onChange, onRemove }: { project: Pro
           ))}
         </select>
       )}
-      {subject.value === 'number' && condition.kind === 'arc' && (
+      {subject.value === 'number' && (condition.kind === 'arc' || condition.kind === 'skill' || condition.kind === 'stat') && (
         <input
           key={condition.value}
           className="inp num"
           type="number"
-          aria-label="Arc value"
+          aria-label={condition.kind === 'arc' ? 'Arc value' : condition.kind === 'skill' ? 'Rank' : 'Stat value'}
           defaultValue={condition.value}
           onBlur={(e) => onChange({ ...condition, value: Number(e.currentTarget.value) || 0 })}
         />

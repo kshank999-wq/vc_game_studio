@@ -930,6 +930,10 @@ namespace VCGS
                 case "lore": return game.KnowsLore(reference) == (op == "known");
                 case "mechanic": return game.HasMechanic(reference) == (op == "available");
                 case "equipped": return game.IsEquipped(reference) == (op == "equipped");
+                case "stat":
+                    var total = game.Stat(reference);
+                    var bar = D.Num(c, "value", 1);
+                    return op == "atLeast" ? total >= bar : total < bar;
                 case "skill":
                     var rank = game.SkillRank(reference);
                     var at = (int)D.Num(c, "value", 1);

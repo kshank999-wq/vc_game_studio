@@ -409,7 +409,11 @@ wear on each use, breaks a worn-out item (one is taken, the next starts
 unworn), takes an item out of its slot once none is carried, adds up stats by
 name, and refuses in the studio's words ("You don't carry Diving Knife.",
 "Out of Flare."). The `equipped` condition and the `equip` / `unequip` effects
-work everywhere, and a save keeps `equipped` (slot to item) and `wear`.
+work everywhere, and a save keeps `equipped` (slot to item) and `wear`. A
+`stat` condition (`{ "kind": "stat", "ref": "Damage", "op": "atLeast" |
+"below", "value": 2 }`) names a stat rather than a key and compares what the
+equipped items add up to (the same `stat` total, name in any case, 0 when
+nothing equipped has it); the IR keeps the name as written.
 
 | Engine | Equip / put away / use | Slot, stat, wear | Signals |
 | --- | --- | --- | --- |

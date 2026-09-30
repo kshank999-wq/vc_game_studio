@@ -1030,6 +1030,12 @@ namespace vcgs
             if (kind == "lore") return game.KnowsLore(ref) == (op == "known");
             if (kind == "mechanic") return game.HasMechanic(ref) == (op == "available");
             if (kind == "equipped") return game.IsEquipped(ref) == (op == "equipped");
+            if (kind == "stat")
+            {
+                const double total = game.Stat(ref);
+                const double bar = c["value"].Num(1);
+                return op == "atLeast" ? total >= bar : total < bar;
+            }
             if (kind == "skill")
             {
                 int rank = game.SkillRank(ref);

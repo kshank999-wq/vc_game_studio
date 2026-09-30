@@ -1,5 +1,5 @@
 import { describeCost, kindOf, learnCheck, payFor, ranksOf, treeOf } from './skills';
-import { equipCheck, equipmentOf, isEquipped, useCheck } from './equipment';
+import { equipCheck, equipmentOf, isEquipped, statsOf, useCheck } from './equipment';
 import { craftCheck, recipeOf } from './crafting';
 import { initialState, interactionsOf, statesOf } from './details';
 import { spineSequence } from './layout';
@@ -284,6 +284,8 @@ const settle = (d: Doing) => {
   // Anything now carried has been found.
   for (const [id, n] of Object.entries(d.world.items)) if (n > 0 && !d.world.found[id]) d.world = { ...d.world, found: { ...d.world.found, [id]: true } };
   for (let round = 0; round < 8; round++) {
+    // Stat conditions read what the equipped items add up to now.
+    d.world = { ...d.world, stats: statsOf(d.project, d.world) };
     let moved = false;
     for (const o of Object.values(d.project.objects)) {
       if (o.type === 'trigger' && !isEmpty(ruleOf(o)) && !d.world.fired[o.id] && evaluate(ruleOf(o), d.world)) {
@@ -315,6 +317,7 @@ const settle = (d: Doing) => {
     }
     if (!moved) return;
   }
+  d.world = { ...d.world, stats: statsOf(d.project, d.world) };
 };
 
 /** A cinematic as it plays: its running time and camera notes, and each shot of its shot list. */

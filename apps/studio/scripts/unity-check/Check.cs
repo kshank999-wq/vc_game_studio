@@ -275,8 +275,14 @@ static class Check
             g.Equip("diving_knife");
             for (var i = 0; i < 3; i++) g.UseItem("diving_knife");
             if (g.HasItem("diving_knife") || g.IsEquipped("diving_knife") || g.UseCheck("diving_knife") != "Equip Diving Knife first.") Fail("the knife should break after three uses, and be gone");
+            // Stat conditions read what the equipped items add up to, by name in any case.
+            var strong = Json.Parse("{\"match\": \"all\", \"items\": [{\"kind\": \"stat\", \"ref\": \"Damage\", \"op\": \"atLeast\", \"value\": 2}]}");
+            var dim = Json.Parse("{\"match\": \"all\", \"items\": [{\"kind\": \"stat\", \"ref\": \"light\", \"op\": \"below\", \"value\": 1}]}");
+            if (Rules.Check(strong, g) || !Rules.Check(dim, g)) Fail("with nothing equipped, Damage should be below 2 and Light below 1");
             g.GiveItem("diving_knife");
             Rules.Apply(Json.Parse("[{\"kind\": \"equip\", \"ref\": \"diving_knife\"}]"), g);
+            if (!Rules.Check(strong, g) || !Rules.Check(dim, g)) Fail("with the knife equipped, Damage should be at least 2");
+            Console.WriteLine("stat conditions: Damage " + g.Stat("Damage") + " at least 2: " + Rules.Check(strong, g));
             if (!Rules.Check(Json.Parse("{\"match\": \"all\", \"items\": [{\"kind\": \"equipped\", \"ref\": \"diving_knife\", \"op\": \"equipped\"}]}"), g) || g.UsesLeft("diving_knife") != 3) Fail("an effect should equip a new knife, unworn, and conditions should see it");
             g.UseItem("diving_knife");
             var h = new GameState(story);

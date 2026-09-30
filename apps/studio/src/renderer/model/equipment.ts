@@ -80,3 +80,17 @@ export const useCheck = (project: Project, state: PlayState, id: string): string
 
 /** An item's stats in words ("Damage 2 · Reach 1"). */
 export const describeStats = (e: Equipment): string => e.stats.map((s) => `${s.name} ${s.value}`).join(' · ');
+
+/** Every stat name equipment has, as first written (for choosing one in a rule). */
+export const statNames = (project: Project): string[] => {
+  const seen = new Map<string, string>();
+  for (const o of Object.values(project.objects)) for (const st of equipmentOf(o)?.stats ?? []) if (!seen.has(st.name.toLowerCase())) seen.set(st.name.toLowerCase(), st.name);
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+};
+
+/** The equipped items' stats added up, by name in lower case: what stat conditions read. */
+export const statsOf = (project: Project, state: Pick<PlayState, 'equipped'>): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const id of Object.values(state.equipped ?? {})) for (const st of equipmentOf(project.objects[id])?.stats ?? []) out[st.name.toLowerCase()] = (out[st.name.toLowerCase()] ?? 0) + st.value;
+  return out;
+};

@@ -578,6 +578,8 @@ const runtime = (): GeneratedFile[] => {
       '\t\t\treturn game.has_mechanic(ref) == (op == "available")',
       '\t\t"equipped":',
       '\t\t\treturn game.is_equipped(ref) == (op == "equipped")',
+      '\t\t"stat":',
+      '\t\t\treturn VCGSRules.stat(ref, game) >= float(c.get("value", 1)) if op == "atLeast" else VCGSRules.stat(ref, game) < float(c.get("value", 1))',
       '\t\t"skill":',
       '\t\t\treturn game.skill_rank(ref) >= int(c.get("value", 1)) if op == "atLeast" else game.skill_rank(ref) < int(c.get("value", 1))',
       '\treturn false',

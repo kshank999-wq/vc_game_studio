@@ -21,7 +21,9 @@ export type Condition =
   /** A skill's rank: at least n (learned: at least 1), or below n (not learned: below 1). */
   | { kind: 'skill'; ref: string; op: 'atLeast' | 'below'; value: number }
   /** An item of equipment, in its slot or not. */
-  | { kind: 'equipped'; ref: string; op: 'equipped' | 'notEquipped' };
+  | { kind: 'equipped'; ref: string; op: 'equipped' | 'notEquipped' }
+  /** What the equipped items add up to for a stat (ref is the stat's name, such as Damage): at least n, or below n. */
+  | { kind: 'stat'; ref: string; op: 'atLeast' | 'below'; value: number };
 
 export interface Rule {
   match: 'all' | 'any';
@@ -87,6 +89,7 @@ export const SUBJECTS: readonly Subject[] = [
   { kind: 'lore', label: 'Lore', type: 'lore', ops: [{ op: 'known', label: 'is known' }, { op: 'unknown', label: 'is not known' }], value: 'none' },
   { kind: 'mechanic', label: 'Mechanic', type: 'mechanic', ops: [{ op: 'available', label: 'is available' }, { op: 'unavailable', label: 'is not available' }], value: 'none' },
   { kind: 'skill', label: 'Skill', type: 'skill', ops: [{ op: 'atLeast', label: 'is at rank at least' }, { op: 'below', label: 'is below rank' }], value: 'number' },
+  { kind: 'stat', label: 'Stat', type: 'inventory', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'below', label: 'is below' }], value: 'number' },
   { kind: 'equipped', label: 'Equipment', type: 'inventory', ops: [{ op: 'equipped', label: 'is equipped' }, { op: 'notEquipped', label: 'is not equipped' }], value: 'none' },
   { kind: 'visited', label: 'Scene', type: 'scene', ops: [{ op: 'visited', label: 'was visited' }, { op: 'notVisited', label: 'was not visited' }], value: 'none' },
 ];
@@ -144,6 +147,8 @@ export const newCondition = (kind: Condition['kind'], ref = '', value = ''): Con
       return { kind, ref, op: 'atLeast', value: Number(value) || 1 };
     case 'equipped':
       return { kind, ref, op: 'equipped' };
+    case 'stat':
+      return { kind, ref, op: 'atLeast', value: Number(value) || 1 };
   }
 };
 
@@ -187,6 +192,8 @@ export const describeCondition = (project: Project, c: Condition): string => {
       return `${who} is ${c.op === 'available' ? '' : 'not '}available`;
     case 'equipped':
       return `${who} is ${c.op === 'equipped' ? '' : 'not '}equipped`;
+    case 'stat':
+      return `${c.ref || '…'} is ${c.op === 'atLeast' ? 'at least' : 'below'} ${c.value}`;
     case 'skill':
       return c.value <= 1 ? `${who} is ${c.op === 'atLeast' ? '' : 'not '}learned` : `${who} ${c.op === 'atLeast' ? 'at rank' : 'below rank'} ${c.value}${c.op === 'atLeast' ? '+' : ''}`;
   }
@@ -258,6 +265,8 @@ export interface PlayState {
   equipped: Record<string, string>;
   /** How many times each item of equipment has been used, toward its durability. */
   wear: Record<string, number>;
+  /** What the equipped items add up to, by stat name in lower case (kept up to date by the play-through). */
+  stats?: Record<string, number>;
 }
 
 export type QuestState = 'active' | 'done';
@@ -293,6 +302,10 @@ export const holds = (c: Condition, s: PlayState): boolean => {
       return !!s.mechanics[c.ref] === (c.op === 'available');
     case 'equipped':
       return Object.values(s.equipped ?? {}).includes(c.ref) === (c.op === 'equipped');
+    case 'stat': {
+      const total = s.stats?.[c.ref.trim().toLowerCase()] ?? 0;
+      return c.op === 'atLeast' ? total >= c.value : total < c.value;
+    }
     case 'skill':
       return c.op === 'atLeast' ? (s.skills?.[c.ref] ?? 0) >= c.value : (s.skills?.[c.ref] ?? 0) < c.value;
   }
@@ -363,7 +376,7 @@ export const everyRule = (project: Project): { rule?: Rule; effects?: Effect[]; 
 /** Conditions and effects that point at something no longer in the project (spec §25). */
 export const brokenReferences = (project: Project): { owner: string; where: string }[] =>
   everyRule(project)
-    .filter(({ rule, effects }) => conditionsIn(rule).some((c) => !project.objects[c.ref]) || (effects ?? []).some((e) => !project.objects[e.ref]))
+    .filter(({ rule, effects }) => conditionsIn(rule).some((c) => c.kind !== 'stat' && !project.objects[c.ref]) || (effects ?? []).some((e) => !project.objects[e.ref]))
     .map(({ owner, where }) => ({ owner, where }));
 
 /** Every effect that sets this state, wherever it is. */

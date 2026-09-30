@@ -62,8 +62,11 @@ monitor while you fix it on another.
   what was in the slot; a worn-out item breaks and one is gone; an item no
   longer carried comes out of its slot. Each is a decision on the path,
   replayed when a path is checked. Rules can ask *Equipment › is equipped / is
-  not equipped*, and the effects *Equip item* and *Put item away* do it from
-  the story. In the sample, the Diving Knife (Damage 2, three uses) comes with
+  not equipped* and *Stat › is at least / is below* a number (what the
+  equipped items add up to for that stat, 0 with none; the name is chosen
+  from the stats your equipment has, in any case), and the effects *Equip
+  item* and *Put item away* do it from the story. A trigger, puzzle or quest
+  waiting on a stat happens as soon as the gear that meets it is equipped. In the sample, the Diving Knife (Damage 2, three uses) comes with
   lighting the lantern, and the eels leave a Flare Pistol (Damage 1, Light 3,
   a flare a shot) and two flares.
 - **Crafting** (spec §8): an inventory item's Game Bible entry can give it a

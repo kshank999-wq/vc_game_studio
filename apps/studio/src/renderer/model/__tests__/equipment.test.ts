@@ -102,3 +102,50 @@ describe('equipment in the handoff', () => {
     expect(storySchema().properties.equipment).toBeTruthy();
   });
 });
+
+describe('conditions on stat values (spec §8)', () => {
+  it('ask what the equipped items add up to, by stat name in any case', async () => {
+    const { brokenReferences } = await import('../rules');
+    const { statNames, statsOf } = await import('../equipment');
+    const p = sunkenVault();
+    const knife = byName(p, 'Diving Knife');
+    const pistol = byName(p, 'Flare Pistol');
+    expect(statNames(p)).toEqual(['Damage', 'Light']);
+    const strong = { kind: 'stat' as const, ref: 'Damage', op: 'atLeast' as const, value: 2 };
+    const dim = { kind: 'stat' as const, ref: 'light', op: 'below' as const, value: 1 };
+    expect(describeCondition(p, strong)).toBe('Damage is at least 2');
+    expect(describeCondition(p, dim)).toBe('light is below 1');
+    let world: PlayWorld = { ...startWorld(p), items: { [knife]: 1, [pistol]: 1 } };
+    const rule = (c: typeof strong | typeof dim) => evaluate({ match: 'all', items: [c] }, { ...world, stats: statsOf(p, world) });
+    expect([rule(strong), rule(dim)]).toEqual([false, true]);
+    world = gearIn(p, world, knife, 'equip').world;
+    expect([rule(strong), rule(dim)]).toEqual([true, true]);
+    world = gearIn(p, world, pistol, 'equip').world;
+    expect(statsOf(p, world)).toEqual({ damage: 1, light: 3 });
+    expect([rule(strong), rule(dim)]).toEqual([false, false]);
+    // A stat name is not a reference to anything in the story.
+    const withRule: Project = { ...p, events: p.events.map((e, i) => (i === 0 ? { ...e, when: { match: 'all', items: [strong] } } : e)) };
+    expect(brokenReferences(withRule)).toEqual(brokenReferences(p));
+  });
+
+  it('are settled against in play: a trigger waiting on a stat fires once the gear is equipped', () => {
+    const base = sunkenVault();
+    const knife = byName(base, 'Diving Knife');
+    const drains = byName(base, 'Seam drains');
+    const p: Project = { ...base, objects: { ...base.objects, [drains]: { ...base.objects[drains]!, data: { ...base.objects[drains]!.data, rule: { match: 'all', items: [{ kind: 'stat', ref: 'Damage', op: 'atLeast', value: 2 }] } } } } };
+    const play = playToDecision(p, startPlay(p));
+    expect(play.world.fired[drains]).toBeFalsy();
+    const armed = gear(p, play, knife, 'equip');
+    expect(armed.world.stats).toEqual({ damage: 2 });
+    expect(armed.world.fired[drains]).toBe(true);
+    expect(gear(p, armed, knife, 'unequip').world.stats).toEqual({});
+  });
+
+  it('keep the stat name in the handoff', async () => {
+    const { buildIR } = await import('../handoff/ir');
+    const p = sunkenVault();
+    const strong = { kind: 'stat' as const, ref: 'Damage', op: 'atLeast' as const, value: 2 };
+    const withRule: Project = { ...p, events: p.events.map((e, i) => (i === 0 ? { ...e, when: { match: 'all', items: [strong] } } : e)) };
+    expect(JSON.stringify(buildIR(withRule))).toContain('"kind":"stat","ref":"Damage"');
+  });
+});
