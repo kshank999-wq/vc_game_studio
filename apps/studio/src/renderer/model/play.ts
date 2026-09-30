@@ -880,6 +880,37 @@ export const codexNotesText = (project: Project, world: PlayWorld, notes: Readon
   return [`CODEX NOTES · ${project.name}`, ...(parts.length ? parts : ['No notes yet.'])].join('\n\n');
 };
 
+/** The style of the printable notes page (the same in the engines' printable page). */
+export const NOTES_PRINT_STYLE =
+  'body{font-family:Georgia,serif;margin:2em auto;max-width:40em;color:#111}h1{margin:0}.sub{margin:.2em 0 1.5em;color:#555}h2{border-bottom:1px solid #999;margin-top:1.5em}h3{margin:.8em 0 .2em;font-size:1em}p{margin:0 0 .4em}.note{break-inside:avoid}@page{margin:2cm}';
+
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
+ * Exported notes (codexNotesText) as a page to print: the story's name, then
+ * each section's notes under its name, entry by entry. The engines' codex
+ * screens print the same page from the same text.
+ */
+export const notesPrintHtml = (notesText: string): string => {
+  const [first = '', ...blocks] = notesText.replace(/\r\n?/g, '\n').split('\n\n');
+  const name = first.replace(/^CODEX NOTES · /, '');
+  const body: string[] = [];
+  let section = '';
+  for (const block of blocks) {
+    const [head = '', ...rest] = block.split('\n');
+    const at = head.indexOf(' · ');
+    if (at < 0) {
+      body.push(`<p>${escapeHtml(block)}</p>`);
+      continue;
+    }
+    const s = head.slice(0, at);
+    if (s !== section) body.push(`<h2>${escapeHtml(s.charAt(0) + s.slice(1).toLowerCase())}</h2>`);
+    section = s;
+    body.push(`<div class="note"><h3>${escapeHtml(head.slice(at + 3))}</h3><p>${rest.map(escapeHtml).join('<br>')}</p></div>`);
+  }
+  return `<!doctype html>\n<html><head><meta charset="utf-8"><title>${escapeHtml(name)} · codex notes</title><style>${NOTES_PRINT_STYLE}</style></head>\n<body><h1>${escapeHtml(name)}</h1><p class="sub">Codex notes</p>\n${body.join('\n')}\n</body></html>\n`;
+};
+
 /**
  * An entry's name as notes are matched by: its first line without the quest
  * bullet, a quest's goal, or states in brackets ("(won)", "(carried ×2)"),

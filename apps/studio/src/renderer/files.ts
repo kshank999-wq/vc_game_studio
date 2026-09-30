@@ -134,8 +134,8 @@ export const saveProjectFile = async (project: Project, file: ProjectFile | null
 };
 
 /** Hand the person a text file to keep (a download). */
-export const downloadText = (name: string, text: string): void => {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+export const downloadText = (name: string, text: string, type = 'text/plain'): void => {
+  const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
   const a = document.createElement('a');
   a.href = url;
   a.download = name;
@@ -188,6 +188,34 @@ export const readText = (file: Blob): Promise<string> =>
 
 /** The name for a project's exported codex notes. */
 export const notesFileNameFor = (project: Project): string => fileNameFor(project).replace(/\.[^.]+$/, '') + ' codex notes.txt';
+
+/** The printable notes page's file name, beside the notes' own. */
+export const notesPageNameFor = (project: Project): string => notesFileNameFor(project).replace(/\.txt$/, '.html');
+
+/**
+ * Print a page: it loads in a hidden frame, which then asks for the print
+ * dialog. False when the page may not print (an embedded page, say).
+ */
+export const printHtml = (html: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    const frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    frame.addEventListener('load', () => {
+      const win = frame.contentWindow;
+      try {
+        if (!win) throw new Error('no frame');
+        win.focus();
+        win.print();
+        resolve(true);
+      } catch {
+        resolve(false);
+      }
+      setTimeout(() => frame.remove(), 60_000);
+    });
+    frame.srcdoc = html;
+    document.body.appendChild(frame);
+  });
 
 /** Can this file be written back to without asking (so autosave can use it)? */
 export const canWriteBack = (file: ProjectFile | null): boolean => !!file && (!!file.path || !!file.handle);

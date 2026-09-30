@@ -266,6 +266,12 @@ public:
     /** Save the notes as a text file (Saved/CodexNotes.txt when Path is empty); returns where, or "" if it could not. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") FString ExportCodexNotes(const FString& Path = TEXT(""));
     /**
+     * Print the notes: save them as a page (Saved/CodexNotes.html when Path is
+     * empty) and, with bOpen, open it in the browser to print from. Returns
+     * where, or "" if it could not.
+     */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") FString PrintCodexNotes(const FString& Path = TEXT(""), bool bOpen = true);
+    /**
      * Import exported notes (from a codex here, the studio's or another engine's):
      * each "SECTION · entry" block is matched to an entry by section and name,
      * and those notes are set (the others stay). Returns how many; Skipped gets
@@ -327,6 +333,7 @@ private:
 #include "VcgsSubsystem.h"
 #include "VcgsConvert.h"
 #include "HAL/PlatformApplicationMisc.h"
+#include "HAL/PlatformProcess.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
@@ -464,6 +471,14 @@ FString UVcgsSubsystem::ExportCodexNotes(const FString& Path)
     const FString Where = Path.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("CodexNotes.txt") : Path;
     return FFileHelper::SaveStringToFile(ToF(CodexData->NotesText()), *Where, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM) ? Where : FString();
 }
+FString UVcgsSubsystem::PrintCodexNotes(const FString& Path, bool bOpen)
+{
+    if (!CodexData) return FString();
+    const FString Where = Path.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("CodexNotes.html") : Path;
+    if (!FFileHelper::SaveStringToFile(ToF(CodexData->NotesPage()), *Where, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM)) return FString();
+    if (bOpen) FPlatformProcess::LaunchFileInDefaultExternalApplication(*FPaths::ConvertRelativePathToFull(Where));
+    return Where;
+}
 TArray<FString> UVcgsSubsystem::GetCodexEntries(const FString& Search, const FString& Section, const FString& Sort) const
 {
     TArray<FString> Keys;
@@ -587,7 +602,8 @@ namespace vcgs { class Codex; }
  * is on (★); Tab reaches the bookmarks alone too. N writes a note on it: type
  * it, Enter keeps it, Escape leaves it. E saves every note as a text file
  * (ExportCodexNotes on the subsystem), and I reads it back (ImportCodexNotes).
- * Y copies the notes to share them, V takes in notes someone shared. The notes
+ * Y copies the notes to share them, V takes in notes someone shared, and P
+ * opens them as a page to print (PrintCodexNotes). The notes
  * sync with Saved/CodexNotesSync.json (SyncCodexNotes) when the codex opens,
  * every few seconds while it is open, and after each note.
  */
@@ -744,6 +760,11 @@ void AVcgsCodexHUD::DrawHUD()
         const FString Where = Story->ExportCodexNotes();
         StatusText = Where.IsEmpty() ? std::string("Could not save the notes.") : "Notes saved to " + ToStd(Where);
     }
+    else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::P))
+    {
+        const FString Where = Story->PrintCodexNotes();
+        StatusText = Where.IsEmpty() ? std::string("Could not save the notes page.") : "Notes page opened to print: " + ToStd(Where);
+    }
     else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::Y))
     {
         Story->CopyCodexNotes();
@@ -840,7 +861,7 @@ void AVcgsCodexHUD::DrawHUD()
         DrawText(ToF(Line), Line == "CODEX" ? Gold : Ink, Left + 18.f, Y);
         Y += 22.f;
     }
-    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B, N · E save, I load, Y share, V paste notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
+    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B, N · E save, I load, Y share, V paste, P print notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
 }
 `,
 

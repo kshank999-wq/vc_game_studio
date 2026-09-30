@@ -370,6 +370,13 @@ func _initialize() -> void:
 	var saved: String = silt_player.export_codex_notes("user://vcgs_check_notes.txt")
 	if saved == "" or FileAccess.get_file_as_string(saved) != notes:
 		fail("the notes should be saved as a text file, got " + saved)
+	# Print them: the same notes as a page, section by section, saved to open and print.
+	var page: String = silt_player.codex_notes_page()
+	if not page.begins_with("<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>The Sunken Vault · codex notes</title>") or not page.contains("<h1>The Sunken Vault</h1><p class=\"sub\">Codex notes</p>\n<h2>Quests</h2>\n<div class=\"note\"><h3>Open the vault — Reach the vault chamber and open the door</h3><p>Key first, then the lever</p></div>\n<h2>Lore</h2>\n<div class=\"note\"><h3>THE DROWNED ORDER</h3><p>Priests, not monks</p></div>\n</body></html>\n"):
+		fail("the notes page should list each note under its section, got " + page)
+	var printed: String = silt_player.print_codex_notes("user://vcgs_check_notes.html", false)
+	if printed == "" or FileAccess.get_file_as_string(printed) != page:
+		fail("the notes page should be saved to print, got " + printed)
 	game.set_note("quests:open_the_vault", "")
 	# Import them back: matched by section and name, whatever the entry's state now.
 	var file := FileAccess.open("user://vcgs_check_import.txt", FileAccess.WRITE)

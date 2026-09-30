@@ -158,7 +158,12 @@ the studio's play-through:
   `paste_codex_notes()` (and `take_codex_notes(text)`); Unity
   `VcgsCodex.ShareNotes` / `PasteNotes`; Unreal `CopyCodexNotes` /
   `PasteCodexNotes` (the plugin now uses the ApplicationCore module for the
-  clipboard). And the notes **sync** through a sync file (JSON,
+  clipboard). P prints them: the same page as the studio prints (the story's
+  name, then each section's notes), saved as an HTML file and opened in the
+  browser to print from: Godot `print_codex_notes()` (user://codex_notes.html)
+  and `codex_notes_page()`; Unity `VcgsCodex.PrintNotes()` (persistentDataPath)
+  and `Codex.NotesPage()`; Unreal `PrintCodexNotes` (Saved/CodexNotes.html)
+  and `vcgs::Codex::NotesPage()`. And the notes **sync** through a sync file (JSON,
   `"format": "vcgs-codex-notes-sync"`): every note with when it was last
   changed (a note taken off kept, empty), merged so that for each entry the
   newer note wins, and written back. The placeholder screens sync when the

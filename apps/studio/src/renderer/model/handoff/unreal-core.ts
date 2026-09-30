@@ -4,11 +4,14 @@
  * reads story.json and plays it the way the Godot and Unity runtimes do, so
  * it can be compiled and run outside Unreal, and is.
  */
+import { NOTES_PRINT_STYLE } from '../play';
+
 export const VCGS_CORE_H = String.raw`// VCGS Runtime for Unreal: the story's logic in portable C++17.
 // The same for every project; safe to commit. No exceptions, no RTTI.
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <functional>
@@ -1146,6 +1149,73 @@ namespace vcgs
                 any = true;
             }
             return any ? out : out + "\n\nNo notes yet.";
+        }
+
+        /** The style of the printable notes page (the same as the studio's). */
+        static constexpr const char* PrintStyle = ${JSON.stringify(NOTES_PRINT_STYLE)};
+
+        /**
+         * The notes as a page to print: the story's name, then each section's
+         * notes under its name, entry by entry (the same page as the studio's
+         * play-through prints).
+         */
+        std::string NotesPage() const { return PageOf(NotesText()); }
+
+        /** Exported notes (NotesText) as a page to print. */
+        static std::string PageOf(const std::string& notesText)
+        {
+            auto esc = [](const std::string& s)
+            {
+                std::string out;
+                for (char c : s) out += c == '&' ? "&amp;" : c == '<' ? "&lt;" : c == '>' ? "&gt;" : std::string(1, c);
+                return out;
+            };
+            std::string text;
+            for (size_t i = 0; i < notesText.size(); ++i)
+            {
+                if (notesText[i] != '\r') text += notesText[i];
+                else if (i + 1 >= notesText.size() || notesText[i + 1] != '\n') text += '\n';
+            }
+            std::vector<std::string> blocks;
+            for (size_t from = 0;;)
+            {
+                const size_t at = text.find("\n\n", from);
+                blocks.push_back(text.substr(from, at == std::string::npos ? std::string::npos : at - from));
+                if (at == std::string::npos) break;
+                from = at + 2;
+            }
+            const std::string head = "CODEX NOTES · ";
+            const std::string name = blocks[0].rfind(head, 0) == 0 ? blocks[0].substr(head.size()) : blocks[0];
+            std::string body, section;
+            for (size_t i = 1; i < blocks.size(); ++i)
+            {
+                std::vector<std::string> lines;
+                for (size_t from = 0;;)
+                {
+                    const size_t at = blocks[i].find('\n', from);
+                    lines.push_back(blocks[i].substr(from, at == std::string::npos ? std::string::npos : at - from));
+                    if (at == std::string::npos) break;
+                    from = at + 1;
+                }
+                const size_t at = lines[0].find(" · ");
+                if (at == std::string::npos)
+                {
+                    body += "\n<p>" + esc(blocks[i]) + "</p>";
+                    continue;
+                }
+                const std::string s = lines[0].substr(0, at);
+                if (s != section)
+                {
+                    std::string title = s;
+                    for (size_t c = 1; c < title.size(); ++c) title[c] = static_cast<char>(std::tolower(static_cast<unsigned char>(title[c])));
+                    body += "\n<h2>" + esc(title) + "</h2>";
+                }
+                section = s;
+                std::string rest;
+                for (size_t j = 1; j < lines.size(); ++j) rest += (j > 1 ? "<br>" : "") + esc(lines[j]);
+                body += "\n<div class=\"note\"><h3>" + esc(lines[0].substr(at + std::string(" · ").size())) + "</h3><p>" + rest + "</p></div>";
+            }
+            return "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>" + esc(name) + " · codex notes</title><style>" + PrintStyle + "</style></head>\n<body><h1>" + esc(name) + "</h1><p class=\"sub\">Codex notes</p>" + body + "\n</body></html>\n";
         }
 
         /** The entries shown, in order, by key ("lore:…"): what a cursor moves through. */

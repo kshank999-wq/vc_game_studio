@@ -79,7 +79,11 @@ monitor while you fix it on another.
   the codex yet are listed, not lost silently. **Share notes** hands the same
   text to the system's share sheet where there is one (a phone, say), and
   copies it otherwise, to paste into a message; **Paste notes** takes in notes
-  someone shared, the same way Import notes does. The notes **sync** across
+  someone shared, the same way Import notes does. **Print notes** lays them
+  out as a page (the story's name, then each section's notes, entry by entry)
+  and opens the print dialog; where the page may not print (an embedded page,
+  say) it saves that page as an .html file to open and print instead. The
+  notes **sync** across
   the studio's windows in this browser, and are there again next time: each
   keeps when it was last changed, and the newer one wins (a note taken off
   stays off). The engines sync the same way through a file. The engines' codex

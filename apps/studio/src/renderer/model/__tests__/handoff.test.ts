@@ -389,6 +389,9 @@ describe('quests and encounters in the engines', () => {
     const player = file('addons/vcgs_runtime/debug_player.gd');
     expect(player).toContain('func codex_text(query := "", section := "", sort := "", cursor := "") -> String:');
     expect(player).toContain('game.lore_discovered.connect(_on_codex_news)');
+    // P prints the notes: the same page as the studio's.
+    expect(player).toContain('func print_codex_notes(path := "user://codex_notes.html", open := true) -> String:');
+    expect(RUNTIME_FILES['VcgsCodex.cs']).toContain('public string PrintNotes(string path = null, bool open = true)');
     expect(player).toContain('game.quest_started.connect(_on_codex_news)');
     // Unity and Unreal have one too: the same text, a screen to draw it.
     expect(RUNTIME_FILES['Codex.cs']).toContain('public string Text(string query = "", string section = "", string sort = "", string cursor = "")');

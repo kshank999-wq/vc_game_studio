@@ -5,6 +5,8 @@
  * thin Unity wrappers around it. C# 9, for Unity 2021.2 and later.
  */
 
+import { NOTES_PRINT_STYLE } from '../play';
+
 const HEAD = '// VCGS Runtime for Unity. The same for every project; safe to commit.';
 
 export const RUNTIME_FILES: Record<string, string> = {
@@ -1504,6 +1506,43 @@ namespace VCGS
             return string.Join("\n\n", parts);
         }
 
+        /// <summary>The style of the printable notes page (the same as the studio's).</summary>
+        public const string PrintStyle = ${JSON.stringify(NOTES_PRINT_STYLE)};
+
+        /// <summary>
+        /// The notes as a page to print: the story's name, then each section's
+        /// notes under its name, entry by entry (the same page as the studio's
+        /// play-through prints).
+        /// </summary>
+        public string NotesPage() => PageOf(NotesText());
+
+        /// <summary>Exported notes (NotesText) as a page to print.</summary>
+        public static string PageOf(string notesText)
+        {
+            static string Esc(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+            var blocks = notesText.Replace("\r\n", "\n").Replace("\r", "\n").Split(new[] { "\n\n" }, StringSplitOptions.None);
+            var name = blocks[0].StartsWith("CODEX NOTES · ") ? blocks[0].Substring("CODEX NOTES · ".Length) : blocks[0];
+            var body = new List<string>();
+            var section = "";
+            for (var i = 1; i < blocks.Length; i++)
+            {
+                var lines = blocks[i].Split('\n');
+                var at = lines[0].IndexOf(" · ", StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    body.Add("<p>" + Esc(blocks[i]) + "</p>");
+                    continue;
+                }
+                var s = lines[0].Substring(0, at);
+                if (s != section) body.Add("<h2>" + Esc(s.Substring(0, Math.Min(1, s.Length)) + s.Substring(Math.Min(1, s.Length)).ToLowerInvariant()) + "</h2>");
+                section = s;
+                var rest = new List<string>();
+                for (var j = 1; j < lines.Length; j++) rest.Add(Esc(lines[j]));
+                body.Add("<div class=\"note\"><h3>" + Esc(lines[0].Substring(at + 3)) + "</h3><p>" + string.Join("<br>", rest) + "</p></div>");
+            }
+            return "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>" + Esc(name) + " · codex notes</title><style>" + PrintStyle + "</style></head>\n<body><h1>" + Esc(name) + "</h1><p class=\"sub\">Codex notes</p>\n" + string.Join("\n", body) + "\n</body></html>\n";
+        }
+
         /// <summary>The entries shown, in order, by key ("lore:…"): what a cursor moves through.</summary>
         public List<string> EntryKeys(string query = "", string section = "", string sort = "")
         {
@@ -1530,7 +1569,8 @@ namespace VCGS
     /// to order each section; the arrows move a cursor (▶) and B bookmarks
     /// the entry it is on (★Bookmarks shows only those), N writes a note on it,
     /// E saves every note as a text file, I reads them back, Y copies them to
-    /// share them, and V takes in notes someone shared. Drawn with
+    /// share them, V takes in notes someone shared, and P opens them as a
+    /// page to print. Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1580,6 +1620,28 @@ namespace VCGS
 
         /// <summary>What just happened, shown under the codex (the notes saved, say).</summary>
         public string Status { get; private set; } = "";
+
+        /// <summary>
+        /// Print the notes (P): save them as a page and open it, to print from
+        /// the browser. Returns where, or "" if it could not.
+        /// </summary>
+        public string PrintNotes(string path = null, bool open = true)
+        {
+            if (Book == null) return "";
+            path = path ?? System.IO.Path.Combine(Application.persistentDataPath, "codex_notes.html");
+            try
+            {
+                System.IO.File.WriteAllText(path, Book.NotesPage());
+                if (open) Application.OpenURL(new Uri(path).AbsoluteUri);
+                Status = "Notes page opened to print: " + path;
+                return path;
+            }
+            catch (Exception)
+            {
+                Status = "Could not save the notes page.";
+                return "";
+            }
+        }
 
         /// <summary>Save every note as a text file (E); returns where, or "" if it could not.</summary>
         public string ExportNotes(string path = null)
@@ -1744,6 +1806,11 @@ namespace VCGS
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.Y)
             {
                 ShareNotes();
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.P)
+            {
+                PrintNotes();
                 e.Use();
             }
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.V)

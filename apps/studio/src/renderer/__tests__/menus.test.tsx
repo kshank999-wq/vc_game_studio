@@ -274,6 +274,31 @@ describe('play-through', () => {
     fireEvent.click(within(codex).getByRole('button', { name: 'Share notes' }));
     await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('This page cannot copy by itself'));
     expect((within(codex).getByLabelText('Notes to copy') as HTMLTextAreaElement).value).toContain('LORE · THE DROWNED ORDER\nPriests');
+    // Print them: the notes as a page, in a hidden frame that asks for the print dialog.
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {}); // jsdom has no print dialog
+    fireEvent.click(within(codex).getByRole('button', { name: 'Print notes' }));
+    const frame = document.querySelector('iframe[aria-hidden="true"]') as HTMLIFrameElement;
+    expect(frame.srcdoc).toContain('<h2>Lore</h2>\n<div class="note"><h3>THE DROWNED ORDER</h3><p>Priests</p></div>');
+    const printed = vi.fn();
+    Object.defineProperty(frame.contentWindow!, 'print', { configurable: true, value: printed });
+    frame.dispatchEvent(new Event('load'));
+    await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('Printing the notes.'));
+    expect(printed).toHaveBeenCalled();
+    frame.remove();
+    // No print dialog: save them as a page to print from.
+    const pageClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    fireEvent.click(within(codex).getByRole('button', { name: 'Save as a page' }));
+    expect(saved.at(-1)!.type).toBe('text/html;charset=utf-8');
+    expect(await read(saved.at(-1)!)).toContain('<title>The Sunken Vault · codex notes</title>');
+    // Where the page may not print at all, it is saved straight away.
+    fireEvent.click(within(codex).getByRole('button', { name: 'Print notes' }));
+    const refused = document.querySelector('iframe[aria-hidden="true"]') as HTMLIFrameElement;
+    Object.defineProperty(refused.contentWindow!, 'print', { configurable: true, value: () => { throw new Error('blocked'); } });
+    refused.dispatchEvent(new Event('load'));
+    await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('This page cannot print by itself'));
+    refused.remove();
+    pageClick.mockRestore();
+    quiet.mockRestore();
     // Sync: the notes are kept in the browser, and a note changed in another window turns up here.
     const storedKey = Object.keys(localStorage).find((k) => k.startsWith('vcgs.codexNotes.'))!;
     const stored = JSON.parse(localStorage.getItem(storedKey)!);
@@ -294,7 +319,7 @@ describe('play-through', () => {
     expect(within(codex).queryByLabelText('Shared notes to take in')).toBeNull();
     fireEvent.click(within(sections).getByRole('button', { name: '★ Bookmarks' }));
     URL.createObjectURL = created;
-    URL.revokeObjectURL = revoked;
+    if (revoked) URL.revokeObjectURL = revoked; // else keep the stub: a download's clean-up may still be pending
     expect(screen.getByRole('dialog', { name: 'Codex' })).toBeTruthy();
     fireEvent.change(search, { target: { value: 'lantern' } });
     fireEvent.click(within(sections).getByRole('button', { name: 'All' }));

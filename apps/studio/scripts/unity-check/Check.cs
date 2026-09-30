@@ -153,6 +153,10 @@ static class Check
         // Export them: each entry with a note, in the codex's order.
         sorting.SetNote("encounters:" + Encounters.EelSwarm, "Bring the lantern");
         if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nPriests, not monks") Fail("the notes export should list each noted entry (the eels are not met here), got " + book.NotesText());
+        // Print them: the same notes as a page, section by section.
+        var page = book.NotesPage();
+        if (!page.StartsWith("<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>The Sunken Vault · codex notes</title><style>" + Codex.PrintStyle + "</style></head>") || !page.EndsWith("<h1>The Sunken Vault</h1><p class=\"sub\">Codex notes</p>\n<h2>Lore</h2>\n<div class=\"note\"><h3>THE DROWNED ORDER</h3><p>Priests, not monks</p></div>\n</body></html>\n")) Fail("the notes page should list each note under its section, got " + page);
+        if (!Codex.PageOf("CODEX NOTES · A & B\n\nITEMS · <KEY>\none\ntwo").Contains("<title>A &amp; B · codex notes</title>") || !Codex.PageOf("CODEX NOTES · A & B\n\nITEMS · <KEY>\none\ntwo").Contains("<h2>Items</h2>\n<div class=\"note\"><h3>&lt;KEY&gt;</h3><p>one<br>two</p></div>")) Fail("the notes page should escape its text and keep a note's lines");
         sorting.SetNote("encounters:" + Encounters.EelSwarm, "");
         // Import them back: matched by section and name, whatever the entry's state.
         var read = book.ImportNotes("CODEX NOTES · The Sunken Vault\r\n\r\nLORE · THE LAST EXPEDITION (seen)\r\nPry marks,\r\nby the lock\r\n\r\nENCOUNTERS · EEL SWARM (won)\r\nNot met here");
@@ -182,6 +186,7 @@ static class Check
         // The screen compiles with Unity's GUI; its button reads the same codex.
         var screen = new UnityEngine.GameObject("Codex").AddComponent<VcgsCodex>();
         if (screen.ButtonText() != "") Fail("the codex screen should wait for VcgsGame");
+        if (screen.PrintNotes() != "" || UnityEngine.Application.opened.Count != 0) Fail("with no game there are no notes to print");
         if (silt.Win()) Fail("there is no encounter to win now");
 
         // SC-01 opens by lighting the lantern: its oil becomes a mechanic in play (an effect), with its tuning.

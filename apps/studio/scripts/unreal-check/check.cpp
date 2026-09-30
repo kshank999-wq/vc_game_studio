@@ -202,6 +202,12 @@ int main()
             if (book.Text("not monks").find("THE DROWNED ORDER") == std::string::npos) Fail("a search should find the note, got " + book.Text("not monks"));
             // Export them: each entry with a note, in the codex's order.
             if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nPriests, not monks") Fail("the notes export should list each noted entry, got " + book.NotesText());
+            // Print them: the same notes as a page, section by section.
+            const std::string page = book.NotesPage();
+            const std::string pageEnd = "<h1>The Sunken Vault</h1><p class=\"sub\">Codex notes</p>\n<h2>Lore</h2>\n<div class=\"note\"><h3>THE DROWNED ORDER</h3><p>Priests, not monks</p></div>\n</body></html>\n";
+            if (page.rfind("<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>The Sunken Vault · codex notes</title><style>" + std::string(vcgs::Codex::PrintStyle) + "</style></head>", 0) != 0 || page.size() < pageEnd.size() || page.compare(page.size() - pageEnd.size(), pageEnd.size(), pageEnd) != 0) Fail("the notes page should list each note under its section, got " + page);
+            const std::string other = vcgs::Codex::PageOf("CODEX NOTES · A & B\r\n\r\nITEMS · <KEY>\r\none\r\ntwo");
+            if (other.find("<title>A &amp; B · codex notes</title>") == std::string::npos || other.find("<h2>Items</h2>\n<div class=\"note\"><h3>&lt;KEY&gt;</h3><p>one<br>two</p></div>") == std::string::npos) Fail("the notes page should escape its text and keep a note's lines, got " + other);
             // Import them back: matched by section and name, whatever the entry's state.
             const vcgs::Codex::ReadNotes read = book.NotesFrom("CODEX NOTES · The Sunken Vault\r\n\r\nLORE · THE LAST EXPEDITION (seen)\r\nPry marks,\r\nby the lock\r\n\r\nENCOUNTERS · EEL SWARM (won)\r\nNot met here");
             if (read.Notes.size() != 1 || read.Notes[0].first != std::string("lore:") + Lore::TheLastExpedition || read.Notes[0].second != "Pry marks,\nby the lock" || Join(read.Skipped, ",") != "ENCOUNTERS · EEL SWARM (won)") Fail("importing notes should match them by section and name");

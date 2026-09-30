@@ -5309,9 +5309,14 @@ kbd {
 
 .play-codex-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.play-codex-head .pref-hint {
+  flex: 1 1 calc(100% - 90px); /* its own line: the buttons share the next */
 }
 
 .play-codex-search {

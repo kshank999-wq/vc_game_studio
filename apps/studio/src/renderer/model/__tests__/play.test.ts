@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advance, choose, endFreePlay, interact, playToDecision, promptOf, settleWorld, setWorld, startPlay, startWorld, type Play } from '../play';
+import { advance, choose, endFreePlay, notesPrintHtml, NOTES_PRINT_STYLE, interact, playToDecision, promptOf, settleWorld, setWorld, startPlay, startWorld, type Play } from '../play';
 import { setConnectionRules } from '../project';
 import { sunkenVault } from '../sample';
 import type { Project } from '../types';
@@ -584,3 +584,23 @@ describe('the codex', () => {
     expect(codexText(dark, play.world)).toContain('ENCOUNTERS · 1 met, 0 won');
   });
 });
+
+describe('notesPrintHtml', () => {
+  it('turns exported notes into a page to print, section by section', () => {
+    const page = notesPrintHtml('CODEX NOTES · Tom & Jerry\n\nLORE · THE <OLD> ORDER\nPriests\n\nLORE · THE LAST EXPEDITION\nWho?\n\nITEMS · KEY\nFits the door');
+    expect(page).toContain('<title>Tom &amp; Jerry · codex notes</title>');
+    expect(page).toContain('<h1>Tom &amp; Jerry</h1>');
+    expect(page.match(/<h2>Lore<\/h2>/g)).toHaveLength(1);
+    expect(page).toContain('<div class="note"><h3>THE &lt;OLD&gt; ORDER</h3><p>Priests</p></div>');
+    expect(page.indexOf('<h2>Items</h2>')).toBeGreaterThan(page.indexOf('Who?'));
+    expect(notesPrintHtml('CODEX NOTES · X\n\nNo notes yet.')).toContain('<p>No notes yet.</p>');
+  });
+
+  it('is the page the engines print, byte for byte', () => {
+    // The same notes and page as scripts/godot-check/check.gd expects.
+    expect(notesPrintHtml('CODEX NOTES · The Sunken Vault\n\nQUESTS · Open the vault — Reach the vault chamber and open the door\nKey first, then the lever\n\nLORE · THE DROWNED ORDER\nPriests, not monks')).toBe(
+      `<!doctype html>\n<html><head><meta charset="utf-8"><title>The Sunken Vault · codex notes</title><style>${NOTES_PRINT_STYLE}</style></head>\n<body><h1>The Sunken Vault</h1><p class="sub">Codex notes</p>\n<h2>Quests</h2>\n<div class="note"><h3>Open the vault — Reach the vault chamber and open the door</h3><p>Key first, then the lever</p></div>\n<h2>Lore</h2>\n<div class="note"><h3>THE DROWNED ORDER</h3><p>Priests, not monks</p></div>\n</body></html>\n`,
+    );
+  });
+});
+

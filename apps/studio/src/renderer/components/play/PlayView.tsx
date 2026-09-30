@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
-import { advance, choose, codexNotesFrom, codexNotesText, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, choose, codexNotesFrom, codexNotesText, notesPrintHtml, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
-import { copyText, downloadText, notesFileNameFor, readText } from '../../files';
+import { copyText, downloadText, notesFileNameFor, notesPageNameFor, printHtml, readText } from '../../files';
 import { liveNotes, mergeNotes, notesFromSync, notesStorageKey, notesSyncText, type StampedNote } from '../../model/codex-sync';
 import { Symbol } from '../Symbol';
 import { Inline } from '../Inline';
@@ -183,6 +183,19 @@ const CodexPanel = ({
       setImported('This page cannot copy by itself: the notes are below, selected. Copy them (Ctrl+C or ⌘C) to share them.');
     }
   };
+  // Printing: the notes as a page, in the print dialog; where the page may not print, it is saved to print from.
+  const PRINTING = 'Printing the notes. No print dialog? Save them as a page and print that.';
+  const printNotes = async () => {
+    const page = notesPrintHtml(codexNotesText(project, world, notes));
+    setToCopy('');
+    if (await printHtml(page)) {
+      setImported(PRINTING);
+    } else savePage();
+  };
+  const savePage = () => {
+    downloadText(notesPageNameFor(project), notesPrintHtml(codexNotesText(project, world, notes)), 'text/html');
+    setImported('This page cannot print by itself: the notes are saved as a page. Open it and print it.');
+  };
   // The entry whose note is being written, by key.
   const [editing, setEditing] = useState('');
   /** A pencil to write (or change) the player's note on an entry. */
@@ -271,6 +284,9 @@ const CodexPanel = ({
         <button className="tb-btn small" disabled={!notes.size} title={notes.size ? 'Share every note (or copy them)' : 'Write a note (✎) first'} onClick={() => void shareNotes()}>
           Share notes
         </button>
+        <button className="tb-btn small" disabled={!notes.size} title={notes.size ? 'Print every note' : 'Write a note (✎) first'} onClick={() => void printNotes()}>
+          Print notes
+        </button>
         <button className="tb-btn small" aria-expanded={pasting} title="Take in notes someone shared with you" onClick={() => setPasting((o) => !o)}>
           Paste notes
         </button>
@@ -333,6 +349,14 @@ const CodexPanel = ({
       {imported && (
         <p className="play-note" role="status">
           {imported}
+          {imported === PRINTING && (
+            <>
+              {' '}
+              <button className="tb-btn small" onClick={savePage}>
+                Save as a page
+              </button>
+            </>
+          )}
         </p>
       )}
       <input

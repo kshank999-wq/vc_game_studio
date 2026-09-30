@@ -256,7 +256,7 @@ namespace UnityEngine
         public Rect(float x, float y, float width, float height) { this.x = x; this.y = y; this.width = width; this.height = height; }
     }
 
-    public enum KeyCode { None, C, Escape, Return, Slash, Tab, S, B, N, E, I, Y, V, UpArrow, DownArrow }
+    public enum KeyCode { None, C, Escape, Return, Slash, Tab, S, B, N, E, I, Y, V, P, UpArrow, DownArrow }
     public enum EventType { KeyDown, KeyUp, Repaint, Layout }
 
     public sealed class Event
@@ -276,6 +276,8 @@ namespace UnityEngine
     public static class Application
     {
         public static string persistentDataPath = System.IO.Path.GetTempPath();
+        public static readonly List<string> opened = new();
+        public static void OpenURL(string url) => opened.Add(url);
     }
 
     public static class Screen
