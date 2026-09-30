@@ -517,6 +517,13 @@ namespace vcgs
             auto it = Equipped.find(slot);
             return it == Equipped.end() ? "" : it->second;
         }
+        /** The slot an item is equipped in ("" when it is not). */
+        std::string SlotOf(const std::string& item) const
+        {
+            for (const auto& e : Equipped)
+                if (e.second == item) return e.first;
+            return "";
+        }
 
         /** Why an item can't be equipped now, or "" when it can. */
         std::string EquipCheck(const std::string& item) const
@@ -1420,7 +1427,9 @@ namespace vcgs
                     if (codex.empty()) continue;
                     auto held = game.Items.find(key);
                     const int count = held == game.Items.end() ? 0 : held->second;
-                    things.push_back({"items:" + key, title(Story::Find(game.StoryData.ItemDefs, key)["name"].Str(), key) + (count > 1 ? " (carried ×" + std::to_string(count) + ")" : count == 1 ? " (carried)" : "") + "\n" + codex});
+                    const std::string slot = game.SlotOf(key);
+                    const std::string carried = count < 1 ? "" : " (carried" + (count > 1 ? " ×" + std::to_string(count) : std::string()) + (slot.empty() ? std::string() : ", equipped · " + slot) + ")";
+                    things.push_back({"items:" + key, title(Story::Find(game.StoryData.ItemDefs, key)["name"].Str(), key) + carried + "\n" + codex});
                 }
                 section("items", "ITEMS · " + std::to_string(things.size()) + " of " + std::to_string(withEntry) + " found", things, "\n\n", "None yet.");
             }

@@ -716,8 +716,8 @@ export interface Codex {
   objects: { id: string; name: string; text: string; state: string }[];
   /** Locations visited that have a codex entry, in the order visited. */
   locations: { id: string; name: string; text: string }[];
-  /** Items found that have a codex entry, in the order found, with how many are carried now. */
-  items: { id: string; name: string; text: string; carried: number }[];
+  /** Items found that have a codex entry, in the order found, with how many are carried now and the slot it is equipped in ("" when not). */
+  items: { id: string; name: string; text: string; carried: number; equipped: string }[];
   /** Mechanics available, in the order they became available: how to use each. */
   mechanics: { id: string; name: string; controls: string; text: string }[];
   /** Skills, abilities and upgrades learned, in the order first learned: their rank, kind and tree, and what they do. */
@@ -744,6 +744,13 @@ export interface Codex {
 const CODEX_TYPES: readonly ObjectType[] = ['character', 'environment', 'inventory', 'object'];
 const codexEntry = (o: StoryObject | undefined): string | undefined => (o && CODEX_TYPES.includes(o.type) && String(o.data.codex ?? '').trim() ? String(o.data.codex).trim() : undefined);
 
+/**
+ * How an item's codex heading says it is carried, and equipped: " (carried)",
+ * " (carried ×2)", " (carried, equipped · Hand)", or "" when none is. The same in the engines.
+ */
+export const carriedMark = (i: { carried: number; equipped: string }): string =>
+  i.carried > 0 ? ` (carried${i.carried > 1 ? ` ×${i.carried}` : ''}${i.equipped ? `, equipped · ${i.equipped}` : ''})` : '';
+
 /** Encounters met, in the order met (one won counts as met). */
 const metOf = (world: PlayWorld): string[] => [...new Set([...Object.keys(world.met).filter((id) => world.met[id]), ...Object.keys(world.won).filter((id) => world.won[id])])];
 
@@ -763,7 +770,7 @@ export const codexOf = (project: Project, world: PlayWorld): Codex => {
       .map((id) => ({ id, name: name(project, id), text: codexEntry(project.objects[id])! })),
     items: Object.keys(world.found)
       .filter((id) => world.found[id] && codexEntry(project.objects[id]))
-      .map((id) => ({ id, name: name(project, id), text: codexEntry(project.objects[id])!, carried: world.items[id] ?? 0 })),
+      .map((id) => ({ id, name: name(project, id), text: codexEntry(project.objects[id])!, carried: world.items[id] ?? 0, equipped: Object.keys(world.equipped ?? {}).find((slot) => world.equipped[slot] === id) ?? '' })),
     objects: Object.keys(world.used)
       .filter((id) => world.used[id] && codexEntry(project.objects[id]))
       .map((id) => ({ id, name: name(project, id), text: codexEntry(project.objects[id])!, state: world.objects[id] ?? '' })),
@@ -896,7 +903,7 @@ export const codexSections = (
       heading: `ITEMS · ${c.items.length} of ${c.itemsTotal} found`,
       empty: 'None yet.',
       sep: '\n\n',
-      entries: c.items.map((i) => ({ id: i.id, text: `${i.name.toUpperCase()}${i.carried > 1 ? ` (carried ×${i.carried})` : i.carried ? ' (carried)' : ''}\n${i.text}` })),
+      entries: c.items.map((i) => ({ id: i.id, text: `${i.name.toUpperCase()}${carriedMark(i)}\n${i.text}` })),
     },
     !!c.objectsTotal && {
       key: 'objects',

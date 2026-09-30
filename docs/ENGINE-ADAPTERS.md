@@ -129,7 +129,8 @@ the studio's play-through:
   the characters met (anyone with a *Codex entry* in the Bible, once they have
   spoken a line), the locations visited (any location with a *Codex entry*,
   once a scene set there has played), the items found (any item with a *Codex entry*, once the
-  player has held it, marked while carried), the objects used (any object
+  player has held it, marked while carried, and equipped with its slot:
+  "(carried, equipped · Hand)"; Godot `game.slot_of`, Unity and Unreal `SlotOf`), the objects used (any object
   with a *Codex entry*, once the player has used it, with its state now), the
   mechanics available (their controls and description), the skills learned
   (in the order first learned: rank, kind and tree, what they do; each rank

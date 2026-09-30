@@ -293,19 +293,25 @@ func _initialize() -> void:
 	if silt_player.text() != "[Encounter] Eel swarm" or silt_player.labels() != ["Win", "Lose"]:
 		fail("SC-02 should open on the eels with Win and Lose, got " + silt_player.text() + " " + str(silt_player.labels()))
 	# The codex, before anything is found but the eels, met and not yet beaten.
-	if silt_player.codex_text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 0 of 1 found\nNone yet.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nSKILLS · 0 of 2 learned\nNone yet.\n\nENCOUNTERS · 1 met, 0 won\n\nEEL SWARM\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 0 of 2 found\nNothing found yet." or silt_player.codex_button_text() != "Codex (C) · 1 new":
+	if silt_player.codex_text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 0 of 3 found\nNone yet.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nSKILLS · 0 of 2 learned\nNone yet.\n\nENCOUNTERS · 1 met, 0 won\n\nEEL SWARM\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 0 of 2 found\nNothing found yet." or silt_player.codex_button_text() != "Codex (C) · 1 new":
 		fail("the codex should show only the eels, got " + silt_player.codex_text() + " / " + silt_player.codex_button_text())
 	silt_player.press(0)
 	if not game.was_won("eel_swarm") or silt_player.text() != "Find the key in the silt":
 		fail("Win should beat the eels and go on, got " + silt_player.text())
 	# Beating the eels, then finding the key (an item for the codex) starts the quest, and its seal reveals the Order's
 	# story: the codex button counts them all, and the codex shows them.
-	if silt_player.codex_button_text() != "Codex (C) · 5 new":
+	if silt_player.codex_button_text() != "Codex (C) · 6 new":
 		fail("the codex button should mark the new entry, got " + silt_player.codex_button_text())
 	silt_player.open_codex()
 	print("codex: ", silt_player.codex_text().replace("\n", " | "))
-	if not silt_player.codex_open() or not silt_player.codex_text().begins_with("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 1 of 1 found\n\nVAULT KEY (carried)\nA heavy bronze key, green with age, stamped with the Order’s wave.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nSKILLS · 0 of 2 learned\nNone yet.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 2 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault") or silt_player.codex_button_text() != "Codex (C)":
+	if not silt_player.codex_open() or not silt_player.codex_text().begins_with("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 2 of 3 found\n\nFLARE PISTOL (carried)\nA brass signal pistol from the last expedition. Each flare lights a chamber for a few breaths.\n\nVAULT KEY (carried)\nA heavy bronze key, green with age, stamped with the Order’s wave.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nSKILLS · 0 of 2 learned\nNone yet.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 2 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault") or silt_player.codex_button_text() != "Codex (C)":
 		fail("the codex should show The Drowned Order, got " + silt_player.codex_text())
+	# An item equipped is marked so, with its slot.
+	VCGSRules.equip("flare_pistol", game)
+	if silt_player.codex_text("", "items").find("FLARE PISTOL (carried, equipped · Hand)\n") < 0:
+		fail("the codex should mark the flare pistol equipped, got " + silt_player.codex_text("", "items"))
+	print("equipped in the codex: ", silt_player.codex_text("", "items").split("\n")[4])
+	VCGSRules.unequip("flare_pistol", game)
 	# Search it: only the entries that match, ignoring case; headings are not searched.
 	silt_player.set_codex_search("LANTERN")
 	print("search: ", silt_player.codex_text("LANTERN").replace("\n", " | "))

@@ -175,8 +175,8 @@ describe('play-through', () => {
     // Finding the key starts the quest, and its seal tells the Order's story.
     expect(container.querySelector('.play-quest')?.textContent).toContain('New quest: Open the vault');
     expect(container.querySelector('.play-lore')?.textContent).toContain('Discovered: The Drowned Order');
-    // The codex counts those, Mara, the chamber, the key, the lantern's oil and the eels (met, then beaten), and opens on the quest log, the characters, the locations, the items, the mechanics, the encounters and the lore (C, or its button).
-    expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex · 8 new');
+    // The codex counts those, Mara, the chamber, the knife, the pistol, the key, the lantern's oil and the eels (met, then beaten), and opens on the quest log, the characters, the locations, the items, the mechanics, the encounters and the lore (C, or its button).
+    expect(screen.getByRole('button', { name: /Codex/ }).textContent).toBe('Codex · 10 new');
     act(() => {
       fireEvent.keyDown(window, { key: 'c' });
     });

@@ -5,7 +5,7 @@ import { checkAllPaths } from '../../model/paths';
 import { describeCost, kindOf, learnCheck, skillsOf, treeOf } from '../../model/skills';
 import { craftCheck, describeRecipe, recipesOf } from '../../model/crafting';
 import { describeStats, equipCheck, equipmentList, equipmentOf, isEquipped, statTotal, usesLeft, useCheck } from '../../model/equipment';
-import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, craft, endFreePlay, gear, interact, learn, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, carriedMark, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, craft, endFreePlay, gear, interact, learn, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { PathsPanel } from './PathsPanel';
 import { SavesPanel } from './SavesPanel';
@@ -647,7 +647,7 @@ const CodexPanel = ({
             <article key={i.id} className="play-codex-lore play-codex-item">
               <h4>
                 {star('items', i.id, i.name)} {pencil('items', i.id, i.name)} <Symbol type="inventory" size={11} /> {i.name}
-                {i.carried > 0 && <span className="play-note"> (carried{i.carried > 1 ? ` ×${i.carried}` : ''})</span>}
+                {i.carried > 0 && <span className="play-note">{carriedMark(i)}</span>}
               </h4>
               <p>{i.text}</p>
               {note('items', i.id, i.name)}

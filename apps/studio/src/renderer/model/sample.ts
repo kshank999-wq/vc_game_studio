@@ -232,14 +232,14 @@ export const sunkenVault = (): Project => {
   const salvage = makeObject('inventory', 'Salvage', p.objects[mara]!.created, { code: 'ITM-02' });
   p = setNotes({ ...p, objects: { ...p.objects, [salvage.id]: salvage } }, salvage.id, 'Scraps of the last expedition’s kit: brass, cord, a cracked lens. Enough of it buys an upgrade.');
   // Weapons and equipment (spec §8): a knife from the cave mouth that wears out, and a flare pistol that burns flares.
-  const gearItem = (name: string, code: string, notes: string, equip?: Record<string, unknown>) => {
-    const made = makeObject('inventory', name, p.objects[mara]!.created, { code, ...(equip ? { equip } : {}) });
+  const gearItem = (name: string, code: string, notes: string, equip?: Record<string, unknown>, codex?: string) => {
+    const made = makeObject('inventory', name, p.objects[mara]!.created, { code, ...(equip ? { equip } : {}), ...(codex ? { codex } : {}) });
     p = setNotes({ ...p, objects: { ...p.objects, [made.id]: made } }, made.id, notes);
     return made.id;
   };
   const flare = gearItem('Flare', 'ITM-05', 'A magnesium flare for the pistol.');
-  const knife = gearItem('Diving Knife', 'ITM-03', 'Mara’s spare, notched from the rocks.', { slot: 'Hand', stats: [{ name: 'Damage', value: 2 }], ammoPerUse: 1, durability: 3 });
-  const pistol = gearItem('Flare Pistol', 'ITM-04', 'An old signal pistol from the last expedition.', { slot: 'Hand', stats: [{ name: 'Damage', value: 1 }, { name: 'Light', value: 3 }], ammo: flare, ammoPerUse: 1, durability: 0 });
+  const knife = gearItem('Diving Knife', 'ITM-03', 'Mara’s spare, notched from the rocks.', { slot: 'Hand', stats: [{ name: 'Damage', value: 2 }], ammoPerUse: 1, durability: 3 }, 'A short diving knife, notched from the rocks. It cuts kelp and cord, and dulls fast.');
+  const pistol = gearItem('Flare Pistol', 'ITM-04', 'An old signal pistol from the last expedition.', { slot: 'Hand', stats: [{ name: 'Damage', value: 1 }, { name: 'Light', value: 3 }], ammo: flare, ammoPerUse: 1, durability: 0 }, 'A brass signal pistol from the last expedition. Each flare lights a chamber for a few breaths.');
   p = updateEvent(p, caveMouth, lit.id, { effects: [{ kind: 'enableMechanic', ref: design.mechanic! }, { kind: 'give', ref: knife }] });
   // A stat condition (spec §8): in the vault chamber, the flare pistol's light (Light 3) shows the
   // last expedition's pry marks round the lock, without forcing the door.

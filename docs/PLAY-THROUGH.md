@@ -92,8 +92,8 @@ monitor while you fix it on another.
   goals, then those done), the characters met (anyone with a *Codex entry* in
   the Bible, once they speak a line; a character without one stays out of it),
   the locations visited (the same, once a scene set there plays), the items
-  found (the same, once held; marked while carried, and kept once
-  used up), the objects used (the same, once used in free play, with how they
+  found (the same, once held; marked while carried, and equipped with its
+  slot, "(carried, equipped · Hand)", and kept once used up), the objects used (the same, once used in free play, with how they
   stand now),
   the mechanics available (with their controls and
   description), the skills learned (in the order first learned, with the rank

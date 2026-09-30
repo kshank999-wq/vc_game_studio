@@ -442,6 +442,8 @@ namespace VCGS
         public bool IsEquipped(string item) => Equipped.ContainsValue(item ?? "");
         /// <summary>The item in a slot ("" for none).</summary>
         public string EquippedIn(string slot) => Equipped.TryGetValue(slot ?? "", out var i) ? i : "";
+        /// <summary>The slot an item is equipped in ("" when it is not).</summary>
+        public string SlotOf(string item) { foreach (var e in Equipped) if (e.Value == item) return e.Key; return ""; }
 
         string GearName(string item) => Story.Equipment.TryGetValue(item ?? "", out var e) ? D.Str(e, "name") : item;
 
@@ -1712,7 +1714,9 @@ namespace VCGS
                 {
                     if (game.Story.ItemCodex(key) == "") continue;
                     var count = game.Items.TryGetValue(key, out var n) ? n : 0;
-                    things.Add(("items:" + key, Title(game.Story.ItemName(key), key) + (count > 1 ? " (carried ×" + count + ")" : count == 1 ? " (carried)" : "") + "\n" + game.Story.ItemCodex(key)));
+                    var slot = game.SlotOf(key);
+                    var carried = count < 1 ? "" : " (carried" + (count > 1 ? " ×" + count : "") + (slot != "" ? ", equipped · " + slot : "") + ")";
+                    things.Add(("items:" + key, Title(game.Story.ItemName(key), key) + carried + "\n" + game.Story.ItemCodex(key)));
                 }
                 Section("items", "ITEMS · " + things.Count + " of " + itemsWithEntry + " found", things, "\n\n", "None yet.");
             }
