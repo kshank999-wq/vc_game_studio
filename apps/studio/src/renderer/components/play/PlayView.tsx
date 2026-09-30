@@ -3,7 +3,8 @@ import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
 import { checkAllPaths } from '../../model/paths';
 import { describeCost, kindOf, learnCheck, skillsOf, treeOf } from '../../model/skills';
-import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, learn, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { describeStats, equipCheck, equipmentList, equipmentOf, isEquipped, statTotal, usesLeft, useCheck } from '../../model/equipment';
+import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, gear, interact, learn, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { PathsPanel } from './PathsPanel';
 import { SavesPanel } from './SavesPanel';
@@ -121,9 +122,72 @@ const EntryView = ({ entry }: { entry: Entry }) => {
           {entry.ranks > 1 && <span className="play-note"> · rank {entry.rank} of {entry.ranks}</span>}
         </div>
       );
+    case 'gear':
+      return (
+        <div className="play-gear">
+          <Symbol type="inventory" size={12} /> {entry.text}
+          {entry.detail && <span className="play-note"> · {entry.detail}</span>}
+        </div>
+      );
     case 'end':
       return <div className="play-end">{entry.text}</div>;
   }
+};
+
+/** Weapons and equipment (spec §8): what is in each slot, and every item of equipment carried, to equip, put away or use (or why not). */
+const GearSection = ({ project, world, onGear }: { project: Project; world: PlayWorld; onGear: (id: string, act: 'equip' | 'unequip' | 'use') => void }) => {
+  const all = equipmentList(project);
+  if (!all.length) return null;
+  const carried = all.filter((o) => (world.items[o.id] ?? 0) > 0);
+  const slots = Object.entries(world.equipped ?? {}).filter(([, id]) => project.objects[id]);
+  const stats = [...new Set(Object.values(world.equipped ?? {}).flatMap((id) => equipmentOf(project.objects[id])?.stats.map((s) => s.name) ?? []))];
+  return (
+    <section aria-label="Equipment">
+      <h3>Equipment</h3>
+      <p className="pref-hint">
+        {slots.length ? slots.map(([slot, id]) => `${slot}: ${project.objects[id]!.name}`).join(' · ') : 'Nothing equipped.'}
+        {stats.length > 0 && ` · ${stats.map((s) => `${s} ${statTotal(project, world, s)}`).join(' · ')}`}
+      </p>
+      {!carried.length && <p className="pref-hint">No equipment carried.</p>}
+      {carried.map((o) => {
+        const e = equipmentOf(o)!;
+        const on = isEquipped(world, o.id);
+        const why = on ? useCheck(project, world, o.id) : equipCheck(project, world, o.id);
+        const left = usesLeft(project, world, o.id);
+        return (
+          <div key={o.id} className={`play-row play-gear-row${on ? ' on' : ''}`}>
+            <span className="play-skill-name">
+              <Symbol type="inventory" size={11} /> {o.name}
+              <span className="muted">
+                {' '}
+                · {e.slot}
+                {e.stats.length ? ` · ${describeStats(e)}` : ''}
+                {e.ammo ? ` · ${world.items[e.ammo] ?? 0} ${project.objects[e.ammo]?.name ?? ''}` : ''}
+                {Number.isFinite(left) ? ` · ${left} ${left === 1 ? 'use' : 'uses'} left` : ''}
+              </span>
+            </span>
+            <span className="play-gear-actions">
+              {on ? (
+                <>
+                  <button className="tb-btn small" disabled={!!why} title={why || `Use ${o.name}`} aria-label={`Use ${o.name}`} onClick={() => onGear(o.id, 'use')}>
+                    Use
+                  </button>
+                  <button className="tb-btn small" aria-label={`Put away ${o.name}`} onClick={() => onGear(o.id, 'unequip')}>
+                    Put away
+                  </button>
+                </>
+              ) : (
+                <button className="tb-btn small" disabled={!!why} title={why || `Equip ${o.name}`} aria-label={`Equip ${o.name}`} onClick={() => onGear(o.id, 'equip')}>
+                  Equip
+                </button>
+              )}
+            </span>
+            {why && on && <span className="pref-hint play-skill-needs">{why}</span>}
+          </div>
+        );
+      })}
+    </section>
+  );
 };
 
 /** The skills, abilities and upgrades (spec §8), by tree: each rank learned of how many, its cost, and Learn (or why not). */
@@ -661,7 +725,7 @@ const CodexPanel = ({
 };
 
 /** The world, which the designer can change by hand to try another path. */
-const WorldPanel = ({ project, world, onChange, onLearn }: { project: Project; world: PlayWorld; onChange: (change: (w: PlayWorld) => PlayWorld) => void; onLearn: (id: string) => void }) => {
+const WorldPanel = ({ project, world, onChange, onLearn, onGear }: { project: Project; world: PlayWorld; onChange: (change: (w: PlayWorld) => PlayWorld) => void; onLearn: (id: string) => void; onGear: (id: string, act: 'equip' | 'unequip' | 'use') => void }) => {
   const of = (type: ObjectType) =>
     Object.values(project.objects)
       .filter((o) => o.type === type)
@@ -805,6 +869,7 @@ const WorldPanel = ({ project, world, onChange, onLearn }: { project: Project; w
           ))}
         </section>
       )}
+      <GearSection project={project} world={world} onGear={onGear} />
       <SkillsSection project={project} world={world} onLearn={onLearn} />
       {toggles('mechanic', 'Mechanics', 'Available:')}
       {toggles('lore', 'Lore', 'Discovered:')}
@@ -1085,7 +1150,7 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
           )}
         </div>
       </section>
-      <WorldPanel project={project} world={play.world} onChange={(change) => push(setWorld(project, play, change))} onLearn={(id) => push(learn(project, play, id))} />
+      <WorldPanel project={project} world={play.world} onChange={(change) => push(setWorld(project, play, change))} onLearn={(id) => push(learn(project, play, id))} onGear={(id, act) => push(gear(project, play, id, act))} />
     </div>
   );
 };

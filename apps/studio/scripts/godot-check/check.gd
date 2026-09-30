@@ -528,6 +528,43 @@ func _initialize() -> void:
 	game.load_text(before_skills)
 	game.loaded = false
 
+	# Weapons and equipment (spec §8): the knife wears out, the flare pistol burns flares.
+	var before_gear: String = JSON.stringify(game.save_data(""))
+	var gear = load("res://vcgs/generated/logic/rules.gd")
+	gear.reset(game)
+	if gear.equip("diving_knife", game) != "You don't carry Diving Knife." or gear.equip("vault_key", game) != "Not equipment.":
+		fail("only equipment that is carried can be equipped")
+	game.give_item("diving_knife")
+	game.give_item("flare_pistol")
+	game.give_item("flare")
+	if gear.equip("diving_knife", game) != "" or game.equipped_in("Hand") != "diving_knife" or gear.stat("damage", game) != 2.0:
+		fail("the knife should go in the hand, with its damage")
+	if gear.equip("flare_pistol", game) != "" or game.equipped_in("Hand") != "flare_pistol" or gear.stat("Light", game) != 3.0 or game.is_equipped("diving_knife"):
+		fail("the pistol should take the hand, putting the knife back")
+	if gear.use_item("flare_pistol", game) != "" or int(game.items.get("flare", 0)) != 0 or gear.use_check("flare_pistol", game) != "Out of Flare.":
+		fail("the pistol should burn its one flare")
+	gear.equip("diving_knife", game)
+	for _i in 3:
+		gear.use_item("diving_knife", game)
+	if game.has_item("diving_knife") or game.is_equipped("diving_knife") or gear.use_check("diving_knife", game) != "Equip Diving Knife first.":
+		fail("the knife should break after three uses, and be gone")
+	game.give_item("diving_knife")
+	VCGSRuleEngine.apply([{ "kind": "equip", "ref": "diving_knife" }], game)
+	if not VCGSRuleEngine.check({ "match": "all", "items": [{ "kind": "equipped", "ref": "diving_knife", "op": "equipped" }] }, game) or gear.uses_left("diving_knife", game) != 3:
+		fail("an effect should equip a new knife, unworn, and conditions should see it")
+	gear.use_item("diving_knife", game)
+	var gear_save: Dictionary = game.save_data("")
+	print("gear: equipped ", gear_save["equipped"], " wear ", gear_save["wear"])
+	gear.reset(game)
+	game.load_text(JSON.stringify(gear_save))
+	if game.equipped_in("Hand") != "diving_knife" or gear.uses_left("diving_knife", game) != 2:
+		fail("equipment and its wear should save and load")
+	game.consume_item("diving_knife")
+	if game.is_equipped("diving_knife"):
+		fail("an item no longer carried should come out of its slot")
+	game.load_text(before_gear)
+	game.loaded = false
+
 	check_level(game)
 
 	print("OK" if failures == 0 else str(failures) + " FAILED")

@@ -8559,3 +8559,49 @@ button.bible-dual-col:hover {
   opacity: 0.5;
   cursor: default;
 }
+
+/* Weapons and equipment (spec §8) */
+.play-gear {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--c-inventory);
+}
+
+.play-gear-row {
+  flex-wrap: wrap;
+}
+
+.play-gear-row.on .play-skill-name {
+  color: var(--c-inventory);
+}
+
+.play-gear-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.play-gear-row .tb-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.equipment-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.equipment-stat {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.equipment-number {
+  width: 64px;
+}

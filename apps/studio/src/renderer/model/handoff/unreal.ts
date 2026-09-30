@@ -192,6 +192,7 @@ struct VCGS_API FVcgsLineRow : public FTableRowBase
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsQuestSignature, const FString&, Quest);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsSceneSignature, const FString&, Scene);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsSkillSignature, const FString&, Skill, int32, Rank);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsGearSignature, const FString&, Item, const FString&, Slot);
 
 /**
  * The one playthrough of the story: reads story.json when the game starts and
@@ -255,6 +256,18 @@ public:
     UFUNCTION(BlueprintPure, Category = "VCGS|State") FString GetSkillLearnCheck(const FString& Skill) const;
     /** Learn the next rank: pay its cost, gain the rank, do what it does. Returns why not ("" when learned). */
     UFUNCTION(BlueprintCallable, Category = "VCGS|State") FString LearnSkill(const FString& Skill);
+    /** Put an item in its slot (putting back what was there); returns why not ("" when equipped). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Equipment") FString EquipItem(const FString& Item);
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Equipment") FString UnequipItem(const FString& Item);
+    /** Use an equipped item: its ammunition spent, a use of wear, broken when worn out; returns why not ("" when used). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Equipment") FString UseItem(const FString& Item);
+    UFUNCTION(BlueprintPure, Category = "VCGS|Equipment") FString GetUseCheck(const FString& Item) const;
+    UFUNCTION(BlueprintPure, Category = "VCGS|Equipment") FString GetEquippedIn(const FString& Slot) const;
+    UFUNCTION(BlueprintPure, Category = "VCGS|Equipment") bool IsItemEquipped(const FString& Item) const;
+    /** What the equipped items add up to for a stat, such as "Damage". */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Equipment") float GetStat(const FString& Stat) const;
+    /** Uses left before an item breaks (-1 when it never does). */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Equipment") int32 GetUsesLeft(const FString& Item) const;
 
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestStarted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
@@ -338,6 +351,10 @@ public:
     vcgs::Codex* CodexState() const { return CodexData.get(); }
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnMechanicAvailable;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsSkillSignature OnSkillLearned;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Equipment") FVcgsGearSignature OnItemEquipped;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Equipment") FVcgsGearSignature OnItemUnequipped;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Equipment") FVcgsQuestSignature OnItemUsed;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Equipment") FVcgsQuestSignature OnItemBroke;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnEncounterMet;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnEncounterWon;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnCharacterMet;
@@ -424,6 +441,10 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     Game->OnLoreDiscovered = [this](const std::string& Lore) { OnLoreDiscovered.Broadcast(ToF(Lore)); };
     Game->OnMechanicAvailable = [this](const std::string& Mechanic) { OnMechanicAvailable.Broadcast(ToF(Mechanic)); };
     Game->OnSkillLearned = [this](const std::string& Skill, int Rank) { OnSkillLearned.Broadcast(ToF(Skill), Rank); };
+    Game->OnItemEquipped = [this](const std::string& Item, const std::string& Slot) { OnItemEquipped.Broadcast(ToF(Item), ToF(Slot)); };
+    Game->OnItemUnequipped = [this](const std::string& Item, const std::string& Slot) { OnItemUnequipped.Broadcast(ToF(Item), ToF(Slot)); };
+    Game->OnItemUsed = [this](const std::string& Item) { OnItemUsed.Broadcast(ToF(Item)); };
+    Game->OnItemBroke = [this](const std::string& Item) { OnItemBroke.Broadcast(ToF(Item)); };
     Game->OnEncounterMet = [this](const std::string& Encounter) { OnEncounterMet.Broadcast(ToF(Encounter)); };
     Game->OnEncounterWon = [this](const std::string& Encounter) { OnEncounterWon.Broadcast(ToF(Encounter)); };
     Game->OnCharacterMet = [this](const std::string& Character) { OnCharacterMet.Broadcast(ToF(Character)); };
@@ -627,6 +648,14 @@ FString UVcgsSubsystem::GetMechanicDetail(const FString& Mechanic, const FString
 int32 UVcgsSubsystem::GetSkillRank(const FString& Skill) const { return Game ? Game->SkillRank(ToStd(Skill)) : 0; }
 FString UVcgsSubsystem::GetSkillLearnCheck(const FString& Skill) const { return Game ? ToF(vcgs::Rules::LearnCheck(ToStd(Skill), *Game)) : FString(); }
 FString UVcgsSubsystem::LearnSkill(const FString& Skill) { return Game ? ToF(vcgs::Rules::Learn(ToStd(Skill), *Game)) : FString(); }
+FString UVcgsSubsystem::EquipItem(const FString& Item) { return Game ? ToF(Game->Equip(ToStd(Item))) : FString(); }
+FString UVcgsSubsystem::UnequipItem(const FString& Item) { return Game ? ToF(Game->Unequip(ToStd(Item))) : FString(); }
+FString UVcgsSubsystem::UseItem(const FString& Item) { return Game ? ToF(Game->UseItem(ToStd(Item))) : FString(); }
+FString UVcgsSubsystem::GetUseCheck(const FString& Item) const { return Game ? ToF(Game->UseCheck(ToStd(Item))) : FString(); }
+FString UVcgsSubsystem::GetEquippedIn(const FString& Slot) const { return Game ? ToF(Game->EquippedIn(ToStd(Slot))) : FString(); }
+bool UVcgsSubsystem::IsItemEquipped(const FString& Item) const { return Game && Game->IsEquipped(ToStd(Item)); }
+float UVcgsSubsystem::GetStat(const FString& Stat) const { return Game ? static_cast<float>(Game->Stat(ToStd(Stat))) : 0.f; }
+int32 UVcgsSubsystem::GetUsesLeft(const FString& Item) const { return Game ? Game->UsesLeft(ToStd(Item)) : 0; }
 
 FString UVcgsSubsystem::Onward(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Onward(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::NodeKind(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::KindOf(*Game, ToStd(Node))) : FString(); }

@@ -423,7 +423,7 @@ describe('lore and mechanics in the engines', () => {
     expect(ir.lore[0]).toMatchObject({ discoveredWhen: { match: 'all', items: [{ kind: 'visited', ref: 'sc_03_the_vault_door', op: 'visited' }] } });
     expect(ir.mechanics[0]).toMatchObject({ byEffect: true, fields: { tuning: 'About a minute of deep water on a full lantern' } });
     expect(ir.mechanics[0]).not.toHaveProperty('availableWhen');
-    expect(ir.scenes.find((s) => s.name === 'The Cave Mouth')!.main[0]).toMatchObject({ kind: 'action', label: 'Light the lantern', effects: [{ kind: 'enableMechanic', ref: 'lantern_oil' }] });
+    expect(ir.scenes.find((s) => s.name === 'The Cave Mouth')!.main[0]).toMatchObject({ kind: 'action', label: 'Light the lantern', effects: [{ kind: 'enableMechanic', ref: 'lantern_oil' }, { kind: 'give', ref: 'diving_knife' }] });
     const { generateGodot } = await import('../handoff/godot');
     const { RUNTIME_FILES } = await import('../handoff/unity-runtime');
     const { VCGS_CORE_H } = await import('../handoff/unreal-core');

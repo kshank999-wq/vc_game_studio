@@ -47,6 +47,19 @@ export const storySchema = () => ({
     quests: { type: 'array', items: ref('quest'), description: 'Quests and objectives: each starts when `starts` holds (at once without it) and is done when `completes` holds, paying `reward`.' },
     mechanics: { type: 'array', items: ref('mechanic'), description: 'Mechanics: how a system works, in the designer\'s words, and its tuning in `fields`; each usable once `availableWhen` holds.' },
     encounters: { type: 'array', items: ref('encounter'), description: 'Encounters and enemies: played by the game where an `encounter` event puts them, then won or lost.' },
+    equipment: {
+      type: 'array',
+      description: 'Items that can be equipped: see the README.',
+      items: obj({
+        item: str,
+        name: str,
+        slot: str,
+        stats: { type: 'array', items: obj({ name: str, value: num }) },
+        ammo: { anyOf: [{ type: 'null' }, obj({ item: str, name: str })] },
+        ammoPerUse: { type: 'integer', minimum: 1 },
+        durability: { type: 'integer', minimum: 0, description: 'Uses before it breaks; 0 never breaks.' },
+      }),
+    },
     skills: { type: 'array', items: ref('skill'), description: 'Skills, abilities and upgrades (their kind, tree and use in `fields`), learned in ranks: see the README.' },
     cinematics: { type: 'array', items: ref('thing') },
     flags: { type: 'array', items: obj({ id: str, ident, name: str, values: strings, initial: str, setBy: strings }) },
@@ -171,9 +184,9 @@ export const storySchema = () => ({
       type: 'object',
       required: ['kind', 'ref', 'op'],
       properties: {
-        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill'] },
+        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill', 'equipped'] },
         ref: { description: 'The key of the flag, item, object, choice, character, puzzle or scene it is about.', ...str },
-        op: { enum: ['is', 'isNot', 'has', 'hasNot', 'chose', 'didNotChoose', 'atLeast', 'atMost', 'solved', 'unsolved', 'visited', 'notVisited', 'done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable', 'below'] },
+        op: { enum: ['is', 'isNot', 'has', 'hasNot', 'chose', 'didNotChoose', 'atLeast', 'atMost', 'solved', 'unsolved', 'visited', 'notVisited', 'done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable', 'below', 'equipped', 'notEquipped'] },
         value: { type: ['string', 'number'] },
       },
     },
@@ -186,7 +199,7 @@ export const storySchema = () => ({
     effect: {
       type: 'object',
       required: ['kind', 'ref'],
-      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire', 'startQuest', 'revealLore', 'completeQuest', 'enableMechanic', 'learnSkill'] }, ref: str, value: str, amount: num },
+      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire', 'startQuest', 'revealLore', 'completeQuest', 'enableMechanic', 'learnSkill', 'equip', 'unequip'] }, ref: str, value: str, amount: num },
     },
     effects: { type: 'array', items: ref('effect') },
     storyNode: obj({ key: str, kind: str, name: str }),
@@ -324,6 +337,13 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
    Learning it takes the cost, adds the rank and does \`onLearn\`; a
    \`learnSkill\` effect adds a rank without the cost or the checks (still only
    up to \`ranks\`). Keep the ranks in a save.
+8. **Equipment** (\`equipment\`, by item key) goes in its \`slot\`, one item a
+   slot, when the player carries it (equipping puts back what was there).
+   Equipped items' \`stats\` add up by name. A use needs the item equipped and
+   \`ammoPerUse\` of \`ammo.item\` carried, and spends them; after \`durability\`
+   uses (0: never) it breaks: one is taken, and a new one starts unworn. An item
+   no longer carried comes out of its slot. Keep \`equipped\` (slot to item) and
+   \`wear\` (uses so far) in a save.
 
 ## Rules and effects
 
@@ -340,9 +360,10 @@ rules; an empty rule holds. A condition is \`{ kind, ref, op, value? }\`:
 | puzzle | a puzzle key | solved, unsolved | |
 | visited | a scene key | visited, notVisited | |
 | skill | a skill key | atLeast, below | a rank (1 is learned) |
+| equipped | an item key | equipped, notEquipped | |
 
 An effect is \`{ kind, ref, value?, amount? }\`: \`setFlag\` (value), \`give\`,
-\`take\`, \`setObject\` (value), \`arc\` (amount), \`solve\`, \`fire\`, \`learnSkill\`.
+\`take\`, \`setObject\` (value), \`arc\` (amount), \`solve\`, \`fire\`, \`learnSkill\`, \`equip\`, \`unequip\`.
 ${ir.levels.length ? LEVELS_README : ''}`;
 
 const LEVELS_README = `

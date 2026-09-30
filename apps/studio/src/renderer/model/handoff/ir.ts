@@ -1,3 +1,4 @@
+import { equipmentOf } from '../equipment';
 import { costOf, ranksOf, requiresOf } from '../skills';
 import { describeTarget, whoLabel, type Who } from '../collab';
 import { interactionsOf, initialState, statesOf } from '../details';
@@ -176,6 +177,22 @@ export interface IrSkill extends IrThing {
   onLearn?: IrEffect[];
 }
 
+/**
+ * An item of equipment: it goes in `slot` (one item a slot), its `stats` add
+ * up with the other equipped items', each use spends `ammoPerUse` of `ammo`
+ * (an item key) when it has one, and it breaks after `durability` uses (0:
+ * never), one of it gone.
+ */
+export interface IrEquipment {
+  item: string;
+  name: string;
+  slot: string;
+  stats: { name: string; value: number }[];
+  ammo: { item: string; name: string } | null;
+  ammoPerUse: number;
+  durability: number;
+}
+
 /** An encounter on a timeline: the game plays it and reports a win or a loss. */
 export interface IrEncounter extends IrThing {
   /** A win counts only when this holds. */
@@ -324,6 +341,8 @@ export interface HandoffIR {
   characters: IrCharacter[];
   objects: IrObject[];
   items: IrThing[];
+  /** The items that can be equipped (spec §8), by item key: slot, stats, ammunition, durability. */
+  equipment: IrEquipment[];
   locations: IrThing[];
   /** Design definitions, most often sorted out of raw notes (docs/NOTE-SORTER.md): data for the game to read. */
   lore: IrLore[];
@@ -552,6 +571,12 @@ export const buildIR = (project: Project): HandoffIR => {
       ...(o.type === 'puzzle' && effects(o.data.effects as Effect[] | undefined) ? { effects: effects(o.data.effects as Effect[] | undefined) } : {}),
     })),
     items: of('inventory').map(thing),
+    equipment: of('inventory').flatMap((o): IrEquipment[] => {
+      const e = equipmentOf(o);
+      if (!e) return [];
+      const ammo = e.ammo && key(e.ammo) ? { item: key(e.ammo)!, name: project.objects[e.ammo]!.name } : null;
+      return [{ item: key(o.id)!, name: o.name, slot: e.slot, stats: e.stats, ammo, ammoPerUse: e.ammoPerUse, durability: e.durability }];
+    }),
     locations: of('environment').map(thing),
     lore: of('lore').map((o): IrLore => (o.data.byEffect ? { ...thing(o), byEffect: true } : ((when) => ({ ...thing(o), ...(when ? { discoveredWhen: when } : {}) }))(rule(o.data.rule as Rule | undefined)))),
     quests: of('quest').map((o): IrQuest => {

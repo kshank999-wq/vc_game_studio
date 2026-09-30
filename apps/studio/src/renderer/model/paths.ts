@@ -1,6 +1,6 @@
 import { interactionsOf } from './details';
 import { learnCheck } from './skills';
-import { advance, choose, endFreePlay, interact, learn, decisionAt, playToDecision, promptOf, startPlay, type Decision, type Outcome, type Play } from './play';
+import { advance, choose, endFreePlay, gear, gearIn, interact, learn, decisionAt, playToDecision, promptOf, startPlay, type Decision, type Outcome, type Play } from './play';
 import type { Project } from './types';
 
 /**
@@ -61,6 +61,12 @@ export const describeDecision = (project: Project, d: Decision): string => {
       return 'free play left';
     case 'learn':
       return `learned ${nameOf(project, d.at)}`;
+    case 'equip':
+      return `equipped ${nameOf(project, d.at)}`;
+    case 'unequip':
+      return `put away ${nameOf(project, d.at)}`;
+    case 'useItem':
+      return `used ${nameOf(project, d.at)}`;
   }
 };
 
@@ -76,6 +82,12 @@ const offeredNow = (project: Project, play: Play): string => {
 
 /** Make one decision again on the story as it is now; the play after it, or why it can't be made. */
 const redo = (project: Project, play: Play, d: Decision): { play: Play } | { why: string } => {
+  // Equipment is equipped, put away and used whenever the player likes, too.
+  if (d.kind === 'equip' || d.kind === 'unequip' || d.kind === 'useItem') {
+    const act = d.kind === 'useItem' ? 'use' : d.kind;
+    const r = gearIn(project, play.world, d.at, act);
+    return r.needs ? { why: `${nameOf(project, d.at)} can't be ${act === 'use' ? 'used' : act === 'equip' ? 'equipped' : 'put away'}: ${r.needs}` } : { play: gear(project, play, d.at, act) };
+  }
   // A skill is learned whenever the player likes: not at a place in the story.
   if (d.kind === 'learn') {
     const check = learnCheck(project, play.world, d.at);

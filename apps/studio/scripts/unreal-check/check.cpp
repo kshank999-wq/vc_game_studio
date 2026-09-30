@@ -386,6 +386,32 @@ int main()
         if (h.SkillRank("deep_breath") != 2 || h.SkillRank("lantern_hood") != 1) Fail("skills should save and load");
     }
 
+    // Weapons and equipment (spec §8): the knife wears out, the flare pistol burns flares.
+    {
+        vcgs::GameState g(story);
+        if (g.Equip("diving_knife") != "You don't carry Diving Knife." || g.Equip("vault_key") != "Not equipment.") Fail("only equipment that is carried can be equipped");
+        g.GiveItem("diving_knife"); g.GiveItem("flare_pistol"); g.GiveItem("flare");
+        if (g.Equip("diving_knife") != "" || g.EquippedIn("Hand") != "diving_knife" || g.Stat("damage") != 2) Fail("the knife should go in the hand, with its damage");
+        if (g.Equip("flare_pistol") != "" || g.EquippedIn("Hand") != "flare_pistol" || g.Stat("Light") != 3 || g.IsEquipped("diving_knife")) Fail("the pistol should take the hand, putting the knife back");
+        if (g.UseItem("flare_pistol") != "" || g.Items["flare"] != 0 || g.UseCheck("flare_pistol") != "Out of Flare.") Fail("the pistol should burn its one flare");
+        g.Equip("diving_knife");
+        for (int i = 0; i < 3; i++) g.UseItem("diving_knife");
+        if (g.HasItem("diving_knife") || g.IsEquipped("diving_knife") || g.UseCheck("diving_knife") != "Equip Diving Knife first.") Fail("the knife should break after three uses, and be gone");
+        g.GiveItem("diving_knife");
+        std::string err;
+        vcgs::Rules::Apply(vcgs::JsonReader::Parse("[{\"kind\": \"equip\", \"ref\": \"diving_knife\"}]", &err), g);
+        const vcgs::Value armed = vcgs::JsonReader::Parse("{\"match\": \"all\", \"items\": [{\"kind\": \"equipped\", \"ref\": \"diving_knife\", \"op\": \"equipped\"}]}", &err);
+        if (!vcgs::Rules::Check(armed, g) || g.UsesLeft("diving_knife") != 3) Fail("an effect should equip a new knife, unworn, and conditions should see it");
+        g.UseItem("diving_knife");
+        vcgs::GameState h(story);
+        std::string at;
+        h.LoadSave(g.SaveText("The Sunken Vault"), at);
+        std::printf("gear: hand %s, uses left %d\n", h.EquippedIn("Hand").c_str(), h.UsesLeft("diving_knife"));
+        if (h.EquippedIn("Hand") != "diving_knife" || h.UsesLeft("diving_knife") != 2) Fail("equipment and its wear should save and load");
+        h.TakeItem("diving_knife");
+        if (h.IsEquipped("diving_knife")) Fail("an item no longer carried should come out of its slot");
+    }
+
     // Custom code in VcgsStoryKeys.h's region was kept when the story was exported again.
     if (std::string(VcgsKeys::CustomCheck) != "kept") Fail("custom code in VcgsStoryKeys.h should survive exporting again");
     else std::printf("custom code: %s\n", VcgsKeys::CustomCheck);

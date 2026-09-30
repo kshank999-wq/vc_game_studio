@@ -1,7 +1,8 @@
 import { describeCost, kindOf, learnCheck, payFor, ranksOf, treeOf } from './skills';
+import { equipCheck, equipmentOf, isEquipped, useCheck } from './equipment';
 import { initialState, interactionsOf, statesOf } from './details';
 import { spineSequence } from './layout';
-import { apply, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
+import { apply, dropEquipped, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
 import { dualWith, elementsIn, spokenTogether } from './scene';
 import { cinematicTiming, describeShot, shotsOf } from './shots';
 import { eventLine, eventTitle, loseOf, MAIN, sceneTimeline } from './timeline';
@@ -61,6 +62,8 @@ export type Entry =
   | { kind: 'mechanic'; text: string }
   /** A skill, ability or upgrade learned: its new rank of how many (spec §8). */
   | { kind: 'skill'; text: string; rank: number; ranks: number }
+  /** Equipment equipped, put away, used or broken (spec §8). */
+  | { kind: 'gear'; text: string; detail?: string }
   | { kind: 'skip'; text: string; needs: string }
   | { kind: 'end'; text: string };
 
@@ -88,7 +91,11 @@ export type Decision =
   | { kind: 'use'; at: string; object: string; interaction: string }
   | { kind: 'skip'; at: string }
   /** A rank of a skill learned (whenever: it isn't made at a place in the story). */
-  | { kind: 'learn'; at: string };
+  | { kind: 'learn'; at: string }
+  /** An item of equipment equipped, put away or used (whenever, like learning). */
+  | { kind: 'equip'; at: string }
+  | { kind: 'unequip'; at: string }
+  | { kind: 'useItem'; at: string };
 
 export interface Play {
   world: PlayWorld;
@@ -128,7 +135,7 @@ const MAX_STEPS = 2000;
 // ---------------------------------------------------------------- the world
 
 export const startWorld = (project: Project): PlayWorld => {
-  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {}, met: {}, metCharacters: {}, found: {}, been: {}, used: {}, lore: {}, mechanics: {}, skills: {} };
+  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {}, met: {}, metCharacters: {}, found: {}, been: {}, used: {}, lore: {}, mechanics: {}, skills: {}, equipped: {}, wear: {} };
   for (const o of Object.values(project.objects)) {
     const initial = initialState(o);
     if (o.type === 'state' && initial !== undefined) world.flags[o.id] = initial;
@@ -167,6 +174,8 @@ const doEffects = (d: Doing, effects: Effect[] | undefined) => {
         d.log.push({ kind: 'mechanic', text: name(d.project, e.ref) });
       }
     } else if (e.kind === 'learnSkill') gainRank(d, e.ref);
+    else if (e.kind === 'equip') gearEquip(d, e.ref);
+    else if (e.kind === 'unequip') gearUnequip(d, e.ref);
     else if (e.kind === 'revealLore') {
       if (d.project.objects[e.ref] && !d.world.lore[e.ref]) {
         d.world = { ...d.world, lore: { ...d.world.lore, [e.ref]: true } };
@@ -178,6 +187,47 @@ const doEffects = (d: Doing, effects: Effect[] | undefined) => {
       d.log.push({ kind: 'effect', text: describeEffect(d.project, e) });
     }
   }
+};
+
+/** Put an item in its slot (when it can be), putting back what was there. */
+const gearEquip = (d: Doing, id: string) => {
+  if (equipCheck(d.project, d.world, id)) return;
+  const e = equipmentOf(d.project.objects[id])!;
+  const before = d.world.equipped?.[e.slot];
+  d.world = { ...d.world, equipped: { ...(d.world.equipped ?? {}), [e.slot]: id } };
+  d.log.push({ kind: 'gear', text: `Equipped ${name(d.project, id)}`, detail: `${e.slot}${before ? ` · put away ${name(d.project, before)}` : ''}` });
+};
+
+const gearUnequip = (d: Doing, id: string) => {
+  const slot = Object.entries(d.world.equipped ?? {}).find(([, held]) => held === id)?.[0];
+  if (!slot) return;
+  const equipped = { ...d.world.equipped };
+  delete equipped[slot];
+  d.world = { ...d.world, equipped };
+  d.log.push({ kind: 'gear', text: `Put away ${name(d.project, id)}`, detail: slot });
+};
+
+/** Use an equipped item: its ammunition spent, a use of wear; worn out, it breaks and one is gone. */
+const gearUse = (d: Doing, id: string) => {
+  const e = equipmentOf(d.project.objects[id])!;
+  const next = { ...d.world, items: { ...d.world.items }, equipped: { ...d.world.equipped }, wear: { ...(d.world.wear ?? {}) } };
+  const said: string[] = [];
+  if (e.ammo) {
+    next.items[e.ammo] = Math.max(0, (next.items[e.ammo] ?? 0) - e.ammoPerUse);
+    said.push(`${next.items[e.ammo]} ${name(d.project, e.ammo)} left`);
+    if (!next.items[e.ammo]) dropEquipped(next, e.ammo);
+  }
+  next.wear[id] = (next.wear[id] ?? 0) + 1;
+  const broke = e.durability > 0 && next.wear[id]! >= e.durability;
+  if (e.durability > 0 && !broke) said.push(`${e.durability - next.wear[id]!} ${e.durability - next.wear[id]! === 1 ? 'use' : 'uses'} left`);
+  d.log.push({ kind: 'gear', text: `Used ${name(d.project, id)}`, ...(said.length ? { detail: said.join(' · ') } : {}) });
+  if (broke) {
+    next.items[id] = Math.max(0, (next.items[id] ?? 0) - 1);
+    next.wear[id] = 0;
+    if (!next.items[id]) dropEquipped(next, id);
+    d.log.push({ kind: 'gear', text: `${name(d.project, id)} breaks` });
+  }
+  d.world = next;
 };
 
 /** A rank of a skill, up to its ranks: logged, and what learning it does is done. */
@@ -1150,12 +1200,33 @@ export const endFreePlay = (project: Project, play: Play): Play => {
 export const learnSkillIn = (project: Project, world: PlayWorld, id: string): Changed & { needs?: string } => {
   const check = learnCheck(project, world, id);
   if (!check.ok) return { world, log: [], needs: check.needs };
-  const d: Doing = { project, world: { ...world, items: payFor(project, world, id) }, log: [] };
+  const d: Doing = { project, world: { ...world, items: payFor(project, world, id), equipped: { ...(world.equipped ?? {}) }, wear: { ...(world.wear ?? {}) } }, log: [] };
+  for (const [item, n] of Object.entries(d.world.items)) if (!n) dropEquipped(d.world, item);
   const cost = describeCost(project, project.objects[id]!);
   if (cost !== 'Free') d.log.push({ kind: 'effect', text: `pay ${cost}` });
   gainRank(d, id);
   settle(d);
   return { world: d.world, log: d.log };
+};
+
+/** Equip an item, put it away, or use it: why not, or the world after (settled). */
+export const gearIn = (project: Project, world: PlayWorld, id: string, act: 'equip' | 'unequip' | 'use'): Changed & { needs?: string } => {
+  const needs = act === 'equip' ? equipCheck(project, world, id) : act === 'use' ? useCheck(project, world, id) : isEquipped(world, id) ? '' : `${name(project, id)} is not equipped.`;
+  if (needs) return { world, log: [], needs };
+  const d: Doing = { project, world, log: [] };
+  if (act === 'equip') gearEquip(d, id);
+  else if (act === 'unequip') gearUnequip(d, id);
+  else gearUse(d, id);
+  settle(d);
+  return { world: d.world, log: d.log };
+};
+
+/** Equip, put away or use an item during the play-through, kept on its path as a decision. */
+export const gear = (project: Project, play: Play, id: string, act: 'equip' | 'unequip' | 'use'): Play => {
+  const r = gearIn(project, play.world, id, act);
+  if (r.needs) return play;
+  const decision: Decision = { kind: act === 'use' ? 'useItem' : act, at: id };
+  return { ...play, world: r.world, log: [...play.log, ...r.log], decisions: [...(play.decisions ?? []), decision] };
 };
 
 /** Learn a skill during the play-through, kept on its path as a decision. */

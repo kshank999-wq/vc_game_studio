@@ -34,7 +34,7 @@ describe('Bible filters', () => {
       { kind: 'tag', tag: 'Animation' },
       { kind: 'tag', tag: 'Audio' },
     ]);
-    expect(choices.find((c) => c.heading === 'TYPE')!.options.map((o) => o.count)).toEqual([1, 2]);
+    expect(choices.find((c) => c.heading === 'TYPE')!.options.map((o) => o.count)).toEqual([1, 5]);
   });
 
   it('knows what needs a look, what is unused and what is complete', () => {

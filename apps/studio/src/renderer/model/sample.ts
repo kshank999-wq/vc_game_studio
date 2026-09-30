@@ -231,7 +231,23 @@ export const sunkenVault = (): Project => {
   // Progression (spec §8): the Diving tree. Beating the eels leaves salvage, which buys the lantern's hood.
   const salvage = makeObject('inventory', 'Salvage', p.objects[mara]!.created, { code: 'ITM-02' });
   p = setNotes({ ...p, objects: { ...p.objects, [salvage.id]: salvage } }, salvage.id, 'Scraps of the last expedition’s kit: brass, cord, a cracked lens. Enough of it buys an upgrade.');
-  p = setValue(p, design.encounter!, 'effects', [{ kind: 'give', ref: salvage.id }, { kind: 'give', ref: salvage.id }]);
+  // Weapons and equipment (spec §8): a knife from the cave mouth that wears out, and a flare pistol that burns flares.
+  const gearItem = (name: string, code: string, notes: string, equip?: Record<string, unknown>) => {
+    const made = makeObject('inventory', name, p.objects[mara]!.created, { code, ...(equip ? { equip } : {}) });
+    p = setNotes({ ...p, objects: { ...p.objects, [made.id]: made } }, made.id, notes);
+    return made.id;
+  };
+  const flare = gearItem('Flare', 'ITM-05', 'A magnesium flare for the pistol.');
+  const knife = gearItem('Diving Knife', 'ITM-03', 'Mara’s spare, notched from the rocks.', { slot: 'Hand', stats: [{ name: 'Damage', value: 2 }], ammoPerUse: 1, durability: 3 });
+  const pistol = gearItem('Flare Pistol', 'ITM-04', 'An old signal pistol from the last expedition.', { slot: 'Hand', stats: [{ name: 'Damage', value: 1 }, { name: 'Light', value: 3 }], ammo: flare, ammoPerUse: 1, durability: 0 });
+  p = updateEvent(p, caveMouth, lit.id, { effects: [{ kind: 'enableMechanic', ref: design.mechanic! }, { kind: 'give', ref: knife }] });
+  p = setValue(p, design.encounter!, 'effects', [
+    { kind: 'give', ref: salvage.id },
+    { kind: 'give', ref: salvage.id },
+    { kind: 'give', ref: pistol },
+    { kind: 'give', ref: flare },
+    { kind: 'give', ref: flare },
+  ]);
   const skill = (name: string, notes: string, data: Record<string, unknown>) => {
     const made = makeObject('skill', name, p.objects[mara]!.created, { code: nextCode(p, codeFormatFor('skill')!), tree: 'Diving', ...data });
     p = setNotes({ ...p, objects: { ...p.objects, [made.id]: made } }, made.id, notes);

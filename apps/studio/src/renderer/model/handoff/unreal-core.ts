@@ -265,6 +265,7 @@ namespace vcgs
             Index("lore", Lore);
             Index("mechanics", Mechanics);
             Index("skills", Skills);
+            for (const auto& item : Root["equipment"].items) Equipment[item["item"].Str()] = &item;
             for (const auto& l : Root["lines"].items) Lines[l["id"].Str()] = &l;
         }
         Story(const Story&) = delete;
@@ -322,6 +323,8 @@ namespace vcgs
         std::string Name;
         std::string Start;
         std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines, Quests, Encounters, Lore, Mechanics, Skills;
+        /** Items that can be equipped, by item key: name, slot, stats, ammo, ammoPerUse, durability. */
+        std::map<std::string, const Value*> Equipment;
         /** Inventory items, by key: name, notes and fields (the codex entry is fields.codex). */
         std::map<std::string, const Value*> ItemDefs;
         /** Locations (environments), by key: name, notes and fields (the codex entry is fields.codex). */
@@ -394,6 +397,14 @@ namespace vcgs
         std::map<std::string, int> Skills;
         /** The same skills, in the order first learned (the codex's order). */
         std::vector<std::string> SkillOrder;
+        /** What is equipped, by slot (an item key each). */
+        std::map<std::string, std::string> Equipped;
+        /** How many times each item of equipment has been used, toward its durability. */
+        std::map<std::string, int> Wear;
+        /** An item went into a slot, or came out of it: its key and the slot. */
+        std::function<void(const std::string&, const std::string&)> OnItemEquipped, OnItemUnequipped;
+        /** An item of equipment was used, or broke. */
+        std::function<void(const std::string&)> OnItemUsed, OnItemBroke;
         /** A skill gained a rank: its key and new rank. */
         std::function<void(const std::string&, int)> OnSkillLearned;
         bool AutoRules = true;
@@ -416,7 +427,7 @@ namespace vcgs
             checkpointBody.clear();
             Loaded = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear(); Equipped.clear(); Wear.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -473,7 +484,133 @@ namespace vcgs
         {
             int& n = Items[item];
             n = n - count < 0 ? 0 : n - count;
+            if (n == 0) DropEquipped(item);
             Changed();
+        }
+
+        /** Nothing left of an item: it comes out of its slot, and a new one starts unworn. */
+        void DropEquipped(const std::string& item)
+        {
+            for (auto it = Equipped.begin(); it != Equipped.end();)
+            {
+                if (it->second != item) { ++it; continue; }
+                const std::string slot = it->first;
+                it = Equipped.erase(it);
+                if (OnItemUnequipped) OnItemUnequipped(item, slot);
+            }
+            Wear.erase(item);
+        }
+
+        bool IsEquipped(const std::string& item) const
+        {
+            for (const auto& e : Equipped) if (e.second == item) return true;
+            return false;
+        }
+        /** The item in a slot ("" for none). */
+        std::string EquippedIn(const std::string& slot) const
+        {
+            auto it = Equipped.find(slot);
+            return it == Equipped.end() ? "" : it->second;
+        }
+
+        /** Why an item can't be equipped now, or "" when it can. */
+        std::string EquipCheck(const std::string& item) const
+        {
+            if (!StoryData.Equipment.count(item)) return "Not equipment.";
+            const std::string name = Story::Find(StoryData.Equipment, item)["name"].Str();
+            if (!HasItem(item)) return "You don't carry " + name + ".";
+            if (IsEquipped(item)) return name + " is already equipped.";
+            return "";
+        }
+
+        /** Put an item in its slot, putting back what was there. Returns why not ("" when equipped). */
+        std::string Equip(const std::string& item)
+        {
+            std::string why = EquipCheck(item);
+            if (!why.empty()) return why;
+            const std::string slot = Story::Find(StoryData.Equipment, item)["slot"].Str();
+            const std::string before = EquippedIn(slot);
+            if (!before.empty())
+            {
+                Equipped.erase(slot);
+                if (OnItemUnequipped) OnItemUnequipped(before, slot);
+            }
+            Equipped[slot] = item;
+            if (OnItemEquipped) OnItemEquipped(item, slot);
+            Changed();
+            return "";
+        }
+
+        /** Take an item out of its slot. Returns why not ("" when put away). */
+        std::string Unequip(const std::string& item)
+        {
+            for (const auto& e : Equipped)
+            {
+                if (e.second != item) continue;
+                const std::string slot = e.first;
+                Equipped.erase(slot);
+                if (OnItemUnequipped) OnItemUnequipped(item, slot);
+                Changed();
+                return "";
+            }
+            const std::string name = Story::Find(StoryData.Equipment, item)["name"].Str();
+            return (name.empty() ? item : name) + " is not equipped.";
+        }
+
+        /** Why an equipped item can't be used now, or "" when it can: not equipped, or out of its ammunition. */
+        std::string UseCheck(const std::string& item) const
+        {
+            if (!StoryData.Equipment.count(item)) return "Not equipment.";
+            const Value& e = Story::Find(StoryData.Equipment, item);
+            if (!IsEquipped(item)) return "Equip " + e["name"].Str() + " first.";
+            const Value& ammo = e["ammo"];
+            if (ammo.IsObject())
+            {
+                auto it = Items.find(ammo["item"].Str());
+                if ((it == Items.end() ? 0 : it->second) < static_cast<int>(e["ammoPerUse"].Num(1))) return "Out of " + ammo["name"].Str() + ".";
+            }
+            return "";
+        }
+
+        /** Use an equipped item: spend its ammunition and a use of wear; worn out, it breaks and one is gone. Returns why not ("" when used). */
+        std::string UseItem(const std::string& item)
+        {
+            std::string why = UseCheck(item);
+            if (!why.empty()) return why;
+            const Value& e = Story::Find(StoryData.Equipment, item);
+            if (e["ammo"].IsObject()) TakeItem(e["ammo"]["item"].Str(), static_cast<int>(e["ammoPerUse"].Num(1)));
+            int used = ++Wear[item];
+            if (OnItemUsed) OnItemUsed(item);
+            const int durability = static_cast<int>(e["durability"].Num(0));
+            if (durability > 0 && used >= durability)
+            {
+                Wear[item] = 0;
+                if (OnItemBroke) OnItemBroke(item);
+                TakeItem(item);
+            }
+            else Changed();
+            return "";
+        }
+
+        /** Uses left before an item breaks (-1 when it never does). */
+        int UsesLeft(const std::string& item) const
+        {
+            const int durability = static_cast<int>(Story::Find(StoryData.Equipment, item)["durability"].Num(0));
+            if (durability == 0) return -1;
+            auto it = Wear.find(item);
+            const int left = durability - (it == Wear.end() ? 0 : it->second);
+            return left < 0 ? 0 : left;
+        }
+
+        /** What the equipped items add up to for a stat (by name, ignoring case). */
+        double Stat(const std::string& name) const
+        {
+            auto lower = [](std::string t) { for (char& ch : t) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch))); return t; };
+            double total = 0;
+            for (const auto& e : Equipped)
+                for (const Value& st : Story::Find(StoryData.Equipment, e.second)["stats"].items)
+                    if (lower(st["name"].Str()) == lower(name)) total += st["value"].Num(0);
+            return total;
         }
 
         int Arc(const std::string& character) const { auto it = Arcs.find(character); return it == Arcs.end() ? 0 : it->second; }
@@ -602,7 +739,7 @@ namespace vcgs
                    ",\n  \"fired\": " + list(Fired) + ",\n  \"picked\": " + list(Picked) + ",\n  \"won\": " + list(Won) + ",\n  \"met\": " + list(MetEncounters) +
                    ",\n  \"characters\": " + list(MetCharacters) + ",\n  \"found\": " + list(FoundItems) + ",\n  \"locations\": " + list(VisitedLocations) +
                    ",\n  \"used\": " + list(UsedObjects) + ",\n  \"lore\": " + list(KnownLore) + ",\n  \"mechanics\": " + list(MechanicOrder) +
-                   ",\n  \"skills\": " + learned();
+                   ",\n  \"skills\": " + learned() + ",\n  \"equipped\": " + strings(Equipped) + ",\n  \"wear\": " + numbers(Wear);
         }
 
         /** Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it. */
@@ -642,7 +779,7 @@ namespace vcgs
             const bool keepRules = AutoRules;
             AutoRules = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear(); Equipped.clear(); Wear.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -654,6 +791,8 @@ namespace vcgs
             for (const auto& e : data["chosen"].fields) Chosen[e.first] = e.second.Str();
             for (const auto& e : data["items"].fields) Items[e.first] = static_cast<int>(e.second.number);
             for (const auto& e : data["arcs"].fields) Arcs[e.first] = static_cast<int>(e.second.number);
+            for (const auto& e : data["equipped"].fields) Equipped[e.first] = e.second.Str();
+            for (const auto& e : data["wear"].fields) Wear[e.first] = static_cast<int>(e.second.number);
             for (const auto& e : data["skills"].fields)
             {
                 Skills[e.first] = static_cast<int>(e.second.number);
@@ -856,6 +995,7 @@ namespace vcgs
             }
             if (kind == "lore") return game.KnowsLore(ref) == (op == "known");
             if (kind == "mechanic") return game.HasMechanic(ref) == (op == "available");
+            if (kind == "equipped") return game.IsEquipped(ref) == (op == "equipped");
             if (kind == "skill")
             {
                 int rank = game.SkillRank(ref);
@@ -899,6 +1039,8 @@ namespace vcgs
                 else if (kind == "completeQuest") CompleteQuest(ref, game);
                 else if (kind == "enableMechanic") game.EnableMechanic(ref);
                 else if (kind == "learnSkill") GainRank(ref, game);
+                else if (kind == "equip") game.Equip(ref);
+                else if (kind == "unequip") game.Unequip(ref);
             }
         }
 

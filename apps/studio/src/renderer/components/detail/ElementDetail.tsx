@@ -5,6 +5,8 @@ import { lazy, Suspense, useState } from 'react';
 
 /** A skill's ranks, cost and what it needs first: loaded when a skill is shown. */
 const SkillProgression = lazy(() => import('./SkillProgression').then((m) => ({ default: m.SkillProgression })));
+/** An item as a weapon, tool or something worn: loaded when an item is shown. */
+const EquipmentEditor = lazy(() => import('./EquipmentEditor').then((m) => ({ default: m.EquipmentEditor })));
 
 import {
   FIELDS,
@@ -291,6 +293,14 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
               <Text key={f.key} spec={f} value={use[f.key] ?? ''} onSave={(v) => onCommit(setSceneUse(project, inThisScene!, id, f.key, v))} />
             ))}
           </div>
+        </section>
+      )}
+
+      {object.type === 'inventory' && (
+        <section className="detail-section">
+          <Suspense fallback={null}>
+            <EquipmentEditor object={object} project={project} onCommit={onCommit} />
+          </Suspense>
         </section>
       )}
 

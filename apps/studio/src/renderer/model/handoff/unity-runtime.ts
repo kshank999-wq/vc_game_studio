@@ -209,6 +209,8 @@ namespace VCGS
         public readonly Dictionary<string, Dictionary<string, object>> Encounters = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Lore = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Mechanics = new Dictionary<string, Dictionary<string, object>>();
+        /// <summary>Items that can be equipped, by item key: name, slot, stats, ammo, ammoPerUse, durability.</summary>
+        public readonly Dictionary<string, Dictionary<string, object>> Equipment = new Dictionary<string, Dictionary<string, object>>();
         /// <summary>Skills, abilities and upgrades, by key: ranks, cost, requires, learnWhen (and learnWhenText), onLearn.</summary>
         public readonly Dictionary<string, Dictionary<string, object>> Skills = new Dictionary<string, Dictionary<string, object>>();
         /// <summary>Inventory items, by key: name, notes and fields (the codex entry is fields.codex).</summary>
@@ -240,6 +242,7 @@ namespace VCGS
             Index(root, "lore", Lore);
             Index(root, "mechanics", Mechanics);
             Index(root, "skills", Skills);
+            foreach (var e in D.List(root, "equipment")) { var d = D.Map(e); Equipment[D.Str(d, "item")] = d; }
             Index(root, "items", ItemDefs);
             Index(root, "locations", LocationDefs);
             foreach (var l in D.List(root, "lines"))
@@ -334,6 +337,10 @@ namespace VCGS
         public readonly List<string> AvailableMechanics = new List<string>();
         /// <summary>Skills, abilities and upgrades learned, by rank (Rules.Learn).</summary>
         public readonly Dictionary<string, int> Skills = new Dictionary<string, int>();
+        /// <summary>What is equipped, by slot (an item key each).</summary>
+        public readonly Dictionary<string, string> Equipped = new Dictionary<string, string>();
+        /// <summary>How many times each item of equipment has been used, toward its durability.</summary>
+        public readonly Dictionary<string, int> Wear = new Dictionary<string, int>();
 
         /// <summary>Anything the story's conditions can see has changed.</summary>
         public event Action Changed;
@@ -344,6 +351,10 @@ namespace VCGS
         public event Action<string> MechanicAvailable;
         /// <summary>A skill gained a rank: its key and new rank.</summary>
         public event Action<string, int> SkillLearned;
+        /// <summary>An item went into a slot, or came out of it: its key and the slot.</summary>
+        public event Action<string, string> ItemEquipped, ItemUnequipped;
+        /// <summary>An item of equipment was used, or broke.</summary>
+        public event Action<string> ItemUsed, ItemBroke;
         public event Action<string> EncounterMet;
         public event Action<string> EncounterWon;
         public event Action<string> CharacterMet;
@@ -366,7 +377,7 @@ namespace VCGS
             checkpointAt = "";
             Loaded = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear(); Equipped.Clear(); Wear.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -411,7 +422,108 @@ namespace VCGS
         public void TakeItem(string item, int count = 1)
         {
             Items[item] = Math.Max(0, (Items.TryGetValue(item, out var n) ? n : 0) - count);
+            if (Items[item] == 0) DropEquipped(item);
             OnChanged();
+        }
+
+        /// <summary>Nothing left of an item: it comes out of its slot, and a new one starts unworn.</summary>
+        void DropEquipped(string item)
+        {
+            foreach (var slot in new List<string>(Equipped.Keys))
+                if (Equipped[slot] == item) { Equipped.Remove(slot); ItemUnequipped?.Invoke(item, slot); }
+            Wear.Remove(item);
+        }
+
+        public bool IsEquipped(string item) => Equipped.ContainsValue(item ?? "");
+        /// <summary>The item in a slot ("" for none).</summary>
+        public string EquippedIn(string slot) => Equipped.TryGetValue(slot ?? "", out var i) ? i : "";
+
+        string GearName(string item) => Story.Equipment.TryGetValue(item ?? "", out var e) ? D.Str(e, "name") : item;
+
+        /// <summary>Why an item can't be equipped now, or "" when it can.</summary>
+        public string EquipCheck(string item)
+        {
+            if (!Story.Equipment.ContainsKey(item ?? "")) return "Not equipment.";
+            if (!HasItem(item)) return "You don't carry " + GearName(item) + ".";
+            if (IsEquipped(item)) return GearName(item) + " is already equipped.";
+            return "";
+        }
+
+        /// <summary>Put an item in its slot, putting back what was there. Returns why not ("" when equipped).</summary>
+        public string Equip(string item)
+        {
+            var why = EquipCheck(item);
+            if (why != "") return why;
+            var slot = D.Str(Story.Equipment[item], "slot");
+            var before = EquippedIn(slot);
+            if (before != "") { Equipped.Remove(slot); ItemUnequipped?.Invoke(before, slot); }
+            Equipped[slot] = item;
+            ItemEquipped?.Invoke(item, slot);
+            OnChanged();
+            return "";
+        }
+
+        /// <summary>Take an item out of its slot. Returns why not ("" when put away).</summary>
+        public string Unequip(string item)
+        {
+            foreach (var slot in new List<string>(Equipped.Keys))
+            {
+                if (Equipped[slot] != item) continue;
+                Equipped.Remove(slot);
+                ItemUnequipped?.Invoke(item, slot);
+                OnChanged();
+                return "";
+            }
+            return GearName(item) + " is not equipped.";
+        }
+
+        /// <summary>Why an equipped item can't be used now, or "" when it can: not equipped, or out of its ammunition.</summary>
+        public string UseCheck(string item)
+        {
+            if (!Story.Equipment.TryGetValue(item ?? "", out var e)) return "Not equipment.";
+            if (!IsEquipped(item)) return "Equip " + GearName(item) + " first.";
+            var ammo = D.Map(e, "ammo");
+            if (ammo.Count > 0 && (Items.TryGetValue(D.Str(ammo, "item"), out var n) ? n : 0) < (int)D.Num(e, "ammoPerUse", 1)) return "Out of " + D.Str(ammo, "name") + ".";
+            return "";
+        }
+
+        /// <summary>Use an equipped item: spend its ammunition and a use of wear; worn out, it breaks and one is gone. Returns why not ("" when used).</summary>
+        public string UseItem(string item)
+        {
+            var why = UseCheck(item);
+            if (why != "") return why;
+            var e = Story.Equipment[item];
+            var ammo = D.Map(e, "ammo");
+            if (ammo.Count > 0) TakeItem(D.Str(ammo, "item"), (int)D.Num(e, "ammoPerUse", 1));
+            Wear[item] = (Wear.TryGetValue(item, out var w) ? w : 0) + 1;
+            ItemUsed?.Invoke(item);
+            var durability = (int)D.Num(e, "durability", 0);
+            if (durability > 0 && Wear[item] >= durability)
+            {
+                Wear[item] = 0;
+                ItemBroke?.Invoke(item);
+                TakeItem(item);
+            }
+            else OnChanged();
+            return "";
+        }
+
+        /// <summary>Uses left before an item breaks (-1 when it never does).</summary>
+        public int UsesLeft(string item)
+        {
+            var durability = Story.Equipment.TryGetValue(item ?? "", out var e) ? (int)D.Num(e, "durability", 0) : 0;
+            return durability == 0 ? -1 : Math.Max(0, durability - (Wear.TryGetValue(item, out var w) ? w : 0));
+        }
+
+        /// <summary>What the equipped items add up to for a stat (by name, ignoring case).</summary>
+        public double Stat(string name)
+        {
+            double total = 0;
+            foreach (var item in Equipped.Values)
+                if (Story.Equipment.TryGetValue(item, out var e))
+                    foreach (var s in D.List(e, "stats"))
+                        if (string.Equals(D.Str(D.Map(s), "name"), name, StringComparison.OrdinalIgnoreCase)) total += D.Num(D.Map(s), "value");
+            return total;
         }
 
         public int Arc(string character) => Arcs.TryGetValue(character, out var n) ? n : 0;
@@ -648,7 +760,8 @@ namespace VCGS
                 ",\n  \"solved\": " + Sorted(Solved) + ",\n  \"visited\": " + Sorted(Visited) + ",\n  \"fired\": " + Sorted(Fired) + ",\n  \"picked\": " + Sorted(Picked) + ",\n  \"won\": " + Sorted(Won) +
                 ",\n  \"met\": " + InOrder(MetEncounters) + ",\n  \"characters\": " + InOrder(MetCharacters) + ",\n  \"found\": " + InOrder(FoundItems) + ",\n  \"locations\": " + InOrder(VisitedLocations) +
                 ",\n  \"used\": " + InOrder(UsedObjects) + ",\n  \"lore\": " + InOrder(KnownLore) + ",\n  \"mechanics\": " + InOrder(AvailableMechanics) +
-                ",\n  \"skills\": " + Map(Skills, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                ",\n  \"skills\": " + Map(Skills, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
+                ",\n  \"equipped\": " + Map(Equipped, Q) + ",\n  \"wear\": " + Map(Wear, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         /// <summary>Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it.</summary>
@@ -684,7 +797,7 @@ namespace VCGS
             var keepRules = AutoRules;
             AutoRules = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear(); Equipped.Clear(); Wear.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -697,6 +810,8 @@ namespace VCGS
             foreach (var e in D.Map(data, "items")) Items[e.Key] = (int)D.Num(e.Value, 0);
             foreach (var e in D.Map(data, "arcs")) Arcs[e.Key] = (int)D.Num(e.Value, 0);
             foreach (var e in D.Map(data, "skills")) Skills[e.Key] = (int)D.Num(e.Value, 0);
+            foreach (var e in D.Map(data, "equipped")) Equipped[e.Key] = D.Str(data["equipped"] as Dictionary<string, object>, e.Key);
+            foreach (var e in D.Map(data, "wear")) Wear[e.Key] = (int)D.Num(e.Value, 0);
             foreach (var q in D.List(data, "quests"))
                 if (q is Dictionary<string, object> quest && D.Str(quest, "key") != "") Quests[D.Str(quest, "key")] = D.Str(quest, "state");
             void Keys(string field, Action<string> add)
@@ -781,6 +896,7 @@ namespace VCGS
                     return op == "done" ? state == "done" : op == "notDone" ? state != "done" : op == "active" ? state == "active" : state == "";
                 case "lore": return game.KnowsLore(reference) == (op == "known");
                 case "mechanic": return game.HasMechanic(reference) == (op == "available");
+                case "equipped": return game.IsEquipped(reference) == (op == "equipped");
                 case "skill":
                     var rank = game.SkillRank(reference);
                     var at = (int)D.Num(c, "value", 1);
@@ -809,6 +925,8 @@ namespace VCGS
                     case "completeQuest": CompleteQuest(reference, game); break;
                     case "enableMechanic": game.EnableMechanic(reference); break;
                     case "learnSkill": GainRank(reference, game); break;
+                    case "equip": game.Equip(reference); break;
+                    case "unequip": game.Unequip(reference); break;
                 }
             }
         }

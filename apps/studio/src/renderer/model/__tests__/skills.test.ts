@@ -86,7 +86,7 @@ describe('skills in the handoff', () => {
       ['deep_breath', 2, null, [], null, 'Skill', 'Diving'],
       ['lantern_hood', 1, { item: 'salvage', name: 'Salvage', amount: 2 }, ['deep_breath'], 'Lantern oil is available', 'Upgrade', 'Diving'],
     ]);
-    expect(ir.encounters[0]!.onWin).toEqual([{ kind: 'give', ref: 'salvage' }, { kind: 'give', ref: 'salvage' }]);
+    expect(ir.encounters[0]!.onWin!.filter((e) => e.ref === 'salvage')).toEqual([{ kind: 'give', ref: 'salvage' }, { kind: 'give', ref: 'salvage' }]);
     const story = JSON.parse(json.generate!(ir, 'vcgs').files[0]!.content);
     expect(story.skills).toHaveLength(2);
     expect(storySchema().properties.skills).toBeTruthy();

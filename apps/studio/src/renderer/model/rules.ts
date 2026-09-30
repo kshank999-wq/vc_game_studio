@@ -19,7 +19,9 @@ export type Condition =
   | { kind: 'lore'; ref: string; op: 'known' | 'unknown' }
   | { kind: 'mechanic'; ref: string; op: 'available' | 'unavailable' }
   /** A skill's rank: at least n (learned: at least 1), or below n (not learned: below 1). */
-  | { kind: 'skill'; ref: string; op: 'atLeast' | 'below'; value: number };
+  | { kind: 'skill'; ref: string; op: 'atLeast' | 'below'; value: number }
+  /** An item of equipment, in its slot or not. */
+  | { kind: 'equipped'; ref: string; op: 'equipped' | 'notEquipped' };
 
 export interface Rule {
   match: 'all' | 'any';
@@ -39,7 +41,10 @@ export type Effect =
   | { kind: 'completeQuest'; ref: string }
   | { kind: 'enableMechanic'; ref: string }
   /** A rank of a skill, given: nothing paid, nothing needed first. */
-  | { kind: 'learnSkill'; ref: string };
+  | { kind: 'learnSkill'; ref: string }
+  /** Put an item of equipment in its slot (if it is carried), or take it out. */
+  | { kind: 'equip'; ref: string }
+  | { kind: 'unequip'; ref: string };
 
 export const isRule = (x: Condition | Rule): x is Rule => 'match' in x;
 
@@ -82,6 +87,7 @@ export const SUBJECTS: readonly Subject[] = [
   { kind: 'lore', label: 'Lore', type: 'lore', ops: [{ op: 'known', label: 'is known' }, { op: 'unknown', label: 'is not known' }], value: 'none' },
   { kind: 'mechanic', label: 'Mechanic', type: 'mechanic', ops: [{ op: 'available', label: 'is available' }, { op: 'unavailable', label: 'is not available' }], value: 'none' },
   { kind: 'skill', label: 'Skill', type: 'skill', ops: [{ op: 'atLeast', label: 'is at rank at least' }, { op: 'below', label: 'is below rank' }], value: 'number' },
+  { kind: 'equipped', label: 'Equipment', type: 'inventory', ops: [{ op: 'equipped', label: 'is equipped' }, { op: 'notEquipped', label: 'is not equipped' }], value: 'none' },
   { kind: 'visited', label: 'Scene', type: 'scene', ops: [{ op: 'visited', label: 'was visited' }, { op: 'notVisited', label: 'was not visited' }], value: 'none' },
 ];
 
@@ -105,6 +111,8 @@ export const EFFECTS: readonly EffectKind[] = [
   { kind: 'revealLore', label: 'Reveal lore', type: 'lore', value: 'none' },
   { kind: 'enableMechanic', label: 'Make mechanic available', type: 'mechanic', value: 'none' },
   { kind: 'learnSkill', label: 'Give a skill rank', type: 'skill', value: 'none' },
+  { kind: 'equip', label: 'Equip item', type: 'inventory', value: 'none' },
+  { kind: 'unequip', label: 'Put item away', type: 'inventory', value: 'none' },
 ];
 
 export const subjectOf = (kind: Condition['kind']): Subject => SUBJECTS.find((s) => s.kind === kind)!;
@@ -134,6 +142,8 @@ export const newCondition = (kind: Condition['kind'], ref = '', value = ''): Con
       return { kind, ref, op: 'available' };
     case 'skill':
       return { kind, ref, op: 'atLeast', value: Number(value) || 1 };
+    case 'equipped':
+      return { kind, ref, op: 'equipped' };
   }
 };
 
@@ -175,6 +185,8 @@ export const describeCondition = (project: Project, c: Condition): string => {
       return `${who} is ${c.op === 'known' ? '' : 'not '}known`;
     case 'mechanic':
       return `${who} is ${c.op === 'available' ? '' : 'not '}available`;
+    case 'equipped':
+      return `${who} is ${c.op === 'equipped' ? '' : 'not '}equipped`;
     case 'skill':
       return c.value <= 1 ? `${who} is ${c.op === 'atLeast' ? '' : 'not '}learned` : `${who} ${c.op === 'atLeast' ? 'at rank' : 'below rank'} ${c.value}${c.op === 'atLeast' ? '+' : ''}`;
   }
@@ -213,6 +225,10 @@ export const describeEffect = (project: Project, e: Effect): string => {
       return `make ${who} available`;
     case 'learnSkill':
       return `give a rank of ${who}`;
+    case 'equip':
+      return `equip ${who}`;
+    case 'unequip':
+      return `put away ${who}`;
   }
 };
 
@@ -238,11 +254,15 @@ export interface PlayState {
   mechanics: Record<string, boolean>;
   /** Skills, abilities and upgrades learned, by rank (spec §8). */
   skills: Record<string, number>;
+  /** What is equipped, by slot: an item each (spec §8). */
+  equipped: Record<string, string>;
+  /** How many times each item of equipment has been used, toward its durability. */
+  wear: Record<string, number>;
 }
 
 export type QuestState = 'active' | 'done';
 
-export const emptyState = (): PlayState => ({ flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, quests: {}, lore: {}, mechanics: {}, skills: {} });
+export const emptyState = (): PlayState => ({ flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, quests: {}, lore: {}, mechanics: {}, skills: {}, equipped: {}, wear: {} });
 
 export const holds = (c: Condition, s: PlayState): boolean => {
   switch (c.kind) {
@@ -271,9 +291,17 @@ export const holds = (c: Condition, s: PlayState): boolean => {
       return !!s.lore[c.ref] === (c.op === 'known');
     case 'mechanic':
       return !!s.mechanics[c.ref] === (c.op === 'available');
+    case 'equipped':
+      return Object.values(s.equipped ?? {}).includes(c.ref) === (c.op === 'equipped');
     case 'skill':
       return c.op === 'atLeast' ? (s.skills?.[c.ref] ?? 0) >= c.value : (s.skills?.[c.ref] ?? 0) < c.value;
   }
+};
+
+/** Nothing left of an item: it comes out of its slot, and a new one starts unworn. */
+export const dropEquipped = (s: PlayState, item: string) => {
+  for (const [slot, held] of Object.entries(s.equipped)) if (held === item) delete s.equipped[slot];
+  delete s.wear[item];
 };
 
 export const evaluate = (rule: Rule | undefined, s: PlayState): boolean => {
@@ -284,12 +312,15 @@ export const evaluate = (rule: Rule | undefined, s: PlayState): boolean => {
 
 /** Apply effects to a state. Firing a trigger is left to the caller, which knows the trigger's own effects. */
 export const apply = (effects: Effect[] | undefined, s: PlayState): PlayState => {
-  const next: PlayState = { ...s, flags: { ...s.flags }, items: { ...s.items }, objects: { ...s.objects }, arcs: { ...s.arcs }, solved: { ...s.solved }, quests: { ...s.quests }, lore: { ...s.lore }, mechanics: { ...s.mechanics }, skills: { ...(s.skills ?? {}) } };
+  const next: PlayState = { ...s, flags: { ...s.flags }, items: { ...s.items }, objects: { ...s.objects }, arcs: { ...s.arcs }, solved: { ...s.solved }, quests: { ...s.quests }, lore: { ...s.lore }, mechanics: { ...s.mechanics }, skills: { ...(s.skills ?? {}) }, equipped: { ...(s.equipped ?? {}) }, wear: { ...(s.wear ?? {}) } };
   for (const e of effects ?? []) {
     if (e.kind === 'setFlag') next.flags[e.ref] = e.value;
     if (e.kind === 'setObject') next.objects[e.ref] = e.value;
     if (e.kind === 'give') next.items[e.ref] = (next.items[e.ref] ?? 0) + 1;
-    if (e.kind === 'take') next.items[e.ref] = Math.max(0, (next.items[e.ref] ?? 0) - 1);
+    if (e.kind === 'take') {
+      next.items[e.ref] = Math.max(0, (next.items[e.ref] ?? 0) - 1);
+      if (!next.items[e.ref]) dropEquipped(next, e.ref);
+    }
     if (e.kind === 'arc') next.arcs[e.ref] = (next.arcs[e.ref] ?? 0) + e.amount;
     if (e.kind === 'solve') next.solved[e.ref] = true;
     // Starting a quest that is under way or done changes nothing.

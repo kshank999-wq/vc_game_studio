@@ -51,6 +51,21 @@ monitor while you fix it on another.
   *Diving* tree: *Deep Breath* (two free ranks) and the *Lantern Hood* upgrade,
   which needs Deep Breath and the lantern's oil and costs the two salvage
   that beating the eels leaves.
+- **Weapons and equipment** (spec §8): an inventory item's Game Bible entry
+  can make it **equipment**: its **Slot** (Hand, Head, Light: any name; one
+  item a slot), its **Stats** (names and numbers, such as Damage 2; the
+  equipped items' add up), what **Each use spends** (so many of another item:
+  ammunition) and how many **Uses before it breaks** (0: never). The world
+  panel's **Equipment** shows what is in each slot and the stats they add up
+  to, and each item of equipment carried with **Equip**, **Use** and **Put
+  away** (or why not: not carried, out of ammunition). Equipping puts back
+  what was in the slot; a worn-out item breaks and one is gone; an item no
+  longer carried comes out of its slot. Each is a decision on the path,
+  replayed when a path is checked. Rules can ask *Equipment › is equipped / is
+  not equipped*, and the effects *Equip item* and *Put item away* do it from
+  the story. In the sample, the Diving Knife (Damage 2, three uses) comes with
+  lighting the lantern, and the eels leave a Flare Pistol (Damage 1, Light 3,
+  a flare a shot) and two flares.
 - **Encounters** go on a scene's timeline (**+ Event › Encounter**, new or one
   from the Bible). The preview offers **Win**, only when the encounter's *Can be
   won when* rule holds (otherwise it says what it needs), and **Lose**. A win
@@ -114,7 +129,7 @@ monitor while you fix it on another.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.
 - **The world** panel shows every state, what is carried, object states, arcs,
-  quests, skills, mechanics, lore, choices made, puzzles solved, encounters won, triggers fired and
+  quests, equipment, skills, mechanics, lore, choices made, puzzles solved, encounters won, triggers fired and
   scenes visited. Change any of it to try another path. **Step back**
   (Backspace) undoes one step.
 - **Paths** (spec §15) are expected ways through the story, kept in the

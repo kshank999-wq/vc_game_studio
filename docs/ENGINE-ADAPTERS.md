@@ -398,6 +398,29 @@ Each skill also gets its data like the other design definitions: a
 Diving tree through every refusal, pays with the eels' salvage, and saves and
 loads the ranks.
 
+## Weapons and equipment
+
+The IR's `equipment` lists the items that can be equipped (spec §8), by item
+key: `slot`, `stats` (names and values), `ammo` (an item key and name, or
+null) and `ammoPerUse`, and `durability` (uses before it breaks; 0 never).
+Every runtime keeps what is in each slot and each item's wear, equips only
+what is carried (putting back what was in the slot), spends ammunition and
+wear on each use, breaks a worn-out item (one is taken, the next starts
+unworn), takes an item out of its slot once none is carried, adds up stats by
+name, and refuses in the studio's words ("You don't carry Diving Knife.",
+"Out of Flare."). The `equipped` condition and the `equip` / `unequip` effects
+work everywhere, and a save keeps `equipped` (slot to item) and `wear`.
+
+| Engine | Equip / put away / use | Slot, stat, wear | Signals |
+| --- | --- | --- | --- |
+| Godot | `VCGSRules.equip`, `unequip`, `use_item` (and `equip_check`, `use_check`) | `game.equipped_in(slot)`, `VCGSRules.stat(name, game)`, `uses_left` | `item_equipped`, `item_unequipped`, `item_used`, `item_broke` |
+| Unity | `game.Equip`, `Unequip`, `UseItem` (and `EquipCheck`, `UseCheck`) | `EquippedIn`, `Stat`, `UsesLeft` | `ItemEquipped`, `ItemUnequipped`, `ItemUsed`, `ItemBroke` |
+| Unreal | `EquipItem`, `UnequipItem`, `UseItem` (and `GetUseCheck`) on the subsystem | `GetEquippedIn`, `GetStat`, `GetUsesLeft` | `OnItemEquipped`, `OnItemUnequipped`, `OnItemUsed`, `OnItemBroke` |
+
+Each engine's check equips the sample's knife and flare pistol, burns the
+flare, wears the knife out, equips a new one by an effect, and saves and
+loads the slots and wear.
+
 ## Comments and tasks
 
 The IR's `notes` are the project's open comments and tasks (spec §16), oldest
