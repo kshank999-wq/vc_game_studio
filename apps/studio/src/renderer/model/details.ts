@@ -80,6 +80,11 @@ export const FIELDS: Partial<Record<ObjectType, readonly FieldSpec[]>> = {
     { key: 'weakness', label: 'Weakness', placeholder: 'Lantern light' },
     { key: 'onLose', label: 'If the player loses', options: ['Try again', 'Game over', 'Carry on'] },
   ],
+  skill: [
+    { key: 'kind', label: 'Kind', options: ['Skill', 'Ability', 'Upgrade'] },
+    { key: 'tree', label: 'Unlock tree', placeholder: 'Diving' },
+    { key: 'effect', label: 'What it does', placeholder: 'Hold your breath twice as long' },
+  ],
   scene: [
     { key: 'summary', label: 'Summary', multiline: true },
     { key: 'purpose', label: 'Purpose', placeholder: 'Open the vault' },

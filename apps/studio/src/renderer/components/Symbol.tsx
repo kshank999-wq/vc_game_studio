@@ -23,6 +23,7 @@ const FILL: Partial<Record<ObjectType, string>> = {
   quest: 'var(--c-quest)',
   mechanic: 'var(--c-mechanic)',
   encounter: 'var(--c-encounter)',
+  skill: 'var(--c-skill)',
   begin: 'var(--gold)',
   end: 'var(--gold)',
 };
@@ -109,6 +110,14 @@ export const Symbol = ({ type, size = 14, color }: { type: ObjectType; size?: nu
     case 'encounter':
       // An arrow, striking.
       return svg(<path d="M3 13L12 4M6.5 3.5H12.5V9.5" fill="none" stroke={fill} strokeWidth="1.8" strokeLinecap="round" />);
+    case 'skill':
+      // A chevron rising: a rank up.
+      return svg(
+        <>
+          <path d="M3 10.5L8 5.5l5 5" fill="none" stroke={fill} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M3 14L8 9l5 5" fill="none" stroke={fill} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+        </>,
+      );
     case 'begin':
     case 'end':
       return <LockIcon size={size} />;

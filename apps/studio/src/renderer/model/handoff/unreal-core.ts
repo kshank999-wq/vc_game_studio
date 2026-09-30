@@ -264,6 +264,7 @@ namespace vcgs
             Index("encounters", Encounters);
             Index("lore", Lore);
             Index("mechanics", Mechanics);
+            Index("skills", Skills);
             for (const auto& l : Root["lines"].items) Lines[l["id"].Str()] = &l;
         }
         Story(const Story&) = delete;
@@ -320,7 +321,7 @@ namespace vcgs
         const Value Root;
         std::string Name;
         std::string Start;
-        std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines, Quests, Encounters, Lore, Mechanics;
+        std::map<std::string, const Value*> Graph, Scenes, Choices, Objects, Triggers, Flags, Characters, Cinematics, Lines, Quests, Encounters, Lore, Mechanics, Skills;
         /** Inventory items, by key: name, notes and fields (the codex entry is fields.codex). */
         std::map<std::string, const Value*> ItemDefs;
         /** Locations (environments), by key: name, notes and fields (the codex entry is fields.codex). */
@@ -345,6 +346,7 @@ namespace vcgs
         void Solve(const std::string& puzzle, GameState& game);
         void Settle(GameState& game);
         void CompleteQuest(const std::string& quest, GameState& game);
+        void GainRank(const std::string& skill, GameState& game);
     }
 
     /**
@@ -388,6 +390,10 @@ namespace vcgs
         std::set<std::string> Mechanics;
         /** The same mechanics, in the order they became available. */
         std::vector<std::string> MechanicOrder;
+        /** Skills, abilities and upgrades learned, by rank (Rules::Learn). */
+        std::map<std::string, int> Skills;
+        /** A skill gained a rank: its key and new rank. */
+        std::function<void(const std::string&, int)> OnSkillLearned;
         bool AutoRules = true;
         std::function<void(const std::string&)> OnTriggerFired;
         std::function<void(const std::string&)> OnQuestStarted;
@@ -408,7 +414,7 @@ namespace vcgs
             checkpointBody.clear();
             Loaded = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -587,7 +593,8 @@ namespace vcgs
                    ",\n  \"chosen\": " + strings(Chosen) + ",\n  \"quests\": " + quests + ",\n  \"solved\": " + list(Solved) + ",\n  \"visited\": " + list(Visited) +
                    ",\n  \"fired\": " + list(Fired) + ",\n  \"picked\": " + list(Picked) + ",\n  \"won\": " + list(Won) + ",\n  \"met\": " + list(MetEncounters) +
                    ",\n  \"characters\": " + list(MetCharacters) + ",\n  \"found\": " + list(FoundItems) + ",\n  \"locations\": " + list(VisitedLocations) +
-                   ",\n  \"used\": " + list(UsedObjects) + ",\n  \"lore\": " + list(KnownLore) + ",\n  \"mechanics\": " + list(MechanicOrder);
+                   ",\n  \"used\": " + list(UsedObjects) + ",\n  \"lore\": " + list(KnownLore) + ",\n  \"mechanics\": " + list(MechanicOrder) +
+                   ",\n  \"skills\": " + numbers(Skills);
         }
 
         /** Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it. */
@@ -627,7 +634,7 @@ namespace vcgs
             const bool keepRules = AutoRules;
             AutoRules = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -639,6 +646,7 @@ namespace vcgs
             for (const auto& e : data["chosen"].fields) Chosen[e.first] = e.second.Str();
             for (const auto& e : data["items"].fields) Items[e.first] = static_cast<int>(e.second.number);
             for (const auto& e : data["arcs"].fields) Arcs[e.first] = static_cast<int>(e.second.number);
+            for (const auto& e : data["skills"].fields) Skills[e.first] = static_cast<int>(e.second.number);
             for (const Value& q : data["quests"].items)
             {
                 const std::string key = q["key"].Str();
@@ -726,6 +734,20 @@ namespace vcgs
             if (KnowsLore(lore)) return;
             KnownLore.push_back(lore);
             if (OnLoreDiscovered) OnLoreDiscovered(lore);
+            Changed();
+        }
+
+        /** A skill's rank: 0 until learned. */
+        int SkillRank(const std::string& skill) const
+        {
+            auto it = Skills.find(skill);
+            return it == Skills.end() ? 0 : it->second;
+        }
+        /** One rank more of a skill (Rules::Learn pays for it and checks what it needs first). */
+        void AddSkillRank(const std::string& skill)
+        {
+            int rank = ++Skills[skill];
+            if (OnSkillLearned) OnSkillLearned(skill, rank);
             Changed();
         }
 
@@ -821,6 +843,12 @@ namespace vcgs
             }
             if (kind == "lore") return game.KnowsLore(ref) == (op == "known");
             if (kind == "mechanic") return game.HasMechanic(ref) == (op == "available");
+            if (kind == "skill")
+            {
+                int rank = game.SkillRank(ref);
+                int at = static_cast<int>(c["value"].Num(1));
+                return op == "atLeast" ? rank >= at : rank < at;
+            }
             return false;
         }
 
@@ -857,6 +885,7 @@ namespace vcgs
                 else if (kind == "revealLore") game.DiscoverLore(ref);
                 else if (kind == "completeQuest") CompleteQuest(ref, game);
                 else if (kind == "enableMechanic") game.EnableMechanic(ref);
+                else if (kind == "learnSkill") GainRank(ref, game);
             }
         }
 
@@ -933,6 +962,60 @@ namespace vcgs
         }
 
         /** Complete a quest now, started or not, and pay its reward (once). */
+        /**
+         * Why the next rank of a skill can't be learned now, or "" when it can:
+         * fully learned, a skill to learn first, its conditions, or its cost
+         * (the same words as the studio).
+         */
+        inline std::string LearnCheck(const std::string& skill, const GameState& game)
+        {
+            if (!game.StoryData.Skills.count(skill)) return "Not a skill.";
+            const Value& s = Story::Find(game.StoryData.Skills, skill);
+            int rank = game.SkillRank(skill);
+            int ranks = static_cast<int>(s["ranks"].Num(1));
+            if (rank >= ranks) return ranks > 1 ? "All " + std::to_string(ranks) + " ranks learned." : std::string("Learned.");
+            std::string missing;
+            for (const Value& r : s["requires"].items)
+            {
+                const std::string key = r.Str();
+                if (game.SkillRank(key) >= 1) continue;
+                const Value& need = Story::Find(game.StoryData.Skills, key);
+                missing += (missing.empty() ? "" : " and ") + (need["name"].Str().empty() ? key : need["name"].Str());
+            }
+            if (!missing.empty()) return "Learn " + missing + " first.";
+            if (s["learnWhen"].IsObject() && !Check(s["learnWhen"], game)) return "Needs " + s["learnWhenText"].Str() + ".";
+            const Value& cost = s["cost"];
+            if (cost.IsObject())
+            {
+                auto it = game.Items.find(cost["item"].Str());
+                int have = it == game.Items.end() ? 0 : it->second;
+                int amount = static_cast<int>(cost["amount"].Num(1));
+                if (have < amount) return "Costs " + std::to_string(amount) + " \u00d7 " + cost["name"].Str() + " (you have " + std::to_string(have) + ").";
+            }
+            return "";
+        }
+
+        /** Learn the next rank: pay its cost, gain the rank, do what it does. Returns why not ("" when learned). */
+        inline std::string Learn(const std::string& skill, GameState& game)
+        {
+            std::string why = LearnCheck(skill, game);
+            if (!why.empty()) return why;
+            const Value& cost = Story::Find(game.StoryData.Skills, skill)["cost"];
+            if (cost.IsObject()) game.TakeItem(cost["item"].Str(), static_cast<int>(cost["amount"].Num(1)));
+            GainRank(skill, game);
+            return "";
+        }
+
+        /** A rank given (by learning, or an effect): up to its ranks, and what learning it does. */
+        inline void GainRank(const std::string& skill, GameState& game)
+        {
+            if (!game.StoryData.Skills.count(skill)) return;
+            const Value& s = Story::Find(game.StoryData.Skills, skill);
+            if (game.SkillRank(skill) >= static_cast<int>(s["ranks"].Num(1))) return;
+            game.AddSkillRank(skill);
+            Apply(s["onLearn"], game);
+        }
+
         inline void CompleteQuest(const std::string& quest, GameState& game)
         {
             if (game.QuestState(quest) == "done") return;

@@ -371,6 +371,30 @@ Godot `VCGSSceneFlow.dual_requested(line_id, with_line_id)`, Unity
 component's Blueprint event `OnDualDialogue` (both lines' speaker, text and
 direction). The Play-through preview pairs lines by the same rule.
 
+## Skills and upgrades
+
+The IR's `skills` (spec §8) are the skills, abilities and upgrades: each has
+its `ranks`, a `cost` (an item's key and name, and an amount, or null), what
+it `requires` first (skill keys), `learnWhen` (and `learnWhenText`, the rule
+in words) and `onLearn`, with its kind, tree and use in `fields`. Every
+runtime keeps each skill's rank, checks and learns it the same way, and
+refuses with the studio's own words ("Learn Deep Breath first.", "Costs 2 ×
+Salvage (you have 0)."). Conditions of kind `skill` (`atLeast` / `below` a
+rank) and the `learnSkill` effect (a rank, free, up to `ranks`) work
+everywhere, and a save keeps the ranks (`skills`, by key).
+
+| Engine | Learn | Rank | Why not | Signal |
+| --- | --- | --- | --- | --- |
+| Godot | `VCGSRules.learn(key, game)` | `game.skill_rank(key)` | `VCGSRules.learn_check` | `skill_learned` |
+| Unity | `Rules.Learn(key, game)` | `game.SkillRank(key)` | `Rules.LearnCheck` | `SkillLearned` |
+| Unreal | `UVcgsSubsystem::LearnSkill` (`vcgs::Rules::Learn`) | `GetSkillRank` | `GetSkillLearnCheck` | `OnSkillLearned` |
+
+Each skill also gets its data like the other design definitions: a
+`VCGSSkill` resource (Godot), a `VcgsSkill` asset (Unity), a `DT_Skills` row
+(Unreal), and a `Skills` key class. Each engine's check learns the sample's
+Diving tree through every refusal, pays with the eels' salvage, and saves and
+loads the ranks.
+
 ## Comments and tasks
 
 The IR's `notes` are the project's open comments and tasks (spec §16), oldest

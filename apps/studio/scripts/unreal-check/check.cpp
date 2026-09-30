@@ -352,6 +352,30 @@ int main()
         if (saving.Loaded) Fail("starting the scene should end the load");
     }
 
+    // Skills (spec §8): the Diving tree. Deep Breath first (two ranks, free), then the
+    // lantern's hood, once the oil is in play, for the two salvage the eels leave.
+    {
+        vcgs::GameState g(story);
+        if (vcgs::Rules::Learn("lantern_hood", g) != "Learn Deep Breath first.") Fail("the hood should need Deep Breath first");
+        if (vcgs::Rules::Learn("deep_breath", g) != "" || g.SkillRank("deep_breath") != 1) Fail("Deep Breath should be learned, for free");
+        if (vcgs::Rules::LearnCheck("lantern_hood", g) != "Needs Lantern oil is available.") Fail("the hood should need the lantern's oil, got " + vcgs::Rules::LearnCheck("lantern_hood", g));
+        vcgs::Rules::Learn("deep_breath", g);
+        if (vcgs::Rules::LearnCheck("deep_breath", g) != "All 2 ranks learned.") Fail("Deep Breath should stop at two ranks");
+        g.EnableMechanic("lantern_oil");
+        if (vcgs::Rules::LearnCheck("lantern_hood", g) != "Costs 2 \u00d7 Salvage (you have 0).") Fail("the hood should cost two salvage, got " + vcgs::Rules::LearnCheck("lantern_hood", g));
+        vcgs::Rules::Apply(vcgs::Story::Find(story.Encounters, "eel_swarm")["onWin"], g);
+        if (vcgs::Rules::Learn("lantern_hood", g) != "" || g.Items["salvage"] != 0 || g.SkillRank("lantern_hood") != 1) Fail("the eels' salvage should buy the hood");
+        std::string err;
+        vcgs::Rules::Apply(vcgs::JsonReader::Parse("[{\"kind\": \"learnSkill\", \"ref\": \"deep_breath\"}]", &err), g);
+        const vcgs::Value ranks = vcgs::JsonReader::Parse("{\"match\": \"all\", \"items\": [{\"kind\": \"skill\", \"ref\": \"lantern_hood\", \"op\": \"atLeast\", \"value\": 1}, {\"kind\": \"skill\", \"ref\": \"deep_breath\", \"op\": \"below\", \"value\": 3}]}", &err);
+        if (g.SkillRank("deep_breath") != 2 || !vcgs::Rules::Check(ranks, g)) Fail("a given rank should stop at the skill's ranks, and conditions should see ranks");
+        vcgs::GameState h(story);
+        std::string at;
+        h.LoadSave(g.SaveText("The Sunken Vault"), at);
+        std::printf("skills: deep_breath %d, lantern_hood %d\n", h.SkillRank("deep_breath"), h.SkillRank("lantern_hood"));
+        if (h.SkillRank("deep_breath") != 2 || h.SkillRank("lantern_hood") != 1) Fail("skills should save and load");
+    }
+
     // Custom code in VcgsStoryKeys.h's region was kept when the story was exported again.
     if (std::string(VcgsKeys::CustomCheck) != "kept") Fail("custom code in VcgsStoryKeys.h should survive exporting again");
     else std::printf("custom code: %s\n", VcgsKeys::CustomCheck);

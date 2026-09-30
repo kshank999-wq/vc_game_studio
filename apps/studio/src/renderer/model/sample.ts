@@ -228,6 +228,24 @@ export const sunkenVault = (): Project => {
   // Turning the key opens the vault: the quest is done.
   p = updateEvent(p, vaultDoor, choice.id, { effects: [{ kind: 'take', ref: key }, { kind: 'arc', ref: mara, amount: 1 }, { kind: 'completeQuest', ref: design.quest! }] });
 
+  // Progression (spec §8): the Diving tree. Beating the eels leaves salvage, which buys the lantern's hood.
+  const salvage = makeObject('inventory', 'Salvage', p.objects[mara]!.created, { code: 'ITM-02' });
+  p = setNotes({ ...p, objects: { ...p.objects, [salvage.id]: salvage } }, salvage.id, 'Scraps of the last expedition’s kit: brass, cord, a cracked lens. Enough of it buys an upgrade.');
+  p = setValue(p, design.encounter!, 'effects', [{ kind: 'give', ref: salvage.id }, { kind: 'give', ref: salvage.id }]);
+  const skill = (name: string, notes: string, data: Record<string, unknown>) => {
+    const made = makeObject('skill', name, p.objects[mara]!.created, { code: nextCode(p, codeFormatFor('skill')!), tree: 'Diving', ...data });
+    p = setNotes({ ...p, objects: { ...p.objects, [made.id]: made } }, made.id, notes);
+    return made.id;
+  };
+  const breath = skill('Deep Breath', 'Longer under water with each rank.', { kind: 'Skill', ranks: 2, effect: 'Hold your breath a third longer' });
+  skill('Lantern Hood', 'A brass hood that keeps the flame out of the water.', {
+    kind: 'Upgrade',
+    effect: 'The lantern burns half as fast in deep water',
+    cost: { item: salvage.id, amount: 2 },
+    requires: [breath],
+    rule: { match: 'all', items: [{ kind: 'mechanic', ref: design.mechanic!, op: 'available' }] },
+  });
+
   // Where it all happens: one level, tied to the scenes and the Bible.
   p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent, oil: design.mechanic! });
 

@@ -1,10 +1,11 @@
+import { costOf, ranksOf, requiresOf } from '../skills';
 import { describeTarget, whoLabel, type Who } from '../collab';
 import { interactionsOf, initialState, statesOf } from '../details';
 import { laneSequence, spineSequence } from '../layout';
 import { CATEGORIES, dualWith, elementsIn, sceneLines } from '../scene';
 import { hasInline, plainInline } from '../inline';
 import { eventTitle, loseOf, sceneTimeline } from '../timeline';
-import { isEmpty, isRule, type Effect, type Rule } from '../rules';
+import { describeRule, isEmpty, isRule, type Effect, type Rule } from '../rules';
 import { cinematicTiming, shotsOf } from '../shots';
 import type { ObjectType, Project, StoryObject } from '../types';
 import { buildLevels, type IrLevel } from './levels';
@@ -156,6 +157,23 @@ export interface IrMechanic extends IrThing {
   /** Available only when an effect makes it available (it has no `availableWhen` then). */
   byEffect?: true;
   availableWhen?: IrRule;
+}
+
+/**
+ * A skill, ability or upgrade (spec §8), learned in ranks up to `ranks`: a
+ * rank needs every skill in `requires` learned, `learnWhen` to hold, and
+ * `cost` paid (so many of an item); `onLearn` happens with each rank. Its
+ * kind, tree and what it does are in `fields`.
+ */
+export interface IrSkill extends IrThing {
+  ranks: number;
+  /** The item a rank costs (its key and name), and how many. */
+  cost: { item: string; name: string; amount: number } | null;
+  requires: string[];
+  learnWhen?: IrRule;
+  /** learnWhen in words, for "Needs …" when it doesn't hold. */
+  learnWhenText?: string;
+  onLearn?: IrEffect[];
 }
 
 /** An encounter on a timeline: the game plays it and reports a win or a loss. */
@@ -312,6 +330,7 @@ export interface HandoffIR {
   quests: IrQuest[];
   mechanics: IrMechanic[];
   encounters: IrEncounter[];
+  skills: IrSkill[];
   cinematics: IrThing[];
   flags: IrFlag[];
   triggers: IrTrigger[];
@@ -356,6 +375,7 @@ export const DESIGN_LISTS = [
   { list: 'quests', type: 'quest', label: 'Quest', folder: 'Quests', group: 'Story' },
   { list: 'mechanics', type: 'mechanic', label: 'Mechanic', folder: 'Mechanics', group: 'Logic' },
   { list: 'encounters', type: 'encounter', label: 'Encounter', folder: 'Encounters', group: 'World' },
+  { list: 'skills', type: 'skill', label: 'Skill', folder: 'Skills', group: 'Logic' },
 ] as const satisfies readonly { list: keyof HandoffIR; type: ObjectType; label: string; folder: string; group: string }[];
 
 const fieldsOf = (o: StoryObject): Record<string, string> =>
@@ -547,6 +567,19 @@ export const buildIR = (project: Project): HandoffIR => {
       const onLose = effects(o.data.loseEffects as Effect[] | undefined);
       const loss = ({ 'Game over': 'gameOver', 'Carry on': 'carryOn' } as const)[loseOf(o) as 'Game over' | 'Carry on'] ?? 'retry';
       return { ...thing(o), ...(winWhen ? { winWhen } : {}), ...(onWin ? { onWin } : {}), ...(onLose ? { onLose } : {}), loss };
+    }),
+    skills: of('skill').map((o): IrSkill => {
+      const cost = costOf(o);
+      const learnWhen = rule(o.data.rule as Rule | undefined);
+      const onLearn = effects(o.data.effects as Effect[] | undefined);
+      return {
+        ...thing(o),
+        ranks: ranksOf(o),
+        cost: cost && key(cost.item) ? { item: key(cost.item)!, name: project.objects[cost.item]!.name, amount: cost.amount } : null,
+        requires: requiresOf(o).flatMap((r) => (key(r) ? [key(r)!] : [])),
+        ...(learnWhen ? { learnWhen, learnWhenText: describeRule(project, o.data.rule as Rule) } : {}),
+        ...(onLearn ? { onLearn } : {}),
+      };
     }),
     cinematics: of('cinematic').map((o) => {
       const event = project.events.find((e) => e.refId === o.id);

@@ -17,7 +17,9 @@ export type Condition =
   | { kind: 'visited'; ref: string; op: 'visited' | 'notVisited' }
   | { kind: 'quest'; ref: string; op: 'done' | 'notDone' | 'active' | 'notStarted' }
   | { kind: 'lore'; ref: string; op: 'known' | 'unknown' }
-  | { kind: 'mechanic'; ref: string; op: 'available' | 'unavailable' };
+  | { kind: 'mechanic'; ref: string; op: 'available' | 'unavailable' }
+  /** A skill's rank: at least n (learned: at least 1), or below n (not learned: below 1). */
+  | { kind: 'skill'; ref: string; op: 'atLeast' | 'below'; value: number };
 
 export interface Rule {
   match: 'all' | 'any';
@@ -35,7 +37,9 @@ export type Effect =
   | { kind: 'startQuest'; ref: string }
   | { kind: 'revealLore'; ref: string }
   | { kind: 'completeQuest'; ref: string }
-  | { kind: 'enableMechanic'; ref: string };
+  | { kind: 'enableMechanic'; ref: string }
+  /** A rank of a skill, given: nothing paid, nothing needed first. */
+  | { kind: 'learnSkill'; ref: string };
 
 export const isRule = (x: Condition | Rule): x is Rule => 'match' in x;
 
@@ -77,6 +81,7 @@ export const SUBJECTS: readonly Subject[] = [
   },
   { kind: 'lore', label: 'Lore', type: 'lore', ops: [{ op: 'known', label: 'is known' }, { op: 'unknown', label: 'is not known' }], value: 'none' },
   { kind: 'mechanic', label: 'Mechanic', type: 'mechanic', ops: [{ op: 'available', label: 'is available' }, { op: 'unavailable', label: 'is not available' }], value: 'none' },
+  { kind: 'skill', label: 'Skill', type: 'skill', ops: [{ op: 'atLeast', label: 'is at rank at least' }, { op: 'below', label: 'is below rank' }], value: 'number' },
   { kind: 'visited', label: 'Scene', type: 'scene', ops: [{ op: 'visited', label: 'was visited' }, { op: 'notVisited', label: 'was not visited' }], value: 'none' },
 ];
 
@@ -99,6 +104,7 @@ export const EFFECTS: readonly EffectKind[] = [
   { kind: 'completeQuest', label: 'Complete quest', type: 'quest', value: 'none' },
   { kind: 'revealLore', label: 'Reveal lore', type: 'lore', value: 'none' },
   { kind: 'enableMechanic', label: 'Make mechanic available', type: 'mechanic', value: 'none' },
+  { kind: 'learnSkill', label: 'Give a skill rank', type: 'skill', value: 'none' },
 ];
 
 export const subjectOf = (kind: Condition['kind']): Subject => SUBJECTS.find((s) => s.kind === kind)!;
@@ -126,6 +132,8 @@ export const newCondition = (kind: Condition['kind'], ref = '', value = ''): Con
       return { kind, ref, op: 'known' };
     case 'mechanic':
       return { kind, ref, op: 'available' };
+    case 'skill':
+      return { kind, ref, op: 'atLeast', value: Number(value) || 1 };
   }
 };
 
@@ -167,6 +175,8 @@ export const describeCondition = (project: Project, c: Condition): string => {
       return `${who} is ${c.op === 'known' ? '' : 'not '}known`;
     case 'mechanic':
       return `${who} is ${c.op === 'available' ? '' : 'not '}available`;
+    case 'skill':
+      return c.value <= 1 ? `${who} is ${c.op === 'atLeast' ? '' : 'not '}learned` : `${who} ${c.op === 'atLeast' ? 'at rank' : 'below rank'} ${c.value}${c.op === 'atLeast' ? '+' : ''}`;
   }
 };
 
@@ -201,6 +211,8 @@ export const describeEffect = (project: Project, e: Effect): string => {
       return `complete ${who}`;
     case 'enableMechanic':
       return `make ${who} available`;
+    case 'learnSkill':
+      return `give a rank of ${who}`;
   }
 };
 
@@ -224,11 +236,13 @@ export interface PlayState {
   lore: Record<string, boolean>;
   /** Mechanics the player can use now. */
   mechanics: Record<string, boolean>;
+  /** Skills, abilities and upgrades learned, by rank (spec §8). */
+  skills: Record<string, number>;
 }
 
 export type QuestState = 'active' | 'done';
 
-export const emptyState = (): PlayState => ({ flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, quests: {}, lore: {}, mechanics: {} });
+export const emptyState = (): PlayState => ({ flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, quests: {}, lore: {}, mechanics: {}, skills: {} });
 
 export const holds = (c: Condition, s: PlayState): boolean => {
   switch (c.kind) {
@@ -257,6 +271,8 @@ export const holds = (c: Condition, s: PlayState): boolean => {
       return !!s.lore[c.ref] === (c.op === 'known');
     case 'mechanic':
       return !!s.mechanics[c.ref] === (c.op === 'available');
+    case 'skill':
+      return c.op === 'atLeast' ? (s.skills?.[c.ref] ?? 0) >= c.value : (s.skills?.[c.ref] ?? 0) < c.value;
   }
 };
 
@@ -268,7 +284,7 @@ export const evaluate = (rule: Rule | undefined, s: PlayState): boolean => {
 
 /** Apply effects to a state. Firing a trigger is left to the caller, which knows the trigger's own effects. */
 export const apply = (effects: Effect[] | undefined, s: PlayState): PlayState => {
-  const next: PlayState = { ...s, flags: { ...s.flags }, items: { ...s.items }, objects: { ...s.objects }, arcs: { ...s.arcs }, solved: { ...s.solved }, quests: { ...s.quests }, lore: { ...s.lore }, mechanics: { ...s.mechanics } };
+  const next: PlayState = { ...s, flags: { ...s.flags }, items: { ...s.items }, objects: { ...s.objects }, arcs: { ...s.arcs }, solved: { ...s.solved }, quests: { ...s.quests }, lore: { ...s.lore }, mechanics: { ...s.mechanics }, skills: { ...(s.skills ?? {}) } };
   for (const e of effects ?? []) {
     if (e.kind === 'setFlag') next.flags[e.ref] = e.value;
     if (e.kind === 'setObject') next.objects[e.ref] = e.value;
@@ -282,6 +298,7 @@ export const apply = (effects: Effect[] | undefined, s: PlayState): PlayState =>
     // Completing a quest pays its reward too; the play-through does that (its reward is the quest's own effects).
     if (e.kind === 'completeQuest') next.quests[e.ref] = 'done';
     if (e.kind === 'enableMechanic') next.mechanics[e.ref] = true;
+    if (e.kind === 'learnSkill') next.skills[e.ref] = (next.skills[e.ref] ?? 0) + 1;
   }
   return next;
 };

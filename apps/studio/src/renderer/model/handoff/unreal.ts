@@ -191,6 +191,7 @@ struct VCGS_API FVcgsLineRow : public FTableRowBase
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsQuestSignature, const FString&, Quest);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsSceneSignature, const FString&, Scene);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsSkillSignature, const FString&, Skill, int32, Rank);
 
 /**
  * The one playthrough of the story: reads story.json when the game starts and
@@ -248,6 +249,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "VCGS|State") bool HasMechanic(const FString& Mechanic) const;
     /** A mechanic's field as written in the studio, such as "tuning" (empty when it has none). */
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetMechanicDetail(const FString& Mechanic, const FString& Field) const;
+    /** A skill's rank (0 until learned). */
+    UFUNCTION(BlueprintPure, Category = "VCGS|State") int32 GetSkillRank(const FString& Skill) const;
+    /** Why the next rank of a skill can't be learned now (fully learned, a skill first, its conditions, its cost), or "" when it can. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|State") FString GetSkillLearnCheck(const FString& Skill) const;
+    /** Learn the next rank: pay its cost, gain the rank, do what it does. Returns why not ("" when learned). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|State") FString LearnSkill(const FString& Skill);
 
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestStarted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
@@ -330,6 +337,7 @@ public:
     /** The core's codex, for C++ (null until a story is loaded). */
     vcgs::Codex* CodexState() const { return CodexData.get(); }
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnMechanicAvailable;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsSkillSignature OnSkillLearned;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnEncounterMet;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnEncounterWon;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnCharacterMet;
@@ -415,6 +423,7 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     Game->OnQuestCompleted = [this](const std::string& Quest) { OnQuestCompleted.Broadcast(ToF(Quest)); };
     Game->OnLoreDiscovered = [this](const std::string& Lore) { OnLoreDiscovered.Broadcast(ToF(Lore)); };
     Game->OnMechanicAvailable = [this](const std::string& Mechanic) { OnMechanicAvailable.Broadcast(ToF(Mechanic)); };
+    Game->OnSkillLearned = [this](const std::string& Skill, int Rank) { OnSkillLearned.Broadcast(ToF(Skill), Rank); };
     Game->OnEncounterMet = [this](const std::string& Encounter) { OnEncounterMet.Broadcast(ToF(Encounter)); };
     Game->OnEncounterWon = [this](const std::string& Encounter) { OnEncounterWon.Broadcast(ToF(Encounter)); };
     Game->OnCharacterMet = [this](const std::string& Character) { OnCharacterMet.Broadcast(ToF(Character)); };
@@ -614,6 +623,10 @@ FString UVcgsSubsystem::GetMechanicDetail(const FString& Mechanic, const FString
 {
     return StoryData ? ToF(vcgs::Story::Find(StoryData->Mechanics, ToStd(Mechanic))["fields"][ToStd(Field)].Str()) : FString();
 }
+
+int32 UVcgsSubsystem::GetSkillRank(const FString& Skill) const { return Game ? Game->SkillRank(ToStd(Skill)) : 0; }
+FString UVcgsSubsystem::GetSkillLearnCheck(const FString& Skill) const { return Game ? ToF(vcgs::Rules::LearnCheck(ToStd(Skill), *Game)) : FString(); }
+FString UVcgsSubsystem::LearnSkill(const FString& Skill) { return Game ? ToF(vcgs::Rules::Learn(ToStd(Skill), *Game)) : FString(); }
 
 FString UVcgsSubsystem::Onward(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Onward(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::NodeKind(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::KindOf(*Game, ToStd(Node))) : FString(); }

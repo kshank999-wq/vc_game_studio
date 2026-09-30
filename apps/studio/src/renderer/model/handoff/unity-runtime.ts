@@ -209,6 +209,8 @@ namespace VCGS
         public readonly Dictionary<string, Dictionary<string, object>> Encounters = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Lore = new Dictionary<string, Dictionary<string, object>>();
         public readonly Dictionary<string, Dictionary<string, object>> Mechanics = new Dictionary<string, Dictionary<string, object>>();
+        /// <summary>Skills, abilities and upgrades, by key: ranks, cost, requires, learnWhen (and learnWhenText), onLearn.</summary>
+        public readonly Dictionary<string, Dictionary<string, object>> Skills = new Dictionary<string, Dictionary<string, object>>();
         /// <summary>Inventory items, by key: name, notes and fields (the codex entry is fields.codex).</summary>
         public readonly Dictionary<string, Dictionary<string, object>> ItemDefs = new Dictionary<string, Dictionary<string, object>>();
         /// <summary>Locations (environments), by key: name, notes and fields (the codex entry is fields.codex).</summary>
@@ -237,6 +239,7 @@ namespace VCGS
             Index(root, "encounters", Encounters);
             Index(root, "lore", Lore);
             Index(root, "mechanics", Mechanics);
+            Index(root, "skills", Skills);
             Index(root, "items", ItemDefs);
             Index(root, "locations", LocationDefs);
             foreach (var l in D.List(root, "lines"))
@@ -329,6 +332,8 @@ namespace VCGS
         public readonly HashSet<string> Mechanics = new HashSet<string>();
         /// <summary>The same mechanics, in the order they became available.</summary>
         public readonly List<string> AvailableMechanics = new List<string>();
+        /// <summary>Skills, abilities and upgrades learned, by rank (Rules.Learn).</summary>
+        public readonly Dictionary<string, int> Skills = new Dictionary<string, int>();
 
         /// <summary>Anything the story's conditions can see has changed.</summary>
         public event Action Changed;
@@ -337,6 +342,8 @@ namespace VCGS
         public event Action<string> QuestCompleted;
         public event Action<string> LoreDiscovered;
         public event Action<string> MechanicAvailable;
+        /// <summary>A skill gained a rank: its key and new rank.</summary>
+        public event Action<string, int> SkillLearned;
         public event Action<string> EncounterMet;
         public event Action<string> EncounterWon;
         public event Action<string> CharacterMet;
@@ -359,7 +366,7 @@ namespace VCGS
             checkpointAt = "";
             Loaded = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -540,6 +547,17 @@ namespace VCGS
 
         public bool HasMechanic(string mechanic) => Mechanics.Contains(mechanic);
 
+        /// <summary>A skill's rank: 0 until learned.</summary>
+        public int SkillRank(string skill) => Skills.TryGetValue(skill ?? "", out var n) ? n : 0;
+
+        /// <summary>One rank more of a skill (Rules.Learn pays for it and checks what it needs first).</summary>
+        public void AddSkillRank(string skill)
+        {
+            Skills[skill] = SkillRank(skill) + 1;
+            SkillLearned?.Invoke(skill, Skills[skill]);
+            OnChanged();
+        }
+
         public void EnableMechanic(string mechanic)
         {
             if (!Mechanics.Add(mechanic)) return;
@@ -629,7 +647,8 @@ namespace VCGS
                 ",\n  \"arcs\": " + Map(Arcs, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) + ",\n  \"chosen\": " + Map(Chosen, Q) + ",\n  \"quests\": [" + string.Join(", ", quests) + "]" +
                 ",\n  \"solved\": " + Sorted(Solved) + ",\n  \"visited\": " + Sorted(Visited) + ",\n  \"fired\": " + Sorted(Fired) + ",\n  \"picked\": " + Sorted(Picked) + ",\n  \"won\": " + Sorted(Won) +
                 ",\n  \"met\": " + InOrder(MetEncounters) + ",\n  \"characters\": " + InOrder(MetCharacters) + ",\n  \"found\": " + InOrder(FoundItems) + ",\n  \"locations\": " + InOrder(VisitedLocations) +
-                ",\n  \"used\": " + InOrder(UsedObjects) + ",\n  \"lore\": " + InOrder(KnownLore) + ",\n  \"mechanics\": " + InOrder(AvailableMechanics);
+                ",\n  \"used\": " + InOrder(UsedObjects) + ",\n  \"lore\": " + InOrder(KnownLore) + ",\n  \"mechanics\": " + InOrder(AvailableMechanics) +
+                ",\n  \"skills\": " + Map(Skills, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         /// <summary>Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it.</summary>
@@ -665,7 +684,7 @@ namespace VCGS
             var keepRules = AutoRules;
             AutoRules = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
-            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -677,6 +696,7 @@ namespace VCGS
             foreach (var e in D.Map(data, "chosen")) Chosen[e.Key] = D.Str(data["chosen"] as Dictionary<string, object>, e.Key);
             foreach (var e in D.Map(data, "items")) Items[e.Key] = (int)D.Num(e.Value, 0);
             foreach (var e in D.Map(data, "arcs")) Arcs[e.Key] = (int)D.Num(e.Value, 0);
+            foreach (var e in D.Map(data, "skills")) Skills[e.Key] = (int)D.Num(e.Value, 0);
             foreach (var q in D.List(data, "quests"))
                 if (q is Dictionary<string, object> quest && D.Str(quest, "key") != "") Quests[D.Str(quest, "key")] = D.Str(quest, "state");
             void Keys(string field, Action<string> add)
@@ -761,6 +781,10 @@ namespace VCGS
                     return op == "done" ? state == "done" : op == "notDone" ? state != "done" : op == "active" ? state == "active" : state == "";
                 case "lore": return game.KnowsLore(reference) == (op == "known");
                 case "mechanic": return game.HasMechanic(reference) == (op == "available");
+                case "skill":
+                    var rank = game.SkillRank(reference);
+                    var at = (int)D.Num(c, "value", 1);
+                    return op == "atLeast" ? rank >= at : rank < at;
                 default: return false;
             }
         }
@@ -784,6 +808,7 @@ namespace VCGS
                     case "revealLore": game.DiscoverLore(reference); break;
                     case "completeQuest": CompleteQuest(reference, game); break;
                     case "enableMechanic": game.EnableMechanic(reference); break;
+                    case "learnSkill": GainRank(reference, game); break;
                 }
             }
         }
@@ -856,6 +881,51 @@ namespace VCGS
                 }
                 if (!moved) return;
             }
+        }
+
+        /// <summary>
+        /// Why the next rank of a skill can't be learned now, or "" when it can:
+        /// fully learned, a skill to learn first, its conditions, or its cost
+        /// (the same words as the studio).
+        /// </summary>
+        public static string LearnCheck(string skill, GameState game)
+        {
+            if (!game.Story.Skills.TryGetValue(skill ?? "", out var s)) return "Not a skill.";
+            var rank = game.SkillRank(skill);
+            var ranks = (int)D.Num(s, "ranks", 1);
+            if (rank >= ranks) return ranks > 1 ? "All " + ranks + " ranks learned." : "Learned.";
+            var missing = new List<string>();
+            foreach (var r in D.List(s, "requires"))
+                if (r is string need && game.SkillRank(need) < 1) missing.Add(game.Story.Skills.TryGetValue(need, out var n) ? D.Str(n, "name") : need);
+            if (missing.Count > 0) return "Learn " + string.Join(" and ", missing) + " first.";
+            if (D.Get(s, "learnWhen") != null && !Check(D.Get(s, "learnWhen"), game)) return "Needs " + D.Str(s, "learnWhenText") + ".";
+            var cost = D.Map(s, "cost");
+            if (cost.Count > 0)
+            {
+                var have = game.Items.TryGetValue(D.Str(cost, "item"), out var h) ? h : 0;
+                var amount = (int)D.Num(cost, "amount", 1);
+                if (have < amount) return "Costs " + amount + " × " + D.Str(cost, "name") + " (you have " + have + ").";
+            }
+            return "";
+        }
+
+        /// <summary>Learn the next rank: pay its cost, gain the rank, do what it does. Returns why not ("" when learned).</summary>
+        public static string Learn(string skill, GameState game)
+        {
+            var why = LearnCheck(skill, game);
+            if (why != "") return why;
+            var cost = D.Map(game.Story.Skills[skill], "cost");
+            if (cost.Count > 0) game.TakeItem(D.Str(cost, "item"), (int)D.Num(cost, "amount", 1));
+            GainRank(skill, game);
+            return "";
+        }
+
+        /// <summary>A rank given (by learning, or an effect): up to its ranks, and what learning it does.</summary>
+        public static void GainRank(string skill, GameState game)
+        {
+            if (!game.Story.Skills.TryGetValue(skill ?? "", out var s) || game.SkillRank(skill) >= (int)D.Num(s, "ranks", 1)) return;
+            game.AddSkillRank(skill);
+            Apply(D.Get(s, "onLearn"), game);
         }
 
         /// <summary>Complete a quest now, started or not, and pay its reward (once).</summary>
@@ -2363,6 +2433,16 @@ namespace VCGS
     /// <summary>A mechanic: how a system works, in the designer's words.</summary>
     [CreateAssetMenu(menuName = "VCGS/Mechanic")]
     public sealed class VcgsMechanic : VcgsElement { }
+}
+`,
+  'VcgsSkill.cs': String.raw`${HEAD}
+using UnityEngine;
+
+namespace VCGS
+{
+    /// <summary>A skill, ability or upgrade: its kind, tree and use in the designer's words (Rules.Learn plays it).</summary>
+    [CreateAssetMenu(menuName = "VCGS/Skill")]
+    public sealed class VcgsSkill : VcgsElement { }
 }
 `,
   'VcgsEncounter.cs': String.raw`${HEAD}

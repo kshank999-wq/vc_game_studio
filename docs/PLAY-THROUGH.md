@@ -37,6 +37,20 @@ monitor while you fix it on another.
   lighting the lantern at the cave mouth makes Lantern oil available, finding
   the key starts *Open the vault* and its seal reveals *The Drowned Order* (the
   vault door reveals it otherwise), and turning the key completes the quest.
+- **Skills, abilities and upgrades** (spec §8) are Game Bible entries, in
+  unlock trees. Each is learned a rank at a time up to its **Ranks**, after the
+  skills it lists under **Learn first**, when its *Can be learned when* rule
+  holds, for what **Each rank costs** (so many of an inventory item: skill
+  points, salvage, coins). *Learning it* is what each rank does. The world
+  panel's **Skills** lists each tree with every rank learned and **Learn**,
+  or what is in the way: fully learned, a skill first, its rule, or its cost
+  and what is carried. A learned rank shows in the transcript and is a
+  decision on the path, replayed when a path is checked. Rules can ask
+  *Skill › is at rank at least / is below rank* (1 is learned), and the effect
+  *Give a skill rank* gives one free, up to its ranks. In the sample, the
+  *Diving* tree: *Deep Breath* (two free ranks) and the *Lantern Hood* upgrade,
+  which needs Deep Breath and the lantern's oil and costs the two salvage
+  that beating the eels leaves.
 - **Encounters** go on a scene's timeline (**+ Event › Encounter**, new or one
   from the Bible). The preview offers **Win**, only when the encounter's *Can be
   won when* rule holds (otherwise it says what it needs), and **Lose**. A win
@@ -98,7 +112,7 @@ monitor while you fix it on another.
 - **Skipped events** (their conditions failed) appear in the transcript with
   what they needed, so a path that can never be reached shows up here.
 - **The world** panel shows every state, what is carried, object states, arcs,
-  quests, mechanics, lore, choices made, puzzles solved, encounters won, triggers fired and
+  quests, skills, mechanics, lore, choices made, puzzles solved, encounters won, triggers fired and
   scenes visited. Change any of it to try another path. **Step back**
   (Backspace) undoes one step.
 - **Paths** (spec §15) are expected ways through the story, kept in the

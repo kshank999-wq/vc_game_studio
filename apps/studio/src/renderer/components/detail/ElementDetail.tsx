@@ -1,7 +1,10 @@
 import { CommentsHistory } from '../collab/lazy';
 import { runningTime, shotsOf } from '../../model/shots';
 import { useNav } from '../../nav';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
+
+/** A skill's ranks, cost and what it needs first: loaded when a skill is shown. */
+const SkillProgression = lazy(() => import('./SkillProgression').then((m) => ({ default: m.SkillProgression })));
 
 import {
   FIELDS,
@@ -50,6 +53,7 @@ const RULES: Partial<Record<StoryObject['type'], { rule: string; effects?: strin
   encounter: { rule: 'Can be won when', effects: 'On a win', loses: 'On a loss' },
   lore: { rule: 'Discovered when (empty: known from the beginning)' },
   mechanic: { rule: 'Available when (empty: from the beginning)' },
+  skill: { rule: 'Can be learned when (empty: any time)', effects: 'Learning it (each rank)' },
 };
 
 /** The rule that an effect can stand in for: "Only by an effect" turns it off (data.byEffect). */
@@ -287,6 +291,14 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
               <Text key={f.key} spec={f} value={use[f.key] ?? ''} onSave={(v) => onCommit(setSceneUse(project, inThisScene!, id, f.key, v))} />
             ))}
           </div>
+        </section>
+      )}
+
+      {object.type === 'skill' && (
+        <section className="detail-section">
+          <Suspense fallback={null}>
+            <SkillProgression object={object} project={project} onCommit={onCommit} />
+          </Suspense>
         </section>
       )}
 

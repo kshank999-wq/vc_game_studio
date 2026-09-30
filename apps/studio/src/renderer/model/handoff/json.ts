@@ -47,6 +47,7 @@ export const storySchema = () => ({
     quests: { type: 'array', items: ref('quest'), description: 'Quests and objectives: each starts when `starts` holds (at once without it) and is done when `completes` holds, paying `reward`.' },
     mechanics: { type: 'array', items: ref('mechanic'), description: 'Mechanics: how a system works, in the designer\'s words, and its tuning in `fields`; each usable once `availableWhen` holds.' },
     encounters: { type: 'array', items: ref('encounter'), description: 'Encounters and enemies: played by the game where an `encounter` event puts them, then won or lost.' },
+    skills: { type: 'array', items: ref('skill'), description: 'Skills, abilities and upgrades (their kind, tree and use in `fields`), learned in ranks: see the README.' },
     cinematics: { type: 'array', items: ref('thing') },
     flags: { type: 'array', items: obj({ id: str, ident, name: str, values: strings, initial: str, setBy: strings }) },
     triggers: { type: 'array', items: ref('trigger') },
@@ -170,9 +171,9 @@ export const storySchema = () => ({
       type: 'object',
       required: ['kind', 'ref', 'op'],
       properties: {
-        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic'] },
+        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill'] },
         ref: { description: 'The key of the flag, item, object, choice, character, puzzle or scene it is about.', ...str },
-        op: { enum: ['is', 'isNot', 'has', 'hasNot', 'chose', 'didNotChoose', 'atLeast', 'atMost', 'solved', 'unsolved', 'visited', 'notVisited', 'done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable'] },
+        op: { enum: ['is', 'isNot', 'has', 'hasNot', 'chose', 'didNotChoose', 'atLeast', 'atMost', 'solved', 'unsolved', 'visited', 'notVisited', 'done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable', 'below'] },
         value: { type: ['string', 'number'] },
       },
     },
@@ -185,7 +186,7 @@ export const storySchema = () => ({
     effect: {
       type: 'object',
       required: ['kind', 'ref'],
-      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire', 'startQuest', 'revealLore', 'completeQuest', 'enableMechanic'] }, ref: str, value: str, amount: num },
+      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire', 'startQuest', 'revealLore', 'completeQuest', 'enableMechanic', 'learnSkill'] }, ref: str, value: str, amount: num },
     },
     effects: { type: 'array', items: ref('effect') },
     storyNode: obj({ key: str, kind: str, name: str }),
@@ -198,6 +199,23 @@ export const storySchema = () => ({
     quest: {
       allOf: [ref('thing'), obj({ byEffect: { const: true }, starts: ref('rule'), completes: ref('rule'), reward: ref('effects') }, [])],
       description: 'A quest: under way once `starts` holds (at once when there is none), done when `completes` holds (never without it), then its `reward` effects are done.',
+    },
+    skill: {
+      allOf: [
+        ref('thing'),
+        obj(
+          {
+            ranks: { type: 'integer', minimum: 1 },
+            cost: { anyOf: [{ type: 'null' }, obj({ item: str, name: str, amount: { type: 'integer', minimum: 1 } })], description: 'What a rank costs: so many of an inventory item.' },
+            requires: { ...strings, description: 'Skills to learn (rank 1) before its first rank.' },
+            learnWhen: ref('rule'),
+            learnWhenText: { type: 'string', description: 'learnWhen in words, for "Needs …".' },
+            onLearn: { type: 'array', items: ref('effect'), description: 'What each rank learned does.' },
+          },
+          ['ranks', 'cost', 'requires'],
+        ),
+      ],
+      description: 'A skill, ability or upgrade, learned rank by rank up to `ranks`.',
     },
     encounter: {
       allOf: [ref('thing'), obj({ winWhen: ref('rule'), onWin: ref('effects'), onLose: ref('effects'), loss: { enum: ['retry', 'gameOver', 'carryOn'] } }, ['loss'])],
@@ -299,6 +317,13 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
    it does \`onWin\` and the scene goes on. A loss does \`onLose\`, then plays the
    encounter again (\`loss: "retry"\`), ends the game (\`"gameOver"\`), or goes on
    (\`"carryOn"\`).
+7. **Skills** (\`skills\`) are learned when the player chooses, a rank at a time
+   up to \`ranks\`. Keep each one's rank (0 to start). A rank can be learned when
+   it is below \`ranks\`, every skill in \`requires\` is at rank 1 or more,
+   \`learnWhen\` holds, and the player carries \`cost.amount\` of \`cost.item\`.
+   Learning it takes the cost, adds the rank and does \`onLearn\`; a
+   \`learnSkill\` effect adds a rank without the cost or the checks (still only
+   up to \`ranks\`). Keep the ranks in a save.
 
 ## Rules and effects
 
@@ -314,9 +339,10 @@ rules; an empty rule holds. A condition is \`{ kind, ref, op, value? }\`:
 | arc | a character key | atLeast, atMost | a number |
 | puzzle | a puzzle key | solved, unsolved | |
 | visited | a scene key | visited, notVisited | |
+| skill | a skill key | atLeast, below | a rank (1 is learned) |
 
 An effect is \`{ kind, ref, value?, amount? }\`: \`setFlag\` (value), \`give\`,
-\`take\`, \`setObject\` (value), \`arc\` (amount), \`solve\`, \`fire\`.
+\`take\`, \`setObject\` (value), \`arc\` (amount), \`solve\`, \`fire\`, \`learnSkill\`.
 ${ir.levels.length ? LEVELS_README : ''}`;
 
 const LEVELS_README = `

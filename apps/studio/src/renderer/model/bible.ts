@@ -24,6 +24,7 @@ export type ViewKey =
   | 'quests'
   | 'mechanics'
   | 'encounters'
+  | 'skills'
   | 'production';
 
 export interface BibleView {
@@ -50,6 +51,7 @@ export const VIEWS: readonly BibleView[] = [
   { key: 'quests', label: 'Quests / Objectives', symbol: 'quest', types: ['quest'] },
   { key: 'mechanics', label: 'Mechanics', symbol: 'mechanic', types: ['mechanic'] },
   { key: 'encounters', label: 'Encounters / Enemies', symbol: 'encounter', types: ['encounter'] },
+  { key: 'skills', label: 'Skills / Upgrades', symbol: 'skill', types: ['skill'] },
   { key: 'production', label: 'Production Requirements', symbol: 'object' },
 ];
 
@@ -103,7 +105,7 @@ export const viewGroups = (project: Project, key: ViewKey, query = ''): Group[] 
 
   switch (key) {
     case 'all': {
-      const order: ObjectType[] = ['begin', 'plotPoint', 'end', 'scene', 'cinematic', 'choice', 'character', 'environment', 'object', 'inventory', 'puzzle', 'trigger', 'gate', 'state', 'arcEvent', 'dialogue', 'lore', 'quest', 'mechanic', 'encounter'];
+      const order: ObjectType[] = ['begin', 'plotPoint', 'end', 'scene', 'cinematic', 'choice', 'character', 'environment', 'object', 'inventory', 'puzzle', 'trigger', 'gate', 'state', 'arcEvent', 'dialogue', 'lore', 'quest', 'mechanic', 'encounter', 'skill'];
       return keep(order.map((type) => ({ label: TYPE_LABEL[type], entries: wrap(objects.filter((o) => o.type === type)) })));
     }
     case 'characters': {
@@ -148,6 +150,13 @@ export const viewGroups = (project: Project, key: ViewKey, query = ''): Group[] 
               .map((line) => ({ kind: 'line' as const, id: line.id, line })),
           })),
       );
+    }
+    case 'skills': {
+      // A tree a group: its skills, abilities and upgrades.
+      const skills = objects.filter((o) => o.type === 'skill');
+      const tree = (o: StoryObject) => String(o.data.tree ?? '').trim() || 'No tree';
+      const trees = [...new Set(skills.map(tree))].sort((a, b) => (a === 'No tree' ? 1 : b === 'No tree' ? -1 : a.localeCompare(b)));
+      return keep(trees.map((t) => ({ label: t, entries: wrap(skills.filter((o) => tree(o) === t)) })));
     }
     case 'production': {
       const tagged = objects.filter((o) => ((o.data.production as string[] | undefined) ?? []).length > 0);

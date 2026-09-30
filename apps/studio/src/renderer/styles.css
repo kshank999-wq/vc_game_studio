@@ -5569,7 +5569,8 @@ kbd {
 .play-quest,
 .play-encounter,
 .play-lore,
-.play-mechanic {
+.play-mechanic,
+.play-skill {
   font-family: var(--font-ui);
   font-size: 12.5px;
   display: flex;
@@ -8500,4 +8501,61 @@ button.bible-dual-col:hover {
   margin-top: 8px;
   padding-top: 6px;
   border-top: 1px solid var(--border);
+}
+
+/* Skills, abilities and upgrades (spec §8) */
+.play-skill {
+  color: var(--c-skill);
+}
+
+.play-skill-tree + .play-skill-tree {
+  margin-top: 6px;
+}
+
+.play-skill-row {
+  flex-wrap: wrap;
+}
+
+.play-skill-row.learned .play-skill-name {
+  color: var(--c-skill);
+}
+
+.play-skill-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.play-skill-needs {
+  flex-basis: 100%;
+  margin-top: -2px;
+}
+
+.skill-progression {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skill-cost {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skill-ranks,
+.skill-amount {
+  width: 64px;
+}
+
+.skill-progression .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.play-skill-row .tb-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

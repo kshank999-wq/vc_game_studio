@@ -1,3 +1,4 @@
+import { describeCost, learnCheck, payFor, ranksOf } from './skills';
 import { initialState, interactionsOf, statesOf } from './details';
 import { spineSequence } from './layout';
 import { apply, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
@@ -58,6 +59,8 @@ export type Entry =
   | { kind: 'encounter'; text: string; detail?: string }
   | { kind: 'lore'; text: string }
   | { kind: 'mechanic'; text: string }
+  /** A skill, ability or upgrade learned: its new rank of how many (spec §8). */
+  | { kind: 'skill'; text: string; rank: number; ranks: number }
   | { kind: 'skip'; text: string; needs: string }
   | { kind: 'end'; text: string };
 
@@ -83,7 +86,9 @@ export type Decision =
   | { kind: 'choice'; at: string; option: string }
   | { kind: 'encounter'; at: string; won: boolean }
   | { kind: 'use'; at: string; object: string; interaction: string }
-  | { kind: 'skip'; at: string };
+  | { kind: 'skip'; at: string }
+  /** A rank of a skill learned (whenever: it isn't made at a place in the story). */
+  | { kind: 'learn'; at: string };
 
 export interface Play {
   world: PlayWorld;
@@ -123,7 +128,7 @@ const MAX_STEPS = 2000;
 // ---------------------------------------------------------------- the world
 
 export const startWorld = (project: Project): PlayWorld => {
-  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {}, met: {}, metCharacters: {}, found: {}, been: {}, used: {}, lore: {}, mechanics: {} };
+  const world: PlayWorld = { flags: {}, items: {}, objects: {}, chosen: {}, arcs: {}, solved: {}, visited: {}, fired: {}, picked: {}, quests: {}, won: {}, met: {}, metCharacters: {}, found: {}, been: {}, used: {}, lore: {}, mechanics: {}, skills: {} };
   for (const o of Object.values(project.objects)) {
     const initial = initialState(o);
     if (o.type === 'state' && initial !== undefined) world.flags[o.id] = initial;
@@ -161,7 +166,8 @@ const doEffects = (d: Doing, effects: Effect[] | undefined) => {
         d.world = { ...d.world, mechanics: { ...d.world.mechanics, [e.ref]: true } };
         d.log.push({ kind: 'mechanic', text: name(d.project, e.ref) });
       }
-    } else if (e.kind === 'revealLore') {
+    } else if (e.kind === 'learnSkill') gainRank(d, e.ref);
+    else if (e.kind === 'revealLore') {
       if (d.project.objects[e.ref] && !d.world.lore[e.ref]) {
         d.world = { ...d.world, lore: { ...d.world.lore, [e.ref]: true } };
         d.log.push({ kind: 'lore', text: name(d.project, e.ref) });
@@ -172,6 +178,18 @@ const doEffects = (d: Doing, effects: Effect[] | undefined) => {
       d.log.push({ kind: 'effect', text: describeEffect(d.project, e) });
     }
   }
+};
+
+/** A rank of a skill, up to its ranks: logged, and what learning it does is done. */
+const gainRank = (d: Doing, id: string) => {
+  const skill = d.project.objects[id];
+  if (!skill || skill.type !== 'skill') return;
+  const ranks = ranksOf(skill);
+  const rank = d.world.skills?.[id] ?? 0;
+  if (rank >= ranks) return;
+  d.world = { ...d.world, skills: { ...(d.world.skills ?? {}), [id]: rank + 1 } };
+  d.log.push({ kind: 'skill', text: skill.name, rank: rank + 1, ranks });
+  doEffects(d, effectsOf(skill));
 };
 
 const fire = (d: Doing, id: string) => {
@@ -1103,6 +1121,25 @@ export const interact = (project: Project, play: Play, objectId: string, interac
 export const endFreePlay = (project: Project, play: Play): Play => {
   const at = decisionAt(project, play);
   return noted(play, endHere(project, play), at ? { kind: 'skip', at } : null);
+};
+
+/** Learn the next rank of a skill: pay its cost, gain the rank, do what it does, settle. Returns why not instead when it can't be. */
+export const learnSkillIn = (project: Project, world: PlayWorld, id: string): Changed & { needs?: string } => {
+  const check = learnCheck(project, world, id);
+  if (!check.ok) return { world, log: [], needs: check.needs };
+  const d: Doing = { project, world: { ...world, items: payFor(project, world, id) }, log: [] };
+  const cost = describeCost(project, project.objects[id]!);
+  if (cost !== 'Free') d.log.push({ kind: 'effect', text: `pay ${cost}` });
+  gainRank(d, id);
+  settle(d);
+  return { world: d.world, log: d.log };
+};
+
+/** Learn a skill during the play-through, kept on its path as a decision. */
+export const learn = (project: Project, play: Play, id: string): Play => {
+  const r = learnSkillIn(project, play.world, id);
+  if (r.needs) return play;
+  return { ...play, world: r.world, log: [...play.log, ...r.log], decisions: [...(play.decisions ?? []), { kind: 'learn', at: id }] };
 };
 
 /** Change the world by hand, to try a path (the prompt on offer updates with it). */

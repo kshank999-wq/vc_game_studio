@@ -29,7 +29,9 @@ export type ObjectType =
   | 'lore'
   | 'quest'
   | 'mechanic'
-  | 'encounter';
+  | 'encounter'
+  // Progression (spec §8): skills, abilities and upgrades, learned in trees.
+  | 'skill';
 
 export interface StoryObject {
   id: string;

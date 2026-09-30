@@ -234,6 +234,28 @@ static class Check
         new ScenePlayer(saving, Scenes.Sc03TheVaultDoor).Start();
         if (saving.Loaded) Fail("starting the scene should end the load");
 
+        // Skills (spec §8): the Diving tree. Deep Breath first (two ranks, free), then the
+        // lantern's hood, once the oil is in play, for the two salvage the eels leave.
+        {
+            var g = new GameState(story);
+            if (Rules.Learn("lantern_hood", g) != "Learn Deep Breath first.") Fail("the hood should need Deep Breath first");
+            if (Rules.Learn("deep_breath", g) != "" || g.SkillRank("deep_breath") != 1) Fail("Deep Breath should be learned, for free");
+            if (Rules.LearnCheck("lantern_hood", g) != "Needs Lantern oil is available.") Fail("the hood should need the lantern's oil, got " + Rules.LearnCheck("lantern_hood", g));
+            Rules.Learn("deep_breath", g);
+            if (Rules.LearnCheck("deep_breath", g) != "All 2 ranks learned.") Fail("Deep Breath should stop at two ranks");
+            g.EnableMechanic("lantern_oil");
+            if (Rules.LearnCheck("lantern_hood", g) != "Costs 2 × Salvage (you have 0).") Fail("the hood should cost two salvage, got " + Rules.LearnCheck("lantern_hood", g));
+            Rules.Apply(D.Get(story.Encounters["eel_swarm"], "onWin"), g);
+            if (Rules.Learn("lantern_hood", g) != "" || g.Items["salvage"] != 0 || g.SkillRank("lantern_hood") != 1) Fail("the eels' salvage should buy the hood");
+            Rules.Apply(Json.Parse("[{\"kind\": \"learnSkill\", \"ref\": \"deep_breath\"}]"), g);
+            if (g.SkillRank("deep_breath") != 2 || !Rules.Check(Json.Parse("{\"match\": \"all\", \"items\": [{\"kind\": \"skill\", \"ref\": \"lantern_hood\", \"op\": \"atLeast\", \"value\": 1}, {\"kind\": \"skill\", \"ref\": \"deep_breath\", \"op\": \"below\", \"value\": 3}]}"), g)) Fail("a given rank should stop at the skill's ranks, and conditions should see ranks");
+            var skillSave = g.SaveText("The Sunken Vault");
+            var h = new GameState(story);
+            h.LoadSave(skillSave);
+            Console.WriteLine("skills: deep_breath " + h.SkillRank("deep_breath") + ", lantern_hood " + h.SkillRank("lantern_hood"));
+            if (h.SkillRank("deep_breath") != 2 || h.SkillRank("lantern_hood") != 1) Fail("skills should save and load");
+        }
+
         // Custom code in StoryKeys.cs's region was kept when the story was exported again.
         if (!string.Equals(Scenes.Custom, "kept")) Fail("custom keys in StoryKeys.cs should survive exporting again");
         else Console.WriteLine("custom code: " + Scenes.Custom);

@@ -44,6 +44,7 @@ export const TYPE_LABEL: Record<ObjectType, string> = {
   quest: 'Quest / Objective',
   mechanic: 'Mechanic',
   encounter: 'Encounter / Enemy',
+  skill: 'Skill / Upgrade',
 };
 
 /** What each track accepts from the palette (spec §5, §6). Character arcs take arc events (build step 4). */

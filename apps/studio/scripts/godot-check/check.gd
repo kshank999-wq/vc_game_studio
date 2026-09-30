@@ -484,6 +484,38 @@ func _initialize() -> void:
 	else:
 		print("custom code: ", graph_script.custom_check())
 
+	# Skills (spec §8): the Diving tree. Deep Breath first (two ranks, free), then the
+	# lantern's hood, once the oil is in play, for the two salvage the eels leave.
+	var before_skills: String = JSON.stringify(game.save_data(""))
+	var skill_rules = load("res://vcgs/generated/logic/rules.gd")
+	skill_rules.reset(game)
+	if skill_rules.learn("lantern_hood", game) != "Learn Deep Breath first.":
+		fail("the hood should need Deep Breath first")
+	if skill_rules.learn("deep_breath", game) != "" or game.skill_rank("deep_breath") != 1:
+		fail("Deep Breath should be learned, for free")
+	if skill_rules.learn_check("lantern_hood", game) != "Needs Lantern oil is available.":
+		fail("the hood should need the lantern's oil, got " + skill_rules.learn_check("lantern_hood", game))
+	skill_rules.learn("deep_breath", game)
+	if skill_rules.learn_check("deep_breath", game) != "All 2 ranks learned.":
+		fail("Deep Breath should stop at two ranks")
+	game.enable_mechanic("lantern_oil")
+	if skill_rules.learn_check("lantern_hood", game) != "Costs 2 × Salvage (you have 0).":
+		fail("the hood should cost two salvage, got " + skill_rules.learn_check("lantern_hood", game))
+	skill_rules.win("eel_swarm", game)
+	if skill_rules.learn("lantern_hood", game) != "" or int(game.items.get("salvage", 0)) != 0 or game.skill_rank("lantern_hood") != 1:
+		fail("the eels' salvage should buy the hood")
+	VCGSRuleEngine.apply([{ "kind": "learnSkill", "ref": "deep_breath" }], game)
+	if game.skill_rank("deep_breath") != 2 or not VCGSRuleEngine.check({ "match": "all", "items": [{ "kind": "skill", "ref": "lantern_hood", "op": "atLeast", "value": 1 }, { "kind": "skill", "ref": "deep_breath", "op": "below", "value": 3 }] }, game):
+		fail("a given rank should stop at the skill's ranks, and conditions should see ranks")
+	var skill_save: Dictionary = game.save_data("")
+	print("skills: ", skill_save["skills"])
+	skill_rules.reset(game)
+	game.load_text(JSON.stringify(skill_save))
+	if game.skill_rank("deep_breath") != 2 or game.skill_rank("lantern_hood") != 1:
+		fail("skills should save and load")
+	game.load_text(before_skills)
+	game.loaded = false
+
 	check_level(game)
 
 	print("OK" if failures == 0 else str(failures) + " FAILED")

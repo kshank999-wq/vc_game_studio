@@ -1,5 +1,6 @@
 import { interactionsOf } from './details';
-import { advance, choose, endFreePlay, interact, decisionAt, playToDecision, promptOf, startPlay, type Decision, type Outcome, type Play } from './play';
+import { learnCheck } from './skills';
+import { advance, choose, endFreePlay, interact, learn, decisionAt, playToDecision, promptOf, startPlay, type Decision, type Outcome, type Play } from './play';
 import type { Project } from './types';
 
 /**
@@ -58,6 +59,8 @@ export const describeDecision = (project: Project, d: Decision): string => {
     }
     case 'skip':
       return 'free play left';
+    case 'learn':
+      return `learned ${nameOf(project, d.at)}`;
   }
 };
 
@@ -73,6 +76,11 @@ const offeredNow = (project: Project, play: Play): string => {
 
 /** Make one decision again on the story as it is now; the play after it, or why it can't be made. */
 const redo = (project: Project, play: Play, d: Decision): { play: Play } | { why: string } => {
+  // A skill is learned whenever the player likes: not at a place in the story.
+  if (d.kind === 'learn') {
+    const check = learnCheck(project, play.world, d.at);
+    return check.ok ? { play: learn(project, play, d.at) } : { why: `${nameOf(project, d.at)} can't be learned: ${check.needs}` };
+  }
   const at = decisionAt(project, play);
   const prompt = promptOf(project, play);
   const reached = offeredNow(project, play);

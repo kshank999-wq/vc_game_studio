@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
 import { checkAllPaths } from '../../model/paths';
-import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { describeCost, kindOf, learnCheck, skillsOf, treeOf } from '../../model/skills';
+import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, learn, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { PathsPanel } from './PathsPanel';
 import { SavesPanel } from './SavesPanel';
@@ -113,9 +114,53 @@ const EntryView = ({ entry }: { entry: Entry }) => {
           <Symbol type="mechanic" size={12} /> Now available: {entry.text}
         </div>
       );
+    case 'skill':
+      return (
+        <div className="play-skill">
+          <Symbol type="skill" size={12} /> Learned: {entry.text}
+          {entry.ranks > 1 && <span className="play-note"> · rank {entry.rank} of {entry.ranks}</span>}
+        </div>
+      );
     case 'end':
       return <div className="play-end">{entry.text}</div>;
   }
+};
+
+/** The skills, abilities and upgrades (spec §8), by tree: each rank learned of how many, its cost, and Learn (or why not). */
+const SkillsSection = ({ project, world, onLearn }: { project: Project; world: PlayWorld; onLearn: (id: string) => void }) => {
+  const skills = skillsOf(project);
+  if (!skills.length) return null;
+  const trees = [...new Set(skills.map((o) => treeOf(o) || 'No tree'))];
+  return (
+    <section aria-label="Skills">
+      <h3>Skills</h3>
+      {trees.map((tree) => (
+        <div key={tree} className="play-skill-tree">
+          {trees.length > 1 || tree !== 'No tree' ? <span className="pref-hint">{tree}</span> : null}
+          {skills
+            .filter((o) => (treeOf(o) || 'No tree') === tree)
+            .map((o) => {
+              const check = learnCheck(project, world, o.id);
+              return (
+                <div key={o.id} className={`play-row play-skill-row${check.rank ? ' learned' : ''}`}>
+                  <span className="play-skill-name">
+                    <Symbol type="skill" size={11} /> {o.name}
+                    <span className="muted">
+                      {' '}
+                      · {kindOf(o)} · {check.rank}/{check.ranks}
+                    </span>
+                  </span>
+                  <button className="tb-btn small" disabled={!check.ok} aria-label={`Learn ${o.name}`} title={check.ok ? `Costs ${describeCost(project, o)}` : check.needs} onClick={() => onLearn(o.id)}>
+                    {check.ok ? `Learn · ${describeCost(project, o)}` : check.rank >= check.ranks ? 'Learned' : 'Learn'}
+                  </button>
+                  {!check.ok && check.rank < check.ranks && <span className="pref-hint play-skill-needs">{check.needs}</span>}
+                </div>
+              );
+            })}
+        </div>
+      ))}
+    </section>
+  );
 };
 
 /** The codex as the player would read it: the quest log, the characters met, the locations visited, the items found, the objects used, the mechanics, the encounters met, then the lore found. */
@@ -592,7 +637,7 @@ const CodexPanel = ({
 };
 
 /** The world, which the designer can change by hand to try another path. */
-const WorldPanel = ({ project, world, onChange }: { project: Project; world: PlayWorld; onChange: (change: (w: PlayWorld) => PlayWorld) => void }) => {
+const WorldPanel = ({ project, world, onChange, onLearn }: { project: Project; world: PlayWorld; onChange: (change: (w: PlayWorld) => PlayWorld) => void; onLearn: (id: string) => void }) => {
   const of = (type: ObjectType) =>
     Object.values(project.objects)
       .filter((o) => o.type === type)
@@ -736,6 +781,7 @@ const WorldPanel = ({ project, world, onChange }: { project: Project; world: Pla
           ))}
         </section>
       )}
+      <SkillsSection project={project} world={world} onLearn={onLearn} />
       {toggles('mechanic', 'Mechanics', 'Available:')}
       {toggles('lore', 'Lore', 'Discovered:')}
       <section>
@@ -1015,7 +1061,7 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
           )}
         </div>
       </section>
-      <WorldPanel project={project} world={play.world} onChange={(change) => push(setWorld(project, play, change))} />
+      <WorldPanel project={project} world={play.world} onChange={(change) => push(setWorld(project, play, change))} onLearn={(id) => push(learn(project, play, id))} />
     </div>
   );
 };
