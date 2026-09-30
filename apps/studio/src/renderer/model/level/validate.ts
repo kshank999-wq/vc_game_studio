@@ -44,7 +44,12 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
 
   for (const level of set.levels) {
     const items = set.items.filter((i) => i.levelId === level.id);
-    if (!items.some((i) => assetOf(set, i, global).role === 'playerStart' && !i.hidden)) {
+    // Only a map the game loads on its own needs a start (spec V2 §13): not a world or region, not one
+    // only for planning, and not one the player walks into from the map it is part of.
+    const kind = level.kind ?? 'level';
+    const boundary = level.boundary ?? 'continuous';
+    const needsStart = kind !== 'world' && kind !== 'region' && boundary !== 'mapOnly' && !(level.parentId && (boundary === 'continuous' || boundary === 'streamed'));
+    if (needsStart && !items.some((i) => assetOf(set, i, global).role === 'playerStart' && !i.hidden)) {
       add({ id: level.id, levelId: level.id, severity: 'error', message: `${level.name} has no player start.`, export: 'The engine would not know where to put the player. Drag a Player start in from Actors.' });
     }
     for (const id of level.links ?? []) {

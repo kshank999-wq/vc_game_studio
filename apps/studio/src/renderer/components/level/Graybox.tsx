@@ -352,7 +352,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
           const delta = alongLine(ray.ray, h.origin, h.dir) - held.from;
           if (h.kind === 'face') next = extrude(p.project, held.id, h.face, delta, p.global);
           else {
-            const d = snap(levelsOf(p.project), delta);
+            const d = snap(levelsOf(p.project), delta, undefined, p.levelId);
             next = placeAt(p.project, held.id, { x: Math.round((held.x + h.dir.x * d) * 1000) / 1000, y: Math.round((held.y + h.dir.z * d) * 1000) / 1000 });
           }
         }

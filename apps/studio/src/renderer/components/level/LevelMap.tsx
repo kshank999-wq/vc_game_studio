@@ -1,9 +1,10 @@
 import { patrolStops } from '../../model/level/actors';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { areaOf, assetOf, boundsOf, CATEGORY_COLOR, contains, corners, frameOf, INVALID_COLOR, meshesFor, num, outlineOf, paramOf, selfIntersects, toLocal, toPlan, triangulate, type Frame, type Point } from '../../model/level/geometry';
-import { insertCorner, levelsOf, moveCorner, pivotPoint, moveItems, placeAsset, placeAt, removeCorner, resizeItem, setOutline, snap, withGroups } from '../../model/level/level';
+import { insertCorner, levelsOf, mapGrid, moveCorner, pivotPoint, moveItems, placeAsset, placeAt, removeCorner, resizeItem, setOutline, snap, withGroups } from '../../model/level/level';
 import type { AssetCategory, AssetDefinition, LevelItem, LevelSet } from '../../model/level/types';
 import { spineSequence } from '../../model/layout';
+import { boundsOf as mapBoundsOf } from '../../model/level/hierarchy';
 import type { Project } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
 import type { View } from '../../view';
@@ -128,7 +129,15 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   const shown = preview ?? project;
   const set = levelsOf(shown);
   const level = set.levels.find((l) => l.id === levelId);
-  const scale = PX * view.zoom;
+  // A world or region is kilometres across (spec V2 §3): its base scale fits it on screen as a room's does a room.
+  const extentOf = (s: LevelSet) => {
+    const l = s.levels.find((x) => x.id === levelId);
+    const b = l && mapBoundsOf(s, l, global);
+    return b ? { ...b, ox: l!.origin?.x ?? 0, oy: l!.origin?.y ?? 0 } : undefined;
+  };
+  const extent = extentOf(set);
+  const basePx = (e = extent) => PX * (e && Math.max(e.w, e.d) > 200 ? 200 / Math.max(e.w, e.d) : 1);
+  const scale = basePx() * view.zoom;
 
   useWheelPanZoom(root, setView);
   const pan = useDragPan(view, setView, () => props.onSelect([]));
@@ -143,15 +152,18 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     const items = s.items.filter((i) => i.levelId === levelId && i.floorId === floorId && (!ids?.length || ids.includes(i.id)));
     const r = root.current?.getBoundingClientRect();
     if (!r) return;
-    if (!items.length) {
+    const e = extentOf(s);
+    const unit = basePx(e);
+    // An empty map frames its extent, when it has one.
+    if (!items.length && !e) {
       setView(() => ({ zoom: 1, panX: r.width / 2, panY: r.height / 2 }));
       return;
     }
-    const b = boundsOf(items.flatMap((i) => corners(frameOf(s, i, global))));
+    const b = items.length ? boundsOf(items.flatMap((i) => corners(frameOf(s, i, global)))) : { minX: -e!.w / 2 - e!.ox, maxX: e!.w / 2 - e!.ox, minY: -e!.d / 2 - e!.oy, maxY: e!.d / 2 - e!.oy };
     const w = Math.max(4, b.maxX - b.minX);
     const h = Math.max(4, b.maxY - b.minY);
-    const zoom = Math.min(4, Math.max(0.1, Math.min((r.width - 120) / (w * PX), (r.height - 120) / (h * PX))));
-    setView(() => ({ zoom, panX: r.width / 2 - ((b.minX + b.maxX) / 2) * PX * zoom, panY: r.height / 2 - ((b.minY + b.maxY) / 2) * PX * zoom }));
+    const zoom = Math.min(4, Math.max(0.02, Math.min((r.width - 120) / (w * unit), (r.height - 120) / (h * unit))));
+    setView(() => ({ zoom, panX: r.width / 2 - ((b.minX + b.maxX) / 2) * unit * zoom, panY: r.height / 2 - ((b.minY + b.maxY) / 2) * unit * zoom }));
   };
 
   useImperativeHandle(ref, () => ({
@@ -197,9 +209,9 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
         const h = HANDLES.find((x) => x.key === cur.handle)!;
         const d0 = toLocal({ ...f, x: 0, y: 0 }, { x: at.x - cur.start.x, y: at.y - cur.start.y });
         const s = levelsOf(project);
-        const step = s.settings.snap ? s.settings.grid : 0.01;
-        const w = h.lx ? Math.max(step, snap(s, f.w + h.lx * d0.x)) : f.w;
-        const dd = h.ly ? Math.max(step, snap(s, f.d + h.ly * d0.y)) : f.d;
+        const step = s.settings.snap ? mapGrid(s, levelId) : 0.01;
+        const w = h.lx ? Math.max(step, snap(s, f.w + h.lx * d0.x, undefined, levelId)) : f.w;
+        const dd = h.ly ? Math.max(step, snap(s, f.d + h.ly * d0.y, undefined, levelId)) : f.d;
         // The opposite edge stays where it is.
         const shift = toPlan({ ...f, x: 0, y: 0 }, (h.lx * (w - f.w)) / 2, (h.ly * (dd - f.d)) / 2);
         setPreview(placeAt(resizeItem(project, cur.id, { w, d: dd }, global), cur.id, { x: Math.round((f.x + shift.x) * 1000) / 1000, y: Math.round((f.y + shift.y) * 1000) / 1000 }));
@@ -240,7 +252,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       if (cur?.kind === 'draw') {
         const at = toWorld(e.clientX, e.clientY);
         const s = levelsOf(project);
-        const b = boundsOf([{ x: snap(s, cur.start.x), y: snap(s, cur.start.y) }, { x: snap(s, at.x), y: snap(s, at.y) }]);
+        const b = boundsOf([{ x: snap(s, cur.start.x, undefined, levelId), y: snap(s, cur.start.y, undefined, levelId) }, { x: snap(s, at.x, undefined, levelId), y: snap(s, at.y, undefined, levelId) }]);
         const w = b.maxX - b.minX;
         const h = b.maxY - b.minY;
         if (w >= 0.5 && h >= 0.5) {
@@ -322,7 +334,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
 
   const snapPoint = (p: Point): Point => {
     const s = levelsOf(project);
-    return { x: snap(s, p.x), y: snap(s, p.y) };
+    return { x: snap(s, p.x, undefined, levelId), y: snap(s, p.y, undefined, levelId) };
   };
 
   const finishOutline = (points: Point[]) => {
@@ -394,8 +406,12 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
 
   const px = (n: number) => n / scale; // screen pixels in world units
   const units = set.settings.units;
-  const grid = set.settings.grid || 0.5;
+  const grid = mapGrid(set, levelId);
   const minor = grid * scale >= 7 ? grid : grid * Math.ceil(7 / (grid * scale));
+  // Items that open into their own map (spec V2 §5): marked, with the map's name.
+  const opensInto = new Map(set.levels.filter((l) => l.parentId === levelId && l.anchorId).map((l) => [l.anchorId!, l.name]));
+  // How far the grid goes: well past the map's edge.
+  const reach = Math.max(5000, extent ? Math.max(extent.w, extent.d) * 1.5 + Math.abs(extent.ox) + Math.abs(extent.oy) : 0);
   const selected = new Set(selection);
   const single = selection.length === 1 ? set.items.find((i) => i.id === selection[0]) : undefined;
 
@@ -569,7 +585,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     );
   };
 
-  const draft = drag?.kind === 'draw' ? boundsOf([{ x: snap(set, drag.start.x), y: snap(set, drag.start.y) }, { x: snap(set, drag.at.x), y: snap(set, drag.at.y) }]) : null;
+  const draft = drag?.kind === 'draw' ? boundsOf([{ x: snap(set, drag.start.x, undefined, levelId), y: snap(set, drag.start.y, undefined, levelId) }, { x: snap(set, drag.at.x, undefined, levelId), y: snap(set, drag.at.y, undefined, levelId) }]) : null;
   const marquee = drag?.kind === 'marquee' ? boundsOf([drag.start, drag.at]) : null;
   const order = (i: LevelItem) => ({ space: 0, volume: 1, solid: 2, hosted: 3, light: 4, marker: 5, assembly: 6 })[assetOf(set, i, global).kind];
 
@@ -602,9 +618,17 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
           </pattern>
         </defs>
         <g transform={`translate(${view.panX} ${view.panY}) scale(${scale})`}>
-          <rect x={-5000} y={-5000} width={10000} height={10000} fill="url(#lvl-major)" pointerEvents="none" />
-          <line x1={-5000} y1={0} x2={5000} y2={0} stroke="#3a3218" strokeWidth={px(1)} pointerEvents="none" />
-          <line x1={0} y1={-5000} x2={0} y2={5000} stroke="#3a3218" strokeWidth={px(1)} pointerEvents="none" />
+          <rect x={-reach} y={-reach} width={reach * 2} height={reach * 2} fill="url(#lvl-major)" pointerEvents="none" />
+          <line x1={-reach} y1={0} x2={reach} y2={0} stroke="#3a3218" strokeWidth={px(1)} pointerEvents="none" />
+          <line x1={0} y1={-reach} x2={0} y2={reach} stroke="#3a3218" strokeWidth={px(1)} pointerEvents="none" />
+          {extent && (
+            <g className="lvl-bounds" pointerEvents="none">
+              <rect x={-extent.w / 2 - extent.ox} y={-extent.d / 2 - extent.oy} width={extent.w} height={extent.d} fill="none" stroke="#8a6f2f" strokeWidth={px(1.5)} strokeDasharray={`${px(10)} ${px(6)}`} />
+              <text x={-extent.w / 2 - extent.ox + px(6)} y={-extent.d / 2 - extent.oy - px(8)} fontSize={px(11)} fill="#c9a45c">
+                {level?.name} · {formatLength(extent.w, units)} × {formatLength(extent.d, units)}
+              </text>
+            </g>
+          )}
           {ghost.length > 0 && (
             <g opacity={0.22} pointerEvents="none" className="lvl-ghost">
               {ghost.map((i) => drawItem(i, true))}
@@ -624,6 +648,20 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
             />
           ))}
           {[...items].sort((a, b) => order(a) - order(b)).filter((i) => assetOf(set, i, global).kind !== 'space').map((i) => drawItem(i))}
+          {items
+            .filter((i) => opensInto.has(i.id))
+            .map((i) => {
+              const f = frameOf(set, i, global);
+              const at = labelPoint(f);
+              return (
+                <g key={`opens-${i.id}`} className="lvl-opens" pointerEvents="none">
+                  <polygon points={pointsAttr(corners(f))} fill="none" stroke="#c9a45c" strokeOpacity={0.8} strokeWidth={px(2)} strokeDasharray={`${px(3)} ${px(3)}`} />
+                  <text x={at.x} y={at.y + px(22)} fontSize={px(10)} fill="#c9a45c" textAnchor="middle">
+                    ▸ {opensInto.get(i.id)}
+                  </text>
+                </g>
+              );
+            })}
           {patrols.map((pt) => (
             <g key={`patrol-${pt.name}`} pointerEvents="none" className="lvl-patrol">
               <polygon points={pointsAttr(pt.stops)} fill="none" stroke="#d9607a" strokeOpacity={0.7} strokeWidth={px(1.5)} strokeDasharray={`${px(6)} ${px(4)}`} />

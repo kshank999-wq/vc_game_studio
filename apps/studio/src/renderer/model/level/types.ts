@@ -272,6 +272,19 @@ export interface Floor {
   height: number;
 }
 
+/**
+ * What a map is at its scale (spec V2 §4): World › Region › Level › District ›
+ * Building › Interior. The hierarchy is the designer's, not a rule: a city can
+ * be a Level, a Level can sit straight in a World, a map can have no parent.
+ */
+export type MapKind = 'world' | 'region' | 'level' | 'district' | 'building' | 'interior';
+
+/** How the game reaches a map (spec V2 §13). */
+export type MapBoundary = 'continuous' | 'streamed' | 'instanced' | 'transition' | 'mapOnly';
+
+/** How far along a map is (spec V2 §6); worked out from what is in it unless set. */
+export type MapStatus = 'empty' | 'grayboxed' | 'detailed' | 'gameplay' | 'final';
+
 export interface Level {
   id: string;
   name: string;
@@ -280,6 +293,34 @@ export interface Level {
   /** Plot points and scenes the level as a whole belongs to. */
   links?: string[];
   notes?: string;
+  /** What it is at its scale; a level when absent. */
+  kind?: MapKind;
+  /** The map it is part of (spec V2 §4), if any. */
+  parentId?: string;
+  /**
+   * The item on the parent map it details (spec V2 §16, ChildMapLink): a
+   * region's zone on the world, a building's mass in a city. Its size is the
+   * map's size unless the map sets its own, so scale stays the same at every depth.
+   */
+  anchorId?: string;
+  /** The map's extent in metres (spec V2 §3), when it has one of its own. */
+  width?: number;
+  depth?: number;
+  /** Where the map's own 0, 0 is, from its centre (spec V2 §12): so detail isn't drawn at huge coordinates. */
+  origin?: { x: number; y: number };
+  /** Its own snap step, in metres (a world's is kilometres, a room's centimetres). */
+  grid?: number;
+  boundary?: MapBoundary;
+  /** Set by hand; otherwise worked out (statusOf). */
+  status?: MapStatus;
+  favorite?: boolean;
+  /** Kept out of the navigator's view and the parent map. */
+  hidden?: boolean;
+  /** Its items can't be moved or changed. */
+  locked?: boolean;
+  /** For the engines (spec V2 §11): an environment profile and navigation settings, as words. */
+  environment?: string;
+  navigation?: string;
 }
 
 export interface LevelSettings {

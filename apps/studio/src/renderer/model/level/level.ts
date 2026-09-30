@@ -59,10 +59,13 @@ const next = (set: LevelSet, cls: NamingClass): { serial: number; counters: Leve
   return { serial, counters: { ...set.counters, [cls]: serial } };
 };
 
-/** Snap a length to the grid when snapping is on. */
-export const snap = (set: LevelSet, value: number, force?: boolean): number => {
+/** A map's snap step (spec V2 §12): its own when it has one (a world's is far coarser than a room's), else the project's. */
+export const mapGrid = (set: LevelSet, levelId?: string): number => (levelId ? set.levels.find((l) => l.id === levelId)?.grid : undefined) || set.settings.grid || 0.5;
+
+/** Snap a length to the grid (the map's, given one) when snapping is on. */
+export const snap = (set: LevelSet, value: number, force?: boolean, levelId?: string): number => {
   if (!(force ?? set.settings.snap)) return Math.round(value * 1000) / 1000;
-  const g = set.settings.grid || 0.5;
+  const g = mapGrid(set, levelId);
   return Math.round(Math.round(value / g) * g * 1000) / 1000;
 };
 
@@ -178,8 +181,8 @@ export const placeAsset = (
         assetVersion: partDef.version,
         name: uniqueName({ ...set, items: [...set.items, ...made] }, levelId, part.name),
         serial,
-        x: snap(set, at.x + part.dx * c - part.dy * s, false),
-        y: snap(set, at.y + part.dx * s + part.dy * c, false),
+        x: snap(set, at.x + part.dx * c - part.dy * s, false, levelId),
+        y: snap(set, at.y + part.dx * s + part.dy * c, false, levelId),
         z: part.dz,
         rotation: (part.rotation + turn) % 360,
         groupId,
@@ -205,8 +208,8 @@ export const placeAsset = (
     assetVersion: def.version,
     name: options.name ?? uniqueName(set, levelId, def.name),
     serial,
-    x: snap(set, at.x),
-    y: snap(set, at.y),
+    x: snap(set, at.x, undefined, levelId),
+    y: snap(set, at.y, undefined, levelId),
     z: 0,
     rotation: options.rotation ?? 0,
   };
@@ -358,13 +361,14 @@ export const outlineCorners = (project: Project, id: string, global?: readonly A
   return item ? corners(frameOf(set, item, global)) : [];
 };
 
-const snapped = (set: LevelSet, p: Point): Point => ({ x: snap(set, p.x), y: snap(set, p.y) });
+const snapped = (set: LevelSet, p: Point, levelId?: string): Point => ({ x: snap(set, p.x, undefined, levelId), y: snap(set, p.y, undefined, levelId) });
+const levelOfItem = (project: Project, id: string): string | undefined => levelsOf(project).items.find((i) => i.id === id)?.levelId;
 
 /** Drag one corner of a space's outline (a rectangle becomes an outline). */
 export const moveCorner = (project: Project, id: string, index: number, to: Point, global?: readonly AssetDefinition[]): Project => {
   const points = outlineCorners(project, id, global);
   if (!points[index]) return project;
-  points[index] = snapped(levelsOf(project), to);
+  points[index] = snapped(levelsOf(project), to, levelOfItem(project, id));
   return setOutline(project, id, points, global);
 };
 
@@ -372,7 +376,7 @@ export const moveCorner = (project: Project, id: string, index: number, to: Poin
 export const insertCorner = (project: Project, id: string, wall: number, at: Point, global?: readonly AssetDefinition[]): Project => {
   const points = outlineCorners(project, id, global);
   if (wall < 0 || wall >= points.length) return project;
-  points.splice(wall + 1, 0, snapped(levelsOf(project), at));
+  points.splice(wall + 1, 0, snapped(levelsOf(project), at, levelOfItem(project, id)));
   return setOutline(project, id, points, global);
 };
 
@@ -419,7 +423,7 @@ export const moveItems = (project: Project, ids: readonly string[], dx: number, 
       if (!host) return i;
       return { ...i, host: { ...host, along: Math.round(host.along * 1000) / 1000 } };
     }
-    return { ...i, x: snap(set, i.x + dx), y: snap(set, i.y + dy) };
+    return { ...i, x: snap(set, i.x + dx, undefined, i.levelId), y: snap(set, i.y + dy, undefined, i.levelId) };
   });
   changed = revalidate(changed, ids, global);
   return changed === set ? project : withSet(project, changed);
@@ -489,7 +493,7 @@ export const extrude = (project: Project, id: string, face: Face, distance: numb
   const item = set.items.find((i) => i.id === id);
   if (!item || item.locked || item.host) return project;
   const f = frameOf(set, item, global);
-  const step = set.settings.snap ? set.settings.grid || 0.5 : 0.01;
+  const step = set.settings.snap ? mapGrid(set, item.levelId) : 0.01;
   if (typeof face === 'object') {
     const c = corners(f);
     const a = c[face.wall];
@@ -497,7 +501,7 @@ export const extrude = (project: Project, id: string, face: Face, distance: numb
     if (!f.outline || !a || !b) return project;
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     const n = { x: (b.y - a.y) / len, y: -(b.x - a.x) / len };
-    const d = snap(set, distance);
+    const d = snap(set, distance, undefined, item.levelId);
     if (!d) return project;
     c[face.wall] = { x: a.x + n.x * d, y: a.y + n.y * d };
     c[(face.wall + 1) % c.length] = { x: b.x + n.x * d, y: b.y + n.y * d };
@@ -510,8 +514,8 @@ export const extrude = (project: Project, id: string, face: Face, distance: numb
     return withSet(project, revalidate(mapItems(set, [id], (i) => withSize(i, def, { h })), [id], global));
   }
   const { lx, ly } = FACE_AXIS[face];
-  const w = lx ? Math.max(step, snap(set, f.w + distance)) : f.w;
-  const d = ly ? Math.max(step, snap(set, f.d + distance)) : f.d;
+  const w = lx ? Math.max(step, snap(set, f.w + distance, undefined, item.levelId)) : f.w;
+  const d = ly ? Math.max(step, snap(set, f.d + distance, undefined, item.levelId)) : f.d;
   if (w === f.w && d === f.d) return project;
   // The opposite face stays put: the centre moves half the growth.
   const shift = toPlan({ ...f, x: 0, y: 0 }, (lx * (w - f.w)) / 2, (ly * (d - f.d)) / 2);

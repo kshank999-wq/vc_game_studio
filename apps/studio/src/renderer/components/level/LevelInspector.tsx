@@ -29,6 +29,7 @@ import {
   updateItem,
   updateLevel,
   updateSettings,
+  mapGrid,
 } from '../../model/level/level';
 import { exportNameOf, levelExportName, NAMING_LABEL } from '../../model/level/naming';
 import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelRule, NamingClass, ParamDef, PlayNote, PropertyGroup } from '../../model/level/types';
@@ -43,6 +44,8 @@ import type { ObjectType, Project } from '../../model/types';
 import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
 import { Symbol } from '../Symbol';
 import { BoolField, NumberField, RefField, Section, SelectField, TextField } from './fields';
+import { anchorOf, boundsOf as mapBounds, BOUNDARIES, childOfItem, childrenOf, descendantsOf, kindLabel, kindOf, MAP_KINDS, moveMap, STATUSES, statusOf, updateMap } from '../../model/level/hierarchy';
+import { formatLength } from './units';
 
 interface Props {
   project: Project;
@@ -58,6 +61,10 @@ interface Props {
   onDelete: () => void;
   onSaveToLibrary: (name: string) => void;
   issues: readonly LevelIssue[];
+  /** Open a map (a child, the parent, one in the navigator). */
+  onOpenMap?: (levelId: string) => void;
+  /** Open an item as its own map (spec V2 §5, §8), making it if need be. */
+  onOpenChild?: (itemId: string) => void;
 }
 
 const LINKABLE: ObjectType[] = ['plotPoint', 'scene', 'environment', 'character', 'object', 'inventory', 'puzzle', 'cinematic', 'choice', 'dialogue', 'trigger', 'gate', 'state'];
@@ -169,7 +176,7 @@ export const LevelInspector = (props: Props) => {
     return (
       <aside className="lvl-right" aria-label="Properties">
         <header className="lvl-right-head">
-          <span className="lvl-kind">Level</span>
+          <span className="lvl-kind">{kindLabel(kindOf(level))}</span>
           <h2>{level.name}</h2>
           <p className="mono muted">{levelExportName(set, level)}</p>
         </header>
@@ -177,6 +184,7 @@ export const LevelInspector = (props: Props) => {
           <TextField label="Name" value={level.name} onCommit={(v) => v.trim() && onCommit(updateLevel(project, level.id, { name: v.trim() }))} />
           <TextField label="Notes" value={level.notes ?? ''} onCommit={(v) => onCommit(updateLevel(project, level.id, { notes: v }))} />
         </Section>
+        <MapSection project={project} levelId={level.id} global={global} open={!closed.has('map')} onToggle={() => toggle('map')} onCommit={onCommit} onOpenMap={props.onOpenMap} />
         <Section title="Floors" open={!closed.has('floors')} onToggle={() => toggle('floors')} count={floors.length}>
           {floors
             .slice()
@@ -328,6 +336,7 @@ export const LevelInspector = (props: Props) => {
             <div className="lvl-kv"><span>Type</span><span>{def.name} · {def.category}</span></div>
             <div className="lvl-kv"><span>From</span><span>{def.source === 'starter' ? 'Starter library' : def.source === 'global' ? 'My library' : 'Project library'} · v{def.version}{item.assetVersion !== def.version ? ` (placed from v${item.assetVersion})` : ''}</span></div>
             <div className="lvl-kv"><span>GUID</span><span className="mono lvl-guid" title="Never changes: references and the engine manifest use it">{item.id}</span></div>
+            {def.kind !== 'hosted' && <ChildMapRow project={project} itemId={item.id} onOpenChild={props.onOpenChild} />}
           </Section>
         )}
         {(!q || matches('position rotation floor elevation x y z')) && (
@@ -340,8 +349,8 @@ export const LevelInspector = (props: Props) => {
               </>
             ) : (
               <div className="lvl-grid3">
-                <NumberField label="X" unit="length" units={units} value={f.x} step={set.settings.grid} onCommit={(v) => onCommit(placeAt(project, item.id, { x: v }))} />
-                <NumberField label="Y" unit="length" units={units} value={f.y} step={set.settings.grid} onCommit={(v) => onCommit(placeAt(project, item.id, { y: v }))} />
+                <NumberField label="X" unit="length" units={units} value={f.x} step={mapGrid(set, item.levelId)} onCommit={(v) => onCommit(placeAt(project, item.id, { x: v }))} />
+                <NumberField label="Y" unit="length" units={units} value={f.y} step={mapGrid(set, item.levelId)} onCommit={(v) => onCommit(placeAt(project, item.id, { y: v }))} />
                 <NumberField label="Z" unit="length" units={units} value={item.z} step={0.1} onCommit={(v) => onCommit(placeAt(project, item.id, { z: v }))} />
                 <NumberField label="Rotation" unit="deg" value={item.rotation} step={15} onCommit={(v) => onCommit(placeAt(project, item.id, { rotation: v }))} />
               </div>
@@ -688,3 +697,88 @@ const PIVOTS: { label: string; at: { x: number; y: number } }[] = [
 
 const pivotName = (pivot: { x: number; y: number } | undefined): string =>
   PIVOTS.find((p) => p.at.x === (pivot?.x ?? 0) && p.at.y === (pivot?.y ?? 0))?.label ?? 'Custom';
+
+/**
+ * The map itself (spec V2 §3, §11–§13): what it is at its scale, what it is
+ * part of, its extent, grid and origin, how the game reaches it, how far along
+ * it is, and the maps inside it.
+ */
+const MapSection = ({ project, levelId, global, open, onToggle, onCommit, onOpenMap }: { project: Project; levelId: string; global: readonly AssetDefinition[]; open: boolean; onToggle: () => void; onCommit: (p: Project) => void; onOpenMap?: (id: string) => void }) => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === levelId);
+  if (!level) return null;
+  const units = set.settings.units;
+  const parent = level.parentId ? set.levels.find((l) => l.id === level.parentId) : undefined;
+  const anchor = anchorOf(set, level);
+  const bounds = mapBounds(set, level, global);
+  const kids = childrenOf(set, level.id);
+  const inside = new Set([level.id, ...descendantsOf(set, level.id).map((d) => d.id)]);
+  const set1 = (patch: Parameters<typeof updateMap>[2]) => onCommit(updateMap(project, level.id, patch));
+  return (
+    <Section title="Map" open={open} onToggle={onToggle} count={kids.length || undefined}>
+      <SelectField label="Kind" value={kindOf(level)} options={MAP_KINDS.map((k) => ({ value: k.id, label: k.label }))} onCommit={(v) => set1({ kind: v as typeof level.kind })} />
+      <SelectField
+        label="Part of"
+        value={level.parentId ?? ''}
+        options={[{ value: '', label: 'Nothing (a top map)' }, ...set.levels.filter((l) => !inside.has(l.id)).map((l) => ({ value: l.id, label: `${l.name} (${kindLabel(kindOf(l))})` }))]}
+        onCommit={(v) => onCommit(moveMap(project, level.id, v || undefined))}
+      />
+      {parent && (
+        <p className="lvl-hint">
+          {anchor ? (
+            <>
+              Details <strong>{anchor.name}</strong> on {parent.name}.{' '}
+            </>
+          ) : (
+            <>Inside {parent.name}, not tied to an item there. </>
+          )}
+          <button className="tb-btn small" onClick={() => onOpenMap?.(parent.id)}>
+            ↑ Back to {parent.name}
+          </button>
+        </p>
+      )}
+      <NumberField label="Width" unit="length" units={units} value={bounds?.w ?? 0} min={0} step={level.grid ?? 1} hint={level.width ? undefined : anchor ? `from ${anchor.name}` : 'no edge: set one to draw it'} onCommit={(v) => set1({ width: v > 0 ? v : undefined, ...(v > 0 && !level.depth ? { depth: bounds?.d || v } : {}) })} />
+      <NumberField label="Depth" unit="length" units={units} value={bounds?.d ?? 0} min={0} step={level.grid ?? 1} onCommit={(v) => set1({ depth: v > 0 ? v : undefined, ...(v > 0 && !level.width ? { width: bounds?.w || v } : {}) })} />
+      {bounds && <p className="lvl-hint">{formatLength(bounds.w, units)} × {formatLength(bounds.d, units)}</p>}
+      <NumberField label="Map grid" unit="length" units={units} value={level.grid ?? set.settings.grid} min={0.01} step={level.grid ?? 0.25} hint={level.grid ? undefined : 'the project’s'} onCommit={(v) => set1({ grid: v > 0 ? v : undefined })} />
+      <NumberField label="Origin east" unit="length" units={units} value={level.origin?.x ?? 0} step={level.grid ?? 1} hint="where its 0, 0 is, from its centre" onCommit={(v) => set1({ origin: { x: v, y: level.origin?.y ?? 0 } })} />
+      <NumberField label="Origin south" unit="length" units={units} value={level.origin?.y ?? 0} step={level.grid ?? 1} onCommit={(v) => set1({ origin: { x: level.origin?.x ?? 0, y: v } })} />
+      <SelectField label="Reached" value={level.boundary ?? 'continuous'} options={BOUNDARIES.map((b) => ({ value: b.id, label: b.label }))} onCommit={(v) => set1({ boundary: v as typeof level.boundary })} />
+      <p className="lvl-hint">{BOUNDARIES.find((b) => b.id === (level.boundary ?? 'continuous'))?.hint}</p>
+      <SelectField
+        label="Status"
+        value={level.status ?? ''}
+        options={[{ value: '', label: `Worked out: ${STATUSES.find((st) => st.id === statusOf(set, { ...level, status: undefined }, global))?.label}` }, ...STATUSES.map((st) => ({ value: st.id, label: st.label }))]}
+        onCommit={(v) => set1({ status: (v || undefined) as typeof level.status })}
+      />
+      <TextField label="Environment" value={level.environment ?? ''} placeholder="e.g. Night, fog, rain" onCommit={(v) => set1({ environment: v.trim() || undefined })} />
+      <TextField label="Navigation" value={level.navigation ?? ''} placeholder="e.g. Navmesh, agent 0.4 m" onCommit={(v) => set1({ navigation: v.trim() || undefined })} />
+      <BoolField label="Favourite" value={!!level.favorite} onCommit={(v) => set1({ favorite: v || undefined })} />
+      <BoolField label="Locked" value={!!level.locked} onCommit={(v) => set1({ locked: v || undefined })} />
+      {kids.length > 0 && <span className="lvl-flabel">Maps inside</span>}
+      {kids.map((k) => (
+        <div key={k.id} className="lvl-link">
+          <button className="lvl-link-go" onClick={() => onOpenMap?.(k.id)}>
+            {k.name}
+            <span className="muted">{kindLabel(kindOf(k))}</span>
+          </button>
+        </div>
+      ))}
+    </Section>
+  );
+};
+
+/** For an item: the map it opens into, or the way to make one. */
+export const ChildMapRow = ({ project, itemId, onOpenChild }: { project: Project; itemId: string; onOpenChild?: (id: string) => void }) => {
+  const set = levelsOf(project);
+  const child = childOfItem(set, itemId);
+  return (
+    <div className="lvl-btnrow wrap">
+      <button className="tb-btn small" onClick={() => onOpenChild?.(itemId)} title={child ? `Open ${child.name}` : 'Make a map of it, the next scale down, and open it'}>
+        {child ? `Open ${child.name} ▸` : 'Open as a map ▸'}
+      </button>
+      {child && <span className="muted">{kindLabel(kindOf(child))} · its own map</span>}
+    </div>
+  );
+};
+

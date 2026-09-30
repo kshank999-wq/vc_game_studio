@@ -6,15 +6,37 @@ the `.docx` beside it). Open it with **LEVELS** in the top bar, **View ›
 Levels**, or **Ctrl+L** (⌘L). From the story graph or a scene, it opens on the
 items linked to what you had selected.
 
+Version 2 of the spec, [`specs/level-designer-v2-spec.md`](specs/level-designer-v2-spec.md),
+adds the scale above a level: worlds, regions and the maps inside them. See
+*Worlds, regions and child maps* below.
+
 ## The screen (spec §2)
 
 | Region | What it does |
 | --- | --- |
+| Navigator (left, top) | Every map, World › Region › Level › Building › Floor › Room (spec V2 §6). Click to see a map (on the map open now if it sits there, else it opens), double-click or ▸ to open it; search, favourites, each map's status, and ⋯ for a new map inside, rename, favourite, hide, lock, duplicate and delete. |
+| Breadcrumbs (toolbar) | Where you are, from the top map down to the floor and the room selected; click one to go there, ↑ (or Alt+↑) for the parent map. |
 | Toolbar | Level and floor pickers (with **+ New level** and **+ Floor above**), **2D map / 3D graybox**, the Select and Draw tools, overlays, snapping, **Frame**, and **Preflight**. |
 | Library (left) | The starter catalog in every category in spec §4.2, plus the project's own assets and "my library". Drag an asset onto the map or the graybox, or click it and then click where it goes. Search matches names and descriptions. |
 | Outliner (left, second tab) | Everything on this floor by layer. Each layer can be hidden; each item can be hidden or locked. |
 | Map / graybox (middle) | The same items drawn top-down or in 3D. A status line shows the pointer's position and the selection's name, export name, GUID and size. |
 | Inspector (right) | The authoritative place to edit (spec §6). With nothing selected it shows the level: its floors, story links, units, grid and naming. With several items selected it shows align, distribute, rotate, mirror, group, duplicate, save to library and delete. |
+
+## Worlds, regions and child maps (spec V2)
+
+Start big and work in (spec V2 §2). **+ World** in the navigator, **+ New
+world…** in the level picker, or **+ Start with a world** on an empty
+project opens the world presets (spec V2 §3): a small world or region (10 km),
+a medium world (40 km), a large world (100 km), or custom, with its width,
+depth, grid and origin. Nothing is an engine limit, and the size can change
+later.
+
+- **The hierarchy (spec V2 §4):** every map is a World, Region, Level, District (town, city, dungeon, compound), Building or Interior. It is the designer's word, not a rule: a city can be a Level, a Level can sit straight in a World, and a map needn't be part of anything. A map's **Map** section in the inspector sets what it is, what it is part of, and moves it (never into itself).
+- **Child maps:** select anything on a map and **Open as a map ▸** (or double-click an item that already opens) makes it a map of the next scale down, named after it and the size it is there; the item is marked **▸** with the map's name. Resize the item and the map follows, so the scale is the same at every depth (spec V2 §12); a map can also have a size of its own. A room opens as an interior; a building's map gets its floors in the inspector.
+- **Scale (spec V2 §12):** lengths are metres inside; the map reads kilometres (or miles) once a distance is that long. Each map has its own snap grid (a world snaps in hundreds of metres, a room in fractions of one), and its own origin, so detail is never drawn at huge coordinates. The map's edge is drawn, and an empty map frames it.
+- **How it is reached (spec V2 §13):** Continuous, Streamed, Instanced, Loaded by transition or Map only. The preflight only asks for a player start where the game loads a map on its own: not a world or region, not a map only for planning, not a building the player walks into from its parent.
+- **Status (spec V2 §6):** Empty, Grayboxed, Detailed, Gameplay complete or Final: worked out from what is on the map (spaces and solids, then props and lights, then a player start and something to do), or set by hand.
+- **Safety (spec V2 §15):** deleting a map lists the maps inside it and how many items go with them; deleting an item that opens into a map says the map stays, no longer tied to a place. A locked map turns changes to its items down. Every change is one undo step.
 
 ## What you can do
 
@@ -282,6 +304,7 @@ Its preflight is clean.
 
 | Path | What it is |
 | --- | --- |
+| `model/level/hierarchy.ts` | Spec V2's hierarchy: world presets, map kinds, boundaries and statuses; child maps from items, paths (breadcrumbs), bounds, per-map grids, moving, duplicating and deleting maps, and the navigator tree. |
 | `model/level/types.ts` | The entities in spec §13: `LevelSet` (settings, levels, items, project assets, serial counters, manifest), `Level`, `Floor`, `LevelItem` (the asset instance), `AssetDefinition`, `LevelRule`, `LevelAction`. Stored in `Project.levels`. |
 | `model/level/library.ts` | The starter catalog. Each asset has a kind, a role, a naming class, default size, proxy shape, parameters grouped by inspector section, and hints for the Godot, Unity and Unreal mappings. |
 | `model/level/level.ts` | Every edit, as a pure function returning a new project. |
@@ -314,3 +337,14 @@ clockwise seen from above.
 | §12 Preflight | Done, including what can't be reached from the player start, doorways lower than the player, items from older library versions, engine-specific checks (roles an engine gets as data only, wedges in Unreal, locked art with no final asset) and files changed in the engine since the last export. |
 | §14 Undo, persistence | Done: every edit is one undo step, GUIDs survive save, load, duplicate (which gives new ones), rename and re-export, and the data is plain JSON in the project file. |
 | §19 Future | Not started, as the spec says. |
+
+Against spec V2:
+
+| Spec V2 | Status |
+| --- | --- |
+| §3 Scale presets | Done: small, medium, large and custom, editable. |
+| §4 Hierarchy | Done: kinds, parents, child maps from items, moving between parents. |
+| §6 Navigator | Done: tree to rooms, breadcrumbs, search, favourites, status, hide, lock, rename, duplicate, move (the Map section's *Part of*), delete with a warning. |
+| §11–§12 Map properties, scale | Done: extent, origin, grid, boundary, environment and navigation words; kilometres at world scale. |
+| §13 Boundaries | Done in the studio; travel links next. |
+| §5, §7–§10, §14, engine export | In progress: world destinations and travel links, libraries by scale, buildings with floors, reference images, personal models, puzzle overlays, and the hierarchy in the engines. |

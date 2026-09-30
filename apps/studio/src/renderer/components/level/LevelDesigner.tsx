@@ -4,6 +4,7 @@ import { findAsset } from '../../model/level/library';
 import {
   addFloor,
   addLevel,
+  mapGrid,
   duplicateItems,
   groupItems,
   levelsOf,
@@ -36,6 +37,9 @@ import { LevelInspector } from './LevelInspector';
 import { LevelMap, type MapApi, type MapTool } from './LevelMap';
 import type { Axes, Tool3d } from './gizmo';
 import { formatLength } from './units';
+import { childOfItem, createWorld, duplicateMap, kindLabel, kindOf, mapsOwnedBy, openChildMap, pathTo, removalOfMap, removeMap, updateMap, addChildMap } from '../../model/level/hierarchy';
+import { MapNavigator } from './MapNavigator';
+import { NewWorldDialog } from './NewWorldDialog';
 
 // three.js is big: it loads the first time the graybox is opened.
 const Graybox = lazy(() => import('./Graybox'));
@@ -118,6 +122,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [playFrom, setPlayFrom] = useState<'start' | 'selection' | 'camera'>('start');
   const [playPreset, setPlayPreset] = useState('');
   const [playPerspective, setPlayPerspective] = useState<Perspective | null>(null);
+  const [newWorld, setNewWorld] = useState(false);
   const map = useRef<MapApi>(null);
   const box = useRef<GrayboxApi>(null);
   const playingRef = useRef(false);
@@ -222,6 +227,17 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       setSelection([]);
     };
     const names = ids.map((id) => s.items.find((i) => i.id === id)?.name).filter(Boolean);
+    const owned = mapsOwnedBy(s, ids);
+    if (owned.length) {
+      onConfirm({
+        title: names.length === 1 ? `Delete “${names[0]}”?` : `Delete ${names.length} items?`,
+        message: `${owned.length === 1 ? 'It opens into its own map, which stays' : 'They open into their own maps, which stay'}, no longer tied to a place here:`,
+        details: [...owned.map((m) => `${m.name} (${kindLabel(kindOf(m))})`), ...also.map((i) => `${i.name} (${assetOf(s, i, global).name}), in its walls`)],
+        confirmLabel: 'Delete',
+        onConfirm: go,
+      });
+      return;
+    }
     if (!also.length) {
       go();
       onSay(names.length === 1 ? `Deleted ${names[0]}.` : `Deleted ${names.length} items.`);
@@ -236,9 +252,94 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
     });
   };
 
+  // ------------------------------------------------------------ maps (spec V2 §4–§6)
+
+  /** A locked map's items stay as they are (spec V2 §6): a change to them is turned down, with why. */
+  const commitItems = (next: Project) => {
+    const before = levelsOf(latest.current.project);
+    const after = levelsOf(next);
+    const locked = before.levels.filter((l) => l.locked).map((l) => l.id);
+    if (locked.length) {
+      const mine = (s: typeof before, lid: string) => s.items.filter((i) => i.levelId === lid);
+      const changed = locked.find((lid) => {
+        const a = mine(before, lid);
+        const b = mine(after, lid);
+        return a.length !== b.length || a.some((x, n) => x !== b[n]);
+      });
+      if (changed && after.levels.find((l) => l.id === changed)?.locked) {
+        onSay(`${before.levels.find((l) => l.id === changed)!.name} is locked: unlock it in the navigator or its Map section to change it.`);
+        return;
+      }
+    }
+    onCommit(next);
+  };
+
+  /** Open a map, at a floor, with an item selected (and in view). */
+  const openMap = (lid: string, fid?: string, itemId?: string, within: Project = latest.current.project) => {
+    const s = levelsOf(within);
+    const next = s.levels.find((l) => l.id === lid);
+    if (!next) return;
+    setLevelId(lid);
+    setFloorId(fid ?? next.floors[0]?.id ?? '');
+    setSelection(itemId ? [itemId] : []);
+    setPick(null);
+    setTimeout(() => (mode === '3d' ? box.current : map.current)?.frame(itemId ? [itemId] : undefined), 0);
+  };
+
+  /** Open an item as its own map (making it the first time). */
+  const openChild = (itemId: string) => {
+    const made = openChildMap(latest.current.project, itemId, undefined, global);
+    if (!made.id) return;
+    if (made.made) {
+      onCommit(made.project);
+      const m = levelsOf(made.project).levels.find((l) => l.id === made.id)!;
+      onSay(`${m.name} is its own ${kindLabel(kindOf(m)).toLowerCase()} map now, the size it is here. Alt+↑ goes back.`);
+    }
+    const next = levelsOf(made.project).levels.find((l) => l.id === made.id)!;
+    setLevelId(next.id);
+    setFloorId(next.floors[0]!.id);
+    setSelection([]);
+    setMode('2d');
+    setTimeout(() => map.current?.frame(), 0);
+  };
+
+  const backToParent = () => {
+    const s = levelsOf(latest.current.project);
+    const here = s.levels.find((l) => l.id === latest.current.levelId);
+    const parent = here?.parentId ? s.levels.find((l) => l.id === here.parentId) : undefined;
+    if (!parent || !here) return;
+    // Back out onto the item it details, when it has one.
+    openMap(parent.id, here.anchorId ? s.items.find((i) => i.id === here.anchorId)?.floorId : undefined, here.anchorId);
+  };
+
+  const deleteMap = (lid: string) => {
+    const p = latest.current.project;
+    const s = levelsOf(p);
+    const { maps, items } = removalOfMap(s, lid);
+    const target = maps[0];
+    if (!target) return;
+    const go = () => {
+      const next = removeMap(p, lid);
+      onCommit(next);
+      if (maps.some((m) => m.id === latest.current.levelId)) {
+        const rest = levelsOf(next).levels;
+        const to = (target.parentId && rest.find((l) => l.id === target.parentId)) || rest[0];
+        if (to) openMap(to.id);
+      }
+      onSay(`Deleted ${target.name}.`);
+    };
+    onConfirm({
+      title: `Delete “${target.name}”?`,
+      message: maps.length > 1 ? `The maps inside it go too, with everything on them (${items} items):` : `Everything on it goes too (${items} items).`,
+      details: maps.slice(1).map((m) => `${m.name} (${kindLabel(kindOf(m))})`),
+      confirmLabel: 'Delete',
+      onConfirm: go,
+    });
+  };
+
   const duplicate = () => {
     if (!selection.length) return;
-    const made = duplicateItems(project, withGroups(project, selection), { x: set.settings.grid * 2 || 1, y: set.settings.grid * 2 || 1 });
+    const made = duplicateItems(project, withGroups(project, selection), { x: mapGrid(set, level?.id) * 2 || 1, y: mapGrid(set, level?.id) * 2 || 1 });
     onCommit(made.project);
     setSelection(made.ids);
   };
@@ -327,6 +428,11 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         else setSelection([]);
         return;
       }
+      if (e.altKey && e.key === 'ArrowUp') {
+        e.preventDefault();
+        backToParent();
+        return;
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         remove(sel);
@@ -343,7 +449,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         onCommit(rotateItems(p, sel, e.shiftKey ? -90 : 90, global));
       } else if (!mod && e.key.startsWith('Arrow') && sel.length) {
         e.preventDefault();
-        const step = (levelsOf(p).settings.grid || 0.5) * (e.shiftKey ? 4 : 1);
+        const step = mapGrid(levelsOf(p), lid) * (e.shiftKey ? 4 : 1);
         const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
         const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
         onCommit(moveItems(p, sel, dx, dy, global));
@@ -377,6 +483,23 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         >
           + Create the first level
         </button>
+        <button className="tb-btn" onClick={() => setNewWorld(true)}>
+          + Start with a world
+        </button>
+        <p className="muted">A world holds regions and levels, and they hold towns, buildings and rooms: open each to work closer in.</p>
+        {newWorld && (
+          <NewWorldDialog
+            units={set.settings.units}
+            onClose={() => setNewWorld(false)}
+            onCreate={(w) => {
+              const made = createWorld(project, w);
+              onCommit(made.project);
+              setNewWorld(false);
+              setLevelId(made.id);
+              setFloorId(levelsOf(made.project).levels.find((l) => l.id === made.id)!.floors[0]!.id);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -384,6 +507,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const selected = selection.length === 1 ? set.items.find((i) => i.id === selection[0]) : undefined;
   const floors = [...level.floors].sort((a, b) => b.elevation - a.elevation);
   const picked = pick && findAsset(pick.assetId, set.assets, global);
+  const crumbs = pathTo(set, level.id);
+  const selectedRoom = selected && assetOf(set, selected, global).kind === 'space' ? selected : undefined;
 
   return (
     <div className={`lvl${pick ? ' is-placing' : ''}${playing ? ' playing' : ''}`}>
@@ -399,7 +524,38 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           </>
         ) : (
         <>
+        <nav className="lvl-crumbs" aria-label="Where you are">
+          {crumbs.map((l, n) => (
+            <span key={l.id} className="lvl-crumb">
+              {n > 0 && <span className="lvl-crumb-sep">›</span>}
+              <button className={l.id === level.id ? 'on' : ''} aria-current={l.id === level.id ? 'location' : undefined} onClick={() => l.id !== level.id && openMap(l.id)} title={kindLabel(kindOf(l))}>
+                {l.name}
+              </button>
+            </span>
+          ))}
+          {(level.floors.length > 1 || kindOf(level) === 'building' || kindOf(level) === 'interior') && (
+            <span className="lvl-crumb">
+              <span className="lvl-crumb-sep">›</span>
+              <span className="muted">{floor.name}</span>
+            </span>
+          )}
+          {selectedRoom && (
+            <span className="lvl-crumb">
+              <span className="lvl-crumb-sep">›</span>
+              <span className="muted">{selectedRoom.name}</span>
+            </span>
+          )}
+          {level.parentId && (
+            <button className="icon-btn small lvl-crumb-up" aria-label="Back to the parent map" title="Back to the parent map (Alt+↑)" onClick={backToParent}>
+              ↑
+            </button>
+          )}
+        </nav>
         <select className="inp small lvl-pick" aria-label="Level" value={level.id} onChange={(e) => {
+          if (e.target.value === '+world') {
+            setNewWorld(true);
+            return;
+          }
           if (e.target.value === '+') {
             const made = addLevel(project);
             onCommit(made.project);
@@ -414,10 +570,12 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         }}>
           {set.levels.map((l) => (
             <option key={l.id} value={l.id}>
+              {'  '.repeat(Math.max(0, pathTo(set, l.id).length - 1))}
               {l.name}
             </option>
           ))}
           <option value="+">+ New level</option>
+          <option value="+world">+ New world…</option>
         </select>
         <select className="inp small lvl-pick" aria-label="Floor" value={floor.id} onChange={(e) => {
           if (e.target.value === '+') {
@@ -492,7 +650,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             <label className="lvl-toggle" title="Where the player can walk to from the player start (green), and where they can’t (amber). Doors and gates count as open."><input type="checkbox" checked={view3d.walkable} onChange={(e) => setView3d((o) => ({ ...o, walkable: e.target.checked }))} /> Walkable</label>
           </>
         )}
-        <label className="lvl-toggle" title="Snap to the grid"><input type="checkbox" checked={set.settings.snap} onChange={(e) => onCommit({ ...project, levels: { ...set, settings: { ...set.settings, snap: e.target.checked } } })} /> Snap {formatLength(set.settings.grid, set.settings.units)}</label>
+        <label className="lvl-toggle" title="Snap to the grid"><input type="checkbox" checked={set.settings.snap} onChange={(e) => onCommit({ ...project, levels: { ...set, settings: { ...set.settings, snap: e.target.checked } } })} /> Snap {formatLength(mapGrid(set, level.id), set.settings.units)}</label>
         <div className="grow" />
         <div className="lvl-play" role="group" aria-label="Play">
           <button className="tb-btn small primary" onClick={() => beginPlay()} title="Walk the level (F5; Shift+F5 from the selection)">
@@ -559,6 +717,39 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         )}
       </div>
       <LevelLibrary
+        navigator={
+          <MapNavigator
+            set={set}
+            global={global}
+            levelId={level.id}
+            floorId={floor.id}
+            selection={selection}
+            onOpen={openMap}
+            onLocate={(id) => {
+              const item = set.items.find((i) => i.id === id);
+              if (!item) return;
+              if (item.floorId !== floor.id) setFloorId(item.floorId);
+              setSelection([id]);
+              setTimeout(() => (mode === '3d' ? box.current : map.current)?.frame([id]), 0);
+            }}
+            onNewWorld={() => setNewWorld(true)}
+            onNewChild={(pid) => {
+              const made = addChildMap(project, pid);
+              onCommit(made.project);
+              openMap(made.id, undefined, undefined, made.project);
+            }}
+            onToggle={(lid, what) => {
+              const l = set.levels.find((x) => x.id === lid);
+              if (l) onCommit(updateMap(project, lid, { [what]: l[what] ? undefined : true }));
+            }}
+            onRename={(lid, name) => onCommit(updateMap(project, lid, { name }))}
+            onDuplicate={(lid) => {
+              const made = duplicateMap(project, lid);
+              if (made.id) onCommit(made.project);
+            }}
+            onDelete={deleteMap}
+          />
+        }
         set={set}
         levelId={level.id}
         floorId={floor.id}
@@ -625,7 +816,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             global={global}
             selection={selection}
             onSelect={setSelection}
-            onCommit={onCommit}
+            onCommit={commitItems}
             view={view}
             setView={setView}
             hidden={hidden}
@@ -634,7 +825,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             drawAsset={drawAsset}
             placing={pick?.sticky ? pick.assetId : null}
             onPlace={putDown}
-            onOpen3D={open3D}
+            onOpen3D={(id) => (id && childOfItem(set, id) ? openChild(id) : open3D(id))}
             onHover={setHover}
             issues={issueMap}
           />
@@ -655,7 +846,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               global={global}
               selection={selection}
               onSelect={setSelection}
-              onCommit={onCommit}
+              onCommit={commitItems}
               placing={pick?.sticky ? pick.assetId : null}
               onPlace={putDown}
               onHover={setHover}
@@ -688,7 +879,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         floorId={floor.id}
         global={global}
         selection={selection}
-        onCommit={onCommit}
+        onCommit={commitItems}
         onSelect={setSelection}
         onFloor={(id) => {
           setFloorId(id);
@@ -699,7 +890,21 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         onDelete={() => remove()}
         onSaveToLibrary={save}
         issues={issues}
+        onOpenMap={(lid) => openMap(lid)}
+        onOpenChild={openChild}
       />
+      {newWorld && (
+        <NewWorldDialog
+          units={set.settings.units}
+          onClose={() => setNewWorld(false)}
+          onCreate={(w) => {
+            const made = createWorld(project, w);
+            onCommit(made.project);
+            setNewWorld(false);
+            openMap(made.id, undefined, undefined, made.project);
+          }}
+        />
+      )}
       {pick && picked && (pick.moved || pick.sticky) && (
         <div className="drag-ghost" style={{ left: pick.clientX + 12, top: pick.clientY + 12 }} aria-hidden="true">
           <AssetIcon asset={picked} size={14} />

@@ -76,6 +76,8 @@ const Lock = ({ closed }: { closed: boolean }) => (
 );
 
 interface Props {
+  /** The maps navigator (spec V2 §6), above the library. */
+  navigator?: React.ReactNode;
   set: LevelSet;
   levelId: string;
   floorId: string;
@@ -117,6 +119,7 @@ export const LevelLibrary = (props: Props) => {
 
   return (
     <aside className="lvl-left" aria-label="Library and outliner">
+      {props.navigator}
       <div className="lvl-tabs" role="tablist">
         <button role="tab" aria-selected={props.tab === 'library'} className={props.tab === 'library' ? 'on' : ''} onClick={() => props.onTab('library')}>
           Library

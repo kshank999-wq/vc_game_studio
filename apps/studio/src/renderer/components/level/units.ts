@@ -10,4 +10,9 @@ export const fromDisplay = (value: number, units: LevelSettings['units']): numbe
 
 export const unitLabel = (units: LevelSettings['units']): string => (units === 'ft' ? 'ft' : 'm');
 
-export const formatLength = (metres: number, units: LevelSettings['units']): string => `${toDisplay(metres, units)} ${unitLabel(units)}`;
+/** A length as the designer reads it: kilometres (or miles) once it is that long (spec V2 §12), else metres (or feet). */
+export const formatLength = (metres: number, units: LevelSettings['units']): string => {
+  if (units === 'ft' && Math.abs(metres) >= 1609.344) return `${Math.round((metres / 1609.344) * 100) / 100} mi`;
+  if (units !== 'ft' && Math.abs(metres) >= 1000) return `${Math.round((metres / 1000) * 100) / 100} km`;
+  return `${toDisplay(metres, units)} ${unitLabel(units)}`;
+};
