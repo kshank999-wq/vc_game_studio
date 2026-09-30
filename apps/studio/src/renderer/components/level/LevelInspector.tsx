@@ -84,6 +84,7 @@ const ACTIONS: { value: LevelAction['kind']; label: string; target: 'item' | 'sc
   { value: 'playAudio', label: 'Play audio', target: 'item' },
   { value: 'objective', label: 'Activate objective', target: 'item' },
   { value: 'goToLevel', label: 'Go to level', target: 'level' },
+  { value: 'refuel', label: 'Refill the light of', target: 'item' },
 ];
 
 const ALIGN = [

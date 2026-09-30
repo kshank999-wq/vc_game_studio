@@ -4,7 +4,7 @@ import { assetOf, corners, frameOf, openingOf, outlineOf, overlaps, paramOf, sel
 import { referencesOf } from './links';
 import { migrationFor } from './migrate';
 import { navigate } from './nav';
-import { BODY } from './controller';
+import { BODY, CROUCH } from './controller';
 import { engineSafe, exportNameOf, levelExportName } from './naming';
 import type { AssetDefinition, LevelItem } from './types';
 
@@ -141,8 +141,8 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
   // Where the player can't get to (spec §5.3: inaccessible openings and placements).
   for (const item of set.items) {
     const def = assetOf(set, item, global);
-    if (def.role === 'door' && item.host && !item.hidden && sizeOf(set, item, global).h < BODY.height) {
-      add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} is lower than the player (${BODY.height} m).`, export: 'Play Mode’s player can’t get through it. Make it taller, or give the game a way to crouch.' });
+    if (def.role === 'door' && item.host && !item.hidden && sizeOf(set, item, global).h < CROUCH.height) {
+      add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} is lower than a crouching player (${CROUCH.height} m).`, export: 'Play Mode’s player can’t get through it, even crouching. Make it taller.' });
     }
   }
   for (const level of set.levels) {

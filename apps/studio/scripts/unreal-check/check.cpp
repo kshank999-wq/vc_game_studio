@@ -35,6 +35,25 @@ static void CheckLevel(const vcgs::Story& story)
     vcgs::GameState game(story);
     vcgs::LevelLogic level(std::move(data), game);
     std::printf("level: %s · %zu items\n", level.ExportName.c_str(), level.Order.size());
+    // The dark and the lantern: no light until the lantern is taken; the Squeeze is dark; the oil burns, and Mara tops it up.
+    {
+        vcgs::GameState caveGame(story);
+        vcgs::LevelLogic cave(vcgs::JsonReader::Parse(buffer.str(), &error), caveGame);
+        auto named = [&cave](const std::string& n) { for (const auto& g : cave.Order) if (cave.Item(g)["name"].Str() == n) return g; return std::string(); };
+        if (cave.LightSource != "lantern_oil" || cave.LightFuelFull != 90) Fail("the player's light should come from Lantern oil, with 90 s of fuel");
+        if (cave.ToggleLight() != "You need Lantern oil for light." || cave.IsLit()) Fail("without the lantern there should be no light");
+        cave.Enter(named("Squeeze dark"));
+        std::printf("dark in the squeeze: %.2f\n", cave.Darkness());
+        if (std::fabs(cave.Darkness() - 0.96) > 0.001) Fail("the Squeeze should be 96% dark");
+        cave.Exit(named("Squeeze dark"));
+        cave.Interact(named("Lantern"));
+        if (!caveGame.HasMechanic("lantern_oil") || cave.IsPresent(named("Lantern"))) Fail("taking the lantern should make Lantern oil available, and take it away");
+        if (cave.ToggleLight() != "Light on." || !cave.IsLit()) Fail("with the lantern the light should go on");
+        cave.Tick(10);
+        if (std::fabs(cave.LightFuel - 80) > 0.001) Fail("ten seconds lit should burn ten seconds of oil");
+        cave.Interact(named("Mara"));
+        if (cave.LightFuel != 90) Fail("Mara should top the lantern up");
+    }
     // Mara paces the cave mouth: her first stop is where she stands (4 s there), then on to the second.
     {
         vcgs::GameState walking(story);

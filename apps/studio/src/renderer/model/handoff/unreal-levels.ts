@@ -27,6 +27,7 @@ export const LEVEL_PLUGIN_FILES: Record<string, string> = {
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -76,17 +77,30 @@ namespace vcgs
         double PlayerX = 0, PlayerY = 0, PlayerZ = 0;
         /** How far behind a companion may fall before it catches up at once. */
         static constexpr double CatchUp = 12;
+        /** The player's light (spec §6), from the player start: what lights it (a story item or mechanic), its fuel (infinity for ever), its reach. */
+        std::string LightSource;
+        double LightFuelFull = std::numeric_limits<double>::infinity(), LightRange = 8;
+        /** Whether the light is on, and the seconds of fuel left. */
+        bool LightOn = false;
+        double LightFuel = std::numeric_limits<double>::infinity();
 
         std::function<void(const std::string&)> OnCinematic, OnScene, OnLevel, OnObjective, OnMessage, OnCheckpoint, OnStoryObjectUsed;
         std::function<void(const std::string&, const std::string&, int)> OnSpawn;
         std::function<void(const std::string&, const std::string&)> OnAudio;
         std::function<void()> OnDied, OnRefresh;
+        /** The light went on or off. */
+        std::function<void(bool)> OnLightChanged;
 
         LevelLogic(Value data, GameState& game) : Data(std::move(data)), Game(game)
         {
             Key = Data["key"].Str();
             Name = Data["name"].Str();
             ExportName = Data["export_name"].Str();
+            const Value& light = Data["light"];
+            LightSource = light["source"].Str();
+            if (light["fuel"].Num(0) > 0) LightFuelFull = light["fuel"].Num(0);
+            LightRange = light["range"].Num(8);
+            LightFuel = LightFuelFull;
             const Value& list = Data["items"];
             for (size_t i = 0; i < list.Size(); i++)
             {
@@ -161,6 +175,11 @@ namespace vcgs
             out.Verb = Param(guid, "prompt").Str();
             if (out.Verb.empty()) out.Verb = "Use";
             out.Label = Item(guid)["name"].Str();
+            if (TooDark(guid))
+            {
+                out.Blocked = HasLightSource() ? "Too dark to see. Turn your light on (L)." : std::string("Too dark to see.") + (LightSource.empty() ? "" : " It needs " + StoryName(LightSource) + " for light.");
+                return out;
+            }
             if (Role(guid) == "door")
             {
                 if (Param(guid, "swing").Str() == "open archway") return LevelOffer();
@@ -260,6 +279,7 @@ namespace vcgs
         void Tick(double dt)
         {
             Time += dt;
+            BurnLight(dt);
             // Patrols walk on, companions keep up (the same rules as the studio's Play Mode).
             for (auto& pair : Poses)
             {
@@ -294,6 +314,42 @@ namespace vcgs
                     Run(guid, rules[i]);
                 }
             }
+        }
+
+        /** Whether the player has what lights their light: its story item carried, or its mechanic available. */
+        bool HasLightSource() const { return !LightSource.empty() && (Game.HasItem(LightSource) || Game.HasMechanic(LightSource)); }
+
+        bool IsLit() const { return LightOn && HasLightSource(); }
+
+        /** Turn the player's light on or off (L): only with its source, and with fuel left. Returns what to tell them. */
+        std::string ToggleLight()
+        {
+            std::string text;
+            if (LightOn) { SetLight(false); text = "Light off."; }
+            else if (LightSource.empty()) text = "You have no light here.";
+            else if (!HasLightSource()) text = "You need " + StoryName(LightSource) + " for light.";
+            else if (LightFuel <= 0) text = "Your light has no fuel left.";
+            else { SetLight(true); text = "Light on."; }
+            if (OnMessage) OnMessage(text);
+            return text;
+        }
+
+        /** How dark it is where the player is (0 to 1): the darkest darkness zone they are in. */
+        double Darkness() const
+        {
+            double dark = 0;
+            for (const auto& guid : Inside)
+                if (Role(guid) == "darkness" && IsPresent(guid)) dark = std::max(dark, std::min(1.0, std::max(0.0, Param(guid, "dark").Num(92) / 100)));
+            return dark;
+        }
+
+        /** Whether an item is lost in the dark: in a darkness zone that is here, with the light off. */
+        bool TooDark(const std::string& guid) const
+        {
+            if (IsLit()) return false;
+            const Value& zones = Item(guid)["in_dark"];
+            for (size_t i = 0; i < zones.Size(); i++) if (IsPresent(zones[i].Str())) return true;
+            return false;
         }
 
         /** Walk a pose toward (x, y, z) at most by metres; true when it gets there. */
@@ -415,6 +471,30 @@ namespace vcgs
                 if (OnObjective) OnObjective(Objective);
             }
             else if (kind == "goToLevel") { if (OnLevel) OnLevel(target); }
+            else if (kind == "refuel") { LightFuel = LightFuelFull; if (OnMessage) OnMessage("Your light is full again."); }
+        }
+
+        void SetLight(bool on)
+        {
+            LightOn = on;
+            if (OnLightChanged) OnLightChanged(on);
+        }
+
+        void BurnLight(double dt)
+        {
+            if (!LightOn) return;
+            if (!HasLightSource())
+            {
+                SetLight(false);
+                if (OnMessage) OnMessage("Your light goes out.");
+            }
+            else if (!std::isinf(LightFuel))
+            {
+                LightFuel = std::max(0.0, LightFuel - dt);
+                if (LightFuel > 0) return;
+                SetLight(false);
+                if (OnMessage) OnMessage("Your light goes out: no fuel left.");
+            }
         }
 
         void Spawn(const std::string& guid)
@@ -634,6 +714,7 @@ class AVcgsLevelItem;
 class UPrimitiveComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsLevelKeyEvent, const FString&, Key);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsLightEvent, bool, bOn);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FVcgsLevelSpawnEvent, AVcgsLevelItem*, Spawner, const FString&, ActorKey, int32, Count);
 
 /**
@@ -659,6 +740,8 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelKeyEvent OnObjectiveChanged;
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelKeyEvent OnMessage;
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelSpawnEvent OnSpawnRequested;
+    /** The player's light went on or off: show or hide its lamp. */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLightEvent OnLightChanged;
 
     /** Use an item (by GUID); returns what to tell the player. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") FString Interact(const FString& Guid);
@@ -667,6 +750,15 @@ public:
     /** The nearest item the player can use from here, facing this way, or "". */
     UFUNCTION(BlueprintPure, Category = "VCGS") FString NearestOffer(const FVector& From, const FVector& Facing) const;
     UFUNCTION(BlueprintPure, Category = "VCGS") bool IsPresent(const FString& Guid) const;
+    /** Turn the player's light on or off (bind to L); returns what to tell the player. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") FString ToggleLight();
+    UFUNCTION(BlueprintPure, Category = "VCGS") bool IsLit() const;
+    /** Seconds of fuel left (-1 for a light that never runs out). */
+    UFUNCTION(BlueprintPure, Category = "VCGS") float LightFuel() const;
+    /** How far the light reaches, in centimetres. */
+    UFUNCTION(BlueprintPure, Category = "VCGS") float LightRange() const;
+    /** How dark it is where the player is (0 to 1): darken the screen by this, less with the light on. */
+    UFUNCTION(BlueprintPure, Category = "VCGS") float Darkness() const;
 
 protected:
     virtual void BeginPlay() override;
@@ -733,6 +825,7 @@ void AVcgsLevelDirector::BeginPlay()
         OnSpawnRequested.Broadcast(Spawner ? *Spawner : nullptr, ToF(ActorKey), Count);
     };
     Logic->OnRefresh = [this]() { Refresh(); };
+    Logic->OnLightChanged = [this](bool bOn) { OnLightChanged.Broadcast(bOn); };
     for (TActorIterator<AVcgsLevelItem> It(GetWorld()); It; ++It)
     {
         AVcgsLevelItem* Item = *It;
@@ -844,6 +937,31 @@ FString AVcgsLevelDirector::OfferText(const FString& Guid) const
 bool AVcgsLevelDirector::IsPresent(const FString& Guid) const
 {
     return Logic && Logic->IsPresent(ToStd(Guid));
+}
+
+FString AVcgsLevelDirector::ToggleLight()
+{
+    return Logic ? ToF(Logic->ToggleLight()) : FString();
+}
+
+bool AVcgsLevelDirector::IsLit() const
+{
+    return Logic && Logic->IsLit();
+}
+
+float AVcgsLevelDirector::LightFuel() const
+{
+    return !Logic || std::isinf(Logic->LightFuel) ? -1.f : static_cast<float>(Logic->LightFuel);
+}
+
+float AVcgsLevelDirector::LightRange() const
+{
+    return Logic ? static_cast<float>(Logic->LightRange * 100) : 0.f;
+}
+
+float AVcgsLevelDirector::Darkness() const
+{
+    return Logic ? static_cast<float>(Logic->Darkness()) : 0.f;
 }
 
 FString AVcgsLevelDirector::NearestOffer(const FVector& From, const FVector& Facing) const

@@ -426,6 +426,12 @@ Each adapter maps the axes:
 | Unity | (x, y, −z) | yaw −turn |
 | Unreal | (−z, x, y) × 100 cm | yaw −turn |
 
+The level's `light` is the player's light from the player start (`source`, a
+story item or mechanic key; `fuel` in seconds, 0 for ever; `range` in metres),
+or null. An item in a darkness zone that needs light lists the zones' GUIDs in
+`in_dark`; the runtimes block using it while any of them is present and the
+light is off, and a `refuel` action fills the light again.
+
 A freeform space has an `outline`: its corners [x, z] around its position,
 clockwise seen from above. A door's `host.wall` is then the outline's wall n,
 from corner n to the next. Its floor and ceiling are `slab` pieces: an

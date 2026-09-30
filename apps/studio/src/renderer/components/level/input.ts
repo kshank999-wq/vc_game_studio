@@ -7,7 +7,7 @@ import type { PlayControlPrefs } from '../../preferences';
  * the mouse, a standard-layout controller.
  */
 
-export type Action = 'forward' | 'back' | 'left' | 'right' | 'turnLeft' | 'turnRight' | 'jump' | 'run' | 'interact' | 'inspect' | 'debug' | 'note' | 'view';
+export type Action = 'forward' | 'back' | 'left' | 'right' | 'turnLeft' | 'turnRight' | 'jump' | 'run' | 'crouch' | 'interact' | 'light' | 'inspect' | 'debug' | 'note' | 'view';
 
 export const ACTIONS: readonly { id: Action; label: string }[] = [
   { id: 'forward', label: 'Move forward' },
@@ -18,7 +18,9 @@ export const ACTIONS: readonly { id: Action; label: string }[] = [
   { id: 'turnRight', label: 'Turn right' },
   { id: 'jump', label: 'Jump' },
   { id: 'run', label: 'Run' },
+  { id: 'crouch', label: 'Crouch (hold)' },
   { id: 'interact', label: 'Interact' },
+  { id: 'light', label: 'Light on or off' },
   { id: 'inspect', label: 'Pause and inspect' },
   { id: 'debug', label: 'Debug overlay' },
   { id: 'note', label: 'Note an issue' },
@@ -34,7 +36,9 @@ export const DEFAULT_KEYS: Record<Action, string[]> = {
   turnRight: ['ArrowRight'],
   jump: ['Space'],
   run: ['ShiftLeft', 'ShiftRight'],
+  crouch: ['KeyC', 'ControlLeft'],
   interact: ['KeyE', 'KeyF'],
+  light: ['KeyL'],
   inspect: ['Tab', 'KeyP'],
   debug: ['F3', 'Backquote'],
   note: ['KeyN'],
@@ -51,7 +55,9 @@ export const DEFAULT_PAD: Record<Action, number[]> = {
   turnRight: [],
   jump: [0],
   run: [10, 4],
+  crouch: [11],
   interact: [2, 1],
+  light: [5],
   inspect: [9],
   debug: [8],
   note: [],

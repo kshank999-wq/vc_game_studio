@@ -154,8 +154,8 @@ selection). Beside the button, choose where to start and what the story holds:
 - the **perspective** (first person, third person or top-down), a project setting that can also be changed while playing (**V**)
 
 **Controls.**
-- **Keyboard and mouse:** WASD or the arrows to move, the mouse to look, Shift to run, Space to jump, **E** to use what's in reach. Click the view to capture the mouse; Esc gives it back. Without pointer lock, dragging looks around.
-- **Controller:** the left stick moves, the right stick looks, A jumps, X uses and Start pauses.
+- **Keyboard and mouse:** WASD or the arrows to move, the mouse to look, Shift to run, Space to jump, **C** or Left Ctrl to crouch, **L** for the light, **E** to use what's in reach. Click the view to capture the mouse; Esc gives it back. Without pointer lock, dragging looks around.
+- **Controller:** the left stick moves, the right stick looks, A jumps, X uses, the right stick's press crouches, the right bumper works the light and Start pauses.
 - **Rebinding:** every action's keys and buttons can be changed in the pause panel's **Controls** tab, along with look speed, inverted look and the stick dead zone. These are kept on this computer.
 
 **What happens.** The player is a capsule that walks, climbs steps and stairs,
@@ -172,6 +172,9 @@ the same effects, with triggers and puzzles settling after every change:
 - **Interaction points:** tied to a story object, they use it the way free play does.
 - **Volumes:** notice entering and leaving. Cinematic triggers play their cinematic (with its shot list, skippable); checkpoints set where you come back; portals lead to another level, carrying the story with them; hazards and damage volumes hurt.
 - **Patrols (spec §11):** an NPC, enemy or neutral actor whose **Patrol** names a patrol walks the **Patrol nodes** of that name (Actors) in their **Order**, at its **Speed**, waiting each node's **Wait** at it, round and round. They walk straight from stop to stop: there is no pathfinding, so lay a patrol out with a clear line between its stops. Talk to someone on a patrol where they are. The map draws each patrol as a dashed loop, its stops numbered, and the preflight warns of a Patrol that names no nodes.
+- **Crouching:** held, it lowers the player to 1.1 m, at under half pace, with no jumping. Let go under something low and the player stays down until there is room to stand. The preflight flags only doors lower than a crouching player.
+- **Darkness (spec §6):** a **Darkness** zone (Logic) darkens the view by its **Dark** percent while the player is in it. With **Needs light** on, what is in it can't be used in the dark: it says "Too dark to see", and what the light needs.
+- **The player's light:** the player start's **Light** names what lights it, a story item carried or a mechanic available; **Light fuel** is how many seconds it burns (0 for ever) and **Light range** how far it reaches. **L** turns it on, if the player has what lights it and fuel is left; the HUD shows the fuel, and the light goes out when it runs out or its source is gone. A rule's **Refill the light of** action fills it up again.
 - **Companions:** a companion that **Follows the player** keeps within its **Follow distance**, walking at its Speed (faster when far behind). More than 12 m behind, or on another floor, it catches up at once, behind the player.
 - **Spawners:** put their characters or items in the level, after their delay.
 - **Rules:** run on enter, exit, interact, pickup, use, timers and story changes. Each is logged with its conditions and whether they held, then its story effects and level actions.
@@ -218,6 +221,11 @@ five seconds as Play Mode does):
 - **Unreal:** `vcgs::LevelLogic::Poses`, moved by `Tick`; `AVcgsLevelDirector` sets each actor's location and rotation, and follows the player pawn.
 - **JSON:** the `motion` object, described in the schema.
 
+**Darkness and the light** go over as the level's `light` (what lights it, its fuel and range, from the player start) and each item's `in_dark` (the darkness zones that need light and hold it). Each runtime runs the light as Play Mode does: turning it on needs its source and fuel, it burns while lit, a `refuel` action fills it, and an item in the dark can't be used until it is lit. The checks take the sample's lantern, find the Squeeze 0.96 dark, burn ten seconds of oil and have Mara top it up.
+- **Godot:** `VCGSLevel.toggle_light()`, `darkness()`, `light_on`, `light_fuel` and the `light_changed` signal. `play_<level>.tscn`'s player turns it on with L, crouches with C or Ctrl, darkens the screen and carries a lamp.
+- **Unity:** `LevelLogic.ToggleLight()`, `Darkness()`, `IsLit`, `LightFuel` and `LightChanged`; bind them to your input and lights.
+- **Unreal:** `AVcgsLevelDirector::ToggleLight()`, `Darkness()`, `IsLit()`, `LightFuel()`, `LightRange()` and `OnLightChanged`, for Blueprints; crouching is the character's own.
+
 A freeform space's floor and ceiling go over as a **slab**: the outline raised to its thickness, with its triangles.
 - **Godot:** a `CSGPolygon3D`, colliding through a `ConcavePolygonShape3D` of its faces.
 - **Unity:** a mesh saved under `Levels/Meshes`, with a `MeshCollider`.
@@ -259,7 +267,8 @@ script's custom region is always kept.
 - **The flooded seam:** gone once the lever is up.
 - **The cinematic trigger:** plays *Door in the dark* on the way in.
 - **People and lighting:** Mara, pacing the Cave Mouth on the *Cave watch* patrol (two stops, a wait at each), a player start, lights, a camera marker and an ambient zone.
-- **The Crawlway** into the Squeeze is 1.8 m high. It was 1.6 m, lower than the player, so Play Mode's player couldn't get past the Cave Mouth; the walkable preview found it.
+- **The Crawlway** into the Squeeze is 1.3 m high: crouch to get through.
+- **The dark:** the player start's light burns Lantern oil, 90 seconds of it. Take the **Lantern** at the Cave Mouth to light it (it makes Lantern oil available); the **Squeeze dark** zone makes the Squeeze 96% dark; talking to Mara fills the lantern again.
 
 Its preflight is clean.
 

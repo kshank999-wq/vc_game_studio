@@ -36,6 +36,8 @@ export interface Body {
   /** Looking up (positive) or down. */
   pitch: number;
   grounded: boolean;
+  /** Crouching (spec §6): lower, slower, and through gaps a standing body can't pass. */
+  crouched?: boolean;
 }
 
 export interface MoveInput {
@@ -47,9 +49,18 @@ export interface MoveInput {
   run: boolean;
   /** Move along the map's axes (top-down) instead of the way the body faces. */
   worldAxes?: boolean;
+  /** Hold to crouch; let go to stand, once there is room to. */
+  crouch?: boolean;
 }
 
 export const BODY = { radius: 0.32, height: 1.75, eye: 1.62, walk: 3.6, run: 6.4, jump: 5.2, gravity: 18, stepUp: 0.42 } as const;
+/** A crouching body: how tall, where its eyes are, and how much slower it moves. */
+export const CROUCH = { height: 1.1, eye: 0.95, speed: 0.45 } as const;
+
+/** A body's height now: standing or crouched. */
+export const heightOf = (body: Pick<Body, 'crouched'>): number => (body.crouched ? CROUCH.height : BODY.height);
+/** Its eyes' height above its feet. */
+export const eyeOf = (body: Pick<Body, 'crouched'>): number => (body.crouched ? CROUCH.eye : BODY.eye);
 
 /** Everything the player bumps into, from the graybox's pieces. */
 export const collidersFrom = (meshes: readonly Mesh[]): Collider[] =>
@@ -172,8 +183,15 @@ const resolve = (colliders: readonly Collider[], x: number, y: number, feet: num
 };
 
 /** One step of time: move, collide, climb, fall, land. */
+/** Whether a standing body fits here: nothing solid between its crouched head and its standing one. */
+export const roomToStand = (colliders: readonly Collider[], x: number, y: number, feet: number): boolean =>
+  !colliders.some((c) => c.bottom < feet + BODY.height && c.top > feet + CROUCH.height && over(c, x, y, BODY.radius * 0.9));
+
 export const step = (body: Body, input: MoveInput, dt: number, colliders: readonly Collider[]): Body => {
-  const speed = input.run ? BODY.run : BODY.walk;
+  // Crouch while held; stand again once there is room overhead.
+  const crouched = input.crouch ? true : body.crouched ? !roomToStand(colliders, body.x, body.y, body.z) : false;
+  const height = crouched ? CROUCH.height : BODY.height;
+  const speed = (input.run && !crouched ? BODY.run : BODY.walk) * (crouched ? CROUCH.speed : 1);
   const len = Math.hypot(input.forward, input.strafe);
   const f = len > 1 ? input.forward / len : input.forward;
   const s = len > 1 ? input.strafe / len : input.strafe;
@@ -191,7 +209,7 @@ export const step = (body: Body, input: MoveInput, dt: number, colliders: readon
   for (let i = 0; i < steps; i++) {
     const nx = x + (vx * dt) / steps;
     const ny = y + (vy * dt) / steps;
-    const p = resolve(colliders, nx, ny, z, z + BODY.height);
+    const p = resolve(colliders, nx, ny, z, z + height);
     x = p.x;
     y = p.y;
     // Walking up a step lifts the feet onto it.
@@ -202,7 +220,7 @@ export const step = (body: Body, input: MoveInput, dt: number, colliders: readon
   }
 
   let grounded = body.grounded;
-  if (grounded && input.jump) {
+  if (grounded && input.jump && !crouched) {
     vz = BODY.jump;
     grounded = false;
   }
@@ -222,14 +240,14 @@ export const step = (body: Body, input: MoveInput, dt: number, colliders: readon
     // Hitting a ceiling stops the rise.
     if (vz > 0) {
       for (const c of colliders) {
-        if (c.bottom >= z + BODY.height && c.bottom <= nz + BODY.height && over(c, x, y)) {
-          nz = c.bottom - BODY.height;
+        if (c.bottom >= z + height && c.bottom <= nz + height && over(c, x, y)) {
+          nz = c.bottom - height;
           vz = 0;
         }
       }
     }
   }
-  return { ...body, x, y, z: nz, vz, grounded };
+  return { ...body, x, y, z: nz, vz, grounded, ...(crouched || body.crouched ? { crouched } : {}) };
 };
 
 /** Turn and look (radians), keeping the look between straight down and straight up. */

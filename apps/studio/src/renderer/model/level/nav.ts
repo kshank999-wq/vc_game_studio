@@ -1,4 +1,4 @@
-import { BODY, collidersFrom, type Collider } from './controller';
+import { BODY, collidersFrom, CROUCH, type Collider } from './controller';
 import { assetOf, boundsOf, contains, corners, frameOf, meshesFor, num, paramOf } from './geometry';
 import type { AssetDefinition, LevelItem, LevelSet } from './types';
 
@@ -39,7 +39,8 @@ const CLIMB = new Set(['ladder', 'elevator', 'traversal']);
 const DROP = 4;
 
 const blocked = (colliders: readonly Collider[], x: number, y: number, feet: number): boolean => {
-  const head = feet + BODY.height;
+  // A body that can crouch gets through anything as tall as a crouching one.
+  const head = feet + CROUCH.height;
   for (const c of colliders) {
     if (c.top <= feet + BODY.stepUp || c.bottom >= head) continue;
     if (c.poly) {

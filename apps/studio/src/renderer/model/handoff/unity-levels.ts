@@ -80,6 +80,15 @@ namespace VCGS
         /// <summary>How far behind a companion may fall before it catches up at once.</summary>
         public const double CatchUp = 12;
 
+        /// <summary>The player's light (spec §6), from the player start: what lights it (a story item or mechanic), its fuel (0 for ever), its reach.</summary>
+        public readonly string LightSource;
+        public readonly double LightFuelFull, LightRange;
+        /// <summary>Whether the light is on, and the seconds of fuel left (infinity when it never runs out).</summary>
+        public bool LightOn;
+        public double LightFuel;
+        /// <summary>The light went on or off.</summary>
+        public event Action<bool> LightChanged;
+
         public event Action<string> CinematicRequested;
         public event Action<string> SceneRequested;
         public event Action<string> LevelRequested;
@@ -101,6 +110,11 @@ namespace VCGS
             Key = D.Str(data, "key");
             Name = D.Str(data, "name");
             ExportName = D.Str(data, "export_name");
+            var light = D.Map(data, "light");
+            LightSource = D.Str(light, "source");
+            LightFuelFull = D.Num(light, "fuel", 0) > 0 ? D.Num(light, "fuel", 0) : double.PositiveInfinity;
+            LightRange = D.Num(light, "range", 8);
+            LightFuel = LightFuelFull;
             names = D.Map(data, "names");
             foreach (var o in D.List(data, "items"))
             {
@@ -159,6 +173,7 @@ namespace VCGS
             var prompt = ParamStr(guid, "prompt");
             if (prompt == "") prompt = "Use";
             var label = D.Str(Item(guid), "name");
+            if (TooDark(guid)) return new LevelOffer { Verb = prompt, Label = label, Blocked = HasLightSource() ? "Too dark to see. Turn your light on (L)." : "Too dark to see." + (LightSource != "" ? " It needs " + StoryName(LightSource) + " for light." : "") };
             if (Role(guid) == "door")
             {
                 if (ParamStr(guid, "swing") == "open archway") return null;
@@ -264,6 +279,7 @@ namespace VCGS
         {
             Time += dt;
             MoveActors(dt);
+            BurnLight(dt);
             foreach (var guid in new List<string>(Inside))
             {
                 var role = Role(guid);
@@ -292,6 +308,60 @@ namespace VCGS
                     Run(guid, rule);
                 }
             }
+        }
+
+        /// <summary>Whether the player has what lights their light: its story item carried, or its mechanic available.</summary>
+        public bool HasLightSource() => LightSource != "" && (Game.HasItem(LightSource) || Game.HasMechanic(LightSource));
+
+        public bool IsLit => LightOn && HasLightSource();
+
+        /// <summary>Turn the player's light on or off (L): only with its source, and with fuel left. Returns what to tell them.</summary>
+        public string ToggleLight()
+        {
+            string text;
+            if (LightOn) { LightOn = false; LightChanged?.Invoke(false); text = "Light off."; }
+            else if (LightSource == "") text = "You have no light here.";
+            else if (!HasLightSource()) text = "You need " + StoryName(LightSource) + " for light.";
+            else if (LightFuel <= 0) text = "Your light has no fuel left.";
+            else { LightOn = true; LightChanged?.Invoke(true); text = "Light on."; }
+            Message?.Invoke(text);
+            return text;
+        }
+
+        void BurnLight(double dt)
+        {
+            if (!LightOn) return;
+            if (!HasLightSource())
+            {
+                LightOn = false;
+                LightChanged?.Invoke(false);
+                Message?.Invoke("Your light goes out.");
+            }
+            else if (!double.IsInfinity(LightFuel))
+            {
+                LightFuel = Math.Max(0, LightFuel - dt);
+                if (LightFuel > 0) return;
+                LightOn = false;
+                LightChanged?.Invoke(false);
+                Message?.Invoke("Your light goes out: no fuel left.");
+            }
+        }
+
+        /// <summary>How dark it is where the player is (0 to 1): the darkest darkness zone they are in.</summary>
+        public double Darkness()
+        {
+            double dark = 0;
+            foreach (var guid in Inside)
+                if (Role(guid) == "darkness" && IsPresent(guid)) dark = Math.Max(dark, Math.Min(1, Math.Max(0, ParamNum(guid, "dark", 92) / 100)));
+            return dark;
+        }
+
+        /// <summary>Whether an item is lost in the dark: in a darkness zone that is here, with the light off.</summary>
+        public bool TooDark(string guid)
+        {
+            if (IsLit) return false;
+            foreach (var zone in D.List(Item(guid), "in_dark")) if (zone is string z && IsPresent(z)) return true;
+            return false;
         }
 
         /// <summary>Walk the patrols on and bring the companions after the Player (the same rules as the studio's Play Mode).</summary>
@@ -402,6 +472,7 @@ namespace VCGS
                     ObjectiveChanged?.Invoke(Objective);
                     break;
                 case "goToLevel": LevelRequested?.Invoke(target); break;
+                case "refuel": LightFuel = LightFuelFull; Message?.Invoke("Your light is full again."); break;
             }
         }
 

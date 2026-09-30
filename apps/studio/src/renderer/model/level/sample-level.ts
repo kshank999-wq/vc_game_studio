@@ -9,7 +9,7 @@ import type { LevelItem } from './types';
  */
 export const sampleLevel = (
   project: Project,
-  refs: { caveMouth: string; squeeze: string; theKey: string; vaultDoor: string; chamber: string; mara: string; lever: string; key: string; puzzle: string; cinematic: string; descent: string },
+  refs: { caveMouth: string; squeeze: string; theKey: string; vaultDoor: string; chamber: string; mara: string; lever: string; key: string; puzzle: string; cinematic: string; descent: string; oil: string },
 ): Project => {
   const made = addLevel(project, 'Sunken Vault');
   let p = updateLevel(made.project, made.id, { links: [refs.descent] });
@@ -51,8 +51,8 @@ export const sampleLevel = (
     set(id, { swing: 'open archway', interactive: false });
     return id;
   };
-  // Low, but a person fits: the player is 1.75 m tall.
-  archway('Crawlway', 0, -6.05, 1.2, 1.8);
+  // Low: the player crouches through (1.1 m crouched, 1.75 m standing).
+  archway('Crawlway', 0, -6.05, 1.2, 1.3);
   archway('Squeeze exit', 6, -7.5, 1.2, 1.8);
   archway('Chamber stair', 10, -12, 2);
   const bronze = put('arch.door', 'Bronze Door', 10, -20, { w: 2.4, h: 3.2 });
@@ -61,15 +61,20 @@ export const sampleLevel = (
   patch(bronze, { activeWhen: { match: 'all', items: [{ kind: 'puzzle', ref: refs.puzzle, op: 'unsolved' }] } });
 
   // Who is where.
+  // The explorer's light is the lantern (Lantern oil): a minute and a half of oil, topped up by Mara.
   const start = put('actor.player', 'Explorer start', -1, 3.5);
-  void start;
+  set(start, { light: refs.oil, lightFuel: 90, lightRange: 8 });
   const mara = put('actor.npc', 'Mara', 1.5, 3);
   set(mara, { character: refs.mara, prompt: 'Talk to Mara', patrol: 'Cave watch', speed: 1.1 });
   // She paces the cave mouth while the player gets their bearings: two stops, a wait at each.
   const watch = (name: string, x: number, y: number, order: number, wait: number) => set(put('actor.patrol', name, x, y), { path: 'Cave watch', order, wait });
   watch('Cave watch 1', 1.5, 3, 1, 4);
   watch('Cave watch 2', 4.5, 0.5, 2, 3);
-  put('light.practical', 'Lantern', -2.5, 2.5, undefined);
+  // The lantern by the entrance: taking it makes Lantern oil available, so the player's light can be lit (L).
+  const lantern = put('light.practical', 'Lantern', -2.5, 2.5, undefined);
+  set(lantern, { interactive: true, prompt: 'Take the lantern' });
+  patch(lantern, { rules: [{ id: 'rule_lantern', on: 'interact', effects: [{ kind: 'enableMechanic', ref: refs.oil }], actions: [{ kind: 'despawn', target: lantern }] }] });
+  patch(mara, { rules: [{ id: 'rule_oil', on: 'interact', actions: [{ kind: 'refuel', target: start }] }] });
   const guide = put('pres.dialogue', 'Mara at the door', 12.5, -17);
   set(guide, { speaker: refs.mara });
 
@@ -96,5 +101,8 @@ export const sampleLevel = (
   // The chamber's echo fills it, cut corners and all.
   const echo = put('pres.ambient', 'Dripping echo', 10, -16, { w: 10, d: 8, h: 4.5 });
   p = setOutline(p, echo, chamberCorners);
+  // The Squeeze is pitch dark: the lantern, or nothing. (Placed last, so the other items keep their export names.)
+  const squeezeDark = put('logic.darkness', 'Squeeze dark', 0, -7.5, { w: 12, d: 3, h: 2.2 });
+  set(squeezeDark, { dark: 96 });
   return p;
 };

@@ -78,9 +78,12 @@ describe('navigation preview', () => {
   it('says what can’t be reached when a doorway is too low or a room is walled off', () => {
     let p = sunkenVault();
     const byName = (name: string) => levelsOf(p).items.find((i) => i.name === name)!;
-    p = resizeItem(p, byName('Crawlway').id, { h: 1.4 });
+    // 1.4 m: a crouching player gets through.
+    const crouching = levelIssues(resizeItem(p, byName('Crawlway').id, { h: 1.4 }));
+    expect(crouching.filter((i) => i.message.includes('Crawlway') || i.message.includes('can’t be reached'))).toEqual([]);
+    p = resizeItem(p, byName('Crawlway').id, { h: 1 });
     const issues = levelIssues(p);
-    expect(issues.find((i) => i.id === byName('Crawlway').id)?.message).toBe('Crawlway is lower than the player (1.75 m).');
+    expect(issues.find((i) => i.id === byName('Crawlway').id)?.message).toBe('Crawlway is lower than a crouching player (1.1 m).');
     const cut = issues.filter((i) => i.message.includes('can’t be reached')).map((i) => i.message);
     expect(cut).toEqual(expect.arrayContaining(['Vault Key can’t be reached from the player start.', 'Rusted Lever can’t be reached from the player start.']));
     // The cave mouth is still reachable, so Mara is too.

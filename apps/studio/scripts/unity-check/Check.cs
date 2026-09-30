@@ -286,6 +286,24 @@ static class Check
             var there = moving.Poses[mara];
             if (Math.Abs(there.X - 4.5) > 0.01 || Math.Abs(there.Z - 0.5) > 0.01 || there.Moving) Fail("after 10 s Mara should wait at the second stop, got " + there.X + ", " + there.Z);
         }
+        // The dark and the lantern: no light until the lantern is taken; the Squeeze is dark; the oil burns, and Mara tops it up.
+        {
+            var cave = new LevelLogic(D.Map(Json.Parse(json)), new GameState(story));
+            string Named(string n) => cave.Order.Find(g => D.Str(cave.Item(g), "name") == n) ?? "";
+            if (cave.LightSource != "lantern_oil" || cave.LightFuelFull != 90) Fail("the player's light should come from Lantern oil, with 90 s of fuel, got " + cave.LightSource + " " + cave.LightFuelFull);
+            if (cave.ToggleLight() != "You need Lantern oil for light." || cave.IsLit) Fail("without the lantern there should be no light");
+            cave.Enter(Named("Squeeze dark"));
+            Console.WriteLine("dark in the squeeze: " + cave.Darkness().ToString("0.00"));
+            if (Math.Abs(cave.Darkness() - 0.96) > 0.001) Fail("the Squeeze should be 96% dark");
+            cave.Exit(Named("Squeeze dark"));
+            cave.Interact(Named("Lantern"));
+            if (!cave.Game.HasMechanic("lantern_oil") || cave.IsPresent(Named("Lantern"))) Fail("taking the lantern should make Lantern oil available, and take it away");
+            if (cave.ToggleLight() != "Light on." || !cave.IsLit) Fail("with the lantern the light should go on");
+            cave.Tick(10);
+            if (Math.Abs(cave.LightFuel - 80) > 0.001) Fail("ten seconds lit should burn ten seconds of oil, got " + cave.LightFuel);
+            cave.Interact(Named("Mara"));
+            if (cave.LightFuel != 90) Fail("Mara should top the lantern up, got " + cave.LightFuel);
+        }
         // A companion keeps up: with the player 6 m on, it walks until 2 m away; 30 m on, it catches up at once.
         var follow = new Dictionary<string, object> { ["kind"] = "follow", ["speed"] = 3.5, ["distance"] = 2.0 };
         var pose = new ActorPose();

@@ -55,6 +55,8 @@ export interface LevelPlayState {
   /** Items taken or despawned. */
   gone: Record<string, boolean>;
   spawned: Spawned[];
+  /** The player's light (spec §6): whether it is on, and the seconds of fuel left (Infinity when it never runs out). */
+  light: { on: boolean; fuel: number };
   /** Actors that move (patrols, companions), where they are now, by item id. */
   actors: Record<string, ActorPose>;
   /** Spawners and once-only volumes that have gone off. */
@@ -110,6 +112,7 @@ export const startLevelPlay = (project: Project, levelId: string, options: { pre
     gone: {},
     spawned: [],
     actors: startPoses(set, levelId, options.global),
+    light: { on: false, fuel: fullFuel(project, levelId, options.global) },
     done: {},
     inside: [],
     timers: {},
@@ -123,6 +126,77 @@ export const startLevelPlay = (project: Project, levelId: string, options: { pre
     if (num(paramOf(set, item, 'delay', options.global), 0) <= 0 && assetOf(set, item, options.global).kind === 'marker') state = spawnFrom(project, state, item, options.global);
   }
   return state;
+};
+
+// ---------------------------------------------------------------- the dark, and the player's light (spec §6)
+
+const playerStartOf = (project: Project, levelId: string, global?: readonly AssetDefinition[]): LevelItem | undefined => {
+  const set = levelsOf(project);
+  return set.items.find((i) => i.levelId === levelId && !i.hidden && assetOf(set, i, global).role === 'playerStart');
+};
+
+/** The player's light, as the level's player start sets it: what lights it (a story item or mechanic), its fuel in seconds (0 for ever), how far it reaches. */
+export const lightOf = (project: Project, levelId: string, global?: readonly AssetDefinition[]): { source: string | null; fuel: number; range: number; startId: string | null } => {
+  const set = levelsOf(project);
+  const start = playerStartOf(project, levelId, global);
+  const source = start ? String(paramOf(set, start, 'light', global) ?? '') : '';
+  return {
+    source: source && project.objects[source] ? source : null,
+    fuel: start ? Math.max(0, num(paramOf(set, start, 'lightFuel', global), 0)) : 0,
+    range: start ? num(paramOf(set, start, 'lightRange', global), 8) : 8,
+    startId: start?.id ?? null,
+  };
+};
+
+const fullFuel = (project: Project, levelId: string, global?: readonly AssetDefinition[]) => {
+  const f = lightOf(project, levelId, global).fuel;
+  return f > 0 ? f : Infinity;
+};
+
+/** Whether the player has what lights their light: its story item carried, or its mechanic available. */
+export const hasLightSource = (project: Project, state: LevelPlayState, global?: readonly AssetDefinition[]): boolean => {
+  const source = lightOf(project, state.levelId, global).source;
+  return !!source && ((state.world.items[source] ?? 0) > 0 || !!state.world.mechanics[source]);
+};
+
+/** Whether the player's light is on now. */
+export const isLit = (project: Project, state: LevelPlayState, global?: readonly AssetDefinition[]): boolean => !!state.light?.on && hasLightSource(project, state, global);
+
+/** Turn the player's light on or off (L): only with its source, and with fuel left. */
+export const toggleLight = (project: Project, state: LevelPlayState, global?: readonly AssetDefinition[]): LevelPlayState => {
+  const light = state.light ?? { on: false, fuel: Infinity };
+  if (light.on) return log(say({ ...state, light: { ...light, on: false } }, 'Light off.'), { kind: 'action', text: 'Turns the light off' });
+  const { source } = lightOf(project, state.levelId, global);
+  if (!source) return say(state, 'You have no light here.');
+  if (!hasLightSource(project, state, global)) return say(state, `You need ${name(project, source)} for light.`);
+  if (light.fuel <= 0) return say(state, 'Your light has no fuel left.');
+  return log(say({ ...state, light: { ...light, on: true } }, 'Light on.'), { kind: 'action', text: 'Turns the light on' });
+};
+
+const darknessZones = (project: Project, state: LevelPlayState, global?: readonly AssetDefinition[]): LevelItem[] => {
+  const set = levelsOf(project);
+  return set.items.filter((i) => i.levelId === state.levelId && present(project, state, i) && assetOf(set, i, global).role === 'darkness');
+};
+
+/** How dark it is where the player is (0 to 1): the darkest darkness zone they are in, less when their light is on. */
+export const darknessAt = (project: Project, state: LevelPlayState, global?: readonly AssetDefinition[]): { dark: number; lit: boolean } => {
+  const set = levelsOf(project);
+  const zones = darknessZones(project, state, global).filter((z) => state.inside.includes(z.id));
+  const dark = zones.reduce((d, z) => Math.max(d, Math.min(100, Math.max(0, num(paramOf(set, z, 'dark', global), 92))) / 100), 0);
+  return { dark, lit: isLit(project, state, global) };
+};
+
+/** Whether an item is lost in the dark: inside a darkness zone that needs a light, with the player's light off. */
+export const tooDark = (project: Project, state: LevelPlayState, item: LevelItem, global?: readonly AssetDefinition[]): boolean => {
+  if (isLit(project, state, global)) return false;
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === state.levelId);
+  const elevation = (floorId: string) => level?.floors.find((f) => f.id === floorId)?.elevation ?? 0;
+  const f = frameOf(set, item, global);
+  const at = { x: f.x, y: f.y, z: elevation(item.floorId) + item.z };
+  return darknessZones(project, state, global).some(
+    (z) => z.id !== item.id && bool(paramOf(set, z, 'needsLight', global), true) && volumeHolds(set, z, at, elevation(z.floorId), global),
+  );
 };
 
 // ---------------------------------------------------------------- what is there
@@ -214,6 +288,8 @@ const act = (project: Project, state: LevelPlayState, action: LevelAction, from:
     }
     case 'goToLevel':
       return set.levels.some((l) => l.id === action.target) ? { ...s, goTo: action.target } : s;
+    case 'refuel':
+      return say({ ...s, light: { ...s.light, fuel: fullFuel(project, s.levelId, global) } }, 'Your light is full again.');
   }
 };
 
@@ -229,6 +305,7 @@ const ACTION_WORDS: Record<LevelAction['kind'], string> = {
   playAudio: 'Plays audio at',
   objective: 'Objective:',
   goToLevel: 'Goes to',
+  refuel: 'Refills the light of',
 };
 
 const startScene = (project: Project, state: LevelPlayState, sceneId: string, depth: number): LevelPlayState => {
@@ -291,6 +368,10 @@ export const offerFor = (project: Project, state: LevelPlayState, item: LevelIte
   if (interactive === false && !hasRules) return null;
   if (!(interactive === true || hasRules || INTERACTIVE_ROLES.has(def.role))) return null;
   const prompt = String(paramOf(set, item, 'prompt', global) || 'Use');
+  if (tooDark(project, state, item, global)) {
+    const source = lightOf(project, state.levelId, global).source;
+    return { itemId: item.id, verb: prompt, label: item.name, blocked: hasLightSource(project, state, global) ? 'Too dark to see. Turn your light on (L).' : `Too dark to see.${source ? ` It needs ${name(project, source)} for light.` : ''}` };
+  }
   if (def.role === 'door') {
     const open = isOpen(project, state, item, global);
     if (String(paramOf(set, item, 'swing', global)) === 'open archway') return null;
@@ -379,6 +460,15 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   if (s.cinematic && s.cinematic.until <= s.time) s = dismiss(s);
   // While a cinematic or a scene card is up, the level waits.
   if (s.cinematic || s.scene) return s;
+
+  // The light burns its fuel while it is on, and goes out when that runs out (or its source is gone).
+  if (s.light?.on) {
+    if (!hasLightSource(project, s, global)) s = say({ ...s, light: { ...s.light, on: false } }, 'Your light goes out.');
+    else if (Number.isFinite(s.light.fuel)) {
+      const fuel = Math.max(0, s.light.fuel - dt);
+      s = fuel > 0 ? { ...s, light: { ...s.light, fuel } } : log(say({ ...s, light: { on: false, fuel: 0 } }, 'Your light goes out: no fuel left.'), { kind: 'warn', text: 'The light ran out of fuel' });
+    }
+  }
 
   // Patrols walk on, companions keep up.
   const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => present(project, s, i), global);

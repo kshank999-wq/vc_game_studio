@@ -1,7 +1,7 @@
 import { motionOf } from '../level/actors';
 import type { Effect, Rule } from '../rules';
 import type { Project } from '../types';
-import { assetOf, frameOf, meshesFor, paramOf } from '../level/geometry';
+import { assetOf, contains, frameOf, meshesFor, paramOf } from '../level/geometry';
 import { levelsOf } from '../level/level';
 import { exportNameOf, levelExportName } from '../level/naming';
 import type { LevelItem, ParamValue } from '../level/types';
@@ -91,6 +91,8 @@ export interface IrLevelItem {
    * or a companion's follow distance. Speeds in metres a second.
    */
   motion?: IrMotion;
+  /** The darkness zones it is in that need a light (spec §6): while any is in the level and the player's light is off, it can't be used. */
+  in_dark?: string[];
   revision: string;
 }
 
@@ -107,6 +109,8 @@ export interface IrLevel {
   links: string[];
   /** Where the player begins, when there is a player start. */
   start: { position: [number, number, number]; turn: number } | null;
+  /** The player's light, from the player start (spec §6): the story item or mechanic that lights it, its fuel in seconds (0 for ever), how far it reaches. */
+  light: { source: string; fuel: number; range: number } | null;
   items: IrLevelItem[];
   revision: string;
 }
@@ -144,6 +148,20 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
     const meshes = meshesFor(set, level.id, { ceilings: true });
     const byItem = new Map<string, typeof meshes>();
     for (const m of meshes) byItem.set(m.itemId, [...(byItem.get(m.itemId) ?? []), m]);
+    // Darkness zones that need a light, for the items in them.
+    const darkZones = set.items.filter((i) => i.levelId === level.id && !i.hidden && paramOf(set, i, 'export') !== false && assetOf(set, i).role === 'darkness' && paramOf(set, i, 'needsLight') !== false);
+    const inDark = (item: LevelItem): string[] => {
+      const f = frameOf(set, item);
+      const z = (elevation.get(item.floorId) ?? 0) + item.z;
+      return darkZones
+        .filter((d) => {
+          if (d.id === item.id) return false;
+          const df = frameOf(set, d);
+          const bottom = (elevation.get(d.floorId) ?? 0) + df.z;
+          return contains(df, { x: f.x, y: f.y }) && z >= bottom - 0.25 && z <= bottom + df.h;
+        })
+        .map((d) => d.id);
+    };
     const items = set.items
       .filter((i) => i.levelId === level.id && !i.hidden && paramOf(set, i, 'export') !== false)
       .map((item): IrLevelItem => {
@@ -211,6 +229,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
           replacement_locked: params.replacementLocked === true,
           pieces,
           ...motionFor(item),
+          ...(inDark(item).length ? { in_dark: inDark(item) } : {}),
         };
         return { ...out, revision: fingerprint(JSON.stringify(out)) };
       });
@@ -223,6 +242,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
       floors: level.floors.map((f) => ({ key: floorKey.get(f.id)!, name: f.name, elevation: f.elevation, height: f.height })),
       links: (level.links ?? []).map((l) => story.key(l)).filter((k): k is string => !!k),
       start: start ? { position: start.position, turn: start.turn } : null,
+      light: start && String(start.params.light ?? '') ? { source: String(start.params.light), fuel: Number(start.params.lightFuel) || 0, range: Number(start.params.lightRange) || 8 } : null,
       items,
     };
     return { ...out, revision: fingerprint(JSON.stringify(out)) };

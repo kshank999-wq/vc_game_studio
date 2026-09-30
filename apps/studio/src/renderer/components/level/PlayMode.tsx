@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { startPoses } from '../../model/level/actors';
-import { BODY, collidersFrom, facing, look, step, type Body, type Collider } from '../../model/level/controller';
+import { BODY, collidersFrom, eyeOf, facing, look, step, type Body, type Collider } from '../../model/level/controller';
 import { assetOf, frameOf, meshesFor, num, paramOf, type Mesh } from '../../model/level/geometry';
 import { levelsOf } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
-import { dismiss, interactWith, isOpen, offerFor, present, startLevelPlay, tick, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
+import { darknessAt, dismiss, interactWith, isOpen, lightOf, offerFor, present, startLevelPlay, tick, toggleLight, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
 import type { AssetDefinition, LevelItem, Perspective, PlayPreset } from '../../model/level/types';
 import type { PlayWorld } from '../../model/play';
 import { shotsOf, describeShot } from '../../model/shots';
@@ -131,7 +131,8 @@ export const PlayMode = (props: Props) => {
 
   // ------------------------------------------------------------ three.js
 
-  const three = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; content: THREE.Group; avatar: THREE.Group; actors: THREE.Group } | null>(null);
+  const three = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; content: THREE.Group; avatar: THREE.Group; actors: THREE.Group; lamp: THREE.PointLight } | null>(null);
+  const darkRef = useRef<HTMLDivElement>(null);
   // Actors that move (patrols, companions): drawn in a group each, placed at their pose every frame.
   const movers = useRef(new Map<string, THREE.Group>());
 
@@ -172,7 +173,11 @@ export const PlayMode = (props: Props) => {
     nose.position.set(0, 1.45, -BODY.radius - 0.1);
     avatar.add(bodyMesh, nose);
     s.add(avatar);
-    three.current = { renderer, scene: s, camera, content, avatar, actors };
+    // The player's light, carried at the head.
+    const lamp = new THREE.PointLight('#ffd89a', 26, lightOf(project, levelId, global).range, 1.4);
+    lamp.visible = false;
+    s.add(lamp);
+    three.current = { renderer, scene: s, camera, content, avatar, actors, lamp };
     const resize = () => {
       const { width, height } = el.getBoundingClientRect();
       renderer.setSize(Math.max(1, width), Math.max(1, height));
@@ -370,7 +375,7 @@ export const PlayMode = (props: Props) => {
           const forward = (on('forward') ? 1 : 0) - (on('back') ? 1 : 0) - pad.moveY;
           const strafe = (on('right') ? 1 : 0) - (on('left') ? 1 : 0) + pad.moveX;
           const top = p.perspective === 'top';
-          const next = step(body.current, { forward, strafe: top ? strafe + turnKeys : strafe, jump: on('jump'), run: on('run'), worldAxes: top }, dt, collidersRef.current);
+          const next = step(body.current, { forward, strafe: top ? strafe + turnKeys : strafe, jump: on('jump'), run: on('run'), crouch: on('crouch'), worldAxes: top }, dt, collidersRef.current);
           if (top && (Math.abs(forward) > 0.1 || Math.abs(strafe + turnKeys) > 0.1)) next.yaw = Math.atan2(strafe + turnKeys, forward);
           body.current = next;
           // Fell out of the world: back to the checkpoint or the start.
@@ -385,6 +390,7 @@ export const PlayMode = (props: Props) => {
           const target = nearestOffer(p.project, s, body.current, p.perspective, p.global);
           if ((target?.itemId ?? null) !== (latest.current.offer?.itemId ?? null) || target?.verb !== latest.current.offer?.verb || target?.blocked !== latest.current.offer?.blocked) setOffer(target);
           if (once('interact') && target) s = interactWith(p.project, s, target.itemId, p.global);
+          if (once('light')) s = toggleLight(p.project, s, p.global);
         }
         if (s.goTo) {
           p.onGoToLevel(s.goTo, s.world);
@@ -393,10 +399,11 @@ export const PlayMode = (props: Props) => {
       }
       pressedOnce.current.delete('interact');
       pressedOnce.current.delete('jump');
+      pressedOnce.current.delete('light');
       if (s !== state.current) {
         state.current = s;
         // The HUD follows at 12 frames a second; anything that changes what is there shows at once.
-        if (now - hudAt > 80 || s.world !== hud.world || s.gone !== hud.gone || s.open !== hud.open || s.cinematic !== hud.cinematic || s.scene !== hud.scene || s.over !== hud.over || s.spawned !== hud.spawned || s.enabled !== hud.enabled) {
+        if (now - hudAt > 80 || s.world !== hud.world || s.gone !== hud.gone || s.open !== hud.open || s.cinematic !== hud.cinematic || s.scene !== hud.scene || s.over !== hud.over || s.spawned !== hud.spawned || s.enabled !== hud.enabled || s.light?.on !== hud.light?.on) {
           hudAt = now;
           setHud(s);
         }
@@ -410,6 +417,15 @@ export const PlayMode = (props: Props) => {
         g.rotation.y = -(pose.yaw - origin.yaw);
       }
       placeCamera(t, body.current, p.perspective, collidersRef.current);
+      // The dark (spec §6): the view goes dark in a darkness zone; the player's light pushes it back around them.
+      const { dark, lit } = darknessAt(p.project, s, p.global);
+      const shade = `${dark.toFixed(2)}:${lit ? 1 : 0}`;
+      if (darkRef.current && darkRef.current.dataset.shade !== shade) {
+        darkRef.current.dataset.shade = shade;
+        darkRef.current.style.background = dark <= 0 ? 'none' : lit ? `radial-gradient(circle at 50% 55%, rgba(0,0,0,${(dark * 0.15).toFixed(2)}) 0%, rgba(0,0,0,${(dark * 0.35).toFixed(2)}) 35%, rgba(0,0,0,${dark.toFixed(2)}) 75%)` : `rgba(0,0,0,${dark.toFixed(2)})`;
+      }
+      t.lamp.visible = !!s.light?.on && lit;
+      t.lamp.position.set(body.current.x, body.current.z + eyeOf(body.current) + 0.2, body.current.y);
       if (latest.current.debug) drawLabels(labels.current, t.camera, p.project, s, p.global);
       else if (labels.current && labels.current.childElementCount) labels.current.replaceChildren();
       t.renderer.render(t.scene, t.camera);
@@ -427,6 +443,7 @@ export const PlayMode = (props: Props) => {
   const dangerous = set.items.some(
     (i) => i.levelId === levelId && ['hazard', 'damage'].includes(assetOf(set, i, global).role) && (num(paramOf(set, i, 'damage', global), 0) > 0 || paramOf(set, i, 'kills', global) === true),
   );
+  const lightSource = lightOf(project, levelId, global).source;
   const cinematic = hud.cinematic ? project.objects[hud.cinematic.id] : undefined;
   const nearest = () => nearestItem(project, state.current, body.current, global);
 
@@ -434,6 +451,7 @@ export const PlayMode = (props: Props) => {
     <div className="play-mode">
       <div ref={host} className={`play-view${locked ? ' locked' : ''}`} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} role="application" aria-label="Play Mode" />
       <div ref={labels} className="play-labels" aria-hidden="true" />
+      <div ref={darkRef} className="play-dark" aria-hidden="true" />
       {failed && (
         <div className="play-card" role="status">
           <p>Play Mode needs WebGL, which this browser has switched off.</p>
@@ -456,6 +474,12 @@ export const PlayMode = (props: Props) => {
         {(dangerous || hud.health < 100) && (
           <div className="play-health" aria-label={`Health ${Math.round(hud.health)}`}>
             <span style={{ width: `${Math.max(0, hud.health)}%` }} />
+          </div>
+        )}
+        {lightSource && (
+          <div className={`play-light${hud.light?.on ? ' on' : ''}`} aria-label="Light" title={`Light on or off (${controls.keys.light.map(keyLabel).join(' / ')}) · ${project.objects[lightSource]?.name ?? ''}`}>
+            {hud.light?.on ? 'Light on' : `Light off · ${controls.keys.light.map(keyLabel).join('/')}`}
+            {hud.light && Number.isFinite(hud.light.fuel) && <span className="play-light-fuel"> · {Math.ceil(hud.light.fuel)} s</span>}
           </div>
         )}
         <div className="play-inventory" aria-label="Carrying">
@@ -568,10 +592,11 @@ const placeCamera = (t: { camera: THREE.PerspectiveCamera; avatar: THREE.Group }
   const { camera, avatar } = t;
   avatar.position.set(b.x, b.z, b.y);
   avatar.rotation.y = -b.yaw;
+  avatar.scale.y = b.crouched ? 0.63 : 1;
   avatar.visible = perspective !== 'first';
   if (perspective === 'first') {
     camera.fov = 72;
-    camera.position.set(b.x, b.z + BODY.eye, b.y);
+    camera.position.set(b.x, b.z + eyeOf(b), b.y);
     camera.rotation.set(b.pitch, -b.yaw, 0, 'YXZ');
   } else if (perspective === 'third') {
     camera.fov = 65;
@@ -582,14 +607,14 @@ const placeCamera = (t: { camera: THREE.PerspectiveCamera; avatar: THREE.Group }
     for (let d = 0.4; d <= 4.2; d += 0.2) {
       const px = b.x - f.x * d * Math.cos(pitch);
       const py = b.y - f.y * d * Math.cos(pitch);
-      const pz = b.z + BODY.eye + 0.7 - Math.sin(pitch) * d;
+      const pz = b.z + eyeOf(b) + 0.7 - Math.sin(pitch) * d;
       if (colliders.some((c) => pz > c.bottom && pz < c.top && Math.abs((px - c.x) * Math.cos(c.rot) + (py - c.y) * Math.sin(c.rot)) <= c.hw && Math.abs(-(px - c.x) * Math.sin(c.rot) + (py - c.y) * Math.cos(c.rot)) <= c.hd)) {
         distance = Math.max(0.4, d - 0.25);
         break;
       }
     }
-    camera.position.set(b.x - f.x * distance * Math.cos(pitch), b.z + BODY.eye + 0.7 - Math.sin(pitch) * distance, b.y - f.y * distance * Math.cos(pitch));
-    camera.lookAt(b.x, b.z + BODY.eye, b.y);
+    camera.position.set(b.x - f.x * distance * Math.cos(pitch), b.z + eyeOf(b) + 0.7 - Math.sin(pitch) * distance, b.y - f.y * distance * Math.cos(pitch));
+    camera.lookAt(b.x, b.z + eyeOf(b), b.y);
   } else {
     camera.fov = 50;
     camera.position.set(b.x, b.z + 16, b.y + 7);

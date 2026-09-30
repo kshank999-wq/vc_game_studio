@@ -608,3 +608,33 @@ func check_level(game: Node) -> void:
 	if not (player.get_node(player.level_path) is VCGSLevel):
 		fail("play_sunken_vault.tscn should have a player wired to the level")
 	play.queue_free()
+	# The dark and the lantern: no light until the lantern is taken; the Squeeze is dark; the oil burns, and Mara tops it up.
+	var guid_named := func(n: String) -> String:
+		for g in items:
+			if str(items[g].get("name", "")) == n:
+				return g
+		return ""
+	if str(level.light_data().get("source", "")) != "lantern_oil" or float(level.light_data().get("fuel", 0)) != 90.0:
+		fail("the player's light should come from Lantern oil, with 90 s of fuel, got " + str(level.light_data()))
+	if level.toggle_light() != "You need Lantern oil for light." or level.is_lit():
+		fail("without the lantern there should be no light")
+	var squeeze_dark: String = guid_named.call("Squeeze dark")
+	level.enter(squeeze_dark)
+	print("dark in the squeeze: ", level.darkness())
+	if absf(level.darkness() - 0.96) > 0.001:
+		fail("the Squeeze should be 96% dark, got " + str(level.darkness()))
+	level.exit(squeeze_dark)
+	level.interact(guid_named.call("Lantern"))
+	if not game.has_mechanic("lantern_oil") or level.is_present(guid_named.call("Lantern")):
+		fail("taking the lantern should make Lantern oil available, and take it away")
+	if level.toggle_light() != "Light on." or not level.is_lit():
+		fail("with the lantern the light should go on")
+	level._process(10.0)
+	if absf(level.light_fuel - 80.0) > 0.001:
+		fail("ten seconds lit should burn ten seconds of oil, got " + str(level.light_fuel))
+	level.interact(guid_named.call("Mara"))
+	if level.light_fuel != 90.0:
+		fail("Mara should top the lantern up, got " + str(level.light_fuel))
+	level.toggle_light()
+	if level.is_lit():
+		fail("the light should be off again")

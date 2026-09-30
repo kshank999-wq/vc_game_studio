@@ -8297,3 +8297,27 @@ button.bible-dual-col:hover {
   color: #e5484d;
   font-weight: 600;
 }
+
+/* The dark (spec §6): over the view, under the HUD. */
+.play-dark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: background 0.35s ease;
+}
+
+.play-light {
+  margin-top: 6px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(11, 10, 7, 0.8);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.play-light.on {
+  color: #ffd89a;
+  border-color: #8a6f2f;
+}

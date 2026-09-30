@@ -228,7 +228,7 @@ export const sunkenVault = (): Project => {
   p = updateEvent(p, vaultDoor, choice.id, { effects: [{ kind: 'take', ref: key }, { kind: 'arc', ref: mara, amount: 1 }, { kind: 'completeQuest', ref: design.quest! }] });
 
   // Where it all happens: one level, tied to the scenes and the Bible.
-  p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent });
+  p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent, oil: design.mechanic! });
 
   // Two expected paths, checked in the play-through: straight on to Shared Light, and every other way to Heavy Pockets.
   p = addPath(p, pathOf(playBy(p, 'first'), 'Straight on to Shared Light', undefined, Date.UTC(2026, 8, 1)));
