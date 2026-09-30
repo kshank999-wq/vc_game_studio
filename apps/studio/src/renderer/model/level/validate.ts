@@ -1,3 +1,4 @@
+import { PATROLLERS, patrolStops } from './actors';
 import type { Project } from '../types';
 import { assetOf, corners, frameOf, openingOf, outlineOf, overlaps, paramOf, selfIntersects, sizeOf, wallsOf } from './geometry';
 import { referencesOf } from './links';
@@ -29,7 +30,6 @@ const UNSCRIPTED: Record<string, string> = {
   elevator: 'an elevator',
   ladder: 'a ladder',
   traversal: 'a traversal link',
-  patrolNode: 'a patrol stop',
   waypoint: 'a waypoint',
   cover: 'a cover point',
 };
@@ -49,6 +49,15 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
     }
     for (const id of level.links ?? []) {
       if (!project.objects[id]) add({ id: level.id, levelId: level.id, severity: 'warning', message: `${level.name} links to something no longer in the story.`, export: 'The link is left out of the export.' });
+    }
+  }
+
+  // A patrol named with no stops of that name: the actor would stand still.
+  for (const item of set.items) {
+    if (item.hidden || !PATROLLERS.has(assetOf(set, item, global).role)) continue;
+    const patrol = String(paramOf(set, item, 'patrol', global) ?? '').trim();
+    if (patrol && !patrolStops(set, item.levelId, patrol, global).length) {
+      add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} walks the patrol “${patrol}”, which has no patrol nodes.`, export: 'It stands where it is placed. Give Patrol nodes that name (Actors), or clear its Patrol.' });
     }
   }
 

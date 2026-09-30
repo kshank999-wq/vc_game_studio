@@ -495,6 +495,37 @@ func check_level(game: Node) -> void:
 	print("level: ", level.name, " · ", level.nodes.size(), " of ", items.size(), " items as nodes")
 	if level.name != "LVL_SunkenVault_01" or level.nodes.size() != items.size() or items.size() < 15:
 		fail("every level item should be a node tagged with its GUID")
+	# Mara paces the cave mouth: her first stop is where she stands (4 s there), then on to the second.
+	var mara := ""
+	for guid in items:
+		if str(items[guid].get("name", "")) == "Mara":
+			mara = guid
+	var motion: Dictionary = items[mara].get("motion", {}) if mara != "" else {}
+	if str(motion.get("kind", "")) != "patrol" or motion.get("stops", []).size() != 2 or str(motion.get("name", "")) != "Cave watch":
+		fail("Mara should walk the Cave watch patrol's two stops, got " + str(motion))
+	else:
+		var mara_node := level.nodes[mara] as Node3D
+		var ground: float = mara_node.position.y
+		for _i in 50:
+			level._process(0.1)
+		var mid: Vector3 = mara_node.position
+		print("Mara after 5 s: ", mid)
+		if not (mid.x > 1.6 and mid.x < 4.4 and mid.z > 0.6 and mid.z < 2.9):
+			fail("after 5 s Mara should be on her way to the second stop, got " + str(mid))
+		for _i in 50:
+			level._process(0.1)
+		if mara_node.position.distance_to(Vector3(4.5, ground, 0.5)) > 0.01:
+			fail("after 10 s Mara should wait at the second stop, got " + str(mara_node.position))
+	# A companion keeps up: with the player 6 m on, it walks until 2 m away; 30 m on, it catches up at once.
+	var pose := { "at": Vector3.ZERO, "stop": 0, "until": 0.0 }
+	var follow := { "kind": "follow", "speed": 3.5, "distance": 2.0 }
+	for _i in 30:
+		level.step_follow(pose, follow, 0.1, Vector3(6, 0, 0))
+	if pose["at"].distance_to(Vector3(4, 0, 0)) > 0.001:
+		fail("a companion should stop 2 m from the player, got " + str(pose["at"]))
+	level.step_follow(pose, follow, 0.1, Vector3(4, 0, 30))
+	if pose["at"].distance_to(Vector3(4, 0, 28)) > 0.001:
+		fail("a companion left 30 m behind should catch up at once, got " + str(pose["at"]))
 	var chamber: Node = level.get_node_or_null("RM_SunkenVault_VaultChamber_004")
 	if chamber == null or chamber.get_node("Collision").get_child_count() < 4 or chamber.get_node("Proxy").get_child_count() < 5:
 		fail("the vault chamber should have its floor and walls, as meshes and collision")

@@ -1,3 +1,4 @@
+#include <cmath>
 // Plays the sample project's generated story with the VCGS Runtime for
 // Unreal's core: the same walk as the Godot and Unity checks.
 #include "VcgsCore.h"
@@ -34,6 +35,31 @@ static void CheckLevel(const vcgs::Story& story)
     vcgs::GameState game(story);
     vcgs::LevelLogic level(std::move(data), game);
     std::printf("level: %s · %zu items\n", level.ExportName.c_str(), level.Order.size());
+    // Mara paces the cave mouth: her first stop is where she stands (4 s there), then on to the second.
+    {
+        vcgs::GameState walking(story);
+        vcgs::LevelLogic moving(vcgs::JsonReader::Parse(buffer.str(), &error), walking);
+        std::string mara;
+        for (const auto& guid : moving.Order) if (moving.Item(guid)["name"].Str() == "Mara") mara = guid;
+        if (mara.empty() || !moving.Poses.count(mara) || moving.Item(mara)["motion"]["stops"].Size() != 2) Fail("Mara should walk the Cave watch patrol's two stops");
+        else
+        {
+            for (int i = 0; i < 50; i++) moving.Tick(0.1);
+            const vcgs::ActorPose mid = moving.Poses[mara];
+            std::printf("Mara after 5 s: %.2f, %.2f\n", mid.X, mid.Z);
+            if (!(mid.X > 1.6 && mid.X < 4.4 && mid.Z > 0.6 && mid.Z < 2.9 && mid.Moving)) Fail("after 5 s Mara should be on her way to the second stop");
+            for (int i = 0; i < 50; i++) moving.Tick(0.1);
+            const vcgs::ActorPose there = moving.Poses[mara];
+            if (std::fabs(there.X - 4.5) > 0.01 || std::fabs(there.Z - 0.5) > 0.01 || there.Moving) Fail("after 10 s Mara should wait at the second stop");
+        }
+        // A companion keeps up: with the player 6 m on, it walks until 2 m away; 30 m on, it catches up at once.
+        const vcgs::Value follow = vcgs::JsonReader::Parse("{\"kind\": \"follow\", \"speed\": 3.5, \"distance\": 2}", &error);
+        vcgs::ActorPose pose;
+        for (int i = 0; i < 30; i++) vcgs::LevelLogic::StepFollow(pose, follow, 0.1, 6, 0, 0);
+        if (std::fabs(pose.X - 4) > 0.001 || pose.Moving) Fail("a companion should stop 2 m from the player");
+        vcgs::LevelLogic::StepFollow(pose, follow, 0.1, 4, 0, 30);
+        if (std::fabs(pose.Z - 28) > 0.001) Fail("a companion left 30 m behind should catch up at once");
+    }
     const std::string door = level.GuidOf("INT_VaultChamber_BronzeDoor_004");
     const std::string key = level.GuidOf("INV_SiltCamp_VaultKey_001");
     const std::string lever = level.GuidOf("INT_VaultChamber_RustedLever_005");

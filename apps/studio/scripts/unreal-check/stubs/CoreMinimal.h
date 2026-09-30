@@ -114,6 +114,13 @@ struct FVector
     static double DotProduct(const FVector& a, const FVector& b) { return a.X * b.X + a.Y * b.Y + a.Z * b.Z; }
 };
 
+struct FRotator
+{
+    double Pitch = 0, Yaw = 0, Roll = 0;
+    FRotator() {}
+    FRotator(double p, double y, double r) : Pitch(p), Yaw(y), Roll(r) {}
+};
+
 struct FHitResult {};
 
 struct FVector2D

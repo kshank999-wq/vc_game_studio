@@ -68,6 +68,7 @@ namespace UnityEngine
         internal readonly List<Component> components = new List<Component>();
         public readonly Transform transform;
         public string tag = "Untagged";
+        public static GameObject FindWithTag(string tag) => all.Find(g => g.tag == tag);
         public bool activeSelf { get; private set; } = true;
         public SceneManagement.Scene scene => default;
 
@@ -162,6 +163,7 @@ namespace UnityEngine
         }
 
         public Transform Find(string name) => children.Find(c => c.gameObject.name == name);
+        public Vector3 InverseTransformPoint(Vector3 p) => p - position;
     }
 
     public class Behaviour : Component { }

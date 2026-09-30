@@ -268,6 +268,28 @@ static class Check
         if (game.GetObjectState(Objects.RustedLever) != "up" || !game.Solved.Contains(Puzzles.TheVaultDoor)) Fail("the lever should go up and, through the story, solve the door");
         if (level.IsPresent(seam) || level.IsPresent(door)) Fail("once solved, the seam drains and the bronze door gives way");
 
+        // Mara paces the cave mouth: her first stop is where she stands (4 s there), then on to the second.
+        var mara = level.Order.Find(g => D.Str(level.Item(g), "name") == "Mara");
+        var moving = new LevelLogic(D.Map(Json.Parse(json)), new GameState(story));
+        if (mara == null || !moving.Poses.ContainsKey(mara) || D.List(D.Map(moving.Item(mara), "motion"), "stops").Count != 2) Fail("Mara should walk the Cave watch patrol's two stops");
+        else
+        {
+            for (var i = 0; i < 50; i++) moving.Tick(0.1);
+            var mid = moving.Poses[mara];
+            Console.WriteLine("Mara after 5 s: " + mid.X.ToString("0.00") + ", " + mid.Z.ToString("0.00"));
+            if (!(mid.X > 1.6 && mid.X < 4.4 && mid.Z > 0.6 && mid.Z < 2.9 && mid.Moving)) Fail("after 5 s Mara should be on her way to the second stop");
+            for (var i = 0; i < 50; i++) moving.Tick(0.1);
+            var there = moving.Poses[mara];
+            if (Math.Abs(there.X - 4.5) > 0.01 || Math.Abs(there.Z - 0.5) > 0.01 || there.Moving) Fail("after 10 s Mara should wait at the second stop, got " + there.X + ", " + there.Z);
+        }
+        // A companion keeps up: with the player 6 m on, it walks until 2 m away; 30 m on, it catches up at once.
+        var follow = new Dictionary<string, object> { ["kind"] = "follow", ["speed"] = 3.5, ["distance"] = 2.0 };
+        var pose = new ActorPose();
+        for (var i = 0; i < 30; i++) LevelLogic.StepFollow(pose, follow, 0.1, 6, 0, 0);
+        if (Math.Abs(pose.X - 4) > 0.001 || pose.Moving) Fail("a companion should stop 2 m from the player, got " + pose.X);
+        LevelLogic.StepFollow(pose, follow, 0.1, 4, 0, 30);
+        if (Math.Abs(pose.Z - 28) > 0.001) Fail("a companion left 30 m behind should catch up at once, got " + pose.Z);
+
         // The editor builder, in the stubs' little scene.
         var path = "Assets/VCGS/Generated/Levels/sunken_vault.json";
         var report = VCGS.EditorTools.VcgsLevelBuilder.Build(json, path, false);

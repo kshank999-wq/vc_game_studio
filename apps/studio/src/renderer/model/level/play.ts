@@ -1,3 +1,4 @@
+import { startPoses, stepActors, type ActorPose } from './actors';
 import { applyStoryEffects, settleWorld, startWorld, useStoryObject, type Entry, type PlayWorld } from '../play';
 import { describeEffect, describeRule, evaluate, isEmpty } from '../rules';
 import { cinematicTiming } from '../shots';
@@ -54,6 +55,8 @@ export interface LevelPlayState {
   /** Items taken or despawned. */
   gone: Record<string, boolean>;
   spawned: Spawned[];
+  /** Actors that move (patrols, companions), where they are now, by item id. */
+  actors: Record<string, ActorPose>;
   /** Spawners and once-only volumes that have gone off. */
   done: Record<string, boolean>;
   /** Volumes the player is inside. */
@@ -106,6 +109,7 @@ export const startLevelPlay = (project: Project, levelId: string, options: { pre
     enabled: {},
     gone: {},
     spawned: [],
+    actors: startPoses(set, levelId, options.global),
     done: {},
     inside: [],
     timers: {},
@@ -375,6 +379,10 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   if (s.cinematic && s.cinematic.until <= s.time) s = dismiss(s);
   // While a cinematic or a scene card is up, the level waits.
   if (s.cinematic || s.scene) return s;
+
+  // Patrols walk on, companions keep up.
+  const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => present(project, s, i), global);
+  if (actors !== s.actors) s = { ...s, actors };
 
   const items = set.items.filter((i) => i.levelId === s.levelId && present(project, s, i));
   const volumes = items.filter((i) => assetOf(set, i, global).kind === 'volume');

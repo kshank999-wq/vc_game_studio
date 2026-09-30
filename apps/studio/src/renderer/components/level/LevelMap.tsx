@@ -1,3 +1,4 @@
+import { patrolStops } from '../../model/level/actors';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { areaOf, assetOf, boundsOf, CATEGORY_COLOR, contains, corners, frameOf, INVALID_COLOR, meshesFor, num, outlineOf, paramOf, selfIntersects, toLocal, toPlan, triangulate, type Frame, type Point } from '../../model/level/geometry';
 import { insertCorner, levelsOf, moveCorner, pivotPoint, moveItems, placeAsset, placeAt, removeCorner, resizeItem, setOutline, snap, withGroups } from '../../model/level/level';
@@ -398,6 +399,17 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   const selected = new Set(selection);
   const single = selection.length === 1 ? set.items.find((i) => i.id === selection[0]) : undefined;
 
+  // Patrols: each walked round its stops in order (spec §11), drawn as a closed dashed loop on this floor.
+  const patrols = useMemo(() => {
+    const here = new Set(items.map((i) => i.id));
+    const names = new Map<string, string>();
+    for (const i of items) if (assetOf(set, i, global).role === 'patrolNode') {
+      const name = String(paramOf(set, i, 'path', global) ?? '').trim();
+      if (name && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
+    }
+    return [...names.values()].map((name) => ({ name, stops: patrolStops(set, levelId, name, global).filter((st) => here.has(st.itemId)) })).filter((pt) => pt.stops.length > 1);
+  }, [items, set, levelId, global]);
+
   const storyPath = useMemo(() => {
     if (!props.overlays.story) return [];
     // Story order is left to right on the graph, branches included; the spine breaks ties.
@@ -612,6 +624,16 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
             />
           ))}
           {[...items].sort((a, b) => order(a) - order(b)).filter((i) => assetOf(set, i, global).kind !== 'space').map((i) => drawItem(i))}
+          {patrols.map((pt) => (
+            <g key={`patrol-${pt.name}`} pointerEvents="none" className="lvl-patrol">
+              <polygon points={pointsAttr(pt.stops)} fill="none" stroke="#d9607a" strokeOpacity={0.7} strokeWidth={px(1.5)} strokeDasharray={`${px(6)} ${px(4)}`} />
+              {pt.stops.map((st, n) => (
+                <text key={st.itemId} x={st.x + px(7)} y={st.y - px(7)} fontSize={px(9)} fill="#d9607a">
+                  {n + 1}
+                </text>
+              ))}
+            </g>
+          ))}
           {storyPath.length > 1 && (
             <polyline points={pointsAttr(storyPath.map((s) => s.at))} fill="none" stroke="var(--c-scene)" strokeWidth={px(2)} strokeDasharray={`${px(8)} ${px(5)}`} pointerEvents="none" />
           )}

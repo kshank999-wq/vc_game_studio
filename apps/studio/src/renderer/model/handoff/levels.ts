@@ -1,3 +1,4 @@
+import { motionOf } from '../level/actors';
 import type { Effect, Rule } from '../rules';
 import type { Project } from '../types';
 import { assetOf, frameOf, meshesFor, paramOf } from '../level/geometry';
@@ -84,8 +85,18 @@ export interface IrLevelItem {
   final_asset: string;
   replacement_locked: boolean;
   pieces: IrPiece[];
+  /**
+   * How it moves in play (spec §11), resolved from its settings: a patrol's
+   * stops in order, at level positions like `position`, with the wait at each;
+   * or a companion's follow distance. Speeds in metres a second.
+   */
+  motion?: IrMotion;
   revision: string;
 }
+
+export type IrMotion =
+  | { kind: 'patrol'; name: string; speed: number; stops: { guid: string; at: [number, number, number]; wait: number }[] }
+  | { kind: 'follow'; speed: number; distance: number };
 
 export interface IrLevel {
   guid: string;
@@ -120,6 +131,12 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
     levelKey.set(level.id, k);
   }
   const itemsById = new Map(set.items.map((i) => [i.id, i]));
+  const motionFor = (item: (typeof set.items)[number]): { motion?: IrMotion } => {
+    const m = motionOf(set, item);
+    if (!m) return {};
+    if (m.kind === 'follow') return { motion: { kind: 'follow', speed: round(m.speed), distance: round(m.distance) } };
+    return { motion: { kind: 'patrol', name: m.name, speed: round(m.speed), stops: m.stops.map((st) => ({ guid: st.itemId, at: [round(st.x), round(st.z), round(st.y)], wait: round(st.wait) })) } };
+  };
 
   return set.levels.map((level): IrLevel => {
     const elevation = new Map(level.floors.map((f) => [f.id, f.elevation]));
@@ -193,6 +210,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
           final_asset: String(params.finalAsset ?? ''),
           replacement_locked: params.replacementLocked === true,
           pieces,
+          ...motionFor(item),
         };
         return { ...out, revision: fingerprint(JSON.stringify(out)) };
       });

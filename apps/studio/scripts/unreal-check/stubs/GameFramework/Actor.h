@@ -16,5 +16,7 @@ public:
     void SetActorEnableCollision(bool) {}
     void GetAttachedActors(TArray<AActor*>&) const {}
     FVector GetActorLocation() const { return FVector(); }
+    bool SetActorLocation(const FVector&) { return true; }
+    bool SetActorRotation(const FRotator&) { return true; }
     template <typename T> T* CreateDefaultSubobject(const TCHAR*) { return new T(); }
 };

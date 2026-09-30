@@ -25,6 +25,7 @@ export const LEVEL_PLUGIN_FILES: Record<string, string> = {
 
 #include "VcgsCore.h"
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <map>
 #include <set>
@@ -42,6 +43,18 @@ namespace vcgs
         std::string Blocked;
     };
 
+    /** Where an actor that moves is, in level space as the data has it (metres; x east, y up, z south), and what it is doing. */
+    struct ActorPose
+    {
+        double X = 0, Y = 0, Z = 0;
+        /** The way it faces (level space, flat), once it has moved or turned. */
+        double FacingX = 0, FacingZ = 0;
+        bool Faces = false, Moving = false;
+        /** The patrol stop it walks to, and the level time it waits until. */
+        int Stop = 0;
+        double Until = 0;
+    };
+
     class LevelLogic
     {
     public:
@@ -56,6 +69,13 @@ namespace vcgs
         std::string Objective;
         double Health = 100;
         double Time = 0;
+        /** Actors that move (patrols, companions) by GUID: where each is now. AVcgsLevelDirector moves their actors to match. */
+        std::map<std::string, ActorPose> Poses;
+        /** Where the player is, in level space: companions follow it. The director sets it each frame. */
+        bool HasPlayer = false;
+        double PlayerX = 0, PlayerY = 0, PlayerZ = 0;
+        /** How far behind a companion may fall before it catches up at once. */
+        static constexpr double CatchUp = 12;
 
         std::function<void(const std::string&)> OnCinematic, OnScene, OnLevel, OnObjective, OnMessage, OnCheckpoint, OnStoryObjectUsed;
         std::function<void(const std::string&, const std::string&, int)> OnSpawn;
@@ -73,6 +93,16 @@ namespace vcgs
                 std::string guid = list[i]["guid"].Str();
                 Order.push_back(guid);
                 Items[guid] = &list[i];
+            }
+            for (const auto& guid : Order)
+            {
+                if (!Item(guid)["motion"].IsObject()) continue;
+                const Value& at = Item(guid)["position"];
+                ActorPose pose;
+                pose.X = at[0].Num(0);
+                pose.Y = at[1].Num(0);
+                pose.Z = at[2].Num(0);
+                Poses[guid] = pose;
             }
             subscription = Game.Subscribe([this]() { Changed(); });
             for (const auto& guid : Order)
@@ -230,6 +260,14 @@ namespace vcgs
         void Tick(double dt)
         {
             Time += dt;
+            // Patrols walk on, companions keep up (the same rules as the studio's Play Mode).
+            for (auto& pair : Poses)
+            {
+                if (!IsPresent(pair.first)) continue;
+                const Value& motion = Item(pair.first)["motion"];
+                if (motion["kind"].Str() == "patrol") StepPatrol(pair.second, motion, dt, Time);
+                else if (HasPlayer) StepFollow(pair.second, motion, dt, PlayerX, PlayerY, PlayerZ);
+            }
             for (const auto& guid : std::vector<std::string>(Inside.begin(), Inside.end()))
             {
                 std::string role = Role(guid);
@@ -255,6 +293,60 @@ namespace vcgs
                     Timers[id] = Time;
                     Run(guid, rules[i]);
                 }
+            }
+        }
+
+        /** Walk a pose toward (x, y, z) at most by metres; true when it gets there. */
+        static bool Walk(ActorPose& p, double x, double y, double z, double by)
+        {
+            const double dx = x - p.X, dz = z - p.Z;
+            const double d = std::sqrt(dx * dx + dz * dz);
+            if (d > 1e-6) { p.FacingX = dx; p.FacingZ = dz; p.Faces = true; }
+            if (d <= by || d < 1e-6)
+            {
+                p.X = x; p.Y = y; p.Z = z;
+                p.Moving = d > 1e-6;
+                return true;
+            }
+            const double k = by / d;
+            p.X += dx * k; p.Y += (y - p.Y) * k; p.Z += dz * k;
+            p.Moving = true;
+            return false;
+        }
+
+        /** One patrol step: wait at a stop, else walk on to it; arriving starts the wait and aims at the next, round and round. now is the level time after the step. */
+        static void StepPatrol(ActorPose& p, const Value& motion, double dt, double now)
+        {
+            if (now < p.Until) { p.Moving = false; return; }
+            const Value& stops = motion["stops"];
+            if (stops.Size() == 0) return;
+            const Value& stop = stops[static_cast<size_t>(p.Stop) % stops.Size()];
+            const Value& at = stop["at"];
+            if (!Walk(p, at[0].Num(0), at[1].Num(0), at[2].Num(0), motion["speed"].Num(1.4) * dt)) return;
+            p.Moving = false;
+            p.Until = now + stop["wait"].Num(0);
+            p.Stop = static_cast<int>((static_cast<size_t>(p.Stop) + 1) % stops.Size());
+        }
+
+        /** One follow step: keep within the follow distance of the player at (x, y, z), faster when far; more than CatchUp behind, or another floor, and it catches up at once. */
+        static void StepFollow(ActorPose& p, const Value& motion, double dt, double x, double y, double z)
+        {
+            const double dx = x - p.X, dz = z - p.Z;
+            const double d = std::sqrt(dx * dx + dz * dz);
+            const double distance = motion["distance"].Num(2);
+            if (d > 1e-6) { p.FacingX = dx; p.FacingZ = dz; p.Faces = true; }
+            if (d > CatchUp || std::fabs(y - p.Y) > 3)
+            {
+                const double k = d > 1e-6 ? distance / d : 0;
+                p.X = x - dx * k; p.Y = y; p.Z = z - (d > 1e-6 ? dz * k : distance);
+                p.Moving = false;
+            }
+            else if (d <= distance) p.Moving = false;
+            else
+            {
+                const double speed = motion["speed"].Num(3.5) * (d > distance * 2.5 ? 1.6 : 1.0);
+                const double k = (d - distance) / d;
+                Walk(p, p.X + dx * k, y, p.Z + dz * k, speed * dt);
             }
         }
 
@@ -585,6 +677,7 @@ private:
     TMap<FString, AVcgsLevelItem*> ItemsByGuid;
 
     void Refresh();
+    void MoveActors();
     UFUNCTION() void OnBoxBegin(UPrimitiveComponent* Overlapped, AActor* Other, UPrimitiveComponent* OtherComp, int32 BodyIndex, bool bFromSweep, const FHitResult& Sweep);
     UFUNCTION() void OnBoxEnd(UPrimitiveComponent* Overlapped, AActor* Other, UPrimitiveComponent* OtherComp, int32 BodyIndex);
     bool IsPlayer(const AActor* Other) const;
@@ -603,6 +696,7 @@ private:
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
+#include <cmath>
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -661,7 +755,31 @@ void AVcgsLevelDirector::BeginPlay()
 void AVcgsLevelDirector::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    if (Logic) Logic->Tick(DeltaSeconds);
+    if (!Logic) return;
+    // The player in level space: Unreal's +X is the data's north (-z), +Y its east, Z up, in centimetres.
+    if (const APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
+    {
+        const FVector At = Pawn->GetActorLocation();
+        Logic->HasPlayer = true;
+        Logic->PlayerX = At.Y / 100.0;
+        Logic->PlayerY = At.Z / 100.0;
+        Logic->PlayerZ = -At.X / 100.0;
+    }
+    Logic->Tick(DeltaSeconds);
+    MoveActors();
+}
+
+/** Put each actor that moves (patrols, companions) where the level logic has it, facing the way it goes. */
+void AVcgsLevelDirector::MoveActors()
+{
+    for (const auto& Pose : Logic->Poses)
+    {
+        AVcgsLevelItem* const* Item = ItemsByGuid.Find(ToF(Pose.first));
+        if (!Item || !*Item) continue;
+        const vcgs::ActorPose& P = Pose.second;
+        (*Item)->SetActorLocation(FVector(-P.Z * 100.0, P.X * 100.0, P.Y * 100.0));
+        if (P.Faces) (*Item)->SetActorRotation(FRotator(0.0, std::atan2(P.FacingX, -P.FacingZ) * 180.0 / 3.14159265358979323846, 0.0));
+    }
 }
 
 /** Show what is there, hide what is not, open and shut doors. Pieces are the actors attached to an item. */

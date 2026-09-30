@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { startPoses } from '../../model/level/actors';
 import { BODY, collidersFrom, facing, look, step, type Body, type Collider } from '../../model/level/controller';
 import { assetOf, frameOf, meshesFor, num, paramOf, type Mesh } from '../../model/level/geometry';
 import { levelsOf } from '../../model/level/level';
@@ -131,6 +132,8 @@ export const PlayMode = (props: Props) => {
   // ------------------------------------------------------------ three.js
 
   const three = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; content: THREE.Group; avatar: THREE.Group; actors: THREE.Group } | null>(null);
+  // Actors that move (patrols, companions): drawn in a group each, placed at their pose every frame.
+  const movers = useRef(new Map<string, THREE.Group>());
 
   useEffect(() => {
     const el = host.current;
@@ -200,7 +203,28 @@ export const PlayMode = (props: Props) => {
       disposePiece(child);
     }
     let lights = 0;
+    for (const g of movers.current.values()) {
+      g.parent?.remove(g);
+      g.traverse(disposePiece);
+    }
+    movers.current.clear();
+    const origins = startPoses(set, levelId, global);
     for (const m of scene.visible) {
+      const origin = origins[m.itemId];
+      if (origin && state.current.actors?.[m.itemId]) {
+        // Its pieces, about where it was placed; the outer group moves and turns it.
+        let outer = movers.current.get(m.itemId);
+        if (!outer) {
+          outer = new THREE.Group();
+          outer.userData = { origin, inner: new THREE.Group() };
+          (outer.userData.inner as THREE.Group).position.set(-origin.x, -origin.z, -origin.y);
+          outer.add(outer.userData.inner as THREE.Group);
+          movers.current.set(m.itemId, outer);
+          t.actors.add(outer);
+        }
+        (outer.userData.inner as THREE.Group).add(buildPiece(m, false));
+        continue;
+      }
       t.content.add(buildPiece(m, false));
       if (m.light && lights < 12) {
         lights++;
@@ -211,7 +235,7 @@ export const PlayMode = (props: Props) => {
         t.content.add(light);
       }
     }
-    for (const child of [...t.actors.children]) t.actors.remove(child);
+    for (const child of [...t.actors.children]) if (![...movers.current.values()].includes(child as THREE.Group)) t.actors.remove(child);
     const elevation = new Map(level?.floors.map((f) => [f.id, f.elevation]) ?? []);
     for (const a of state.current.spawned) {
       const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.1, 4, 10), new THREE.MeshStandardMaterial({ color: actorColor[a.role] }));
@@ -378,6 +402,13 @@ export const PlayMode = (props: Props) => {
         }
       }
       if (!t) return;
+      for (const [id, g] of movers.current) {
+        const pose = s.actors?.[id];
+        const origin = g.userData.origin as { yaw: number };
+        if (!pose) continue;
+        g.position.set(pose.x, pose.z, pose.y);
+        g.rotation.y = -(pose.yaw - origin.yaw);
+      }
       placeCamera(t, body.current, p.perspective, collidersRef.current);
       if (latest.current.debug) drawLabels(labels.current, t.camera, p.project, s, p.global);
       else if (labels.current && labels.current.childElementCount) labels.current.replaceChildren();
@@ -578,10 +609,12 @@ const nearestOffer = (project: Project, state: LevelPlayState, b: Body, perspect
     if (def.kind === 'space' || !present(project, state, item)) continue;
     const fr = frameOf(set, item, global);
     const floor = set.levels.find((l) => l.id === item.levelId)?.floors.find((x) => x.id === item.floorId);
-    const base = (floor?.elevation ?? 0) + fr.z;
+    // Someone walking a patrol (or following) is talked to where they are now.
+    const pose = state.actors?.[item.id];
+    const base = pose ? pose.z : (floor?.elevation ?? 0) + fr.z;
     if (b.z + BODY.height < base - 0.3 || b.z > base + Math.max(fr.h, 1) + 0.5) continue;
-    const dx = fr.x - b.x;
-    const dy = fr.y - b.y;
+    const dx = (pose?.x ?? fr.x) - b.x;
+    const dy = (pose?.y ?? fr.y) - b.y;
     const d = Math.hypot(dx, dy);
     const reach = num(paramOf(set, item, 'range', global), 1.5) + Math.max(fr.w, def.kind === 'hosted' ? 0.3 : fr.d) / 2 + 0.2;
     if (d > reach) continue;

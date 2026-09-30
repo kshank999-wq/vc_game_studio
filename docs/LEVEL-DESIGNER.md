@@ -171,6 +171,8 @@ the same effects, with triggers and puzzles settling after every change:
 - **Characters:** a linked scene starts, shown as a scene card.
 - **Interaction points:** tied to a story object, they use it the way free play does.
 - **Volumes:** notice entering and leaving. Cinematic triggers play their cinematic (with its shot list, skippable); checkpoints set where you come back; portals lead to another level, carrying the story with them; hazards and damage volumes hurt.
+- **Patrols (spec §11):** an NPC, enemy or neutral actor whose **Patrol** names a patrol walks the **Patrol nodes** of that name (Actors) in their **Order**, at its **Speed**, waiting each node's **Wait** at it, round and round. They walk straight from stop to stop: there is no pathfinding, so lay a patrol out with a clear line between its stops. Talk to someone on a patrol where they are. The map draws each patrol as a dashed loop, its stops numbered, and the preflight warns of a Patrol that names no nodes.
+- **Companions:** a companion that **Follows the player** keeps within its **Follow distance**, walking at its Speed (faster when far behind). More than 12 m behind, or on another floor, it catches up at once, behind the player.
 - **Spawners:** put their characters or items in the level, after their delay.
 - **Rules:** run on enter, exit, interact, pickup, use, timers and story changes. Each is logged with its conditions and whether they held, then its story effects and level actions.
 - **Present only when:** items appear and disappear as it comes and goes; in the sample, the flooded seam drains and the bronze door gives way once the lever is pulled.
@@ -205,6 +207,16 @@ finds what it placed last time and updates it.
   `AVcgsLevelDirector`, and `build_level.py`. Open the map and run the script
   (**Tools › Execute Python Script**). Positions are in centimetres, X forward.
 - **JSON:** `story.json` gains `levels`, described in `story.schema.json`.
+
+**Patrols and companions** go to every engine as each actor's `motion`: a
+patrol's stops in order (level positions, with their waits) or a companion's
+follow distance, with its speed. Each runtime moves them by the same rules as
+Play Mode (the engines' checks find the sample's Mara at the same place after
+five seconds as Play Mode does):
+- **Godot:** `VCGSLevel` moves the actor's node each frame (`actors` holds the poses; `step_patrol` and `step_follow` are the rules). Companions follow the node in the "player" group, or `player`.
+- **Unity:** `LevelLogic.Poses`, moved by `Tick`; `VcgsLevel` puts each GameObject there, and tells the logic where its `player` (or the GameObject tagged Player) is.
+- **Unreal:** `vcgs::LevelLogic::Poses`, moved by `Tick`; `AVcgsLevelDirector` sets each actor's location and rotation, and follows the player pawn.
+- **JSON:** the `motion` object, described in the schema.
 
 A freeform space's floor and ceiling go over as a **slab**: the outline raised to its thickness, with its triangles.
 - **Godot:** a `CSGPolygon3D`, colliding through a `ConcavePolygonShape3D` of its faces.
@@ -243,7 +255,7 @@ silently. If you keep a file, it is pointed out again next time.
 - **The Rusted Lever:** an interaction that sets the lever up.
 - **The flooded seam:** gone once the lever is up.
 - **The cinematic trigger:** plays *Door in the dark* on the way in.
-- **People and lighting:** Mara, a player start, lights, a camera marker and an ambient zone.
+- **People and lighting:** Mara, pacing the Cave Mouth on the *Cave watch* patrol (two stops, a wait at each), a player start, lights, a camera marker and an ambient zone.
 - **The Crawlway** into the Squeeze is 1.8 m high. It was 1.6 m, lower than the player, so Play Mode's player couldn't get past the Cave Mouth; the walkable preview found it.
 
 Its preflight is clean.
@@ -277,7 +289,7 @@ clockwise seen from above.
 | §5 3D graybox | Done: box, plane, cylinder, sphere, wedge, stairs and ramps; walls with openings; move (free, or along world or local axes), resize and extrude faces and outline walls, pivots, hosted assets that follow their wall, collision and walkable previews. |
 | §6 Inspector | Done, including search and "More" for advanced fields. |
 | §7 Narrative | Done: links both ways, conditions from choices and state, and scene timeline events placed in the level. |
-| §8 Logic, spawns | Done: rules, conditions, story effects and level actions run in Play Mode; spawners spawn after their delay, conditionally. Spawned actors stand where they spawn (no AI or pathing). |
+| §8 Logic, spawns | Done: rules, conditions, story effects and level actions run in Play Mode; spawners spawn after their delay, conditionally. Placed actors walk their patrols and companions follow the player (§11 of the Game Studio spec), in Play Mode and every engine; spawned actors stand where they spawn, and nothing paths around walls. |
 | §9 Play Mode | Done: first person, third person and top-down; keyboard, mouse and controller through rebindable actions; collision, gravity, jumping, stairs; pause and inspect with editable state; test presets; start from the level start, the selection or the 3D camera; debug overlay; event log; notes linked to items. Scenes linked to characters show as cards rather than playing their script in the level. |
 | §10 Identity and names | Done. |
 | §11 Engine handoff | Done: Godot, Unity, Unreal and JSON (see *Sending a level to an engine*). Checked in Godot 4.3, and against Unity and Unreal stand-ins (C#, C++ with g++ and clang, and the Python builder). |

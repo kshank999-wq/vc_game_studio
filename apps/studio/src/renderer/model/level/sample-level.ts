@@ -64,7 +64,11 @@ export const sampleLevel = (
   const start = put('actor.player', 'Explorer start', -1, 3.5);
   void start;
   const mara = put('actor.npc', 'Mara', 1.5, 3);
-  set(mara, { character: refs.mara, prompt: 'Talk to Mara' });
+  set(mara, { character: refs.mara, prompt: 'Talk to Mara', patrol: 'Cave watch', speed: 1.1 });
+  // She paces the cave mouth while the player gets their bearings: two stops, a wait at each.
+  const watch = (name: string, x: number, y: number, order: number, wait: number) => set(put('actor.patrol', name, x, y), { path: 'Cave watch', order, wait });
+  watch('Cave watch 1', 1.5, 3, 1, 4);
+  watch('Cave watch 2', 4.5, 0.5, 2, 3);
   put('light.practical', 'Lantern', -2.5, 2.5, undefined);
   const guide = put('pres.dialogue', 'Mara at the door', 12.5, -17);
   set(guide, { speaker: refs.mara });

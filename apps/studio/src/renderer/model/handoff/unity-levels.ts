@@ -36,6 +36,18 @@ namespace VCGS
     /// run on the story's GameState, so the level and the story always agree.
     /// VcgsLevel runs it in a scene; tests run it anywhere.
     /// </summary>
+    /// <summary>Where an actor that moves is, in level space as the data has it (x east, y up, z south), and what it is doing.</summary>
+    public sealed class ActorPose
+    {
+        public double X, Y, Z;
+        /// <summary>The way it faces (level space, flat), once it has moved or turned.</summary>
+        public double FacingX, FacingZ;
+        public bool Faces, Moving;
+        /// <summary>The patrol stop it walks to, and the level time it waits until.</summary>
+        public int Stop;
+        public double Until;
+    }
+
     public sealed class LevelLogic
     {
         static readonly HashSet<string> Interactive = new HashSet<string> { "door", "pickup", "inventory", "weapon", "ammo", "health", "npc", "companion", "neutral", "dialogue", "interaction", "puzzle", "elevator", "ladder" };
@@ -60,6 +72,13 @@ namespace VCGS
         public double Health = 100;
         public double Time;
         int depth;
+
+        /// <summary>Actors that move (patrols, companions) by GUID: where each is now. VcgsLevel moves their GameObjects to match.</summary>
+        public readonly Dictionary<string, ActorPose> Poses = new Dictionary<string, ActorPose>();
+        /// <summary>Where the player is, in level space ({x, y, z}; null for nowhere): companions follow it. VcgsLevel sets it each frame.</summary>
+        public double[] Player;
+        /// <summary>How far behind a companion may fall before it catches up at once.</summary>
+        public const double CatchUp = 12;
 
         public event Action<string> CinematicRequested;
         public event Action<string> SceneRequested;
@@ -91,6 +110,12 @@ namespace VCGS
                 Order.Add(guid);
             }
             game.Changed += OnChanged;
+            foreach (var guid in Order)
+            {
+                if (D.Map(Item(guid), "motion").Count == 0) continue;
+                var at = D.List(Item(guid), "position");
+                Poses[guid] = new ActorPose { X = D.Num(at.Count > 2 ? at[0] : null, 0), Y = D.Num(at.Count > 2 ? at[1] : null, 0), Z = D.Num(at.Count > 2 ? at[2] : null, 0) };
+            }
             foreach (var guid in Order)
                 if (Role(guid) == "spawn" && D.Str(Item(guid), "kind") == "marker" && ParamNum(guid, "delay", 0) <= 0 && IsPresent(guid)) Spawn(guid);
         }
@@ -238,6 +263,7 @@ namespace VCGS
         public void Tick(double dt)
         {
             Time += dt;
+            MoveActors(dt);
             foreach (var guid in new List<string>(Inside))
             {
                 var role = Role(guid);
@@ -265,6 +291,75 @@ namespace VCGS
                     timers[id] = Time;
                     Run(guid, rule);
                 }
+            }
+        }
+
+        /// <summary>Walk the patrols on and bring the companions after the Player (the same rules as the studio's Play Mode).</summary>
+        void MoveActors(double dt)
+        {
+            foreach (var pair in Poses)
+            {
+                if (!IsPresent(pair.Key)) continue;
+                var motion = D.Map(Item(pair.Key), "motion");
+                if (D.Str(motion, "kind") == "patrol") StepPatrol(pair.Value, motion, dt, Time);
+                else if (Player != null && Player.Length > 2) StepFollow(pair.Value, motion, dt, Player[0], Player[1], Player[2]);
+            }
+        }
+
+        /// <summary>Walk a pose toward (x, y, z) at most by metres; true when it gets there.</summary>
+        static bool Walk(ActorPose p, double x, double y, double z, double by)
+        {
+            var dx = x - p.X;
+            var dz = z - p.Z;
+            var d = Math.Sqrt(dx * dx + dz * dz);
+            if (d > 1e-6) { p.FacingX = dx; p.FacingZ = dz; p.Faces = true; }
+            if (d <= by || d < 1e-6)
+            {
+                p.X = x; p.Y = y; p.Z = z;
+                p.Moving = d > 1e-6;
+                return true;
+            }
+            var k = by / d;
+            p.X += dx * k; p.Y += (y - p.Y) * k; p.Z += dz * k;
+            p.Moving = true;
+            return false;
+        }
+
+        /// <summary>One patrol step: wait at a stop, else walk on to it; arriving starts the wait and aims at the next, round and round. now is the level time after the step.</summary>
+        public static void StepPatrol(ActorPose p, Dictionary<string, object> motion, double dt, double now)
+        {
+            if (now < p.Until) { p.Moving = false; return; }
+            var stops = D.List(motion, "stops");
+            if (stops.Count == 0) return;
+            var stop = D.Map(stops[p.Stop % stops.Count]);
+            var at = D.List(stop, "at");
+            if (at.Count < 3) return;
+            if (!Walk(p, D.Num(at[0], 0), D.Num(at[1], 0), D.Num(at[2], 0), D.Num(motion, "speed", 1.4) * dt)) return;
+            p.Moving = false;
+            p.Until = now + D.Num(stop, "wait", 0);
+            p.Stop = (p.Stop + 1) % stops.Count;
+        }
+
+        /// <summary>One follow step: keep within the follow distance of the player at (x, y, z), faster when far; more than CatchUp behind, or another floor, and it catches up at once.</summary>
+        public static void StepFollow(ActorPose p, Dictionary<string, object> motion, double dt, double x, double y, double z)
+        {
+            var dx = x - p.X;
+            var dz = z - p.Z;
+            var d = Math.Sqrt(dx * dx + dz * dz);
+            var distance = D.Num(motion, "distance", 2);
+            if (d > 1e-6) { p.FacingX = dx; p.FacingZ = dz; p.Faces = true; }
+            if (d > CatchUp || Math.Abs(y - p.Y) > 3)
+            {
+                var k = d > 1e-6 ? distance / d : 0;
+                p.X = x - dx * k; p.Y = y; p.Z = z - (d > 1e-6 ? dz * k : distance);
+                p.Moving = false;
+            }
+            else if (d <= distance) p.Moving = false;
+            else
+            {
+                var speed = D.Num(motion, "speed", 3.5) * (d > distance * 2.5 ? 1.6 : 1);
+                var k = (d - distance) / d;
+                Walk(p, p.X + dx * k, y, p.Z + dz * k, speed * dt);
             }
         }
 
@@ -372,9 +467,33 @@ namespace VCGS
             Refresh();
         }
 
+        [Tooltip("Who companions follow; the GameObject tagged Player when empty.")]
+        public Transform player = null;
+
         void Update()
         {
-            if (Logic != null) Logic.Tick(Time.deltaTime);
+            if (Logic == null) return;
+            // The player in level space: Unity's +Z is the data's north (−z).
+            if (player == null) player = GameObject.FindWithTag("Player")?.transform;
+            if (player != null)
+            {
+                var at = transform.InverseTransformPoint(player.position);
+                Logic.Player = new double[] { at.x, at.y, -at.z };
+            }
+            Logic.Tick(Time.deltaTime);
+            MoveActors();
+        }
+
+        /// <summary>Put each actor that moves (patrols, companions) where LevelLogic has it, facing the way it goes.</summary>
+        public void MoveActors()
+        {
+            foreach (var pair in Logic.Poses)
+            {
+                if (!items.TryGetValue(pair.Key, out var item)) continue;
+                var p = pair.Value;
+                item.transform.localPosition = new Vector3((float)p.X, (float)p.Y, (float)-p.Z);
+                if (p.Faces) item.transform.localEulerAngles = new Vector3(0, (float)(System.Math.Atan2(p.FacingX, -p.FacingZ) * 180 / System.Math.PI), 0);
+            }
         }
 
         /// <summary>Show what is there and hide what is not; open and shut doors.</summary>

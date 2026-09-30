@@ -76,6 +76,17 @@ const light: ParamDef[] = [
   { key: 'shadows', label: 'Casts shadows', group: 'presentation', type: 'boolean', default: true, advanced: true },
 ];
 
+/** Walking a patrol (spec §11): the patrol nodes with this name, in their order, round and round. */
+const patrol = (): ParamDef[] => [
+  { key: 'patrol', label: 'Patrol', group: 'gameplay', type: 'text', default: '' },
+  { key: 'speed', label: 'Speed (m/s)', group: 'gameplay', type: 'number', default: 1.4, min: 0.1, max: 12, step: 0.1 },
+];
+/** A companion keeping up with the player (spec §11). */
+const follow = (): ParamDef[] => [
+  { key: 'follow', label: 'Follows the player', group: 'gameplay', type: 'boolean', default: true },
+  { key: 'distance', label: 'Follow distance', group: 'gameplay', type: 'number', unit: 'length', default: 2, min: 0.5, max: 20, step: 0.25 },
+  { key: 'speed', label: 'Speed (m/s)', group: 'gameplay', type: 'number', default: 3.5, min: 0.1, max: 12, step: 0.1 },
+];
 const spawn = (actor: 'character' | 'inventory' = 'character'): ParamDef[] => [
   { key: 'actor', label: actor === 'character' ? 'Who' : 'What', group: 'spawn', type: 'ref', default: '', refTypes: actor === 'character' ? ['character'] : ['inventory', 'object'] },
   { key: 'count', label: 'Count', group: 'spawn', type: 'number', unit: 'count', default: 1, min: 1, max: 99, step: 1 },
@@ -213,11 +224,11 @@ export const STARTER: readonly AssetDefinition[] = [
   ]),
   ...group('actors', [
     { id: 'actor.player', name: 'Player start', kind: 'marker', role: 'playerStart', naming: 'player', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('Marker3D (player start)', 'Player spawn point', 'APlayerStart'), description: 'Where the player begins. Every level needs one.' },
-    { id: 'actor.npc', name: 'NPC', kind: 'marker', role: 'npc', naming: 'npc', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('CharacterBody3D placeholder', 'NPC prefab placeholder', 'ACharacter placeholder'), description: 'A character standing here.', params: [{ key: 'character', label: 'Character', group: 'narrative', type: 'ref', default: '', refTypes: ['character'] }, ...interaction(true, 'Talk')] },
-    { id: 'actor.companion', name: 'Companion', kind: 'marker', role: 'companion', naming: 'npc', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('CharacterBody3D placeholder', 'Companion prefab placeholder', 'ACharacter placeholder'), description: 'A character who travels with the player.', params: [{ key: 'character', label: 'Character', group: 'narrative', type: 'ref', default: '', refTypes: ['character'] }] },
-    { id: 'actor.enemy', name: 'Enemy', kind: 'marker', role: 'enemy', naming: 'npc', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('CharacterBody3D placeholder', 'Enemy prefab placeholder', 'ACharacter placeholder'), description: 'A hostile actor placed by hand.', params: [{ key: 'character', label: 'Character', group: 'narrative', type: 'ref', default: '', refTypes: ['character'] }, { key: 'health', label: 'Health', group: 'gameplay', type: 'number', default: 100, min: 1, step: 5 }] },
-    { id: 'actor.neutral', name: 'Neutral actor', kind: 'marker', role: 'neutral', naming: 'npc', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('CharacterBody3D placeholder', 'Actor prefab placeholder', 'ACharacter placeholder'), description: 'Someone going about their business.', params: [{ key: 'character', label: 'Character', group: 'narrative', type: 'ref', default: '', refTypes: ['character'] }] },
-    { id: 'actor.patrol', name: 'Patrol node', kind: 'marker', role: 'patrolNode', naming: 'navigation', size: [0.4, 0.4, 0.4], proxy: 'marker', engine: MARKER, description: 'A stop on an actor’s patrol.', params: [{ key: 'path', label: 'Patrol', group: 'gameplay', type: 'text', default: 'Patrol A' }, { key: 'order', label: 'Order', group: 'gameplay', type: 'number', unit: 'count', default: 1, min: 1, step: 1 }, { key: 'wait', label: 'Wait', group: 'gameplay', type: 'number', unit: 's', default: 2, min: 0, step: 0.5 }] },
+    { id: 'actor.npc', name: 'NPC', kind: 'marker', role: 'npc', naming: 'npc', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('CharacterBody3D placeholder', 'NPC prefab placeholder', 'ACharacter placeholder'), description: 'A character standing here.', params: [{ key: 'character', label: 'Character', group: 'narrative', type: 'ref', default: '', refTypes: ['character'] }, ...interaction(true, 'Talk'), ...patrol()] },
+    { id: 'actor.companion', name: 'Companion', kind: 'marker', role: 'companion', naming: 'npc', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('CharacterBody3D placeholder', 'Companion prefab placeholder', 'ACharacter placeholder'), description: 'A character who travels with the player.', params: [{ key: 'character', label: 'Character', group: 'narrative', type: 'ref', default: '', refTypes: ['character'] }, ...follow()] },
+    { id: 'actor.enemy', name: 'Enemy', kind: 'marker', role: 'enemy', naming: 'npc', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('CharacterBody3D placeholder', 'Enemy prefab placeholder', 'ACharacter placeholder'), description: 'A hostile actor placed by hand.', params: [{ key: 'character', label: 'Character', group: 'narrative', type: 'ref', default: '', refTypes: ['character'] }, { key: 'health', label: 'Health', group: 'gameplay', type: 'number', default: 100, min: 1, step: 5 }, ...patrol()] },
+    { id: 'actor.neutral', name: 'Neutral actor', kind: 'marker', role: 'neutral', naming: 'npc', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('CharacterBody3D placeholder', 'Actor prefab placeholder', 'ACharacter placeholder'), description: 'Someone going about their business.', params: [{ key: 'character', label: 'Character', group: 'narrative', type: 'ref', default: '', refTypes: ['character'] }, ...patrol()] },
+    { id: 'actor.patrol', name: 'Patrol node', kind: 'marker', role: 'patrolNode', naming: 'navigation', size: [0.4, 0.4, 0.4], proxy: 'marker', engine: MARKER, description: 'A stop on a patrol: actors whose Patrol is this one’s name walk its stops in order, waiting at each, round and round.', params: [{ key: 'path', label: 'Patrol', group: 'gameplay', type: 'text', default: 'Patrol A' }, { key: 'order', label: 'Order', group: 'gameplay', type: 'number', unit: 'count', default: 1, min: 1, step: 1 }, { key: 'wait', label: 'Wait', group: 'gameplay', type: 'number', unit: 's', default: 2, min: 0, step: 0.5 }] },
   ]),
   ...group('logic', [
     { id: 'logic.trigger', name: 'Trigger volume', kind: 'volume', role: 'trigger', naming: 'trigger', size: [3, 3, 2.5], proxy: 'box', engine: VOLUME, description: 'Notices the player entering and leaving. Give it rules.', params: [{ key: 'once', label: 'Only once', group: 'logic', type: 'boolean', default: true }, { key: 'who', label: 'Noticed', group: 'logic', type: 'select', default: 'player', options: ['player', 'any actor', 'npcs'] }] },

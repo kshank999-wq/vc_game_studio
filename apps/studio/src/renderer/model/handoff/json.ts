@@ -99,6 +99,13 @@ export const storySchema = () => ({
           final_asset: str,
           replacement_locked: { type: 'boolean' },
           pieces: { type: 'array', items: ref('piece') },
+          motion: {
+            description: 'How it moves in play: a patrol walked round its stops in order (straight from stop to stop, waiting `wait` seconds at each), or a companion keeping within `distance` of the player (catching up at once when more than 12 m behind or 3 m above or below). Speeds in metres a second.',
+            oneOf: [
+              obj({ kind: { const: 'patrol' }, name: str, speed: num, stops: { type: 'array', minItems: 1, items: obj({ guid: str, at: ref('vec3'), wait: num }) } }),
+              obj({ kind: { const: 'follow' }, speed: num, distance: num }),
+            ],
+          },
           revision: str,
         },
         ['guid', 'export_name', 'name', 'asset', 'kind', 'role', 'category', 'floor', 'position', 'turn', 'size', 'params', 'links', 'scenes', 'rules', 'engine', 'final_asset', 'replacement_locked', 'pieces', 'revision'],
