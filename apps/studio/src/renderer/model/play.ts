@@ -74,10 +74,23 @@ export type Cursor =
 
 export type Outcome = 'ending' | 'gameOver' | 'deadEnd' | 'loop';
 
+/**
+ * A decision the player made, by what it was made at (spec §15): a choice's
+ * option by its words, an encounter won or lost, an object used in free play,
+ * a free play left. `at` is the choice or encounter, or the free play's event.
+ */
+export type Decision =
+  | { kind: 'choice'; at: string; option: string }
+  | { kind: 'encounter'; at: string; won: boolean }
+  | { kind: 'use'; at: string; object: string; interaction: string }
+  | { kind: 'skip'; at: string };
+
 export interface Play {
   world: PlayWorld;
   cursor: Cursor;
   log: Entry[];
+  /** Every decision so far, in order: the path taken (a replay makes the same ones). */
+  decisions?: Decision[];
   /** The graph node and scene event being played, for "show in the studio". */
   where: { nodeId: string | null; sceneId: string | null; eventId: string | null };
 }
@@ -423,7 +436,7 @@ const run = (project: Project, play: Play, log: Entry[] = []): Play => {
   let cursor = play.cursor;
   const seen = new Map<string, number>();
   for (let n = 0; n < MAX_STEPS; n++) {
-    if (cursor.at !== 'node' && cursor.at !== 'after' && cursor.at !== 'event') return { world: d.world, cursor, log: d.log, where };
+    if (cursor.at !== 'node' && cursor.at !== 'after' && cursor.at !== 'event') return { world: d.world, cursor, log: d.log, where, ...(play.decisions ? { decisions: play.decisions } : {}) };
     // A loop with nothing for the player to do would never end.
     const key = JSON.stringify(cursor);
     const times = (seen.get(key) ?? 0) + 1;
@@ -433,7 +446,7 @@ const run = (project: Project, play: Play, log: Entry[] = []): Play => {
   }
   const text = 'The story goes round without stopping for the player here.';
   d.log.push({ kind: 'end', text });
-  return { world: d.world, cursor: { at: 'end', outcome: 'loop', text }, log: d.log, where };
+  return { world: d.world, cursor: { at: 'end', outcome: 'loop', text }, log: d.log, where, ...(play.decisions ? { decisions: play.decisions } : {}) };
 };
 
 // ---------------------------------------------------------------- playing
@@ -528,8 +541,7 @@ const remember = (d: Doing, key: string) => {
 
 const eventAt = (project: Project, c: { sceneId: string; track: string; index: number }) => trackOf(project, c.sceneId, c.track)?.events[c.index];
 
-/** Pick an option of the choice on offer (by its place in the prompt's list). */
-export const choose = (project: Project, play: Play, index: number): Play => {
+const chooseHere = (project: Project, play: Play, index: number): Play => {
   const c = play.cursor;
   const d: Doing = { project, world: play.world, log: [...play.log] };
   if (c.at === 'graphChoice') {
@@ -1036,7 +1048,7 @@ export const useStoryObject = (project: Project, world: PlayWorld, objectId: str
 };
 
 /** Use an object during free play; the free play ends by itself if that makes its rule hold. */
-export const interact = (project: Project, play: Play, objectId: string, interactionId: string): Play => {
+const interactHere = (project: Project, play: Play, objectId: string, interactionId: string): Play => {
   const c = play.cursor;
   const object = project.objects[objectId];
   if (c.at !== 'freePlay' || !object) return play;
@@ -1052,12 +1064,45 @@ export const interact = (project: Project, play: Play, objectId: string, interac
   return { ...play, world: d.world, log: d.log };
 };
 
-/** Leave a free play now (the player moves on, or the designer skips ahead). */
-export const endFreePlay = (project: Project, play: Play): Play => {
+const endHere = (project: Project, play: Play): Play => {
   const c = play.cursor;
   if (c.at !== 'freePlay') return play;
   const event = eventAt(project, c);
   return run(project, { ...play, cursor: { at: 'event', sceneId: c.sceneId, track: c.track, index: c.index + 1 } }, [{ kind: 'action', text: `${event?.label || 'Free play'} ends (skipped)` }]);
+};
+
+/** What the decision on offer is made at: a graph choice, a scene's choice or encounter (by its story object), or a free play (by its event). */
+export const decisionAt = (project: Project, play: Play): string | null => {
+  const c = play.cursor;
+  if (c.at === 'graphChoice') return c.id;
+  if (c.at !== 'sceneChoice' && c.at !== 'encounter' && c.at !== 'freePlay') return null;
+  const e = eventAt(project, c);
+  return c.at !== 'freePlay' && e?.refId ? e.refId : (e?.id ?? `${c.sceneId}/${c.track}/${c.index}`);
+};
+
+/** The play after a decision, with the decision kept on its path (unless nothing happened). */
+const noted = (before: Play, after: Play, decision: Decision | null): Play =>
+  after === before || !decision ? after : { ...after, decisions: [...(before.decisions ?? []), decision] };
+
+/** Pick an option of the choice on offer (by its place in the prompt's list). */
+export const choose = (project: Project, play: Play, index: number): Play => {
+  const at = decisionAt(project, play);
+  const prompt = promptOf(project, play);
+  const option = prompt.kind === 'choice' ? prompt.options[index] : undefined;
+  const decision: Decision | null = !at || !option ? null : play.cursor.at === 'encounter' ? { kind: 'encounter', at, won: index === 0 } : { kind: 'choice', at, option: option.label };
+  return noted(play, chooseHere(project, play, index), decision);
+};
+
+/** Use an object in free play (one of its verbs). */
+export const interact = (project: Project, play: Play, objectId: string, interactionId: string): Play => {
+  const at = decisionAt(project, play);
+  return noted(play, interactHere(project, play, objectId, interactionId), at ? { kind: 'use', at, object: objectId, interaction: interactionId } : null);
+};
+
+/** Leave a free play now (the player moves on, or the designer skips ahead). */
+export const endFreePlay = (project: Project, play: Play): Play => {
+  const at = decisionAt(project, play);
+  return noted(play, endHere(project, play), at ? { kind: 'skip', at } : null);
 };
 
 /** Change the world by hand, to try a path (the prompt on offer updates with it). */

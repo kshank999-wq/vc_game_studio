@@ -251,4 +251,6 @@ export interface Project {
   levels?: LevelSet;
   /** The Note Sorter's raw notes, cards and categories. Absent until the first import. */
   notes?: NoteSet;
+  /** Expected paths through the story, checked in the play-through (spec §15). */
+  paths?: import('./paths').ExpectedPath[];
 }

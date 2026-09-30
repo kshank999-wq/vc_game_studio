@@ -8228,3 +8228,72 @@ button.bible-dual-col:hover {
   display: block;
   color: var(--text-soft);
 }
+
+.play-paths-name {
+  flex: 1 1 200px;
+  margin: 0;
+}
+
+.play-paths-summary {
+  margin: 10px 0 6px;
+  font-weight: 600;
+}
+
+.play-paths-summary.ok,
+.play-path.ok .play-path-mark {
+  color: #6fae5e;
+}
+
+.play-paths-summary.bad,
+.play-path.bad .play-path-mark,
+.play-paths-failing {
+  color: #e5484d;
+}
+
+.play-paths-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.play-path {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.play-path-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.play-path-mark {
+  font-weight: 700;
+  width: 1em;
+}
+
+.play-path-problem {
+  margin: 4px 0 0 1.6em;
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.play-path-steps {
+  margin: 6px 0 0 1.6em;
+  padding-left: 1.2em;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.play-path-steps li.done {
+  color: var(--text);
+}
+
+.play-path-steps li.broke {
+  color: #e5484d;
+  font-weight: 600;
+}

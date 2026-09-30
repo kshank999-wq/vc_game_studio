@@ -101,6 +101,20 @@ monitor while you fix it on another.
   quests, mechanics, lore, choices made, puzzles solved, encounters won, triggers fired and
   scenes visited. Change any of it to try another path. **Step back**
   (Backspace) undoes one step.
+- **Paths** (spec §15) are expected ways through the story, kept in the
+  project: play the way the story should go and **Save this run** (at the
+  end, or partway). Each path is its decisions (options chosen, encounters won
+  or lost, objects used, free plays left), the scenes and plot points it goes
+  through, and how it ends. Every path is checked against the story as it is
+  now, like tests: played again from its start with the same decisions, it
+  passes while it still goes that way, and otherwise says where it first
+  differs and why: an option no longer on offer and what it needs, an option
+  gone, a choice the story no longer reaches, a scene missed or new, another
+  ending. The Paths button counts the paths that break. **Show** takes the
+  play-through to where one breaks; **Use this run** makes the run in view a
+  path's expected way, after a change made on purpose. The sample comes with
+  two: straight on to Shared Light, and through the squeeze with the ring
+  pocketed, to Heavy Pockets.
 - **Saves** keeps the play-through: three slots in this browser, and a file
   to keep or pass on (Save to a file, Load a file). A save is the whole of
   it, the world, where the player is and the transcript, so loading carries on

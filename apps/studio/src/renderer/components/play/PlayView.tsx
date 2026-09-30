@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
+import { checkAllPaths } from '../../model/paths';
 import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
+import { PathsPanel } from './PathsPanel';
 import { SavesPanel } from './SavesPanel';
 import { copyText, downloadText, notesFileNameFor, notesPageNameFor, printHtml, readText } from '../../files';
 import { liveNotes, mergeNotes, notesFromSync, notesStorageKey, notesSyncText, type StampedNote } from '../../model/codex-sync';
@@ -14,6 +16,8 @@ interface Props {
   /** Start here (a node on the graph) instead of at the Beginning. */
   from?: string;
   onNavigate: (to: Destination) => void;
+  /** Saving expected paths changes the project (one undo step each). */
+  onCommit?: (project: Project) => void;
 }
 
 const isTyping = (target: EventTarget | null) => target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
@@ -758,7 +762,7 @@ const WorldPanel = ({ project, world, onChange }: { project: Project; world: Pla
  * choices with their options (those not on offer say what they need), free
  * play with the scene's objects to use, and the ending it reaches.
  */
-export const PlayView = ({ project, from, onNavigate }: Props) => {
+export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
   const [history, setHistory] = useState<Play[]>(() => [startPlay(project, from)]);
   const play = history[history.length - 1]!;
   const prompt = useMemo(() => promptOf(project, play), [project, play]);
@@ -766,6 +770,8 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   const transcript = useRef<HTMLDivElement>(null);
   const [codexOpen, setCodexOpen] = useState(false);
   const [savesOpen, setSavesOpen] = useState(false);
+  const [pathsOpen, setPathsOpen] = useState(false);
+  const pathsFailing = useMemo(() => (pathsOpen || !project.paths?.length ? 0 : checkAllPaths(project).filter((r) => !r.check.ok).length), [project, pathsOpen]);
   // The player's bookmarks in the codex: kept for the whole play-through, stepping back or not.
   const [bookmarks, setBookmarks] = useState<ReadonlySet<string>>(new Set());
   // And the player's notes on entries, the same way.
@@ -832,8 +838,11 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (savesOpen) {
-        if (e.key === 'Escape') setSavesOpen(false);
+      if (savesOpen || pathsOpen) {
+        if (e.key === 'Escape') {
+          setSavesOpen(false);
+          setPathsOpen(false);
+        }
         return;
       }
       if (hasCodex && (e.key === 'c' || e.key === 'C')) {
@@ -886,12 +895,25 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
             onClick={() => {
               setSavesOpen(!savesOpen);
               setCodexOpen(false);
+              setPathsOpen(false);
             }}
           >
             Saves
           </button>
+          <button
+            className={`tb-btn small${pathsOpen ? ' on' : ''}`}
+            aria-pressed={pathsOpen}
+            title="Expected paths: save a run, and check the story still goes that way"
+            onClick={() => {
+              setPathsOpen(!pathsOpen);
+              setSavesOpen(false);
+              setCodexOpen(false);
+            }}
+          >
+            Paths{pathsFailing > 0 && <span className="play-codex-new play-paths-failing"> · {pathsFailing} ✗</span>}
+          </button>
           {hasCodex && (
-            <button className={`tb-btn small${codexOpen ? ' on' : ''}`} aria-pressed={codexOpen} title="The codex: quests and lore found (C)" onClick={() => (setCodexOpen(!codexOpen), setSavesOpen(false))}>
+            <button className={`tb-btn small${codexOpen ? ' on' : ''}`} aria-pressed={codexOpen} title="The codex: quests and lore found (C)" onClick={() => (setCodexOpen(!codexOpen), setSavesOpen(false), setPathsOpen(false))}>
               Codex{fresh > 0 && <span className="play-codex-new"> · {fresh} new</span>}
             </button>
           )}
@@ -904,6 +926,7 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
             </button>
           )}
         </div>
+        {pathsOpen && <PathsPanel project={project} play={play} from={from} onCommit={onCommit} onShow={push} onClose={() => setPathsOpen(false)} />}
         {savesOpen && <SavesPanel project={project} play={play} onLoad={push} onClose={() => setSavesOpen(false)} />}
         {codexOpen && (
           <CodexPanel

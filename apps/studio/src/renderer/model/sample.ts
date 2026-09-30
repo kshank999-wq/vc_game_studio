@@ -2,6 +2,7 @@ import { addInteraction, interactionsOf, setField, setNotes, setSceneUse, setSta
 import { spineLane } from './layout';
 import { addLane, connect, createProject, makeObject, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
 import { sampleLevel } from './level/sample-level';
+import { addPath, pathOf, playBy } from './paths';
 import { addElement, addLine, setSceneData, updateLine, useInScene } from './scene';
 import { addBranch, addEvent, moveEvent, sceneTimeline, updateBranch, updateEvent } from './timeline';
 import type { Condition } from './rules';
@@ -228,5 +229,9 @@ export const sunkenVault = (): Project => {
 
   // Where it all happens: one level, tied to the scenes and the Bible.
   p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent });
+
+  // Two expected paths, checked in the play-through: straight on to Shared Light, and every other way to Heavy Pockets.
+  p = addPath(p, pathOf(playBy(p, 'first'), 'Straight on to Shared Light', undefined, Date.UTC(2026, 8, 1)));
+  p = addPath(p, pathOf(playBy(p, 'last'), 'Through the squeeze, pockets full', undefined, Date.UTC(2026, 8, 1)));
   return p;
 };

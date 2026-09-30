@@ -988,7 +988,7 @@ export const App = () => {
             {route.view === 'notes' && (
               <NoteSorter project={project} onCommit={commit} onUndo={studio.undo} canUndo={studio.canUndo} onOpenBible={openBible} onSay={say} />
             )}
-            {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} />}
+            {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} onCommit={commit} />}
             {route.view === 'level' && (
               <LevelDesigner
                 key={route.focus ?? 'levels'}
