@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
-import { advance, choose, codexNotesFrom, codexNotesText, notesPrintHtml, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { copyText, downloadText, notesFileNameFor, notesPageNameFor, printHtml, readText } from '../../files';
 import { liveNotes, mergeNotes, notesFromSync, notesStorageKey, notesSyncText, type StampedNote } from '../../model/codex-sync';
@@ -196,6 +196,18 @@ const CodexPanel = ({
     downloadText(notesPageNameFor(project), notesPrintHtml(codexNotesText(project, world, notes)), 'text/html');
     setImported('This page cannot print by itself: the notes are saved as a page. Open it and print it.');
   };
+  // Emailing: a mail link with the notes, for the player's mail app; too long for a link, they go on the clipboard.
+  const mail = notes.size ? notesMailto(codexNotesText(project, world, notes)) : null;
+  const emailNotes = async () => {
+    setToCopy('');
+    if (mail?.whole) return setImported('Opening your mail app with the notes. None opened? Share notes copies them, to paste into a mail.');
+    const text = codexNotesText(project, world, notes);
+    if (await copyText(text)) setImported('The notes are too long for a mail link: they are on the clipboard. Paste them into the mail.');
+    else {
+      setToCopy(text);
+      setImported('The notes are too long for a mail link: they are below, selected. Copy them (Ctrl+C or ⌘C) and paste them into the mail.');
+    }
+  };
   // The entry whose note is being written, by key.
   const [editing, setEditing] = useState('');
   /** A pencil to write (or change) the player's note on an entry. */
@@ -269,7 +281,9 @@ const CodexPanel = ({
       <div className="play-codex-head">
         <span className="rule-label">Codex</span>
         <span className="pref-hint">What the player has found, as a codex screen shows it. Notes sync across this browser’s windows.</span>
-        <div className="grow" />
+        <button className="tb-btn small" onClick={onClose}>
+          Close <kbd>C</kbd>
+        </button>
         <button
           className="tb-btn small"
           disabled={!notes.size}
@@ -284,6 +298,15 @@ const CodexPanel = ({
         <button className="tb-btn small" disabled={!notes.size} title={notes.size ? 'Share every note (or copy them)' : 'Write a note (✎) first'} onClick={() => void shareNotes()}>
           Share notes
         </button>
+        {mail ? (
+          <a className="tb-btn small" href={mail.url} target="_blank" rel="noopener noreferrer" title="Email every note (from your mail app)" onClick={() => void emailNotes()}>
+            Email notes
+          </a>
+        ) : (
+          <button className="tb-btn small" disabled title="Write a note (✎) first">
+            Email notes
+          </button>
+        )}
         <button className="tb-btn small" disabled={!notes.size} title={notes.size ? 'Print every note' : 'Write a note (✎) first'} onClick={() => void printNotes()}>
           Print notes
         </button>
@@ -302,9 +325,6 @@ const CodexPanel = ({
             if (file) void importNotes(file);
           }}
         />
-        <button className="tb-btn small" onClick={onClose}>
-          Close <kbd>C</kbd>
-        </button>
       </div>
       {toCopy && (
         <textarea

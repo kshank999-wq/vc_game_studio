@@ -5316,7 +5316,7 @@ kbd {
 }
 
 .play-codex-head .pref-hint {
-  flex: 1 1 calc(100% - 90px); /* its own line: the buttons share the next */
+  flex: 1 1 calc(100% - 180px); /* a line with Close: the notes buttons share the next */
 }
 
 .play-codex-search {

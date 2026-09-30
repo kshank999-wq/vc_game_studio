@@ -5,7 +5,7 @@
  * thin Unity wrappers around it. C# 9, for Unity 2021.2 and later.
  */
 
-import { NOTES_PRINT_STYLE } from '../play';
+import { MAIL_ON_CLIPBOARD, MAILTO_LIMIT, NOTES_PRINT_STYLE } from '../play';
 
 const HEAD = '// VCGS Runtime for Unity. The same for every project; safe to commit.';
 
@@ -1543,6 +1543,39 @@ namespace VCGS
             return "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>" + Esc(name) + " · codex notes</title><style>" + PrintStyle + "</style></head>\n<body><h1>" + Esc(name) + "</h1><p class=\"sub\">Codex notes</p>\n" + string.Join("\n", body) + "\n</body></html>\n";
         }
 
+        /// <summary>The longest mail link written; longer ones are cut short by some mail apps.</summary>
+        public const int MailtoLimit = ${MAILTO_LIMIT};
+        /// <summary>A mail's body when the notes are too long for its link (they go on the clipboard).</summary>
+        public const string MailOnClipboard = ${JSON.stringify(MAIL_ON_CLIPBOARD)};
+
+        /// <summary>
+        /// The notes as a mail link, for the mail app: "&lt;story&gt; codex notes"
+        /// and the notes (the same link as the studio's). Whole is false when
+        /// they are too long for a link: then the mail says they are on the clipboard.
+        /// </summary>
+        public (string url, bool whole) NotesMailto() => MailtoOf(NotesText());
+
+        /// <summary>Exported notes (NotesText) as a mail link.</summary>
+        public static (string url, bool whole) MailtoOf(string notesText)
+        {
+            static string Enc(string s)
+            {
+                var sb = new StringBuilder();
+                foreach (var b in Encoding.UTF8.GetBytes(s))
+                {
+                    var c = (char)b;
+                    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') sb.Append(c);
+                    else sb.Append('%').Append(b.ToString("X2"));
+                }
+                return sb.ToString();
+            }
+            var text = notesText.Replace("\r\n", "\n").Replace("\r", "\n");
+            var first = text.Split('\n')[0];
+            var head = "mailto:?subject=" + Enc((first.StartsWith("CODEX NOTES · ") ? first.Substring("CODEX NOTES · ".Length) : first) + " codex notes") + "&body=";
+            var url = head + Enc(text.Replace("\n", "\r\n"));
+            return url.Length <= MailtoLimit ? (url, true) : (head + Enc(MailOnClipboard), false);
+        }
+
         /// <summary>The entries shown, in order, by key ("lore:…"): what a cursor moves through.</summary>
         public List<string> EntryKeys(string query = "", string section = "", string sort = "")
         {
@@ -1569,8 +1602,8 @@ namespace VCGS
     /// to order each section; the arrows move a cursor (▶) and B bookmarks
     /// the entry it is on (★Bookmarks shows only those), N writes a note on it,
     /// E saves every note as a text file, I reads them back, Y copies them to
-    /// share them, V takes in notes someone shared, and P opens them as a
-    /// page to print. Drawn with
+    /// share them, V takes in notes someone shared, M emails them, and P
+    /// opens them as a page to print. Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1620,6 +1653,20 @@ namespace VCGS
 
         /// <summary>What just happened, shown under the codex (the notes saved, say).</summary>
         public string Status { get; private set; } = "";
+
+        /// <summary>
+        /// Email the notes (M): open the mail app with them; too long for a
+        /// mail link, they go on the clipboard first. Returns the link ("" with no game).
+        /// </summary>
+        public string EmailNotes(bool open = true)
+        {
+            if (Book == null) return "";
+            var (url, whole) = Book.NotesMailto();
+            if (!whole) GUIUtility.systemCopyBuffer = Book.NotesText();
+            if (open) Application.OpenURL(url);
+            Status = whole ? "Opening your mail app with the notes." : "The notes are too long for a mail link: they are on the clipboard. Paste them into the mail.";
+            return url;
+        }
 
         /// <summary>
         /// Print the notes (P): save them as a page and open it, to print from
@@ -1806,6 +1853,11 @@ namespace VCGS
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.Y)
             {
                 ShareNotes();
+                e.Use();
+            }
+            else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.M)
+            {
+                EmailNotes();
                 e.Use();
             }
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.P)

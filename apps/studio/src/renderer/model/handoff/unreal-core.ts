@@ -4,7 +4,7 @@
  * reads story.json and plays it the way the Godot and Unity runtimes do, so
  * it can be compiled and run outside Unreal, and is.
  */
-import { NOTES_PRINT_STYLE } from '../play';
+import { MAIL_ON_CLIPBOARD, MAILTO_LIMIT, NOTES_PRINT_STYLE } from '../play';
 
 export const VCGS_CORE_H = String.raw`// VCGS Runtime for Unreal: the story's logic in portable C++17.
 // The same for every project; safe to commit. No exceptions, no RTTI.
@@ -1216,6 +1216,49 @@ namespace vcgs
                 body += "\n<div class=\"note\"><h3>" + esc(lines[0].substr(at + std::string(" · ").size())) + "</h3><p>" + rest + "</p></div>";
             }
             return "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>" + esc(name) + " · codex notes</title><style>" + PrintStyle + "</style></head>\n<body><h1>" + esc(name) + "</h1><p class=\"sub\">Codex notes</p>" + body + "\n</body></html>\n";
+        }
+
+        /** The longest mail link written; longer ones are cut short by some mail apps. */
+        static constexpr size_t MailtoLimit = ${MAILTO_LIMIT};
+        /** A mail's body when the notes are too long for its link (they go on the clipboard). */
+        static constexpr const char* MailOnClipboard = ${JSON.stringify(MAIL_ON_CLIPBOARD)};
+
+        /**
+         * The notes as a mail link, for the mail app: "<story> codex notes" and
+         * the notes (the same link as the studio's). The second is false when
+         * they are too long for a link: then the mail says they are on the clipboard.
+         */
+        std::pair<std::string, bool> NotesMailto() const { return MailtoOf(NotesText()); }
+
+        /** Exported notes (NotesText) as a mail link. */
+        static std::pair<std::string, bool> MailtoOf(const std::string& notesText)
+        {
+            auto enc = [](const std::string& s)
+            {
+                static const char* hex = "0123456789ABCDEF";
+                std::string out;
+                for (unsigned char c : s)
+                {
+                    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') out += static_cast<char>(c);
+                    else { out += '%'; out += hex[c >> 4]; out += hex[c & 15]; }
+                }
+                return out;
+            };
+            std::string text;
+            for (size_t i = 0; i < notesText.size(); ++i)
+            {
+                if (notesText[i] != '\r') text += notesText[i];
+                else if (i + 1 >= notesText.size() || notesText[i + 1] != '\n') text += '\n';
+            }
+            std::string first = text.substr(0, text.find('\n'));
+            const std::string prefix = "CODEX NOTES · ";
+            if (first.rfind(prefix, 0) == 0) first = first.substr(prefix.size());
+            const std::string head = "mailto:?subject=" + enc(first + " codex notes") + "&body=";
+            std::string crlf;
+            for (char c : text) crlf += c == '\n' ? std::string("\r\n") : std::string(1, c);
+            const std::string url = head + enc(crlf);
+            if (url.size() <= MailtoLimit) return {url, true};
+            return {head + enc(MailOnClipboard), false};
         }
 
         /** The entries shown, in order, by key ("lore:…"): what a cursor moves through. */

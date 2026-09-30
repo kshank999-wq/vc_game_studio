@@ -1,6 +1,6 @@
 import type { GeneratedFile } from './engines';
 import type { HandoffIR, IrScene } from './ir';
-import { NOTES_PRINT_STYLE } from '../play';
+import { MAIL_ON_CLIPBOARD, MAILTO_LIMIT, NOTES_PRINT_STYLE } from '../play';
 
 /**
  * Placeholder Godot scenes (.tscn): one per story scene, ready to run. Each
@@ -100,7 +100,7 @@ export const sceneRuntime = (): GeneratedFile[] => {
       '## A plain on-screen player: shows each line, action and cinematic, the',
       '## options of a choice, and the objects to use in free play, so a scene',
       '## plays before the game has its own UI. Enter presses the first button,',
-      '## 1-9 the others. C opens the codex (/ searches it, Tab picks a section, S sorts it, the arrows and B bookmark an entry, N writes a note on it, E saves every note as a text file, I reads them back, Y copies them to share, V takes in shared ones, P opens them as a page to print): the quest log, the characters met, the locations visited, the items found, the objects used, the mechanics, the encounters met and the lore found so far. Take it out',
+      '## 1-9 the others. C opens the codex (/ searches it, Tab picks a section, S sorts it, the arrows and B bookmark an entry, N writes a note on it, E saves every note as a text file, I reads them back, Y copies them to share, V takes in shared ones, M emails them, P opens them as a page to print): the quest log, the characters met, the locations visited, the items found, the objects used, the mechanics, the encounters met and the lore found so far. Take it out',
       '## (or keep it for testing) when the game has its own dialogue box, choice',
       '## menu and codex.',
       '',
@@ -147,6 +147,8 @@ export const sceneRuntime = (): GeneratedFile[] => {
       'var _codex_sort_button: OptionButton',
       'const CODEX_SORTS := ["found", "newest", "name"]',
       `const NOTES_PRINT_STYLE := ${JSON.stringify(NOTES_PRINT_STYLE)}`,
+      `const MAILTO_LIMIT := ${MAILTO_LIMIT}`,
+      `const MAIL_ON_CLIPBOARD := ${JSON.stringify(MAIL_ON_CLIPBOARD)}`,
       '## Every section a codex can have, in the order it shows them.',
       'const CODEX_SECTIONS := ["quests", "characters", "locations", "items", "objects", "mechanics", "encounters", "lore"]',
       '## Codex updates (quests, characters, locations, items, objects, mechanics, encounters, lore) since it was last opened.',
@@ -248,6 +250,8 @@ export const sceneRuntime = (): GeneratedFile[] => {
       '\t\telif key.keycode == KEY_P:',
       '\t\t\tvar page := print_codex_notes()',
       '\t\t\t_codex_status.text = ("Notes page opened to print: " + ProjectSettings.globalize_path(page)) if page != "" else "Could not save the notes page."',
+      '\t\telif key.keycode == KEY_M:',
+      '\t\t\t_codex_status.text = "Opening your mail app with the notes." if email_codex_notes()["whole"] else "The notes are too long for a mail link: they are on the clipboard. Paste them into the mail."',
       '\t\telif key.keycode == KEY_V:',
       '\t\t\t_codex_status.text = _say_taken(paste_codex_notes())',
       '\t\telif key.keycode == KEY_N:',
@@ -610,6 +614,27 @@ export const sceneRuntime = (): GeneratedFile[] => {
       '\tif open:',
       '\t\tOS.shell_open(ProjectSettings.globalize_path(path))',
       '\treturn path',
+      '',
+      '## The notes as a mail link, for the mail app: "<story> codex notes" and the notes (the same',
+      '## link as the studio\'s). { "url": …, "whole": false } when they are too long for a link:',
+      '## then the mail says they are on the clipboard.',
+      'func codex_notes_mailto() -> Dictionary:',
+      '\tvar text := codex_notes_text()',
+      '\tvar head := "mailto:?subject=" + (text.get_slice("\\n", 0).trim_prefix("CODEX NOTES · ") + " codex notes").uri_encode() + "&body="',
+      '\tvar url := head + text.replace("\\n", "\\r\\n").uri_encode()',
+      '\tif url.length() <= MAILTO_LIMIT:',
+      '\t\treturn { "url": url, "whole": true }',
+      '\treturn { "url": head + MAIL_ON_CLIPBOARD.uri_encode(), "whole": false }',
+      '',
+      '## Email the notes (M): open the mail app with them; too long for a link, they go on the',
+      '## clipboard first. Returns the mail, as codex_notes_mailto() does.',
+      'func email_codex_notes(open := true) -> Dictionary:',
+      '\tvar mail := codex_notes_mailto()',
+      '\tif not mail["whole"]:',
+      '\t\tDisplayServer.clipboard_set(codex_notes_text())',
+      '\tif open:',
+      '\t\tOS.shell_open(mail["url"])',
+      '\treturn mail',
       '',
       '## An entry\'s name as notes are matched by: its first line without the quest bullet,',
       '## a quest\'s goal, or states in brackets ("(won)", "(carried ×2)"), ignoring case.',

@@ -266,6 +266,12 @@ public:
     /** Save the notes as a text file (Saved/CodexNotes.txt when Path is empty); returns where, or "" if it could not. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") FString ExportCodexNotes(const FString& Path = TEXT(""));
     /**
+     * Email the notes: open the mail app with them ("<story> codex notes"). When
+     * they are too long for a mail link (bWhole false), they go on the clipboard
+     * and the mail says so. Returns the link, or "" with no codex.
+     */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Codex") FString EmailCodexNotes(bool& bWhole, bool bOpen = true);
+    /**
      * Print the notes: save them as a page (Saved/CodexNotes.html when Path is
      * empty) and, with bOpen, open it in the browser to print from. Returns
      * where, or "" if it could not.
@@ -471,6 +477,17 @@ FString UVcgsSubsystem::ExportCodexNotes(const FString& Path)
     const FString Where = Path.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("CodexNotes.txt") : Path;
     return FFileHelper::SaveStringToFile(ToF(CodexData->NotesText()), *Where, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM) ? Where : FString();
 }
+FString UVcgsSubsystem::EmailCodexNotes(bool& bWhole, bool bOpen)
+{
+    bWhole = false;
+    if (!CodexData) return FString();
+    const std::pair<std::string, bool> Mail = CodexData->NotesMailto();
+    bWhole = Mail.second;
+    if (!bWhole) CopyCodexNotes();
+    const FString Url = ToF(Mail.first);
+    if (bOpen) FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
+    return Url;
+}
 FString UVcgsSubsystem::PrintCodexNotes(const FString& Path, bool bOpen)
 {
     if (!CodexData) return FString();
@@ -602,8 +619,8 @@ namespace vcgs { class Codex; }
  * is on (★); Tab reaches the bookmarks alone too. N writes a note on it: type
  * it, Enter keeps it, Escape leaves it. E saves every note as a text file
  * (ExportCodexNotes on the subsystem), and I reads it back (ImportCodexNotes).
- * Y copies the notes to share them, V takes in notes someone shared, and P
- * opens them as a page to print (PrintCodexNotes). The notes
+ * Y copies the notes to share them, V takes in notes someone shared, M emails
+ * them (EmailCodexNotes), and P opens them as a page to print (PrintCodexNotes). The notes
  * sync with Saved/CodexNotesSync.json (SyncCodexNotes) when the codex opens,
  * every few seconds while it is open, and after each note.
  */
@@ -760,6 +777,12 @@ void AVcgsCodexHUD::DrawHUD()
         const FString Where = Story->ExportCodexNotes();
         StatusText = Where.IsEmpty() ? std::string("Could not save the notes.") : "Notes saved to " + ToStd(Where);
     }
+    else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::M))
+    {
+        bool bWhole = false;
+        Story->EmailCodexNotes(bWhole);
+        StatusText = bWhole ? "Opening your mail app with the notes." : "The notes are too long for a mail link: they are on the clipboard. Paste them into the mail.";
+    }
     else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::P))
     {
         const FString Where = Story->PrintCodexNotes();
@@ -861,7 +884,7 @@ void AVcgsCodexHUD::DrawHUD()
         DrawText(ToF(Line), Line == "CODEX" ? Gold : Ink, Left + 18.f, Y);
         Y += 22.f;
     }
-    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B, N · E save, I load, Y share, V paste, P print notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
+    DrawText(ToF(bTypingSearch ? "Type to search · Enter to stop · Esc to clear" : "/ search · Tab section · S sort · arrows + B, N · E save, I load, Y share, V paste, M mail, P print notes · C or Esc close"), Gold, Left + 18.f, Top + PanelHeight - 30.f);
 }
 `,
 

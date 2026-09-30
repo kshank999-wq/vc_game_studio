@@ -153,6 +153,9 @@ static class Check
         // Export them: each entry with a note, in the codex's order.
         sorting.SetNote("encounters:" + Encounters.EelSwarm, "Bring the lantern");
         if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nPriests, not monks") Fail("the notes export should list each noted entry (the eels are not met here), got " + book.NotesText());
+        // Email them: a mail link with the story in the subject and the notes as the body.
+        if (book.NotesMailto() != ("mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0D%0A%0D%0ALORE%20%C2%B7%20THE%20DROWNED%20ORDER%0D%0APriests%2C%20not%20monks", true)) Fail("the mail link should carry the notes, got " + book.NotesMailto());
+        if (Codex.MailtoOf("CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\n" + new string('x', 2000)) != ("mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.", false)) Fail("notes too long for a mail link should say they are on the clipboard");
         // Print them: the same notes as a page, section by section.
         var page = book.NotesPage();
         if (!page.StartsWith("<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>The Sunken Vault · codex notes</title><style>" + Codex.PrintStyle + "</style></head>") || !page.EndsWith("<h1>The Sunken Vault</h1><p class=\"sub\">Codex notes</p>\n<h2>Lore</h2>\n<div class=\"note\"><h3>THE DROWNED ORDER</h3><p>Priests, not monks</p></div>\n</body></html>\n")) Fail("the notes page should list each note under its section, got " + page);
@@ -186,7 +189,7 @@ static class Check
         // The screen compiles with Unity's GUI; its button reads the same codex.
         var screen = new UnityEngine.GameObject("Codex").AddComponent<VcgsCodex>();
         if (screen.ButtonText() != "") Fail("the codex screen should wait for VcgsGame");
-        if (screen.PrintNotes() != "" || UnityEngine.Application.opened.Count != 0) Fail("with no game there are no notes to print");
+        if (screen.PrintNotes() != "" || screen.EmailNotes() != "" || UnityEngine.Application.opened.Count != 0) Fail("with no game there are no notes to print");
         if (silt.Win()) Fail("there is no encounter to win now");
 
         // SC-01 opens by lighting the lantern: its oil becomes a mechanic in play (an effect), with its tuning.

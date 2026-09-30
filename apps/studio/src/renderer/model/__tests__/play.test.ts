@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advance, choose, endFreePlay, notesPrintHtml, NOTES_PRINT_STYLE, interact, playToDecision, promptOf, settleWorld, setWorld, startPlay, startWorld, type Play } from '../play';
+import { advance, choose, endFreePlay, MAILTO_LIMIT, notesMailto, notesPrintHtml, NOTES_PRINT_STYLE, interact, playToDecision, promptOf, settleWorld, setWorld, startPlay, startWorld, type Play } from '../play';
 import { setConnectionRules } from '../project';
 import { sunkenVault } from '../sample';
 import type { Project } from '../types';
@@ -601,6 +601,22 @@ describe('notesPrintHtml', () => {
     expect(notesPrintHtml('CODEX NOTES · The Sunken Vault\n\nQUESTS · Open the vault — Reach the vault chamber and open the door\nKey first, then the lever\n\nLORE · THE DROWNED ORDER\nPriests, not monks')).toBe(
       `<!doctype html>\n<html><head><meta charset="utf-8"><title>The Sunken Vault · codex notes</title><style>${NOTES_PRINT_STYLE}</style></head>\n<body><h1>The Sunken Vault</h1><p class="sub">Codex notes</p>\n<h2>Quests</h2>\n<div class="note"><h3>Open the vault — Reach the vault chamber and open the door</h3><p>Key first, then the lever</p></div>\n<h2>Lore</h2>\n<div class="note"><h3>THE DROWNED ORDER</h3><p>Priests, not monks</p></div>\n</body></html>\n`,
     );
+  });
+});
+
+describe('notesMailto', () => {
+  it('is a mail link with the story in the subject and the notes as the body', () => {
+    // The same link as the engines' checks expect.
+    expect(notesMailto('CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nPriests, not monks')).toEqual({
+      url: 'mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0D%0A%0D%0ALORE%20%C2%B7%20THE%20DROWNED%20ORDER%0D%0APriests%2C%20not%20monks',
+      whole: true,
+    });
+  });
+
+  it('says the notes are on the clipboard when they are too long for a link', () => {
+    const long = notesMailto(`CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\n${'x'.repeat(MAILTO_LIMIT)}`);
+    expect(long.whole).toBe(false);
+    expect(long.url).toBe('mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.');
   });
 });
 

@@ -911,6 +911,31 @@ export const notesPrintHtml = (notesText: string): string => {
   return `<!doctype html>\n<html><head><meta charset="utf-8"><title>${escapeHtml(name)} · codex notes</title><style>${NOTES_PRINT_STYLE}</style></head>\n<body><h1>${escapeHtml(name)}</h1><p class="sub">Codex notes</p>\n${body.join('\n')}\n</body></html>\n`;
 };
 
+/** The longest mail link the codex writes: longer ones are cut short by some mail apps and browsers. */
+export const MAILTO_LIMIT = 2000;
+/** A mail's body when the notes are too long for its link: they go on the clipboard instead. */
+export const MAIL_ON_CLIPBOARD = 'The notes are on the clipboard: paste them here.';
+
+/** Percent-encoded as a mail link wants (UTF-8; letters, digits and - _ . ~ as they are). The same in the engines. */
+const mailEncode = (s: string): string =>
+  Array.from(new TextEncoder().encode(s), (b) => {
+    const c = String.fromCharCode(b);
+    return /[A-Za-z0-9\-_.~]/.test(c) ? c : `%${b.toString(16).toUpperCase().padStart(2, '0')}`;
+  }).join('');
+
+/**
+ * A mail of exported notes (codexNotesText), as a link that opens the
+ * player's mail app: "<story> codex notes" and the notes. When they are too
+ * long for a link (whole false), its body says they are on the clipboard,
+ * and the caller puts them there. The engines' codex screens write the same.
+ */
+export const notesMailto = (notesText: string): { url: string; whole: boolean } => {
+  const text = notesText.replace(/\r\n?/g, '\n');
+  const subject = `mailto:?subject=${mailEncode(`${text.split('\n')[0]!.replace(/^CODEX NOTES · /, '')} codex notes`)}&body=`;
+  const url = subject + mailEncode(text.replace(/\n/g, '\r\n'));
+  return url.length <= MAILTO_LIMIT ? { url, whole: true } : { url: subject + mailEncode(MAIL_ON_CLIPBOARD), whole: false };
+};
+
 /**
  * An entry's name as notes are matched by: its first line without the quest
  * bullet, a quest's goal, or states in brackets ("(won)", "(carried ×2)"),

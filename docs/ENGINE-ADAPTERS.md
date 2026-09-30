@@ -158,7 +158,13 @@ the studio's play-through:
   `paste_codex_notes()` (and `take_codex_notes(text)`); Unity
   `VcgsCodex.ShareNotes` / `PasteNotes`; Unreal `CopyCodexNotes` /
   `PasteCodexNotes` (the plugin now uses the ApplicationCore module for the
-  clipboard). P prints them: the same page as the studio prints (the story's
+  clipboard). M emails them: the same mail link as the studio's (subject
+  "<story> codex notes", the notes as the body), opened in the player's mail
+  app; notes too long for a link (over 2000 characters) go on the clipboard
+  and the mail says to paste them: Godot `email_codex_notes()` and
+  `codex_notes_mailto()`; Unity `VcgsCodex.EmailNotes()` and
+  `Codex.NotesMailto()`; Unreal `EmailCodexNotes` and
+  `vcgs::Codex::NotesMailto()`. P prints them: the same page as the studio prints (the story's
   name, then each section's notes), saved as an HTML file and opened in the
   browser to print from: Godot `print_codex_notes()` (user://codex_notes.html)
   and `codex_notes_page()`; Unity `VcgsCodex.PrintNotes()` (persistentDataPath)

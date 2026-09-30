@@ -274,6 +274,14 @@ describe('play-through', () => {
     fireEvent.click(within(codex).getByRole('button', { name: 'Share notes' }));
     await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('This page cannot copy by itself'));
     expect((within(codex).getByLabelText('Notes to copy') as HTMLTextAreaElement).value).toContain('LORE · THE DROWNED ORDER\nPriests');
+    // Email them: a mail link with the notes, for the mail app.
+    const email = within(codex).getByRole('link', { name: 'Email notes' }) as HTMLAnchorElement;
+    expect(email.href).toMatch(/^mailto:\?subject=The%20Sunken%20Vault%20codex%20notes&body=CODEX%20NOTES/);
+    expect(decodeURIComponent(email.href)).toContain('LORE · THE DROWNED ORDER\r\nPriests');
+    const noNav = vi.spyOn(console, 'error').mockImplementation(() => {}); // jsdom does not follow links
+    fireEvent.click(email);
+    noNav.mockRestore();
+    await waitFor(() => expect(within(codex).getByRole('status').textContent).toContain('Opening your mail app with the notes.'));
     // Print them: the notes as a page, in a hidden frame that asks for the print dialog.
     const quiet = vi.spyOn(console, 'error').mockImplementation(() => {}); // jsdom has no print dialog
     fireEvent.click(within(codex).getByRole('button', { name: 'Print notes' }));

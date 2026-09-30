@@ -202,6 +202,11 @@ int main()
             if (book.Text("not monks").find("THE DROWNED ORDER") == std::string::npos) Fail("a search should find the note, got " + book.Text("not monks"));
             // Export them: each entry with a note, in the codex's order.
             if (book.NotesText() != "CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\nPriests, not monks") Fail("the notes export should list each noted entry, got " + book.NotesText());
+            // Email them: a mail link with the story in the subject and the notes as the body.
+            const std::pair<std::string, bool> mail = book.NotesMailto();
+            if (mail.first != "mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0D%0A%0D%0ALORE%20%C2%B7%20THE%20DROWNED%20ORDER%0D%0APriests%2C%20not%20monks" || !mail.second) Fail("the mail link should carry the notes, got " + mail.first);
+            const std::pair<std::string, bool> tooLong = vcgs::Codex::MailtoOf("CODEX NOTES · The Sunken Vault\n\nLORE · THE DROWNED ORDER\n" + std::string(2000, 'x'));
+            if (tooLong.second || tooLong.first != "mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.") Fail("notes too long for a mail link should say they are on the clipboard, got " + tooLong.first);
             // Print them: the same notes as a page, section by section.
             const std::string page = book.NotesPage();
             const std::string pageEnd = "<h1>The Sunken Vault</h1><p class=\"sub\">Codex notes</p>\n<h2>Lore</h2>\n<div class=\"note\"><h3>THE DROWNED ORDER</h3><p>Priests, not monks</p></div>\n</body></html>\n";

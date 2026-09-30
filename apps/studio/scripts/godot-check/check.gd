@@ -370,6 +370,17 @@ func _initialize() -> void:
 	var saved: String = silt_player.export_codex_notes("user://vcgs_check_notes.txt")
 	if saved == "" or FileAccess.get_file_as_string(saved) != notes:
 		fail("the notes should be saved as a text file, got " + saved)
+	# Email them: a mail link with the story in the subject and the notes as the body.
+	game.set_note("quests:open_the_vault", "")
+	var mail: Dictionary = silt_player.codex_notes_mailto()
+	if mail["url"] != "mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=CODEX%20NOTES%20%C2%B7%20The%20Sunken%20Vault%0D%0A%0D%0ALORE%20%C2%B7%20THE%20DROWNED%20ORDER%0D%0APriests%2C%20not%20monks" or not mail["whole"]:
+		fail("the mail link should carry the notes, got " + str(mail))
+	game.set_note("lore:the_drowned_order", "x".repeat(2000))
+	var long: Dictionary = silt_player.email_codex_notes(false)
+	if long["whole"] or long["url"] != "mailto:?subject=The%20Sunken%20Vault%20codex%20notes&body=The%20notes%20are%20on%20the%20clipboard%3A%20paste%20them%20here.":
+		fail("notes too long for a mail link should go on the clipboard, got " + str(long))
+	game.set_note("lore:the_drowned_order", "Priests, not monks")
+	game.set_note("quests:open_the_vault", "Key first, then the lever")
 	# Print them: the same notes as a page, section by section, saved to open and print.
 	var page: String = silt_player.codex_notes_page()
 	if not page.begins_with("<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>The Sunken Vault · codex notes</title>") or not page.contains("<h1>The Sunken Vault</h1><p class=\"sub\">Codex notes</p>\n<h2>Quests</h2>\n<div class=\"note\"><h3>Open the vault — Reach the vault chamber and open the door</h3><p>Key first, then the lever</p></div>\n<h2>Lore</h2>\n<div class=\"note\"><h3>THE DROWNED ORDER</h3><p>Priests, not monks</p></div>\n</body></html>\n"):
