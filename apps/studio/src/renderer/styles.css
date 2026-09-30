@@ -8323,6 +8323,26 @@ button.bible-dual-col:hover {
   border-color: #8a6f2f;
 }
 
+/* What is in hand (spec §8), beside the light. */
+.play-hand {
+  margin-top: 6px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  border: 1px solid #8a6f2f;
+  background: rgba(11, 10, 7, 0.8);
+  color: #ffd89a;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.play-hand-detail {
+  color: var(--muted);
+}
+
+.play-gear section + section {
+  margin-top: 12px;
+}
+
 /* ─── Comments, tasks and history (spec §16) ─────────────────────────── */
 .collab {
   display: flex;

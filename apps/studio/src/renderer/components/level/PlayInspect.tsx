@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { statesOf } from '../../model/details';
 import { assetOf } from '../../model/level/geometry';
 import { levelsOf } from '../../model/level/level';
-import { addNote, isOpen, presetFrom, removePreset, resolveNote, savePreset, setWorldByHand, type LevelPlayState, type Where } from '../../model/level/play';
+import { addNote, gearDo, isOpen, presetFrom, removePreset, resolveNote, savePreset, setWorldByHand, type LevelPlayState, type Where } from '../../model/level/play';
+import { recipesOf } from '../../model/crafting';
+import { equipmentList } from '../../model/equipment';
+import { skillsOf } from '../../model/skills';
+import { CraftSection, GearSection, SkillsSection } from '../play/GearPanels';
 import type { Project } from '../../model/types';
 import { PlayControls } from './PlayControls';
 
@@ -10,6 +14,8 @@ interface Props {
   project: Project;
   levelId: string;
   state: LevelPlayState;
+  /** The tab to open on (the gear screen, from I). */
+  tab?: Tab;
   at: Where;
   /** The item the player is nearest, for a note. */
   nearest?: string;
@@ -20,7 +26,7 @@ interface Props {
   onExit: () => void;
 }
 
-type Tab = 'state' | 'log' | 'notes' | 'controls';
+type Tab = 'state' | 'gear' | 'log' | 'notes' | 'controls';
 
 /**
  * Paused (spec §9.2–9.3): what the story and the level hold right now, which
@@ -30,7 +36,8 @@ type Tab = 'state' | 'log' | 'notes' | 'controls';
 export const PlayInspect = (props: Props) => {
   const { project, state } = props;
   const set = levelsOf(project);
-  const [tab, setTab] = useState<Tab>('state');
+  const hasGear = equipmentList(project).length > 0 || skillsOf(project).length > 0 || recipesOf(project).length > 0;
+  const [tab, setTab] = useState<Tab>(props.tab === 'gear' && !hasGear ? 'state' : (props.tab ?? 'state'));
   const [presetName, setPresetName] = useState('');
   const [note, setNote] = useState('');
   const [about, setAbout] = useState(props.nearest ?? '');
@@ -67,6 +74,7 @@ export const PlayInspect = (props: Props) => {
         {(
           [
             ['state', 'State'],
+            ...(hasGear ? ([['gear', 'Gear']] as const) : []),
             ['log', `Event log (${state.log.length})`],
             ['notes', `Notes${notes.length ? ` (${notes.length})` : ''}`],
             ['controls', 'Controls'],
@@ -176,6 +184,14 @@ export const PlayInspect = (props: Props) => {
               ))}
             </section>
           </>
+        )}
+        {tab === 'gear' && (
+          <div className="play-gear" aria-label="Gear">
+            <p className="muted">Equip, use, learn and craft here, as the player would; the level's rules see it at once.</p>
+            <GearSection project={project} world={w} onGear={(id, act) => props.onState(gearDo(project, state, act, id))} />
+            <SkillsSection project={project} world={w} onLearn={(id) => props.onState(gearDo(project, state, 'learn', id))} />
+            <CraftSection project={project} world={w} onCraft={(id) => props.onState(gearDo(project, state, 'craft', id))} />
+          </div>
         )}
         {tab === 'log' && (
           <>

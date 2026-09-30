@@ -48,6 +48,15 @@ namespace VCGS
         public double Until;
     }
 
+    /// <summary>Something the player can do on the gear screen (spec §8): equip, unequip, use, learn or craft, and why not ("" when they can).</summary>
+    public sealed class GearOption
+    {
+        public string Act = "";
+        public string Key = "";
+        public string Label = "";
+        public string Why = "";
+    }
+
     public sealed class LevelLogic
     {
         static readonly HashSet<string> Interactive = new HashSet<string> { "door", "pickup", "inventory", "weapon", "ammo", "health", "npc", "companion", "neutral", "dialogue", "interaction", "puzzle", "elevator", "ladder" };
@@ -326,6 +335,81 @@ namespace VCGS
             else { LightOn = true; LightChanged?.Invoke(true); text = "Light on."; }
             Message?.Invoke(text);
             return text;
+        }
+
+        /// <summary>
+        /// Gear, skills and crafting (spec §8): what the player can do now, in the order the
+        /// studio's Play Mode lists it: each item of equipment carried (Use and Put away when
+        /// equipped, else Equip), each skill (Learn), each recipe (Craft), with why not.
+        /// </summary>
+        public List<GearOption> GearMenu()
+        {
+            var menu = new List<GearOption>();
+            foreach (var pair in Game.Story.Equipment)
+            {
+                if (!Game.HasItem(pair.Key)) continue;
+                var name = D.Str(pair.Value, "name");
+                if (Game.IsEquipped(pair.Key))
+                {
+                    menu.Add(new GearOption { Act = "use", Key = pair.Key, Label = "Use " + name, Why = Game.UseCheck(pair.Key) });
+                    menu.Add(new GearOption { Act = "unequip", Key = pair.Key, Label = "Put away " + name });
+                }
+                else menu.Add(new GearOption { Act = "equip", Key = pair.Key, Label = "Equip " + name, Why = Game.EquipCheck(pair.Key) });
+            }
+            foreach (var pair in Game.Story.Skills) menu.Add(new GearOption { Act = "learn", Key = pair.Key, Label = "Learn " + D.Str(pair.Value, "name"), Why = Rules.LearnCheck(pair.Key, Game) });
+            foreach (var pair in Game.Story.Recipes) menu.Add(new GearOption { Act = "craft", Key = pair.Key, Label = "Craft " + D.Str(pair.Value, "name"), Why = Game.CraftCheck(pair.Key) });
+            return menu;
+        }
+
+        /// <summary>The gear screen as text: GEAR, then each option numbered, with why not in brackets.</summary>
+        public string GearText()
+        {
+            var lines = new List<string> { "GEAR" };
+            var menu = GearMenu();
+            if (menu.Count == 0) lines.Add("Nothing to equip, learn or craft.");
+            for (var i = 0; i < menu.Count; i++) lines.Add((i + 1) + ". " + menu[i].Label + (menu[i].Why != "" ? " (" + menu[i].Why + ")" : ""));
+            return string.Join("\n", lines);
+        }
+
+        string GearName(string key)
+        {
+            foreach (var table in new[] { Game.Story.Equipment, Game.Story.Skills, Game.Story.Recipes })
+                if (table.TryGetValue(key ?? "", out var entry)) return D.Str(entry, "name");
+            return StoryName(key);
+        }
+
+        /// <summary>Do one: equip, unequip, use, learn or craft, by the story's rules. Returns what to tell the player ("Equipped Diving Knife", "Crafted 2 × Flare", or why not), as the studio says it.</summary>
+        public string GearDo(string act, string key)
+        {
+            var name = GearName(key);
+            string why, done;
+            switch (act)
+            {
+                case "equip": why = Game.Equip(key); done = "Equipped " + name; break;
+                case "unequip": why = Game.Unequip(key); done = "Put away " + name; break;
+                case "use": why = Game.UseItem(key); done = "Used " + name; break;
+                case "learn": why = Rules.Learn(key, Game); done = "Learned " + name; break;
+                case "craft":
+                    why = Game.Craft(key);
+                    var makes = Game.Story.Recipes.TryGetValue(key ?? "", out var r) ? (int)D.Num(r, "makes", 1) : 1;
+                    done = "Crafted " + (makes > 1 ? makes + " × " : "") + name;
+                    break;
+                default: why = "Nothing to do."; done = ""; break;
+            }
+            var text = why != "" ? why : done;
+            Message?.Invoke(text);
+            return text;
+        }
+
+        /// <summary>What is in the player's hand ("" for nothing).</summary>
+        public string InHand() => Game.EquippedIn("Hand");
+
+        /// <summary>Use what is in the hand (R), as Use on the gear screen.</summary>
+        public string UseInHand()
+        {
+            var key = InHand();
+            if (key == "") { Message?.Invoke("Nothing in hand."); return "Nothing in hand."; }
+            return GearDo("use", key);
         }
 
         void BurnLight(double dt)
@@ -609,6 +693,12 @@ namespace VCGS
         }
 
         public string Interact(string guid) => Logic != null ? Logic.Interact(guid) : "";
+
+        /// <summary>Gear, skills and crafting (spec §8): bind your own keys to these (the studio uses R to use what is in hand, I for the gear screen).</summary>
+        public string UseInHand() => Logic != null ? Logic.UseInHand() : "";
+        public List<GearOption> GearMenu() => Logic != null ? Logic.GearMenu() : new List<GearOption>();
+        public string GearText() => Logic != null ? Logic.GearText() : "";
+        public string GearDo(string act, string key) => Logic != null ? Logic.GearDo(act, key) : "";
     }
 }
 `,

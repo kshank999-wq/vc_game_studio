@@ -154,8 +154,8 @@ selection). Beside the button, choose where to start and what the story holds:
 - the **perspective** (first person, third person or top-down), a project setting that can also be changed while playing (**V**)
 
 **Controls.**
-- **Keyboard and mouse:** WASD or the arrows to move, the mouse to look, Shift to run, Space to jump, **C** or Left Ctrl to crouch, **L** for the light, **E** to use what's in reach. Click the view to capture the mouse; Esc gives it back. Without pointer lock, dragging looks around.
-- **Controller:** the left stick moves, the right stick looks, A jumps, X uses, the right stick's press crouches, the right bumper works the light and Start pauses.
+- **Keyboard and mouse:** WASD or the arrows to move, the mouse to look, Shift to run, Space to jump, **C** or Left Ctrl to crouch, **L** for the light, **E** to use what's in reach, **R** to use what's in hand, **I** for the gear screen. Click the view to capture the mouse; Esc gives it back. Without pointer lock, dragging looks around.
+- **Controller:** the left stick moves, the right stick looks, A jumps, X uses, the right stick's press crouches, the right bumper works the light, the right trigger uses what's in hand, the left trigger opens the gear screen and Start pauses.
 - **Rebinding:** every action's keys and buttons can be changed in the pause panel's **Controls** tab, along with look speed, inverted look and the stick dead zone. These are kept on this computer.
 
 **What happens.** The player is a capsule that walks, climbs steps and stairs,
@@ -176,6 +176,7 @@ the same effects, with triggers and puzzles settling after every change:
 - **Darkness (spec §6):** a **Darkness** zone (Logic) darkens the view by its **Dark** percent while the player is in it. With **Needs light** on, what is in it can't be used in the dark: it says "Too dark to see", and what the light needs.
 - **The player's light:** the player start's **Light** names what lights it, a story item carried or a mechanic available; **Light fuel** is how many seconds it burns (0 for ever) and **Light range** how far it reaches. **L** turns it on, if the player has what lights it and fuel is left; the HUD shows the fuel, and the light goes out when it runs out or its source is gone. A rule's **Refill the light of** action fills it up again.
 - **Companions:** a companion that **Follows the player** keeps within its **Follow distance**, walking at its Speed (faster when far behind). More than 12 m behind, or on another floor, it catches up at once, behind the player.
+- **Gear, skills and crafting (spec §8):** the **Gear** button (or **I**) pauses on the gear screen: the story's Equipment, Skills and Crafting panels, as in the story play-through. Equip, use or put away what is carried, learn a skill and craft by the same rules; each says what it did ("Equipped Diving Knife", "Crafted 2 × Flare") or why not, on screen and in the event log, and the level's rules waiting on the story get their turn (a stat condition, say). The HUD shows what is in the **Hand** slot, its ammunition and uses left; **R** uses it (the knife wears out and breaks, the flare pistol burns flares).
 - **Spawners:** put their characters or items in the level, after their delay.
 - **Rules:** run on enter, exit, interact, pickup, use, timers and story changes. Each is logged with its conditions and whether they held, then its story effects and level actions.
 - **Present only when:** items appear and disappear as it comes and goes; in the sample, the flooded seam drains and the bronze door gives way once the lever is pulled.
@@ -225,6 +226,11 @@ five seconds as Play Mode does):
 - **Godot:** `VCGSLevel.toggle_light()`, `darkness()`, `light_on`, `light_fuel` and the `light_changed` signal. `play_<level>.tscn`'s player turns it on with L, crouches with C or Ctrl, darkens the screen and carries a lamp.
 - **Unity:** `LevelLogic.ToggleLight()`, `Darkness()`, `IsLit`, `LightFuel` and `LightChanged`; bind them to your input and lights.
 - **Unreal:** `AVcgsLevelDirector::ToggleLight()`, `Darkness()`, `IsLit()`, `LightFuel()`, `LightRange()` and `OnLightChanged`, for Blueprints; crouching is the character's own.
+
+**Gear, skills and crafting** in the level work the same everywhere: a gear menu in Play Mode's order (each item of equipment carried, Use and Put away when equipped or else Equip, then each skill, then each recipe, each with why not), its text ("GEAR", then each option numbered, why not in brackets), doing one by the story's rules with the studio's words, and using what is in the Hand slot.
+- **Godot:** `VCGSLevel.gear_menu()`, `gear_text()`, `gear_do(act, key)`, `in_hand()` and `use_in_hand()`, said through `message_shown`. `play_<level>.tscn`'s player uses what is in hand with R, and shows the gear screen with I (1-9 do its options).
+- **Unity:** `LevelLogic.GearMenu()`, `GearText()`, `GearDo(act, key)`, `InHand()` and `UseInHand()`, said through `Message` (and on `VcgsLevel`); bind them to your input.
+- **Unreal:** `AVcgsLevelDirector::UseInHand()`, `InHand()`, `GearText()`, `GearPick(index)` and `GearDo(act, key)`, for Blueprints, said through `OnMessage`.
 
 A freeform space's floor and ceiling go over as a **slab**: the outline raised to its thickness, with its triangles.
 - **Godot:** a `CSGPolygon3D`, colliding through a `ConcavePolygonShape3D` of its faces.

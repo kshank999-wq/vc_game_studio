@@ -5,7 +5,10 @@ import { BODY, collidersFrom, eyeOf, facing, look, step, type Body, type Collide
 import { assetOf, frameOf, meshesFor, num, paramOf, type Mesh } from '../../model/level/geometry';
 import { levelsOf } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
-import { darknessAt, dismiss, interactWith, isOpen, lightOf, offerFor, present, startLevelPlay, tick, toggleLight, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
+import { darknessAt, dismiss, inHand, interactWith, isOpen, lightOf, offerFor, present, startLevelPlay, tick, toggleLight, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
+import { equipmentList, equipmentOf, usesLeft } from '../../model/equipment';
+import { recipesOf } from '../../model/crafting';
+import { skillsOf } from '../../model/skills';
 import type { AssetDefinition, LevelItem, Perspective, PlayPreset } from '../../model/level/types';
 import type { PlayWorld } from '../../model/play';
 import { shotsOf, describeShot } from '../../model/shots';
@@ -74,6 +77,8 @@ export const PlayMode = (props: Props) => {
   const [hud, setHud] = useState<LevelPlayState>(() => startLevelPlay(project, levelId, { preset: props.preset, world: props.world, global }));
   const [offer, setOffer] = useState<Offer | null>(null);
   const [paused, setPaused] = useState(false);
+  // Which tab the paused panel opens on: the state, or the gear screen (I).
+  const [pauseTab, setPauseTab] = useState<'state' | 'gear'>('state');
   const [debug, setDebug] = useState(false);
   const [locked, setLocked] = useState(false);
   const [padOn, setPadOn] = useState(false);
@@ -350,7 +355,14 @@ export const PlayMode = (props: Props) => {
         pressedOnce.current.delete(a);
         return was;
       };
-      if (once('inspect')) setPaused((v) => !v);
+      if (once('inspect')) {
+        setPauseTab('state');
+        setPaused((v) => !v);
+      }
+      if (once('gear')) {
+        setPauseTab('gear');
+        setPaused(true);
+      }
       if (once('debug')) setDebug((v) => !v);
       if (once('view')) p.onPerspective(p.perspective === 'first' ? 'third' : p.perspective === 'third' ? 'top' : 'first');
       if (once('note')) setPaused(true);
@@ -391,6 +403,7 @@ export const PlayMode = (props: Props) => {
           if ((target?.itemId ?? null) !== (latest.current.offer?.itemId ?? null) || target?.verb !== latest.current.offer?.verb || target?.blocked !== latest.current.offer?.blocked) setOffer(target);
           if (once('interact') && target) s = interactWith(p.project, s, target.itemId, p.global);
           if (once('light')) s = toggleLight(p.project, s, p.global);
+          if (once('useItem')) s = useInHand(p.project, s);
         }
         if (s.goTo) {
           p.onGoToLevel(s.goTo, s.world);
@@ -400,6 +413,7 @@ export const PlayMode = (props: Props) => {
       pressedOnce.current.delete('interact');
       pressedOnce.current.delete('jump');
       pressedOnce.current.delete('light');
+      pressedOnce.current.delete('useItem');
       if (s !== state.current) {
         state.current = s;
         // The HUD follows at 12 frames a second; anything that changes what is there shows at once.
@@ -439,6 +453,11 @@ export const PlayMode = (props: Props) => {
   // ------------------------------------------------------------ what the player sees over the level
 
   const items = Object.entries(hud.world.items).filter(([, n]) => n > 0);
+  // Gear, skills and crafting (spec §8): what is in hand, and a way to the gear screen when the story has any.
+  const hasGear = equipmentList(project).length > 0 || skillsOf(project).length > 0 || recipesOf(project).length > 0;
+  const hand = inHand(hud);
+  const handGear = hand ? equipmentOf(project.objects[hand]) : undefined;
+  const handLeft = hand ? usesLeft(project, hud.world, hand) : Infinity;
   // Health shows when something here can hurt.
   const dangerous = set.items.some(
     (i) => i.levelId === levelId && ['hazard', 'damage'].includes(assetOf(set, i, global).role) && (num(paramOf(set, i, 'damage', global), 0) > 0 || paramOf(set, i, 'kills', global) === true),
@@ -490,7 +509,28 @@ export const PlayMode = (props: Props) => {
             </span>
           ))}
         </div>
-        <button className="tb-btn small" onClick={() => setPaused(true)} title={`Pause and inspect (${controls.keys.inspect.map(keyLabel).join(' / ')})`}>
+        {hand && handGear && (
+          <div className="play-hand" aria-label="In hand" title={`Use it (${controls.keys.useItem.map(keyLabel).join(' / ')})`}>
+            Hand: {project.objects[hand]?.name}
+            <span className="play-hand-detail">
+              {handGear.ammo ? ` · ${hud.world.items[handGear.ammo] ?? 0} ${project.objects[handGear.ammo]?.name ?? ''}` : ''}
+              {Number.isFinite(handLeft) ? ` · ${handLeft} ${handLeft === 1 ? 'use' : 'uses'} left` : ''} · {controls.keys.useItem.map(keyLabel).join('/')}
+            </span>
+          </div>
+        )}
+        {hasGear && (
+          <button
+            className="tb-btn small"
+            onClick={() => {
+              setPauseTab('gear');
+              setPaused(true);
+            }}
+            title={`Gear, skills and crafting (${controls.keys.gear.map(keyLabel).join(' / ')})`}
+          >
+            Gear
+          </button>
+        )}
+        <button className="tb-btn small" onClick={() => { setPauseTab('state'); setPaused(true); }} title={`Pause and inspect (${controls.keys.inspect.map(keyLabel).join(' / ')})`}>
           ❚❚ Inspect
         </button>
         <button className="tb-btn small" onClick={() => props.onExit(nearest())}>
@@ -506,7 +546,7 @@ export const PlayMode = (props: Props) => {
       )}
       {hud.message && <div className="play-message">{hud.message.text}</div>}
       {!locked && !paused && props.perspective !== 'top' && !failed && !hud.cinematic && !hud.scene && (
-        <div className="play-hint">Click to look around with the mouse (Esc gives the pointer back) · {controls.keys.forward.map(keyLabel)[0]}{controls.keys.left.map(keyLabel)[0]}{controls.keys.back.map(keyLabel)[0]}{controls.keys.right.map(keyLabel)[0]} to move · {keyLabel(controls.keys.interact[0] ?? 'KeyE')} to use · {keyLabel(controls.keys.inspect[0] ?? 'Tab')} to inspect{padOn ? ' · controller connected' : ''}</div>
+        <div className="play-hint">Click to look around with the mouse (Esc gives the pointer back) · {controls.keys.forward.map(keyLabel)[0]}{controls.keys.left.map(keyLabel)[0]}{controls.keys.back.map(keyLabel)[0]}{controls.keys.right.map(keyLabel)[0]} to move · {keyLabel(controls.keys.interact[0] ?? 'KeyE')} to use · {keyLabel(controls.keys.inspect[0] ?? 'Tab')} to inspect{hasGear ? ` · ${keyLabel(controls.keys.gear[0] ?? 'KeyI')} for gear` : ''}{padOn ? ' · controller connected' : ''}</div>
       )}
       {debug && (
         <div className="play-debug">
@@ -567,6 +607,8 @@ export const PlayMode = (props: Props) => {
       )}
       {paused && (
         <PlayInspect
+          key={pauseTab}
+          tab={pauseTab}
           project={project}
           levelId={levelId}
           state={hud}

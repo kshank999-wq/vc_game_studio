@@ -761,3 +761,37 @@ func check_level(game: Node) -> void:
 	level.toggle_light()
 	if level.is_lit():
 		fail("the light should be off again")
+	# Gear, skills and crafting in the level (spec §8): the gear screen (I), numbered, and R for what is in hand.
+	var before_level_gear: String = JSON.stringify(game.save_data(""))
+	game.give_item("diving_knife")
+	game.give_item("flare_pistol")
+	game.give_item("salvage")
+	var menu: Array = level.gear_menu()
+	var labels: Array = menu.map(func(o: Dictionary) -> String: return str(o["label"]) + ("" if str(o["why"]) == "" else " (" + str(o["why"]) + ")"))
+	print("gear screen: ", level.gear_text().replace("\n", " | "))
+	if labels != ["Equip Diving Knife", "Equip Flare Pistol", "Learn Deep Breath", "Learn Lantern Hood (Learn Deep Breath first.)", "Craft Flare"]:
+		fail("the gear screen should list the knife, the pistol, the skills and the flare recipe, got " + str(labels))
+	if level.gear_text() != "GEAR\n1. Equip Diving Knife\n2. Equip Flare Pistol\n3. Learn Deep Breath\n4. Learn Lantern Hood (Learn Deep Breath first.)\n5. Craft Flare":
+		fail("the gear screen's text should number the options, got " + level.gear_text())
+	if level.use_in_hand() != "Nothing in hand.":
+		fail("with nothing equipped, R should say so")
+	var walker: Node = load("res://vcgs/generated/levels/play_sunken_vault.tscn").instantiate()
+	var hands: Node = walker.get_node("Player")
+	hands.level = level
+	hands.gear = Label.new()
+	hands.gear.visible = true
+	if hands.pick_gear(0) != "Equipped Diving Knife" or level.in_hand() != "diving_knife" or not hands.gear.text.begins_with("GEAR\n1. Use Diving Knife\n2. Put away Diving Knife\n3. Equip Flare Pistol"):
+		fail("picking 1 should equip the knife, and the screen then offer to use it or put it away, got " + hands.gear.text)
+	hands.gear.free()
+	walker.free()
+	if level.use_in_hand() != "Used Diving Knife" or level.gear_menu()[0]["why"] != "":
+		fail("R should use the knife in hand")
+	if level.gear_do("learn", "deep_breath") != "Learned Deep Breath" or game.skill_rank("deep_breath") != 1:
+		fail("the gear screen should learn Deep Breath")
+	if level.gear_do("craft", "flare") != "Crafted 2 × Flare" or int(game.items.get("flare", 0)) != 2:
+		fail("the gear screen should craft two flares")
+	if level.gear_do("learn", "lantern_hood") != "Costs 2 × Salvage (you have 0).":
+		fail("the hood should say what it costs")
+	print("level gear: in hand ", level.in_hand(), ", Deep Breath rank ", game.skill_rank("deep_breath"), ", flares ", game.items.get("flare", 0))
+	game.load_text(before_level_gear)
+	game.loaded = false

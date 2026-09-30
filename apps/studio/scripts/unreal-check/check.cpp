@@ -54,6 +54,30 @@ static void CheckLevel(const vcgs::Story& story)
         cave.Interact(named("Mara"));
         if (cave.LightFuel != 90) Fail("Mara should top the lantern up");
     }
+    // Gear, skills and crafting in the level (spec §8): the gear screen, numbered, and what is in hand.
+    {
+        vcgs::GameState kitGame(story);
+        vcgs::LevelLogic kit(vcgs::JsonReader::Parse(buffer.str(), &error), kitGame);
+        kitGame.EnableMechanic("lantern_oil");
+        kitGame.GiveItem("diving_knife");
+        kitGame.GiveItem("flare_pistol");
+        kitGame.GiveItem("salvage");
+        std::vector<std::string> said;
+        kit.OnMessage = [&said](const std::string& t) { said.push_back(t); };
+        std::printf("gear screen: %s\n", kit.GearText().c_str());
+        if (kit.GearText() != "GEAR\n1. Equip Diving Knife\n2. Equip Flare Pistol\n3. Learn Deep Breath\n4. Learn Lantern Hood (Learn Deep Breath first.)\n5. Craft Flare") Fail("the gear screen should list the knife, the pistol, the skills and the flare recipe, got " + kit.GearText());
+        if (kit.UseInHand() != "Nothing in hand.") Fail("with nothing equipped, R should say so");
+        const auto first = kit.GearMenu()[0];
+        if (kit.GearDo(first.Act, first.Key) != "Equipped Diving Knife" || kit.InHand() != "diving_knife" || kit.GearText().rfind("GEAR\n1. Use Diving Knife\n2. Put away Diving Knife\n3. Equip Flare Pistol", 0) != 0) Fail("the first option should equip the knife, then offer to use it or put it away, got " + kit.GearText());
+        if (kit.UseInHand() != "Used Diving Knife") Fail("R should use the knife in hand");
+        if (kit.GearDo("learn", "deep_breath") != "Learned Deep Breath" || kitGame.SkillRank("deep_breath") != 1) Fail("the gear screen should learn Deep Breath");
+        if (kit.GearDo("craft", "flare") != "Crafted 2 × Flare" || kitGame.Items["flare"] != 2) Fail("the gear screen should craft two flares");
+        if (kit.GearDo("learn", "lantern_hood") != "Costs 2 × Salvage (you have 0).") Fail("the hood should say what it costs");
+        std::string all;
+        for (const auto& t : said) all += (all.empty() ? "" : ",") + t;
+        if (all != "Nothing in hand.,Equipped Diving Knife,Used Diving Knife,Learned Deep Breath,Crafted 2 × Flare,Costs 2 × Salvage (you have 0).") Fail("each should be said to the player, got " + all);
+        std::printf("level gear: in hand %s, Deep Breath rank %d, flares %d\n", kit.InHand().c_str(), kitGame.SkillRank("deep_breath"), kitGame.Items["flare"]);
+    }
     // Mara paces the cave mouth: her first stop is where she stands (4 s there), then on to the second.
     {
         vcgs::GameState walking(story);

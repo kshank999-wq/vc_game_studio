@@ -1,5 +1,8 @@
 import { startPoses, stepActors, type ActorPose } from './actors';
-import { applyStoryEffects, settleWorld, startWorld, useStoryObject, type Entry, type PlayWorld } from '../play';
+import { craftCheck, recipeOf, recipesOf } from '../crafting';
+import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
+import { applyStoryEffects, craftIn, gearIn, learnSkillIn, settleWorld, startWorld, useStoryObject, type Entry, type PlayWorld } from '../play';
+import { learnCheck, skillsOf } from '../skills';
 import { describeEffect, describeRule, evaluate, isEmpty } from '../rules';
 import { cinematicTiming } from '../shots';
 import type { Project } from '../types';
@@ -547,6 +550,73 @@ const enter = (project: Project, state: LevelPlayState, id: string, global?: rea
 export const setWorldByHand = (project: Project, state: LevelPlayState, world: PlayWorld, what: string): LevelPlayState => {
   const settled = settleWorld(project, world);
   return changeWorld(project, log(state, { kind: 'info', text: `By hand: ${what}` }), settled.world, settled.log, undefined, 0);
+};
+
+// ---------------------------------------------------------------- gear, skills and crafting (spec §8)
+
+export type GearAct = 'equip' | 'unequip' | 'use' | 'learn' | 'craft';
+
+export const GEAR_VERBS: Record<GearAct, string> = { equip: 'Equip', unequip: 'Put away', use: 'Use', learn: 'Learn', craft: 'Craft' };
+
+/** Something the player can do with their gear, skills or recipes, and why not ("" when they can). */
+export interface GearOption {
+  act: GearAct;
+  id: string;
+  label: string;
+  why: string;
+}
+
+/**
+ * The gear screen, in order, as the engines' level players list it: each item
+ * of equipment carried (Use and Put away when it is equipped, else Equip), then
+ * each skill (Learn), then each recipe (Craft), each with why not.
+ */
+export const gearMenu = (project: Project, world: PlayWorld): GearOption[] => {
+  const out: GearOption[] = [];
+  for (const o of equipmentList(project)) {
+    if ((world.items[o.id] ?? 0) < 1) continue;
+    if (isEquipped(world, o.id)) {
+      out.push({ act: 'use', id: o.id, label: `Use ${o.name}`, why: useCheck(project, world, o.id) });
+      out.push({ act: 'unequip', id: o.id, label: `Put away ${o.name}`, why: '' });
+    } else out.push({ act: 'equip', id: o.id, label: `Equip ${o.name}`, why: equipCheck(project, world, o.id) });
+  }
+  for (const o of skillsOf(project)) out.push({ act: 'learn', id: o.id, label: `Learn ${o.name}`, why: learnCheck(project, world, o.id).needs ?? '' });
+  for (const o of recipesOf(project)) out.push({ act: 'craft', id: o.id, label: `Craft ${o.name}`, why: craftCheck(project, world, o.id) });
+  return out;
+};
+
+/** What the screen says once it is done ("Equipped Diving Knife", "Crafted 2 × Flare"). The engines say the same. */
+const doneText = (project: Project, act: GearAct, id: string): string => {
+  const n = name(project, id);
+  if (act === 'craft') {
+    const makes = recipeOf(project.objects[id])?.makes ?? 1;
+    return `Crafted ${makes > 1 ? `${makes} × ` : ''}${n}`;
+  }
+  return `${{ equip: 'Equipped', unequip: 'Put away', use: 'Used', learn: 'Learned' }[act]} ${n}`;
+};
+
+/** A story entry as a line of the level's log, with its detail ("Used Diving Knife · 2 uses left"). */
+const gearEntry = (e: Entry): Entry =>
+  e.kind === 'skill' ? { kind: 'effect', text: `Learned ${e.text} (rank ${e.rank} of ${e.ranks})` } : (e.kind === 'gear' || e.kind === 'craft') && e.detail ? { ...e, text: `${e.text} · ${e.detail}` } : e;
+
+/**
+ * Equip, put away or use an item, learn a skill or craft (spec §8) in the
+ * level: the same rules as the story play-through. What happened, or why not,
+ * goes on screen and in the log, and the level's rules waiting on the story get their turn.
+ */
+export const gearDo = (project: Project, state: LevelPlayState, act: GearAct, id: string): LevelPlayState => {
+  const r = act === 'learn' ? learnSkillIn(project, state.world, id) : act === 'craft' ? craftIn(project, state.world, id) : act === 'unequip' && !isEquipped(state.world, id) ? { world: state.world, log: [], needs: `${name(project, id)} is not equipped.` } : gearIn(project, state.world, id, act);
+  if (r.needs) return say(log(state, { kind: 'warn', text: `${GEAR_VERBS[act]} ${name(project, id)}: ${r.needs}` }), r.needs);
+  return say(changeWorld(project, state, r.world, r.log.map(gearEntry), undefined, 0), doneText(project, act, id));
+};
+
+/** What is in the player's hand ("" for nothing). */
+export const inHand = (state: LevelPlayState): string => state.world.equipped?.Hand ?? '';
+
+/** Use what is in the hand (R): as Use on the gear screen. */
+export const useInHand = (project: Project, state: LevelPlayState): LevelPlayState => {
+  const id = inHand(state);
+  return id ? gearDo(project, state, 'use', id) : say(state, 'Nothing in hand.');
 };
 
 // ---------------------------------------------------------------- presets and notes

@@ -388,6 +388,25 @@ static class Check
             cave.Interact(Named("Mara"));
             if (cave.LightFuel != 90) Fail("Mara should top the lantern up, got " + cave.LightFuel);
         }
+        // Gear, skills and crafting in the level (spec §8): the gear screen, numbered, and what is in hand.
+        {
+            var kit = new LevelLogic(D.Map(Json.Parse(json)), new GameState(story));
+            kit.Game.EnableMechanic("lantern_oil");
+            kit.Game.GiveItem("diving_knife"); kit.Game.GiveItem("flare_pistol"); kit.Game.GiveItem("salvage");
+            var said = new List<string>();
+            kit.Message += t => said.Add(t);
+            Console.WriteLine("gear screen: " + kit.GearText().Replace("\n", " | "));
+            if (kit.GearText() != "GEAR\n1. Equip Diving Knife\n2. Equip Flare Pistol\n3. Learn Deep Breath\n4. Learn Lantern Hood (Learn Deep Breath first.)\n5. Craft Flare") Fail("the gear screen should list the knife, the pistol, the skills and the flare recipe, got " + kit.GearText());
+            if (kit.UseInHand() != "Nothing in hand.") Fail("with nothing equipped, R should say so");
+            var first = kit.GearMenu()[0];
+            if (kit.GearDo(first.Act, first.Key) != "Equipped Diving Knife" || kit.InHand() != "diving_knife" || !kit.GearText().StartsWith("GEAR\n1. Use Diving Knife\n2. Put away Diving Knife\n3. Equip Flare Pistol")) Fail("the first option should equip the knife, then offer to use it or put it away, got " + kit.GearText());
+            if (kit.UseInHand() != "Used Diving Knife") Fail("R should use the knife in hand");
+            if (kit.GearDo("learn", "deep_breath") != "Learned Deep Breath" || kit.Game.SkillRank("deep_breath") != 1) Fail("the gear screen should learn Deep Breath");
+            if (kit.GearDo("craft", "flare") != "Crafted 2 × Flare" || kit.Game.Items["flare"] != 2) Fail("the gear screen should craft two flares");
+            if (kit.GearDo("learn", "lantern_hood") != "Costs 2 × Salvage (you have 0).") Fail("the hood should say what it costs");
+            if (string.Join(",", said) != "Nothing in hand.,Equipped Diving Knife,Used Diving Knife,Learned Deep Breath,Crafted 2 × Flare,Costs 2 × Salvage (you have 0).") Fail("each should be said to the player, got " + string.Join(",", said));
+            Console.WriteLine("level gear: in hand " + kit.InHand() + ", Deep Breath rank " + kit.Game.SkillRank("deep_breath") + ", flares " + kit.Game.Items["flare"]);
+        }
         // A companion keeps up: with the player 6 m on, it walks until 2 m away; 30 m on, it catches up at once.
         var follow = new Dictionary<string, object> { ["kind"] = "follow", ["speed"] = 3.5, ["distance"] = 2.0 };
         var pose = new ActorPose();

@@ -334,6 +334,96 @@ namespace vcgs
             return text;
         }
 
+        /** Something the player can do on the gear screen (spec §8): equip, unequip, use, learn or craft, and why not ("" when they can). */
+        struct GearOption
+        {
+            std::string Act, Key, Label, Why;
+        };
+
+        /**
+         * Gear, skills and crafting (spec §8): what the player can do now, in the order the
+         * studio's Play Mode lists it: each item of equipment carried (Use and Put away when
+         * equipped, else Equip), each skill (Learn), each recipe (Craft), with why not.
+         */
+        std::vector<GearOption> GearMenu() const
+        {
+            std::vector<GearOption> menu;
+            for (const auto& e : Game.StoryData.Root["equipment"].items)
+            {
+                const std::string key = e["item"].Str();
+                if (!Game.HasItem(key)) continue;
+                const std::string name = e["name"].Str();
+                if (Game.IsEquipped(key))
+                {
+                    menu.push_back({"use", key, "Use " + name, Game.UseCheck(key)});
+                    menu.push_back({"unequip", key, "Put away " + name, ""});
+                }
+                else menu.push_back({"equip", key, "Equip " + name, Game.EquipCheck(key)});
+            }
+            for (const auto& k : Game.StoryData.Root["skills"].items)
+            {
+                const std::string key = k["ident"]["key"].Str();
+                menu.push_back({"learn", key, "Learn " + k["name"].Str(), Rules::LearnCheck(key, Game)});
+            }
+            for (const auto& r : Game.StoryData.Root["recipes"].items)
+            {
+                const std::string key = r["item"].Str();
+                menu.push_back({"craft", key, "Craft " + r["name"].Str(), Game.CraftCheck(key)});
+            }
+            return menu;
+        }
+
+        /** The gear screen as text: GEAR, then each option numbered, with why not in brackets. */
+        std::string GearText() const
+        {
+            std::string text = "GEAR";
+            const std::vector<GearOption> menu = GearMenu();
+            if (menu.empty()) text += "\nNothing to equip, learn or craft.";
+            for (size_t i = 0; i < menu.size(); i++) text += "\n" + std::to_string(i + 1) + ". " + menu[i].Label + (menu[i].Why.empty() ? std::string() : " (" + menu[i].Why + ")");
+            return text;
+        }
+
+        /** Do one: equip, unequip, use, learn or craft, by the story's rules. Returns what to tell the player ("Equipped Diving Knife", "Crafted 2 × Flare", or why not), as the studio says it. */
+        std::string GearDo(const std::string& act, const std::string& key)
+        {
+            std::string name = key;
+            int makes = 1;
+            for (const char* list : {"equipment", "recipes"})
+                for (const auto& e : Game.StoryData.Root[list].items)
+                    if (e["item"].Str() == key)
+                    {
+                        name = e["name"].Str();
+                        if (std::string(list) == "recipes") makes = static_cast<int>(e["makes"].Num(1));
+                    }
+            for (const auto& k : Game.StoryData.Root["skills"].items)
+                if (k["ident"]["key"].Str() == key) name = k["name"].Str();
+            std::string why, done;
+            if (act == "equip") { why = Game.Equip(key); done = "Equipped " + name; }
+            else if (act == "unequip") { why = Game.Unequip(key); done = "Put away " + name; }
+            else if (act == "use") { why = Game.UseItem(key); done = "Used " + name; }
+            else if (act == "learn") { why = Rules::Learn(key, Game); done = "Learned " + name; }
+            else if (act == "craft") { why = Game.Craft(key); done = "Crafted " + (makes > 1 ? std::to_string(makes) + " \u00d7 " : std::string()) + name; }
+            else why = "Nothing to do.";
+            const std::string text = why.empty() ? done : why;
+            if (OnMessage) OnMessage(text);
+            return text;
+        }
+
+        /** What is in the player's hand ("" for nothing). */
+        std::string InHand() const { return Game.EquippedIn("Hand"); }
+
+        /** Use what is in the hand (R), as Use on the gear screen. */
+        std::string UseInHand()
+        {
+            const std::string key = InHand();
+            if (key.empty())
+            {
+                if (OnMessage) OnMessage("Nothing in hand.");
+                return "Nothing in hand.";
+            }
+            return GearDo("use", key);
+        }
+
         /** How dark it is where the player is (0 to 1): the darkest darkness zone they are in. */
         double Darkness() const
         {
@@ -752,6 +842,14 @@ public:
     UFUNCTION(BlueprintPure, Category = "VCGS") bool IsPresent(const FString& Guid) const;
     /** Turn the player's light on or off (bind to L); returns what to tell the player. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") FString ToggleLight();
+    /** Gear, skills and crafting (spec §8): bind your own keys (the studio uses R to use what is in hand, I for the gear screen). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") FString UseInHand();
+    UFUNCTION(BlueprintPure, Category = "VCGS") FString InHand() const;
+    /** The gear screen as text, each option numbered; GearPick does the nth (from 0). */
+    UFUNCTION(BlueprintPure, Category = "VCGS") FString GearText() const;
+    UFUNCTION(BlueprintCallable, Category = "VCGS") FString GearPick(int32 Index);
+    /** Equip, unequip, use, learn or craft by story key ("equip", "diving_knife"). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") FString GearDo(const FString& Act, const FString& Key);
     UFUNCTION(BlueprintPure, Category = "VCGS") bool IsLit() const;
     /** Seconds of fuel left (-1 for a light that never runs out). */
     UFUNCTION(BlueprintPure, Category = "VCGS") float LightFuel() const;
@@ -942,6 +1040,34 @@ bool AVcgsLevelDirector::IsPresent(const FString& Guid) const
 FString AVcgsLevelDirector::ToggleLight()
 {
     return Logic ? ToF(Logic->ToggleLight()) : FString();
+}
+
+FString AVcgsLevelDirector::UseInHand()
+{
+    return Logic ? ToF(Logic->UseInHand()) : FString();
+}
+
+FString AVcgsLevelDirector::InHand() const
+{
+    return Logic ? ToF(Logic->InHand()) : FString();
+}
+
+FString AVcgsLevelDirector::GearText() const
+{
+    return Logic ? ToF(Logic->GearText()) : FString();
+}
+
+FString AVcgsLevelDirector::GearPick(int32 Index)
+{
+    if (!Logic) return FString();
+    const auto menu = Logic->GearMenu();
+    if (Index < 0 || Index >= static_cast<int32>(menu.size())) return FString();
+    return ToF(Logic->GearDo(menu[Index].Act, menu[Index].Key));
+}
+
+FString AVcgsLevelDirector::GearDo(const FString& Act, const FString& Key)
+{
+    return Logic ? ToF(Logic->GearDo(ToStd(Act), ToStd(Key))) : FString();
 }
 
 bool AVcgsLevelDirector::IsLit() const
