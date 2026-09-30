@@ -109,7 +109,7 @@ static class Check
         silt.EncounterRequested += (e, canWin) => encounters.Add(e + (canWin ? "" : " (can't win)"));
         silt.GameOver += e => over.Add(e);
         var codex = new Codex(fresh);
-        if (codex.Text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 0 of 1 found\nNone yet.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nENCOUNTERS · 0 met, 0 won\nNone yet.\n\nLORE · 0 of 2 found\nNothing found yet." || codex.New != 0) Fail("the codex should start empty, got " + codex.Text());
+        if (codex.Text() != "CODEX\n\nQUESTS · 0 under way, 0 done\nNone yet.\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 0 of 1 found\nNone yet.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 0 of 1 available\nNone yet.\n\nSKILLS · 0 of 2 learned\nNone yet.\n\nENCOUNTERS · 0 met, 0 won\nNone yet.\n\nLORE · 0 of 2 found\nNothing found yet." || codex.New != 0) Fail("the codex should start empty, got " + codex.Text());
         silt.Start();
         silt.Lose();
         Console.WriteLine("encounter: " + string.Join(", ", encounters));
@@ -125,13 +125,22 @@ static class Check
         if (fresh.QuestState(Quests.OpenTheVault) != "active" || !fresh.KnowsLore(Lore.TheDrownedOrder)) Fail("finding the key should start the quest and reveal the lore");
         // The codex: the quest log, the mechanics, the encounters and the lore, and what is new since it was read.
         Console.WriteLine("codex: " + codex.Text().Replace("\n", " | ") + " · new " + codex.New);
-        if (codex.New != 6 || !codex.Text().StartsWith("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 1 of 1 found\n\nVAULT KEY (carried)\nA heavy bronze key, green with age, stamped with the Order’s wave.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 2 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault")) Fail("the codex should show the quest under way, the key, the lantern's oil, the eels won and The Drowned Order, 6 new, got " + codex.Text());
+        if (codex.New != 6 || !codex.Text().StartsWith("CODEX\n\nQUESTS · 1 under way, 0 done\n• Open the vault — Reach the vault chamber and open the door\n\nCHARACTERS · 0 of 1 met\nNone yet.\n\nLOCATIONS · 0 of 1 visited\nNone yet.\n\nITEMS · 1 of 1 found\n\nVAULT KEY (carried)\nA heavy bronze key, green with age, stamped with the Order’s wave.\n\nOBJECTS · 0 of 1 used\nNone yet.\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nSKILLS · 0 of 2 learned\nNone yet.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.\n\nLORE · 1 of 2 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault")) Fail("the codex should show the quest under way, the key, the lantern's oil, the eels won and The Drowned Order, 6 new, got " + codex.Text());
         // Search it: only the entries that match, ignoring case; headings are not searched.
         if (codex.Text("LANTERN") != "CODEX\n\nMECHANICS · 1 of 1 available\n\nLANTERN OIL\nControls: Hold to raise the lantern\nThe lantern’s oil drains the longer you stay in deep water; the screen edges darken as it runs low.\n\nENCOUNTERS · 1 met, 1 won\n\nEEL SWARM (won)\nEnemies: Eels, a dozen or so\nWeak to: Lantern light\nEels in the deep channels. They scatter from lantern light.") Fail("searching for lantern should show the oil and the eels, got " + codex.Text("LANTERN"));
         if (codex.Text("quests") != "CODEX\n\nNothing matches \"quests\".") Fail("a search with no match should say so, got " + codex.Text("quests"));
         if (codex.Text("  ") != codex.Text()) Fail("a blank search should show everything");
         // Filter by section: only that one, alone or with the search.
-        if (string.Join(",", codex.SectionKeys()) != "quests,characters,locations,items,objects,mechanics,encounters,lore") Fail("the codex should offer every section, got " + string.Join(",", codex.SectionKeys()));
+        if (string.Join(",", codex.SectionKeys()) != "quests,characters,locations,items,objects,mechanics,skills,encounters,lore") Fail("the codex should offer every section, got " + string.Join(",", codex.SectionKeys()));
+        // The codex's skills: learning a rank is news, and the section says its rank, kind, tree and use.
+        {
+            var before = codex.New;
+            Rules.Learn("deep_breath", fresh);
+            Console.WriteLine("codex skills: " + codex.Text("", "skills").Replace("\n", " | ") + " · new " + codex.New);
+            if (codex.Text("", "skills") != "CODEX\n\nSKILLS · 1 of 2 learned\n\nDEEP BREATH (rank 1 of 2)\nSkill · Diving\nWhat it does: Hold your breath a third longer\nLonger under water with each rank.") Fail("the codex should list Deep Breath, got " + codex.Text("", "skills"));
+            if (codex.New != before + 1) Fail("learning a skill should be news for the codex");
+            fresh.Skills.Clear();
+        }
         if (codex.Text("", "lore") != "CODEX\n\nLORE · 1 of 2 found\n\nTHE DROWNED ORDER\nRiver priests who sealed the vault three hundred years ago, when the river took the old city. They believed the water kept their secrets.") Fail("filtering to lore should show only the lore, got " + codex.Text("", "lore"));
         if (codex.Text("lantern", "lore") != "CODEX\n\nNothing matches \"lantern\" in Lore.") Fail("a search with no match in a section should say so, got " + codex.Text("lantern", "lore"));
         if (codex.Text("", "objects") != "CODEX\n\nOBJECTS · 0 of 1 used\nNone yet.") Fail("an empty section should say so, got " + codex.Text("", "objects"));

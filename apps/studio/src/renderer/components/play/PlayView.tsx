@@ -594,6 +594,30 @@ const CodexPanel = ({
           ))}
         </section>
       )}
+      {c.skillsTotal > 0 && has('skills') && (
+        <section aria-label="Skills">
+          <h3>
+            Skills <span className="play-note">· {c.skills.length} of {c.skillsTotal} learned</span>
+          </h3>
+          {!c.skills.length && <p className="play-note">None yet.</p>}
+          {c.skills.filter(keep('skills')).sort(inOrder('skills')).map((k) => (
+            <article key={k.id} className="play-codex-lore play-codex-skill">
+              <h4>
+                {star('skills', k.id, k.name)} {pencil('skills', k.id, k.name)} <Symbol type="skill" size={11} /> {k.name}
+                <span className="play-note">
+                  {' '}
+                  · {k.kind}
+                  {k.tree ? ` · ${k.tree}` : ''}
+                  {k.ranks > 1 ? ` · rank ${k.rank} of ${k.ranks}` : ''}
+                </span>
+              </h4>
+              {k.effect && <p className="play-codex-effect">{k.effect}</p>}
+              <p>{k.text}</p>
+              {note('skills', k.id, k.name)}
+            </article>
+          ))}
+        </section>
+      )}
       {c.encountersTotal > 0 && has('encounters') && (
         <section aria-label="Encounters">
           <h3>
@@ -865,7 +889,7 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
   const [seen, setSeen] = useState(0);
   const progress = codexProgress(project, play.world);
   const book = codexOf(project, play.world);
-  const hasCodex = book.quests + book.charactersTotal + book.locationsTotal + book.itemsTotal + book.objectsTotal + book.mechanicsTotal + book.encountersTotal + book.loreTotal > 0;
+  const hasCodex = book.quests + book.charactersTotal + book.locationsTotal + book.itemsTotal + book.objectsTotal + book.mechanicsTotal + book.skillsTotal + book.encountersTotal + book.loreTotal > 0;
   const fresh = Math.max(0, progress - seen);
   useEffect(() => {
     // Read while open; after a step back there is less to have read.

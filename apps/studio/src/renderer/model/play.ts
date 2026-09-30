@@ -1,4 +1,4 @@
-import { describeCost, learnCheck, payFor, ranksOf } from './skills';
+import { describeCost, kindOf, learnCheck, payFor, ranksOf, treeOf } from './skills';
 import { initialState, interactionsOf, statesOf } from './details';
 import { spineSequence } from './layout';
 import { apply, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
@@ -662,6 +662,8 @@ export interface Codex {
   items: { id: string; name: string; text: string; carried: number }[];
   /** Mechanics available, in the order they became available: how to use each. */
   mechanics: { id: string; name: string; controls: string; text: string }[];
+  /** Skills, abilities and upgrades learned, in the order first learned: their rank, kind and tree, and what they do. */
+  skills: { id: string; name: string; rank: number; ranks: number; kind: string; tree: string; effect: string; text: string }[];
   /** Encounters met, in the order met: who they are, what they are weak to, and whether they were won. */
   encounters: { id: string; name: string; enemies: string; weakness: string; text: string; won: boolean }[];
   /** Lore found, in the order found, with its text. */
@@ -675,6 +677,7 @@ export interface Codex {
   itemsTotal: number;
   objectsTotal: number;
   mechanicsTotal: number;
+  skillsTotal: number;
   encountersTotal: number;
   loreTotal: number;
 }
@@ -709,6 +712,12 @@ export const codexOf = (project: Project, world: PlayWorld): Codex => {
     mechanics: Object.keys(world.mechanics)
       .filter((id) => world.mechanics[id] && known(id))
       .map((id) => ({ id, name: name(project, id), controls: String(project.objects[id]!.data.controls ?? ''), text: project.objects[id]!.notes })),
+    skills: Object.keys(world.skills ?? {})
+      .filter((id) => (world.skills[id] ?? 0) > 0 && project.objects[id]?.type === 'skill')
+      .map((id) => {
+        const o = project.objects[id]!;
+        return { id, name: o.name, rank: world.skills[id]!, ranks: ranksOf(o), kind: kindOf(o), tree: treeOf(o), effect: String(o.data.effect ?? '').trim(), text: o.notes };
+      }),
     encounters: metOf(world)
       .filter(known)
       .map((id) => {
@@ -724,6 +733,7 @@ export const codexOf = (project: Project, world: PlayWorld): Codex => {
     itemsTotal: all.filter((o) => o.type === 'inventory' && codexEntry(o)).length,
     objectsTotal: all.filter((o) => o.type === 'object' && codexEntry(o)).length,
     mechanicsTotal: all.filter((o) => o.type === 'mechanic').length,
+    skillsTotal: all.filter((o) => o.type === 'skill').length,
     encountersTotal: all.filter((o) => o.type === 'encounter').length,
     loreTotal: all.filter((o) => o.type === 'lore').length,
   };
@@ -731,7 +741,7 @@ export const codexOf = (project: Project, world: PlayWorld): Codex => {
 
 /** One section of the codex in words: its heading, and each entry as the codex writes it. */
 export interface CodexSection {
-  key: 'quests' | 'characters' | 'locations' | 'items' | 'objects' | 'mechanics' | 'encounters' | 'lore';
+  key: 'quests' | 'characters' | 'locations' | 'items' | 'objects' | 'mechanics' | 'skills' | 'encounters' | 'lore';
   heading: string;
   /** What an empty section says. */
   empty: string;
@@ -761,6 +771,7 @@ export const CODEX_SECTION_NAMES: Record<CodexSection['key'] | 'bookmarks', stri
   items: 'Items',
   objects: 'Objects',
   mechanics: 'Mechanics',
+  skills: 'Skills',
   encounters: 'Encounters',
   lore: 'Lore',
 };
@@ -842,6 +853,16 @@ export const codexSections = (
       empty: 'None yet.',
       sep: '\n\n',
       entries: c.mechanics.map((m) => ({ id: m.id, text: `${m.name.toUpperCase()}${m.controls ? `\nControls: ${m.controls}` : ''}\n${m.text}` })),
+    },
+    !!c.skillsTotal && {
+      key: 'skills',
+      heading: `SKILLS · ${c.skills.length} of ${c.skillsTotal} learned`,
+      empty: 'None yet.',
+      sep: '\n\n',
+      entries: c.skills.map((k) => ({
+        id: k.id,
+        text: `${k.name.toUpperCase()}${k.ranks > 1 ? ` (rank ${k.rank} of ${k.ranks})` : ''}\n${k.kind}${k.tree ? ` · ${k.tree}` : ''}${k.effect ? `\nWhat it does: ${k.effect}` : ''}\n${k.text}`,
+      })),
     },
     !!c.encountersTotal && {
       key: 'encounters',
@@ -1025,7 +1046,9 @@ export const codexProgress = (project: Project, world: PlayWorld): number =>
   Object.keys(world.used).filter((id) => world.used[id] && codexEntry(project.objects[id])).length +
   Object.keys(world.lore).filter((id) => world.lore[id]).length +
   metOf(world).length + Object.keys(world.won).filter((id) => world.won[id]).length +
-  Object.keys(world.mechanics).filter((id) => world.mechanics[id]).length + Object.values(world.quests).reduce((n, q) => n + (q === 'done' ? 2 : 1), 0);
+  Object.keys(world.mechanics).filter((id) => world.mechanics[id]).length +
+  Object.keys(world.skills ?? {}).reduce((n, id) => n + (project.objects[id]?.type === 'skill' ? (world.skills[id] ?? 0) : 0), 0) +
+  Object.values(world.quests).reduce((n, q) => n + (q === 'done' ? 2 : 1), 0);
 
 // ---------------------------------------------------------------- for the level's play mode
 

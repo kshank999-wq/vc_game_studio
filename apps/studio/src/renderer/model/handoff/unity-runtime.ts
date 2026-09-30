@@ -1411,6 +1411,7 @@ namespace VCGS
         int Progress()
         {
             var n = game.KnownLore.Count + game.AvailableMechanics.Count + game.MetEncounters.Count + game.Won.Count;
+            foreach (var k in game.Skills) if (game.Story.Skills.ContainsKey(k.Key)) n += k.Value;
             foreach (var c in game.MetCharacters) if (game.Story.CharacterCodex(c) != "") n++;
             foreach (var i in game.FoundItems) if (game.Story.ItemCodex(i) != "") n++;
             foreach (var l in game.VisitedLocations) if (game.Story.LocationCodex(l) != "") n++;
@@ -1420,7 +1421,7 @@ namespace VCGS
         }
 
         /// <summary>Every section a codex can have, in the order it shows them.</summary>
-        public static readonly string[] Sections = { "quests", "characters", "locations", "items", "objects", "mechanics", "encounters", "lore" };
+        public static readonly string[] Sections = { "quests", "characters", "locations", "items", "objects", "mechanics", "skills", "encounters", "lore" };
 
         /// <summary>The sections this story's codex has (those with anything to find), in order: what a filter by section offers.</summary>
         public List<string> SectionKeys()
@@ -1430,7 +1431,7 @@ namespace VCGS
             var has = new[]
             {
                 s.Quests.Count > 0, Any(s.Characters, s.CharacterCodex), Any(s.LocationDefs, s.LocationCodex), Any(s.ItemDefs, s.ItemCodex),
-                Any(s.Objects, s.ObjectCodex), s.Mechanics.Count > 0, s.Encounters.Count > 0, s.Lore.Count > 0,
+                Any(s.Objects, s.ObjectCodex), s.Mechanics.Count > 0, s.Skills.Count > 0, s.Encounters.Count > 0, s.Lore.Count > 0,
             };
             var keys = new List<string>();
             for (var i = 0; i < Sections.Length; i++) if (has[i]) keys.Add(Sections[i]);
@@ -1584,6 +1585,23 @@ namespace VCGS
                     usable.Add(("mechanics:" + key, Title(D.Str(m, "name"), key) + (controls != "" ? "\nControls: " + controls : "") + "\n" + D.Str(m, "notes")));
                 }
                 Section("mechanics", "MECHANICS · " + usable.Count + " of " + game.Story.Mechanics.Count + " available", usable, "\n\n", "None yet.");
+            }
+            if (game.Story.Skills.Count > 0)
+            {
+                // Each skill learned, in the order first learned: its rank (of more than one), kind and tree, and what it does.
+                var learned = new List<(string key, string text)>();
+                foreach (var pair in game.Skills)
+                {
+                    if (pair.Value < 1 || !game.Story.Skills.TryGetValue(pair.Key, out var k)) continue;
+                    var fields = D.Map(k, "fields");
+                    var ranks = (int)D.Num(k, "ranks", 1);
+                    var kind = D.Str(fields, "kind");
+                    if (kind != "Ability" && kind != "Upgrade") kind = "Skill";
+                    var tree = D.Str(fields, "tree");
+                    var does = D.Str(fields, "effect");
+                    learned.Add(("skills:" + pair.Key, Title(D.Str(k, "name"), pair.Key) + (ranks > 1 ? " (rank " + pair.Value + " of " + ranks + ")" : "") + "\n" + kind + (tree != "" ? " · " + tree : "") + (does != "" ? "\nWhat it does: " + does : "") + "\n" + D.Str(k, "notes")));
+                }
+                Section("skills", "SKILLS · " + learned.Count + " of " + game.Story.Skills.Count + " learned", learned, "\n\n", "None yet.");
             }
             if (game.Story.Encounters.Count > 0)
             {

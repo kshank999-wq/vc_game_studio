@@ -66,7 +66,9 @@ monitor while you fix it on another.
   used up), the objects used (the same, once used in free play, with how they
   stand now),
   the mechanics available (with their controls and
-  description), the encounters met (their enemies and weakness, and whether
+  description), the skills learned (in the order first learned, with the rank
+  of those with more than one, their kind and tree, what they do and their
+  description; each rank learned counts as new), the encounters met (their enemies and weakness, and whether
   they were won; one lost still shows, so its weakness is there to read) and
   the lore found, in the order found, with its text.
   The button counts what's new since it was last opened; Escape closes it.

@@ -131,7 +131,10 @@ the studio's play-through:
   once a scene set there has played), the items found (any item with a *Codex entry*, once the
   player has held it, marked while carried), the objects used (any object
   with a *Codex entry*, once the player has used it, with its state now), the
-  mechanics available (their controls and description), the encounters
+  mechanics available (their controls and description), the skills learned
+  (in the order first learned: rank, kind and tree, what they do; each rank
+  is news, from `skill_learned` / `SkillLearned` / `OnSkillLearned`, and
+  Unreal keeps the order in `SkillOrder`), the encounters
   met (their enemies and weakness, and whether they were won) and the lore
   found so far, in the order found, with its text. The game state keeps the
   encounters met in order: Godot `met_encounters()` with `encounter_met` and

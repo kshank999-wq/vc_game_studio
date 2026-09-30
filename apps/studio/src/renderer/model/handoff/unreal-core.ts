@@ -392,6 +392,8 @@ namespace vcgs
         std::vector<std::string> MechanicOrder;
         /** Skills, abilities and upgrades learned, by rank (Rules::Learn). */
         std::map<std::string, int> Skills;
+        /** The same skills, in the order first learned (the codex's order). */
+        std::vector<std::string> SkillOrder;
         /** A skill gained a rank: its key and new rank. */
         std::function<void(const std::string&, int)> OnSkillLearned;
         bool AutoRules = true;
@@ -414,7 +416,7 @@ namespace vcgs
             checkpointBody.clear();
             Loaded = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -582,6 +584,12 @@ namespace vcgs
                 for (const auto& e : m) { out += (first ? "" : ", ") + JsonQuote(e.first) + ": " + std::to_string(e.second); first = false; }
                 return out + "}";
             };
+            auto learned = [this]()
+            {
+                std::string out = "{";
+                for (size_t i = 0; i < SkillOrder.size(); ++i) out += (i ? ", " : "") + JsonQuote(SkillOrder[i]) + ": " + std::to_string(SkillRank(SkillOrder[i]));
+                return out + "}";
+            };
             std::string quests = "[";
             for (size_t i = 0; i < QuestOrder.size(); ++i)
             {
@@ -594,7 +602,7 @@ namespace vcgs
                    ",\n  \"fired\": " + list(Fired) + ",\n  \"picked\": " + list(Picked) + ",\n  \"won\": " + list(Won) + ",\n  \"met\": " + list(MetEncounters) +
                    ",\n  \"characters\": " + list(MetCharacters) + ",\n  \"found\": " + list(FoundItems) + ",\n  \"locations\": " + list(VisitedLocations) +
                    ",\n  \"used\": " + list(UsedObjects) + ",\n  \"lore\": " + list(KnownLore) + ",\n  \"mechanics\": " + list(MechanicOrder) +
-                   ",\n  \"skills\": " + numbers(Skills);
+                   ",\n  \"skills\": " + learned();
         }
 
         /** Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it. */
@@ -634,7 +642,7 @@ namespace vcgs
             const bool keepRules = AutoRules;
             AutoRules = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
-            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -646,7 +654,11 @@ namespace vcgs
             for (const auto& e : data["chosen"].fields) Chosen[e.first] = e.second.Str();
             for (const auto& e : data["items"].fields) Items[e.first] = static_cast<int>(e.second.number);
             for (const auto& e : data["arcs"].fields) Arcs[e.first] = static_cast<int>(e.second.number);
-            for (const auto& e : data["skills"].fields) Skills[e.first] = static_cast<int>(e.second.number);
+            for (const auto& e : data["skills"].fields)
+            {
+                Skills[e.first] = static_cast<int>(e.second.number);
+                if (Skills[e.first] > 0 && std::find(SkillOrder.begin(), SkillOrder.end(), e.first) == SkillOrder.end()) SkillOrder.push_back(e.first);
+            }
             for (const Value& q : data["quests"].items)
             {
                 const std::string key = q["key"].Str();
@@ -747,6 +759,7 @@ namespace vcgs
         void AddSkillRank(const std::string& skill)
         {
             int rank = ++Skills[skill];
+            if (rank == 1) SkillOrder.push_back(skill);
             if (OnSkillLearned) OnSkillLearned(skill, rank);
             Changed();
         }
@@ -1100,7 +1113,7 @@ namespace vcgs
         /** Every section a codex can have, in the order it shows them. */
         static const std::vector<std::string>& Sections()
         {
-            static const std::vector<std::string> all = {"quests", "characters", "locations", "items", "objects", "mechanics", "encounters", "lore"};
+            static const std::vector<std::string> all = {"quests", "characters", "locations", "items", "objects", "mechanics", "skills", "encounters", "lore"};
             return all;
         }
 
@@ -1108,7 +1121,7 @@ namespace vcgs
         std::vector<std::string> SectionKeys() const
         {
             const Story& s = game.StoryData;
-            const bool has[] = {!s.Quests.empty(), s.CodexCharacters() > 0, s.CodexLocations() > 0, s.CodexItems() > 0, s.CodexObjects() > 0, !s.Mechanics.empty(), !s.Encounters.empty(), !s.Lore.empty()};
+            const bool has[] = {!s.Quests.empty(), s.CodexCharacters() > 0, s.CodexLocations() > 0, s.CodexItems() > 0, s.CodexObjects() > 0, !s.Mechanics.empty(), !s.Skills.empty(), !s.Encounters.empty(), !s.Lore.empty()};
             std::vector<std::string> keys;
             for (size_t i = 0; i < Sections().size(); i++) if (has[i]) keys.push_back(Sections()[i]);
             return keys;
@@ -1251,6 +1264,24 @@ namespace vcgs
                     usable.push_back({"mechanics:" + key, title(m["name"].Str(), key) + (controls.empty() ? "" : "\nControls: " + controls) + "\n" + m["notes"].Str()});
                 }
                 section("mechanics", "MECHANICS · " + std::to_string(usable.size()) + " of " + std::to_string(game.StoryData.Mechanics.size()) + " available", usable, "\n\n", "None yet.");
+            }
+            if (!game.StoryData.Skills.empty())
+            {
+                // Each skill learned, in the order first learned: its rank (of more than one), kind and tree, and what it does.
+                Entries learned;
+                for (const std::string& key : game.SkillOrder)
+                {
+                    const int rank = game.SkillRank(key);
+                    if (rank < 1 || !game.StoryData.Skills.count(key)) continue;
+                    const Value& k = Story::Find(game.StoryData.Skills, key);
+                    const int ranks = static_cast<int>(k["ranks"].Num(1));
+                    std::string kind = k["fields"]["kind"].Str();
+                    if (kind != "Ability" && kind != "Upgrade") kind = "Skill";
+                    const std::string tree = k["fields"]["tree"].Str();
+                    const std::string does = k["fields"]["effect"].Str();
+                    learned.push_back({"skills:" + key, title(k["name"].Str(), key) + (ranks > 1 ? " (rank " + std::to_string(rank) + " of " + std::to_string(ranks) + ")" : "") + "\n" + kind + (tree.empty() ? "" : " \u00b7 " + tree) + (does.empty() ? "" : "\nWhat it does: " + does) + "\n" + k["notes"].Str()});
+                }
+                section("skills", "SKILLS \u00b7 " + std::to_string(learned.size()) + " of " + std::to_string(game.StoryData.Skills.size()) + " learned", learned, "\n\n", "None yet.");
             }
             if (!game.StoryData.Encounters.empty())
             {
@@ -1552,6 +1583,7 @@ namespace vcgs
         int Progress() const
         {
             int n = static_cast<int>(game.KnownLore.size() + game.MechanicOrder.size() + game.MetEncounters.size() + game.Won.size());
+            for (const std::string& k : game.SkillOrder) if (game.StoryData.Skills.count(k)) n += game.SkillRank(k);
             for (const std::string& c : game.MetCharacters) if (!game.StoryData.CharacterCodex(c).empty()) n++;
             for (const std::string& i : game.FoundItems) if (!game.StoryData.ItemCodex(i).empty()) n++;
             for (const std::string& l : game.VisitedLocations) if (!game.StoryData.LocationCodex(l).empty()) n++;
