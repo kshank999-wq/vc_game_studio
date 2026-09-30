@@ -570,6 +570,16 @@ func _initialize() -> void:
 	game.consume_item("diving_knife")
 	if game.is_equipped("diving_knife"):
 		fail("an item no longer carried should come out of its slot")
+	# The sample's stat condition: in the vault chamber, the flare pistol's Light 3 shows the pry marks.
+	gear.reset(game)
+	game.visit("sc_03_the_vault_door")
+	game.give_item("flare_pistol")
+	if game.fired.has("flare_on_the_door") or game.knows_lore("the_last_expedition"):
+		fail("the pry marks should wait for the flare pistol's light")
+	gear.equip("flare_pistol", game)
+	if not game.fired.has("flare_on_the_door") or not game.knows_lore("the_last_expedition"):
+		fail("equipping the flare pistol at the vault door should fire Flare on the door and reveal The Last Expedition")
+	print("flare on the door: fired ", game.fired.has("flare_on_the_door"), ", the last expedition found ", game.knows_lore("the_last_expedition"))
 	game.load_text(before_gear)
 	game.loaded = false
 

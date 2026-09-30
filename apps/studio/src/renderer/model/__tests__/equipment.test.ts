@@ -141,6 +141,25 @@ describe('conditions on stat values (spec §8)', () => {
     expect(gear(p, armed, knife, 'unequip').world.stats).toEqual({});
   });
 
+  it('are in the sample: the flare pistol\'s light shows the pry marks at the vault door', async () => {
+    const { playBy } = await import('../paths');
+    const { setWorld } = await import('../play');
+    const p = sunkenVault();
+    const pistol = byName(p, 'Flare Pistol');
+    const flareLit = byName(p, 'Flare on the door');
+    const expedition = byName(p, 'The Last Expedition');
+    expect(describeCondition(p, (p.objects[flareLit]!.data.rule as { items: never[] }).items[1]!)).toBe('Light is at least 3');
+    // Straight on to Shared Light: the vault door visited, the pistol carried but not in hand.
+    let play = playBy(p, 'first');
+    expect(play.world.visited[byName(p, 'The Vault Door')]).toBeTruthy();
+    expect(play.world.lore[expedition]).toBeFalsy();
+    play = setWorld(p, play, (w) => ({ ...w, items: { ...w.items, [pistol]: 1 } }));
+    play = gear(p, play, pistol, 'equip');
+    expect(play.world.fired[flareLit]).toBe(true);
+    expect(play.world.lore[expedition]).toBe(true);
+    expect(play.log.map((e) => e.text)).toContain('The Last Expedition');
+  });
+
   it('keep the stat name in the handoff', async () => {
     const { buildIR } = await import('../handoff/ir');
     const p = sunkenVault();

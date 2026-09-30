@@ -416,6 +416,14 @@ int main()
         if (h.EquippedIn("Hand") != "diving_knife" || h.UsesLeft("diving_knife") != 2) Fail("equipment and its wear should save and load");
         h.TakeItem("diving_knife");
         if (h.IsEquipped("diving_knife")) Fail("an item no longer carried should come out of its slot");
+        // The sample's stat condition: in the vault chamber, the flare pistol's Light 3 shows the pry marks.
+        vcgs::GameState lit(story);
+        lit.Visit(Scenes::Sc03TheVaultDoor);
+        lit.GiveItem("flare_pistol");
+        if (lit.Fired.count(Triggers::FlareOnTheDoor) || lit.KnowsLore(Lore::TheLastExpedition)) Fail("the pry marks should wait for the flare pistol's light");
+        lit.Equip("flare_pistol");
+        if (!lit.Fired.count(Triggers::FlareOnTheDoor) || !lit.KnowsLore(Lore::TheLastExpedition)) Fail("equipping the flare pistol at the vault door should fire Flare on the door and reveal The Last Expedition");
+        std::printf("flare on the door: fired %d, the last expedition found %d\n", lit.Fired.count(Triggers::FlareOnTheDoor) ? 1 : 0, lit.KnowsLore(Lore::TheLastExpedition) ? 1 : 0);
     }
 
     // Crafting (spec §8): with the pistol, a scrap of salvage packs two flares.

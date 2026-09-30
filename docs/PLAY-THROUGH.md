@@ -68,7 +68,10 @@ monitor while you fix it on another.
   item* and *Put item away* do it from the story. A trigger, puzzle or quest
   waiting on a stat happens as soon as the gear that meets it is equipped. In the sample, the Diving Knife (Damage 2, three uses) comes with
   lighting the lantern, and the eels leave a Flare Pistol (Damage 1, Light 3,
-  a flare a shot) and two flares.
+  a flare a shot) and two flares. Equip the pistol once you have been in the
+  vault chamber and the trigger *Flare on the door* (The Vault Door visited
+  and Light is at least 3) fires: its light shows the pry marks round the
+  lock, and The Last Expedition is found without forcing the door.
 - **Crafting** (spec §8): an inventory item's Game Bible entry can give it a
   **recipe**: what it **Takes** (so many of each ingredient), how many **One
   craft makes**, and *Can be crafted when* (a rule; empty: any time). The

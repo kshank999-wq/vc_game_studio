@@ -291,6 +291,14 @@ static class Check
             if (h.EquippedIn("Hand") != "diving_knife" || h.UsesLeft("diving_knife") != 2) Fail("equipment and its wear should save and load");
             h.TakeItem("diving_knife");
             if (h.IsEquipped("diving_knife")) Fail("an item no longer carried should come out of its slot");
+            // The sample's stat condition: in the vault chamber, the flare pistol's Light 3 shows the pry marks.
+            var flareLit = new GameState(story);
+            flareLit.Visit(Scenes.Sc03TheVaultDoor);
+            flareLit.GiveItem("flare_pistol");
+            if (flareLit.Fired.Contains(Triggers.FlareOnTheDoor) || flareLit.KnowsLore(Lore.TheLastExpedition)) Fail("the pry marks should wait for the flare pistol's light");
+            flareLit.Equip("flare_pistol");
+            if (!flareLit.Fired.Contains(Triggers.FlareOnTheDoor) || !flareLit.KnowsLore(Lore.TheLastExpedition)) Fail("equipping the flare pistol at the vault door should fire Flare on the door and reveal The Last Expedition");
+            Console.WriteLine("flare on the door: fired " + flareLit.Fired.Contains(Triggers.FlareOnTheDoor) + ", the last expedition found " + flareLit.KnowsLore(Lore.TheLastExpedition));
         }
         // Crafting (spec §8): with the pistol, a scrap of salvage packs two flares.
         {

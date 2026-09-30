@@ -241,6 +241,14 @@ export const sunkenVault = (): Project => {
   const knife = gearItem('Diving Knife', 'ITM-03', 'Mara’s spare, notched from the rocks.', { slot: 'Hand', stats: [{ name: 'Damage', value: 2 }], ammoPerUse: 1, durability: 3 });
   const pistol = gearItem('Flare Pistol', 'ITM-04', 'An old signal pistol from the last expedition.', { slot: 'Hand', stats: [{ name: 'Damage', value: 1 }, { name: 'Light', value: 3 }], ammo: flare, ammoPerUse: 1, durability: 0 });
   p = updateEvent(p, caveMouth, lit.id, { effects: [{ kind: 'enableMechanic', ref: design.mechanic! }, { kind: 'give', ref: knife }] });
+  // A stat condition (spec §8): in the vault chamber, the flare pistol's light (Light 3) shows the
+  // last expedition's pry marks round the lock, without forcing the door.
+  const flareLit = addElement(p, vaultDoor, 'trigger', 'Flare on the door')!;
+  p = flareLit.project;
+  p = setField(p, flareLit.id, 'when', 'Light 3+ in the vault chamber');
+  p = setField(p, flareLit.id, 'does', 'The pry marks round the lock show');
+  p = setValue(p, flareLit.id, 'rule', { match: 'all', items: [{ kind: 'visited', ref: vaultDoor, op: 'visited' }, { kind: 'stat', ref: 'Light', op: 'atLeast', value: 3 }] });
+  p = setValue(p, flareLit.id, 'effects', [{ kind: 'revealLore', ref: expedition.id }]);
   // Crafting (spec §8): with the pistol in hand, a scrap of salvage packs two more flares.
   p = setValue(p, flare, 'recipe', { ingredients: [{ item: salvage.id, amount: 1 }], makes: 2, rule: { match: 'all', items: [{ kind: 'item', ref: pistol, op: 'has' }] } });
   p = setValue(p, design.encounter!, 'effects', [
