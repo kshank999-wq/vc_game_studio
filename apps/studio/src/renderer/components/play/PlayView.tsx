@@ -3,6 +3,7 @@ import type { Destination } from '../../model/details';
 import { statesOf } from '../../model/details';
 import { advance, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, endFreePlay, interact, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
+import { SavesPanel } from './SavesPanel';
 import { copyText, downloadText, notesFileNameFor, notesPageNameFor, printHtml, readText } from '../../files';
 import { liveNotes, mergeNotes, notesFromSync, notesStorageKey, notesSyncText, type StampedNote } from '../../model/codex-sync';
 import { Symbol } from '../Symbol';
@@ -764,6 +765,7 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   const push = (next: Play) => next !== play && setHistory((h) => [...h, next]);
   const transcript = useRef<HTMLDivElement>(null);
   const [codexOpen, setCodexOpen] = useState(false);
+  const [savesOpen, setSavesOpen] = useState(false);
   // The player's bookmarks in the codex: kept for the whole play-through, stepping back or not.
   const [bookmarks, setBookmarks] = useState<ReadonlySet<string>>(new Set());
   // And the player's notes on entries, the same way.
@@ -830,6 +832,10 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (savesOpen) {
+        if (e.key === 'Escape') setSavesOpen(false);
+        return;
+      }
       if (hasCodex && (e.key === 'c' || e.key === 'C')) {
         e.preventDefault();
         setCodexOpen((o) => !o);
@@ -873,8 +879,19 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
           <button className="tb-btn small" onClick={restart}>
             ⟲ Restart
           </button>
+          <button
+            className={`tb-btn small${savesOpen ? ' on' : ''}`}
+            aria-pressed={savesOpen}
+            title="Save the play-through, or load a saved one"
+            onClick={() => {
+              setSavesOpen(!savesOpen);
+              setCodexOpen(false);
+            }}
+          >
+            Saves
+          </button>
           {hasCodex && (
-            <button className={`tb-btn small${codexOpen ? ' on' : ''}`} aria-pressed={codexOpen} title="The codex: quests and lore found (C)" onClick={() => setCodexOpen(!codexOpen)}>
+            <button className={`tb-btn small${codexOpen ? ' on' : ''}`} aria-pressed={codexOpen} title="The codex: quests and lore found (C)" onClick={() => (setCodexOpen(!codexOpen), setSavesOpen(false))}>
               Codex{fresh > 0 && <span className="play-codex-new"> · {fresh} new</span>}
             </button>
           )}
@@ -887,6 +904,7 @@ export const PlayView = ({ project, from, onNavigate }: Props) => {
             </button>
           )}
         </div>
+        {savesOpen && <SavesPanel project={project} play={play} onLoad={push} onClose={() => setSavesOpen(false)} />}
         {codexOpen && (
           <CodexPanel
             project={project}

@@ -398,6 +398,11 @@ describe('quests and encounters in the engines', () => {
     // T texts them: the same text-message link as the studio's.
     expect(player).toContain('func text_codex_notes(open := true) -> Dictionary:');
     expect(RUNTIME_FILES['VcgsCodex.cs']).toContain('public string TextNotes(bool open = true)');
+    // F5 saves and F9 loads, in the same format everywhere, as each scene began.
+    expect(player).toContain('func save_game(path := "user://savegame.json") -> String:');
+    expect(file('addons/vcgs_runtime/scene_flow.gd')).toContain('game.checkpoint(scene_key())');
+    expect(RUNTIME_FILES['GameState.cs']).toContain('public string LoadSave(string text)');
+    expect(VCGS_CORE_H).toContain('bool LoadSave(const std::string& text, std::string& At)');
     expect(player).toContain('game.quest_started.connect(_on_codex_news)');
     // Unity and Unreal have one too: the same text, a screen to draw it.
     expect(RUNTIME_FILES['Codex.cs']).toContain('public string Text(string query = "", string section = "", string sort = "", string cursor = "")');

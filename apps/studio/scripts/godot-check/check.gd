@@ -447,6 +447,34 @@ func _initialize() -> void:
 	silt_player.close_codex()
 	if silt_player.codex_open():
 		fail("the codex should close")
+	# Save and load: a save holds the game as the scene being played began (SC-02, before the eels),
+	# and loading puts it back and plays that scene again from its start.
+	var now_state: String = JSON.stringify(game.save_data(""))
+	var saved_game: String = silt_player.save_game("user://vcgs_check_save.json")
+	var save = JSON.parse_string(FileAccess.get_file_as_string(saved_game))
+	print("save: at ", save["at"], " · won ", save["won"], " · visited ", save["visited"], " · mechanics ", save["mechanics"])
+	if save["format"] != "vcgs-save" or save["version"] != 1 or save["story"] != "The Sunken Vault" or save["at"] != "sc_02_the_key" or save["visited"].has("sc_02_the_key") or save["won"].has("eel_swarm") or save["mechanics"] != ["lantern_oil"]:
+		fail("the save should hold the game as SC-02 began, got " + str(save))
+	if not game.was_won("eel_swarm"):
+		fail("saving should not change the game")
+	var loaded_at = silt_player.load_game(saved_game, false)
+	if loaded_at != "sc_02_the_key" or game.was_won("eel_swarm") or game.was_visited("sc_02_the_key") or not game.mechanics.has("lantern_oil") or not game.loaded:
+		fail("loading should put the game back as SC-02 began, got " + str(loaded_at) + " " + str(game.save_data("")))
+	var again = JSON.parse_string(game.save_text("The Sunken Vault"))
+	again.erase("saved_at")
+	save.erase("saved_at")
+	if again != save:
+		fail("a loaded save should save the same again, got " + str(again))
+	# A save from another engine's runtime (the same format) loads here too.
+	var other_at = game.load_text('{"format":"vcgs-save","version":1,"story":"The Sunken Vault","at":"sc_03_the_vault_door","saved_at":1,"flags":{"door_solved":"yes"},"objects":{"rusted_lever":"up"},"items":{"vault_key":2},"arcs":{"mara":1},"chosen":{"c1":"carry_on"},"quests":[{"key":"open_the_vault","state":"active"}],"solved":["vault_door"],"visited":["sc_01_the_cave_mouth","sc_02_the_key"],"fired":[],"picked":["c1:carry_on"],"won":["eel_swarm"],"met":["eel_swarm"],"characters":["mara"],"found":["vault_key"],"locations":["silt_camp"],"used":["rusted_lever"],"lore":["the_drowned_order"],"mechanics":["lantern_oil"]}')
+	if other_at != "sc_03_the_vault_door" or game.get_flag("door_solved") != "yes" or game.object_states.get("rusted_lever") != "up" or int(game.items["vault_key"]) != 2 or int(game.arcs["mara"]) != 1 or game.quest_state("open_the_vault") != "active" or not game.is_solved("vault_door") or not game.was_visited("sc_02_the_key") or not game.was_picked("c1:carry_on") or not game.was_won("eel_swarm") or game.characters_met.keys() != ["mara"] or game.found_items.keys() != ["vault_key"] or game.used_objects.keys() != ["rusted_lever"] or game.lore.keys() != ["the_drowned_order"]:
+		fail("a save in the shared format should load, got " + str(game.save_data("")))
+	if game.load_text("not a save") != null or game.load_text('{"format":"vcgs-codex-notes-sync"}') != null:
+		fail("text that is not a save should not load")
+	if silt_player.load_game("user://vcgs_no_such_save.json", false) != null:
+		fail("there is no save to load there")
+	game.load_text(now_state)
+	game.loaded = false
 	silt.queue_free()
 
 	check_level(game)

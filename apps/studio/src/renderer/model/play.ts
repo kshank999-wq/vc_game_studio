@@ -61,7 +61,7 @@ export type Entry =
   | { kind: 'skip'; text: string; needs: string }
   | { kind: 'end'; text: string };
 
-type Cursor =
+export type Cursor =
   | { at: 'node'; id: string }
   | { at: 'after'; id: string }
   | { at: 'event'; sceneId: string; track: string; index: number }

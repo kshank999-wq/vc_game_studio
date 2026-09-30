@@ -328,6 +328,41 @@ Godot `VCGSSceneFlow.dual_requested(line_id, with_line_id)`, Unity
 component's Blueprint event `OnDualDialogue` (both lines' speaker, text and
 direction). The Play-through preview pairs lines by the same rule.
 
+## Saved games
+
+Every runtime saves and loads the game in one format, so a save from one
+engine loads in another: a JSON file with `"format": "vcgs-save"`, the story's
+name, `at` (the scene key to play on from, "" for the story's beginning),
+`saved_at`, and everything the story knows: `flags`, `objects`, `items`,
+`arcs` and `chosen` by key, `quests` in the order they started (`{key,
+state}`), `solved`, `visited`, `fired`, `picked` and `won` as lists, and the
+codex's ordered lists `met`, `characters`, `found`, `locations`, `used`,
+`lore` and `mechanics`. The codex notes and bookmarks are the player's own and
+stay out of it (the notes sync by themselves).
+
+A save holds the game **as the scene being played began**: each scene player
+takes a checkpoint as it starts, before it marks the scene visited. Loading
+puts that back and plays the scene again from its start, so nothing in it is
+counted twice. Anything the story gained since the save starts where it
+starts. The placeholder screens save with **F5** and load with **F9**:
+
+- Godot: `save_game()` / `load_game()` on the debug player
+  (user://savegame.json), which opens the scene's placeholder scene; on the
+  game state `save_text(story)`, `load_text(text)` (the scene key, or null)
+  and `checkpoint(scene_key)`, which `VCGSSceneFlow.start()` calls.
+- Unity: `VcgsGame.SaveGame()` / `LoadGame()` (savegame.json in
+  persistentDataPath); `LoadGame` returns the scene key and raises
+  `GameLoaded`, for your game to open the Unity scene that plays it. The codex
+  screen's F5 and F9 call them. `GameState.SaveText`, `LoadSave` and
+  `Checkpoint`, which `ScenePlayer.Start()` calls.
+- Unreal: `SaveGame` / `LoadGame` on the subsystem (Saved/SaveGame.json), with
+  the scene in `LoadGame`'s Scene and `OnGameLoaded`; the codex HUD's F5 and F9
+  call them. `vcgs::GameState::SaveText`, `LoadSave` and `Checkpoint`, which
+  `vcgs::ScenePlayer::Start()` calls.
+
+The studio's play-through saves are its own (the whole transcript, by the
+studio's ids); see PLAY-THROUGH.md.
+
 ## Levels
 
 `buildIR` carries the Level Designer's levels as `levels`

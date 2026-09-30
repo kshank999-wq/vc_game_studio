@@ -48,6 +48,8 @@ struct EKeys
     static const FKey SpaceBar;
     static const FKey BackSpace;
     static const FKey Enter;
+    static const FKey F5;
+    static const FKey F9;
     static const FKey Escape;
     static const FKey Slash;
     static const FKey Tab;
@@ -55,6 +57,8 @@ struct EKeys
     static const FKey Down;
 };
 inline const FKey EKeys::A = FKey("A");
+inline const FKey EKeys::F5 = FKey("F5");
+inline const FKey EKeys::F9 = FKey("F9");
 inline const FKey EKeys::B = FKey("B");
 inline const FKey EKeys::C = FKey("C");
 inline const FKey EKeys::D = FKey("D");

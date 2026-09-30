@@ -403,6 +403,10 @@ namespace vcgs
 
         void Reset()
         {
+            hasCheckpoint = false;
+            checkpointAt.clear();
+            checkpointBody.clear();
+            Loaded = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
             Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
@@ -526,6 +530,143 @@ namespace vcgs
             return json + (first ? "}\n}" : "\n  }\n}");
         }
 
+        /** A string as JSON writes it. */
+        static std::string JsonQuote(const std::string& s)
+        {
+            std::string out = "\"";
+            for (const char c : s)
+            {
+                if (c == '"' || c == '\\') { out += '\\'; out += c; }
+                else if (c == '\n') out += "\\n";
+                else if (c == '\r') out += "\\r";
+                else if (c == '\t') out += "\\t";
+                else if (static_cast<unsigned char>(c) < 0x20)
+                {
+                    const char* hex = "0123456789abcdef";
+                    out += "\\u00";
+                    out += hex[(c >> 4) & 0xf];
+                    out += hex[c & 0xf];
+                }
+                else out += c;
+            }
+            return out + "\"";
+        }
+
+        /** Everything the story knows, as the fields of a save (without the codex notes and bookmarks, which are the player's own). */
+        std::string SaveBody() const
+        {
+            auto list = [](const auto& keys)
+            {
+                std::string out = "[";
+                bool first = true;
+                for (const std::string& k : keys) { out += (first ? "" : ", ") + JsonQuote(k); first = false; }
+                return out + "]";
+            };
+            auto strings = [](const std::map<std::string, std::string>& m)
+            {
+                std::string out = "{";
+                bool first = true;
+                for (const auto& e : m) { out += (first ? "" : ", ") + JsonQuote(e.first) + ": " + JsonQuote(e.second); first = false; }
+                return out + "}";
+            };
+            auto numbers = [](const std::map<std::string, int>& m)
+            {
+                std::string out = "{";
+                bool first = true;
+                for (const auto& e : m) { out += (first ? "" : ", ") + JsonQuote(e.first) + ": " + std::to_string(e.second); first = false; }
+                return out + "}";
+            };
+            std::string quests = "[";
+            for (size_t i = 0; i < QuestOrder.size(); ++i)
+            {
+                auto q = Quests.find(QuestOrder[i]);
+                quests += (i ? ", " : "") + std::string("{\"key\": ") + JsonQuote(QuestOrder[i]) + ", \"state\": " + JsonQuote(q == Quests.end() ? "" : q->second) + "}";
+            }
+            quests += "]";
+            return "  \"flags\": " + strings(Flags) + ",\n  \"objects\": " + strings(ObjectStates) + ",\n  \"items\": " + numbers(Items) + ",\n  \"arcs\": " + numbers(Arcs) +
+                   ",\n  \"chosen\": " + strings(Chosen) + ",\n  \"quests\": " + quests + ",\n  \"solved\": " + list(Solved) + ",\n  \"visited\": " + list(Visited) +
+                   ",\n  \"fired\": " + list(Fired) + ",\n  \"picked\": " + list(Picked) + ",\n  \"won\": " + list(Won) + ",\n  \"met\": " + list(MetEncounters) +
+                   ",\n  \"characters\": " + list(MetCharacters) + ",\n  \"found\": " + list(FoundItems) + ",\n  \"locations\": " + list(VisitedLocations) +
+                   ",\n  \"used\": " + list(UsedObjects) + ",\n  \"lore\": " + list(KnownLore) + ",\n  \"mechanics\": " + list(MechanicOrder);
+        }
+
+        /** Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it. */
+        void Checkpoint(const std::string& sceneKey)
+        {
+            checkpointAt = sceneKey;
+            checkpointBody = SaveBody();
+            hasCheckpoint = true;
+        }
+
+        /**
+         * The save file's text: the game as the scene being played began (as it
+         * is now, before any scene). The same format in every VCGS runtime, so a
+         * save from one engine loads in another.
+         */
+        std::string SaveText(const std::string& story) const
+        {
+            const long long now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            return "{\n  \"format\": \"vcgs-save\",\n  \"version\": 1,\n  \"story\": " + JsonQuote(story) + ",\n  \"at\": " + JsonQuote(hasCheckpoint ? checkpointAt : "") +
+                   ",\n  \"saved_at\": " + std::to_string(now) + ",\n" + (hasCheckpoint ? checkpointBody : SaveBody()) + "\n}";
+        }
+
+        /** True after a load, until the scene it resumes at starts. */
+        bool Loaded = false;
+
+        /**
+         * Load a save (from this runtime or another engine's): everything the
+         * story knows is as it was saved (anything the story gained since starts
+         * where it starts). Returns false when the text is not a save; At gets the
+         * scene to play from ("" for the story's beginning).
+         */
+        bool LoadSave(const std::string& text, std::string& At)
+        {
+            std::string error;
+            const Value data = JsonReader::Parse(text, &error);
+            if (!error.empty() || data["format"].Str() != "vcgs-save") return false;
+            const bool keepRules = AutoRules;
+            AutoRules = false;
+            Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
+            Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear();
+            for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
+            for (const auto& o : StoryData.Objects)
+            {
+                std::string initial = (*o.second)["initial"].Str();
+                if ((*o.second)["kind"].Str() == "object" && !initial.empty()) ObjectStates[o.first] = initial;
+            }
+            for (const auto& e : data["flags"].fields) Flags[e.first] = e.second.Str();
+            for (const auto& e : data["objects"].fields) ObjectStates[e.first] = e.second.Str();
+            for (const auto& e : data["chosen"].fields) Chosen[e.first] = e.second.Str();
+            for (const auto& e : data["items"].fields) Items[e.first] = static_cast<int>(e.second.number);
+            for (const auto& e : data["arcs"].fields) Arcs[e.first] = static_cast<int>(e.second.number);
+            for (const Value& q : data["quests"].items)
+            {
+                const std::string key = q["key"].Str();
+                if (key.empty() || Quests.count(key)) continue;
+                Quests[key] = q["state"].Str();
+                QuestOrder.push_back(key);
+            }
+            auto keys = [&](const char* field, std::set<std::string>& into)
+            {
+                for (const Value& k : data[field].items) if (k.type == Value::Type::String) into.insert(k.text);
+            };
+            keys("solved", Solved); keys("visited", Visited); keys("fired", Fired); keys("picked", Picked); keys("won", Won);
+            auto ordered = [&](const char* field, std::vector<std::string>& into)
+            {
+                for (const Value& k : data[field].items)
+                    if (k.type == Value::Type::String && std::find(into.begin(), into.end(), k.text) == into.end()) into.push_back(k.text);
+            };
+            ordered("met", MetEncounters); ordered("characters", MetCharacters); ordered("found", FoundItems); ordered("locations", VisitedLocations);
+            ordered("used", UsedObjects); ordered("lore", KnownLore); ordered("mechanics", MechanicOrder);
+            Mechanics.insert(MechanicOrder.begin(), MechanicOrder.end());
+            Checkpoint(data["at"].Str());
+            Loaded = true;
+            Changed();
+            AutoRules = keepRules;
+            At = checkpointAt;
+            return true;
+        }
+
         /** Merge a sync file into the notes: for each entry, the newer note wins (on a tie, ours). Returns how many notes it changed, or -1 when the text is not a sync file. */
         int SyncNotes(const std::string& text)
         {
@@ -626,6 +767,10 @@ namespace vcgs
         std::vector<std::pair<int, std::function<void()>>> listeners;
         int lastId = 0;
         bool settling = false;
+
+        /** The game as the scene being played began (the fields of a save), and that scene. */
+        std::string checkpointAt, checkpointBody;
+        bool hasCheckpoint = false;
 
         void Changed()
         {
@@ -1431,6 +1576,9 @@ namespace vcgs
 
         void Start()
         {
+            // What a save keeps: the game as this scene begins.
+            game.Checkpoint(key);
+            game.Loaded = false;
             game.Visit(key);
             game.VisitLocation(scene["location"].Str());
             track = &scene["main"];

@@ -215,6 +215,25 @@ static class Check
         var line = StoryWalker.Line(game, "sc_03_line_02");
         if (line.speaker != "Mara") Fail("line 2 should be Mara's, got " + line.speaker);
 
+        // Save and load: a save holds the game as the scene being played began, and loading puts it back.
+        var saving = new GameState(story);
+        var cave = new ScenePlayer(saving, Scenes.Sc01TheCaveMouth);
+        cave.Start();
+        var save = D.Map(Json.Parse(saving.SaveText("The Sunken Vault")));
+        Console.WriteLine("save: at " + D.Str(save, "at") + " · visited " + D.List(save, "visited").Count + " · mechanics " + string.Join(",", D.List(save, "mechanics")));
+        if (D.Str(save, "format") != "vcgs-save" || D.Num(save, "version") != 1 || D.Str(save, "story") != "The Sunken Vault" || D.Str(save, "at") != Scenes.Sc01TheCaveMouth || D.List(save, "visited").Count != 0 || D.List(save, "mechanics").Count != 0) Fail("the save should hold the game as SC-01 began");
+        if (!saving.Visited.Contains(Scenes.Sc01TheCaveMouth) || saving.AvailableMechanics.Count != 1) Fail("SC-01 should have been visited and lit the lantern");
+        var first = saving.SaveText("The Sunken Vault");
+        if (saving.LoadSave(first) != Scenes.Sc01TheCaveMouth || saving.Visited.Count != 0 || saving.AvailableMechanics.Count != 0 || !saving.Loaded) Fail("loading should put the game back as SC-01 began");
+        string NoTime(string t) => System.Text.RegularExpressions.Regex.Replace(t, "\"saved_at\": \\d+", "");
+        if (NoTime(saving.SaveText("The Sunken Vault")) != NoTime(first)) Fail("a loaded save should save the same again, got " + saving.SaveText("The Sunken Vault"));
+        // A save from another engine's runtime (the same format) loads here too.
+        var otherAt = saving.LoadSave("{\"format\":\"vcgs-save\",\"version\":1,\"story\":\"The Sunken Vault\",\"at\":\"sc_03_the_vault_door\",\"saved_at\":1,\"flags\":{\"door_solved\":\"yes\"},\"objects\":{\"rusted_lever\":\"up\"},\"items\":{\"vault_key\":2},\"arcs\":{\"mara\":1},\"chosen\":{\"c1\":\"carry_on\"},\"quests\":[{\"key\":\"open_the_vault\",\"state\":\"active\"}],\"solved\":[\"vault_door\"],\"visited\":[\"sc_01_the_cave_mouth\",\"sc_02_the_key\"],\"fired\":[],\"picked\":[\"c1:carry_on\"],\"won\":[\"eel_swarm\"],\"met\":[\"eel_swarm\"],\"characters\":[\"mara\"],\"found\":[\"vault_key\"],\"locations\":[\"silt_camp\"],\"used\":[\"rusted_lever\"],\"lore\":[\"the_drowned_order\"],\"mechanics\":[\"lantern_oil\"]}");
+        if (otherAt != "sc_03_the_vault_door" || saving.Flags["door_solved"] != "yes" || saving.ObjectStates["rusted_lever"] != "up" || saving.Items["vault_key"] != 2 || saving.Arcs["mara"] != 1 || saving.Quests["open_the_vault"] != "active" || !saving.Solved.Contains("vault_door") || !saving.Visited.Contains("sc_02_the_key") || !saving.Picked.Contains("c1:carry_on") || !saving.Won.Contains("eel_swarm") || string.Join(",", saving.MetCharacters) != "mara" || string.Join(",", saving.FoundItems) != "vault_key" || string.Join(",", saving.UsedObjects) != "rusted_lever" || string.Join(",", saving.KnownLore) != "the_drowned_order" || !saving.Mechanics.Contains("lantern_oil")) Fail("a save in the shared format should load");
+        if (saving.LoadSave("not a save") != null || saving.LoadSave("{\"format\":\"vcgs-codex-notes-sync\"}") != null) Fail("text that is not a save should not load");
+        new ScenePlayer(saving, Scenes.Sc03TheVaultDoor).Start();
+        if (saving.Loaded) Fail("starting the scene should end the load");
+
         CheckLevel(story);
 
         Console.WriteLine(failures == 0 ? "OK" : failures + " FAILED");

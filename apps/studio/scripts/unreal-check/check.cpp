@@ -277,6 +277,36 @@ int main()
     if (vcgs::StoryWalker::KindOf(game, end) != "end") Fail("carrying on should reach the end");
     if (vcgs::StoryWalker::GetLine(game, "sc_03_line_02").Speaker != "Mara") Fail("line 2 should be Mara's");
 
+    // Save and load: a save holds the game as the scene being played began, and loading puts it back.
+    {
+        vcgs::GameState saving(story);
+        vcgs::ScenePlayer cave(saving, Scenes::Sc01TheCaveMouth);
+        cave.Start();
+        const std::string first = saving.SaveText("The Sunken Vault");
+        std::string error;
+        const vcgs::Value save = vcgs::JsonReader::Parse(first, &error);
+        std::printf("save: at %s · visited %zu · mechanics %zu\n", save["at"].Str().c_str(), save["visited"].items.size(), save["mechanics"].items.size());
+        if (!error.empty() || save["format"].Str() != "vcgs-save" || save["version"].number != 1 || save["story"].Str() != "The Sunken Vault" || save["at"].Str() != Scenes::Sc01TheCaveMouth || !save["visited"].items.empty() || !save["mechanics"].items.empty()) Fail("the save should hold the game as SC-01 began, got " + first);
+        if (!saving.Visited.count(Scenes::Sc01TheCaveMouth) || saving.MechanicOrder.size() != 1) Fail("SC-01 should have been visited and lit the lantern");
+        std::string at;
+        if (!saving.LoadSave(first, at) || at != Scenes::Sc01TheCaveMouth || !saving.Visited.empty() || !saving.MechanicOrder.empty() || !saving.Loaded) Fail("loading should put the game back as SC-01 began");
+        auto noTime = [](std::string t)
+        {
+            const size_t from = t.find("\"saved_at\": ");
+            return from == std::string::npos ? t : t.erase(from, t.find(',', from) - from);
+        };
+        if (noTime(saving.SaveText("The Sunken Vault")) != noTime(first)) Fail("a loaded save should save the same again, got " + saving.SaveText("The Sunken Vault"));
+        // A save from another engine's runtime (the same format) loads here too.
+        if (!saving.LoadSave("{\"format\":\"vcgs-save\",\"version\":1,\"story\":\"The Sunken Vault\",\"at\":\"sc_03_the_vault_door\",\"saved_at\":1,\"flags\":{\"door_solved\":\"yes\"},\"objects\":{\"rusted_lever\":\"up\"},\"items\":{\"vault_key\":2},\"arcs\":{\"mara\":1},\"chosen\":{\"c1\":\"carry_on\"},\"quests\":[{\"key\":\"open_the_vault\",\"state\":\"active\"}],\"solved\":[\"vault_door\"],\"visited\":[\"sc_01_the_cave_mouth\",\"sc_02_the_key\"],\"fired\":[],\"picked\":[\"c1:carry_on\"],\"won\":[\"eel_swarm\"],\"met\":[\"eel_swarm\"],\"characters\":[\"mara\"],\"found\":[\"vault_key\"],\"locations\":[\"silt_camp\"],\"used\":[\"rusted_lever\"],\"lore\":[\"the_drowned_order\"],\"mechanics\":[\"lantern_oil\"]}", at)
+            || at != "sc_03_the_vault_door" || saving.GetFlag("door_solved") != "yes" || saving.GetObjectState("rusted_lever") != "up" || saving.Items["vault_key"] != 2 || saving.Arcs["mara"] != 1 || saving.Quests["open_the_vault"] != "active" || Join(saving.QuestOrder, ",") != "open_the_vault"
+            || !saving.Solved.count("vault_door") || !saving.Visited.count("sc_02_the_key") || !saving.Picked.count("c1:carry_on") || !saving.Won.count("eel_swarm") || Join(saving.MetCharacters, ",") != "mara" || Join(saving.FoundItems, ",") != "vault_key"
+            || Join(saving.UsedObjects, ",") != "rusted_lever" || Join(saving.KnownLore, ",") != "the_drowned_order" || !saving.Mechanics.count("lantern_oil")) Fail("a save in the shared format should load");
+        if (saving.LoadSave("not a save", at) || saving.LoadSave("{\"format\":\"vcgs-codex-notes-sync\"}", at)) Fail("text that is not a save should not load");
+        vcgs::ScenePlayer door(saving, Scenes::Sc03TheVaultDoor);
+        door.Start();
+        if (saving.Loaded) Fail("starting the scene should end the load");
+    }
+
     CheckLevel(story);
 
     std::printf("%s\n", failures == 0 ? "OK" : (std::to_string(failures) + " FAILED").c_str());

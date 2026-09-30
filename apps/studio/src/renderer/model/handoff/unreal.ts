@@ -188,6 +188,7 @@ struct VCGS_API FVcgsLineRow : public FTableRowBase
 #include "VcgsSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsQuestSignature, const FString&, Quest);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsSceneSignature, const FString&, Scene);
 
 /**
  * The one playthrough of the story: reads story.json when the game starts and
@@ -249,6 +250,21 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestStarted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnLoreDiscovered;
+
+    /**
+     * Save the game (Saved/SaveGame.json when Path is empty): as the scene being
+     * played began, so loading plays it again from its start. The same format
+     * as the Godot and Unity runtimes. Returns where, or "" if it could not.
+     */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Save") FString SaveGame(const FString& Path = TEXT(""));
+    /**
+     * Load a saved game (one from any engine's VCGS runtime). Scene gets the
+     * story scene to play on from ("" for the story's beginning): open its level
+     * and start its scene flow (OnGameLoaded says so too). False when there is
+     * no save to load.
+     */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Save") bool LoadGame(FString& Scene, const FString& Path = TEXT(""));
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Save") FVcgsSceneSignature OnGameLoaded;
 
     /** The codex in words: the quest log, the characters met, the locations visited, the items found, the objects used, the mechanics, the encounters met, then the lore found (AVcgsCodexHUD draws it). */
     /** With a Search, only the entries it finds (ignoring case), in the sections that have any. */
@@ -477,6 +493,25 @@ int32 UVcgsSubsystem::ImportCodexNotes(TArray<FString>& Skipped, const FString& 
     return ImportCodexNotesText(Text, Skipped);
 }
 
+FString UVcgsSubsystem::SaveGame(const FString& Path)
+{
+    if (!Game || !StoryData) return FString();
+    const FString Where = Path.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("SaveGame.json") : Path;
+    return FFileHelper::SaveStringToFile(ToF(Game->SaveText(StoryData->Name)), *Where, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM) ? Where : FString();
+}
+bool UVcgsSubsystem::LoadGame(FString& Scene, const FString& Path)
+{
+    Scene = FString();
+    if (!Game) return false;
+    const FString Where = Path.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("SaveGame.json") : Path;
+    FString Text;
+    if (!FFileHelper::LoadFileToString(Text, *Where)) return false;
+    std::string At;
+    if (!Game->LoadSave(ToStd(Text), At)) return false;
+    Scene = ToF(At);
+    OnGameLoaded.Broadcast(Scene);
+    return true;
+}
 FString UVcgsSubsystem::ExportCodexNotes(const FString& Path)
 {
     if (!CodexData) return FString();
@@ -638,7 +673,8 @@ namespace vcgs { class Codex; }
  * (ExportCodexNotes on the subsystem), and I reads it back (ImportCodexNotes).
  * Y copies the notes to share them, V takes in notes someone shared, M emails
  * them (EmailCodexNotes), T texts them (TextCodexNotes), and P opens them as a
- * page to print (PrintCodexNotes). The notes
+ * page to print (PrintCodexNotes). F5 saves the game and F9 loads it
+ * (SaveGame / LoadGame on the subsystem), whether the codex is open or not. The notes
  * sync with Saved/CodexNotesSync.json (SyncCodexNotes) when the codex opens,
  * every few seconds while it is open, and after each note.
  */
@@ -679,6 +715,8 @@ private:
     std::string NoteDraft;
     /** What just happened, shown in the panel (the notes saved, say). */
     std::string StatusText;
+    /** What the last save (F5) or load (F9) did, shown whether the codex is open or not. */
+    std::string SaveStatusText;
     /** Add the letters, digits and spaces just pressed to Text (Backspace deletes). */
     void TypeKeys(std::string& Text);
     /** Move the cursor to the next entry shown (1) or the one before (-1). */
@@ -790,6 +828,16 @@ void AVcgsCodexHUD::DrawHUD()
         else TypeKeys(NoteDraft);
     }
     else if (PlayerOwner && bCodexOpen && bTypingSearch) TypeSearch();
+    else if (PlayerOwner && PlayerOwner->WasInputKeyJustPressed(EKeys::F5))
+    {
+        const FString Where = Story->SaveGame();
+        SaveStatusText = Where.IsEmpty() ? std::string("Could not save the game.") : "Saved (F9 loads it): " + ToStd(Where);
+    }
+    else if (PlayerOwner && PlayerOwner->WasInputKeyJustPressed(EKeys::F9))
+    {
+        FString Scene;
+        SaveStatusText = !Story->LoadGame(Scene) ? std::string("No saved game to load.") : "Loaded: playing on from " + (Scene.IsEmpty() ? std::string("the beginning") : ToStd(Scene)) + ".";
+    }
     else if (PlayerOwner && bCodexOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::E))
     {
         const FString Where = Story->ExportCodexNotes();
@@ -864,6 +912,7 @@ void AVcgsCodexHUD::DrawHUD()
     const FLinearColor Ink(0.95f, 0.92f, 0.85f);
     DrawRect(FLinearColor(0.09f, 0.08f, 0.06f, 0.85f), Width - 230.f, 10.f, 220.f, 30.f);
     DrawText(ToF(Book->ButtonText(ToStd(CodexKey.ToString()))), Gold, Width - 220.f, 16.f);
+    if (!SaveStatusText.empty()) DrawText(ToF(SaveStatusText), Gold, 20.f, 16.f);
     if (!bCodexOpen) return;
     Book->MarkRead();
     SinceSync += GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.f;

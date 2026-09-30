@@ -101,6 +101,13 @@ monitor while you fix it on another.
   quests, mechanics, lore, choices made, puzzles solved, encounters won, triggers fired and
   scenes visited. Change any of it to try another path. **Step back**
   (Backspace) undoes one step.
+- **Saves** keeps the play-through: three slots in this browser, and a file
+  to keep or pass on (Save to a file, Load a file). A save is the whole of
+  it, the world, where the player is and the transcript, so loading carries on
+  from the very line it was saved at; Step back undoes a load. A save loads
+  only in its own project, and not once the part of the story it was saved in
+  has been deleted. (The engines save the same story state in their own
+  shared format; see ENGINE-ADAPTERS.md.)
 - The story stops with a reason when it reaches an ending or game over, a node
   with nothing after it, or a loop that never stops for the player.
 

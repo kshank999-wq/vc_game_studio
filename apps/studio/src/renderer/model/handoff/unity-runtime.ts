@@ -355,6 +355,9 @@ namespace VCGS
         /// <summary>Put everything where it starts: a new game.</summary>
         public void Reset()
         {
+            checkpointBody = null;
+            checkpointAt = "";
+            Loaded = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
             Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
@@ -580,6 +583,119 @@ namespace VCGS
         public bool WasPicked(string option) => Picked.Contains(option);
 
         internal void RaiseTriggerFired(string trigger) => TriggerFired?.Invoke(trigger);
+
+        /// <summary>The game as the scene being played began (the fields of a save), and that scene: what a save keeps, so loading plays the scene again from its start.</summary>
+        string checkpointAt = "", checkpointBody = null;
+        /// <summary>True after a load, until the scene it resumes at starts.</summary>
+        public bool Loaded;
+
+        static string Q(string s)
+        {
+            var b = new System.Text.StringBuilder("\"");
+            foreach (var c in s ?? "")
+            {
+                if (c == '"' || c == '\\') b.Append('\\').Append(c);
+                else if (c == '\n') b.Append("\\n");
+                else if (c == '\r') b.Append("\\r");
+                else if (c == '\t') b.Append("\\t");
+                else if (c < ' ') b.Append("\\u").Append(((int)c).ToString("x4"));
+                else b.Append(c);
+            }
+            return b.Append('"').ToString();
+        }
+
+        static string Sorted(IEnumerable<string> keys)
+        {
+            var list = new List<string>(keys);
+            list.Sort(string.CompareOrdinal);
+            return InOrder(list);
+        }
+
+        static string InOrder(IEnumerable<string> keys) => "[" + string.Join(", ", new List<string>(keys).ConvertAll(Q)) + "]";
+
+        static string Map<T>(Dictionary<string, T> d, Func<T, string> value)
+        {
+            var parts = new List<string>();
+            foreach (var e in d) parts.Add(Q(e.Key) + ": " + value(e.Value));
+            return "{" + string.Join(", ", parts) + "}";
+        }
+
+        /// <summary>Everything the story knows, as the fields of a save (without the codex notes and bookmarks, which are the player's own).</summary>
+        string SaveBody()
+        {
+            var quests = new List<string>();
+            foreach (var q in Quests) quests.Add("{\"key\": " + Q(q.Key) + ", \"state\": " + Q(q.Value) + "}");
+            return "  \"flags\": " + Map(Flags, Q) + ",\n  \"objects\": " + Map(ObjectStates, Q) + ",\n  \"items\": " + Map(Items, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
+                ",\n  \"arcs\": " + Map(Arcs, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) + ",\n  \"chosen\": " + Map(Chosen, Q) + ",\n  \"quests\": [" + string.Join(", ", quests) + "]" +
+                ",\n  \"solved\": " + Sorted(Solved) + ",\n  \"visited\": " + Sorted(Visited) + ",\n  \"fired\": " + Sorted(Fired) + ",\n  \"picked\": " + Sorted(Picked) + ",\n  \"won\": " + Sorted(Won) +
+                ",\n  \"met\": " + InOrder(MetEncounters) + ",\n  \"characters\": " + InOrder(MetCharacters) + ",\n  \"found\": " + InOrder(FoundItems) + ",\n  \"locations\": " + InOrder(VisitedLocations) +
+                ",\n  \"used\": " + InOrder(UsedObjects) + ",\n  \"lore\": " + InOrder(KnownLore) + ",\n  \"mechanics\": " + InOrder(AvailableMechanics);
+        }
+
+        /// <summary>Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it.</summary>
+        public void Checkpoint(string sceneKey)
+        {
+            checkpointAt = sceneKey ?? "";
+            checkpointBody = SaveBody();
+        }
+
+        /// <summary>
+        /// The save file's text: the game as the scene being played began (as it
+        /// is now, before any scene). The same format in every VCGS runtime, so
+        /// a save from one engine loads in another.
+        /// </summary>
+        public string SaveText(string story)
+        {
+            var at = checkpointBody != null ? checkpointAt : "";
+            return "{\n  \"format\": \"vcgs-save\",\n  \"version\": 1,\n  \"story\": " + Q(story) + ",\n  \"at\": " + Q(at) + ",\n  \"saved_at\": " + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + ",\n" + (checkpointBody ?? SaveBody()) + "\n}";
+        }
+
+        /// <summary>
+        /// Load a save (from this runtime or another engine's): everything the
+        /// story knows is as it was saved (anything the story gained since starts
+        /// where it starts). Returns the scene to play from ("" for the story's
+        /// beginning), or null when the text is not a save.
+        /// </summary>
+        public string LoadSave(string text)
+        {
+            Dictionary<string, object> data;
+            try { data = D.Map(Json.Parse(text ?? "")); }
+            catch (Exception) { return null; }
+            if (D.Str(data, "format") != "vcgs-save") return null;
+            var keepRules = AutoRules;
+            AutoRules = false;
+            Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
+            Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear();
+            foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
+            foreach (var o in Story.Objects)
+            {
+                var initial = D.Str(o.Value, "initial");
+                if (D.Str(o.Value, "kind") == "object" && initial != "") ObjectStates[o.Key] = initial;
+            }
+            foreach (var e in D.Map(data, "flags")) Flags[e.Key] = D.Str(data["flags"] as Dictionary<string, object>, e.Key);
+            foreach (var e in D.Map(data, "objects")) ObjectStates[e.Key] = D.Str(data["objects"] as Dictionary<string, object>, e.Key);
+            foreach (var e in D.Map(data, "chosen")) Chosen[e.Key] = D.Str(data["chosen"] as Dictionary<string, object>, e.Key);
+            foreach (var e in D.Map(data, "items")) Items[e.Key] = (int)D.Num(e.Value, 0);
+            foreach (var e in D.Map(data, "arcs")) Arcs[e.Key] = (int)D.Num(e.Value, 0);
+            foreach (var q in D.List(data, "quests"))
+                if (q is Dictionary<string, object> quest && D.Str(quest, "key") != "") Quests[D.Str(quest, "key")] = D.Str(quest, "state");
+            void Keys(string field, Action<string> add)
+            {
+                foreach (var k in D.List(data, field)) if (k is string key) add(key);
+            }
+            Keys("solved", k => Solved.Add(k)); Keys("visited", k => Visited.Add(k)); Keys("fired", k => Fired.Add(k)); Keys("picked", k => Picked.Add(k)); Keys("won", k => Won.Add(k));
+            void Ordered(string field, List<string> list)
+            {
+                foreach (var k in D.List(data, field)) if (k is string key && !list.Contains(key)) list.Add(key);
+            }
+            Ordered("met", MetEncounters); Ordered("characters", MetCharacters); Ordered("found", FoundItems); Ordered("locations", VisitedLocations); Ordered("used", UsedObjects); Ordered("lore", KnownLore); Ordered("mechanics", AvailableMechanics);
+            foreach (var m in AvailableMechanics) Mechanics.Add(m);
+            AutoRules = keepRules;
+            Checkpoint(D.Str(data, "at"));
+            Loaded = true;
+            Changed?.Invoke();
+            return checkpointAt;
+        }
 
         void OnChanged()
         {
@@ -905,6 +1021,9 @@ namespace VCGS
 
         public void Start()
         {
+            // What a save keeps: the game as this scene begins.
+            game.Checkpoint(SceneKey);
+            game.Loaded = false;
             game.Visit(SceneKey);
             game.VisitLocation(D.Str(scene, "location"));
             track = Main;
@@ -1620,7 +1739,8 @@ namespace VCGS
     /// the entry it is on (★Bookmarks shows only those), N writes a note on it,
     /// E saves every note as a text file, I reads them back, Y copies them to
     /// share them, V takes in notes someone shared, M emails them, T texts
-    /// them, and P opens them as a page to print. Drawn with
+    /// them, and P opens them as a page to print. F5 saves the game and F9
+    /// loads it (VcgsGame.SaveGame / LoadGame). Drawn with
     /// Unity's immediate-mode GUI, so it needs no canvas or prefab.
     /// </summary>
     public sealed class VcgsCodex : MonoBehaviour
@@ -1670,6 +1790,25 @@ namespace VCGS
 
         /// <summary>What just happened, shown under the codex (the notes saved, say).</summary>
         public string Status { get; private set; } = "";
+
+        /// <summary>Save the game (F5; VcgsGame.SaveGame), and say so. Returns where, or "".</summary>
+        public string SaveGame(string path = null)
+        {
+            if (VcgsGame.Instance == null) return "";
+            var where = VcgsGame.Instance.SaveGame(path);
+            Status = where != "" ? "Saved (F9 loads it): " + where : "Could not save the game.";
+            return where;
+        }
+
+        /// <summary>Load the saved game (F9; VcgsGame.LoadGame), and say so. Returns the scene key it plays on from, or null.</summary>
+        public string LoadGame(string path = null)
+        {
+            if (VcgsGame.Instance == null) return null;
+            var at = VcgsGame.Instance.LoadGame(path);
+            var name = at != null && VcgsGame.Instance.Story.Scenes.TryGetValue(at, out var scene) ? D.Str(scene, "name") : "";
+            Status = at == null ? "No saved game at " + (path ?? VcgsGame.DefaultSavePath) : "Loaded: playing on from " + (at == "" ? "the beginning" : name != "" ? name : at) + ".";
+            return at;
+        }
 
         /// <summary>
         /// Email the notes (M): open the mail app with them; too long for a
@@ -1881,6 +2020,12 @@ namespace VCGS
                 MoveCursor(e.keyCode == KeyCode.DownArrow ? 1 : -1);
                 e.Use();
             }
+            else if (e.type == EventType.KeyDown && !typing && (e.keyCode == KeyCode.F5 || e.keyCode == KeyCode.F9))
+            {
+                if (e.keyCode == KeyCode.F5) SaveGame();
+                else LoadGame();
+                e.Use();
+            }
             else if (e.type == EventType.KeyDown && !typing && IsOpen && e.keyCode == KeyCode.Y)
             {
                 ShareNotes();
@@ -2004,6 +2149,39 @@ namespace VCGS
             DontDestroyOnLoad(gameObject);
             Story = Story.FromJson(story != null ? story.text : "{}");
             State = new GameState(Story);
+        }
+
+        /// <summary>A saved game was loaded: open the Unity scene for this story scene key ("" for the story's beginning), whose VcgsSceneFlow plays it from its start.</summary>
+        public event System.Action<string> GameLoaded;
+
+        /// <summary>Where saves go when no path is given: savegame.json in persistentDataPath.</summary>
+        public static string DefaultSavePath => System.IO.Path.Combine(Application.persistentDataPath, "savegame.json");
+
+        /// <summary>Save the game (as the scene being played began, so loading plays it again from its start). Returns where, or "" if it could not.</summary>
+        public string SaveGame(string path = null)
+        {
+            path = path ?? DefaultSavePath;
+            try
+            {
+                System.IO.File.WriteAllText(path, State.SaveText(Story.Name));
+                return path;
+            }
+            catch (System.Exception)
+            {
+                return "";
+            }
+        }
+
+        /// <summary>Load a saved game (one from any engine's VCGS runtime). Returns the scene key to play on from ("" for the beginning), after GameLoaded; null when there is no save to load.</summary>
+        public string LoadGame(string path = null)
+        {
+            path = path ?? DefaultSavePath;
+            string text;
+            try { text = System.IO.File.ReadAllText(path); }
+            catch (System.Exception) { return null; }
+            var at = State.LoadSave(text);
+            if (at != null) GameLoaded?.Invoke(at);
+            return at;
         }
     }
 }
