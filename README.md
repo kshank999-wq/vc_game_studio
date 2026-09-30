@@ -20,6 +20,7 @@ handoff that generates engine code for Unity, Unreal, Godot or a custom engine.
   [`docs/specs/note-sorter-spec.md`](docs/specs/note-sorter-spec.md)
 - Level Designer: [`docs/LEVEL-DESIGNER.md`](docs/LEVEL-DESIGNER.md)
 - Note Sorter: [`docs/NOTE-SORTER.md`](docs/NOTE-SORTER.md)
+- Comments, tasks and history: [`docs/COLLABORATION.md`](docs/COLLABORATION.md)
 - Plan and status: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 ## Packages

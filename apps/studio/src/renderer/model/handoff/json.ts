@@ -1,3 +1,4 @@
+import { tasksMarkdown } from './notes';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
 import { DESIGN_LISTS, type HandoffIR } from './ir';
@@ -53,6 +54,31 @@ export const storySchema = () => ({
     scenes: { type: 'array', items: ref('scene') },
     lines: { type: 'array', items: obj({ id: str, scene: str, speaker: { type: ['string', 'null'] }, text: str, direction: str, vo: { enum: ['none', 'todo', 'recorded'] }, order: num, styled: { type: 'string', description: 'The line with its emphasis, as Fountain writes it: **bold**, *italic*, _underline_. Only when it has some; text is always plain.' }, dual: { type: 'string', description: 'Dual dialogue: the id of the line this one is spoken at the same time as.' } }, ['id', 'scene', 'speaker', 'text', 'direction', 'vo', 'order']) },
     levels: { type: 'array', items: ref('level'), description: 'The Level Designer\'s levels: items with GUIDs, transforms, settings, story links and rules, and their graybox pieces.' },
+    notes: {
+      type: 'array',
+      description: 'Open comments and tasks for the team, oldest first: what each is about, who wrote it, a task\'s role. Answer and tick them off in VC Game Studio.',
+      items: obj(
+        {
+          kind: { enum: ['comment', 'task'] },
+          text: str,
+          by: str,
+          for: { enum: ['writer', 'narrative', 'level', 'gameplay', 'cinematic', 'audio', 'reviewer'], description: 'A task\'s role; absent for anyone.' },
+          at: { type: 'string', format: 'date-time' },
+          replies: { type: 'array', items: obj({ by: str, text: str }) },
+          on: obj(
+            {
+              kind: { enum: ['object', 'connection', 'level', 'levelItem', 'code'] },
+              key: { type: 'string', description: 'A story key, a level or item guid, a branch as "from → to" keys, or a generated file\'s path.' },
+              name: str,
+              export_name: str,
+              type: { type: 'string', description: 'A story element\'s PascalCase identifier.' },
+            },
+            ['kind', 'key', 'name'],
+          ),
+        },
+        ['kind', 'text', 'by', 'at', 'replies', 'on'],
+      ),
+    },
   },
   $defs: {
     vec3: { type: 'array', items: num, minItems: 3, maxItems: 3, description: 'Metres, y up: x east, y up, z south.' },
@@ -330,6 +356,7 @@ const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
     { path: `${root}/story.json`, content: `${JSON.stringify(story, null, 2)}\n`, kind: 'generated' },
     { path: `${root}/story.schema.json`, content: `${JSON.stringify(storySchema(), null, 2)}\n`, kind: 'runtime' },
     { path: `${root}/README.md`, content: README(ir), kind: 'generated' },
+    { path: `${root}/TASKS.md`, content: tasksMarkdown(ir, 'engine', (n) => (n.on.kind === 'levelItem' || n.on.kind === 'level' ? `${n.on.export_name} (${n.on.key})` : n.on.key)), kind: 'generated' },
   ];
   const storyPath = `${root}/story.json`;
   const elements: ElementOutput[] = [];
@@ -348,6 +375,7 @@ const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
   for (const f of ir.flags) row({ id: f.id, label: f.name, symbol: 'state', group: 'Logic', generates: `flags[] · ${f.values.join(' / ')}` }, f);
   for (const t of ir.triggers) row({ id: t.id, label: t.name, symbol: t.kind, group: 'Logic', generates: t.rule ? 'triggers[] · by rule' : 'triggers[]' }, t);
   for (const l of ir.levels) row({ id: l.guid, label: l.name, symbol: 'environment', group: 'World', generates: `levels[] · ${l.items.length} items (${l.export_name})` }, l);
+  elements.push({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'notes[] · TASKS.md', files: [storyPath, `${root}/TASKS.md`], fingerprint: fingerprint(`${VERSION}:${JSON.stringify(ir.notes)}`) });
   return { files, elements };
 };
 

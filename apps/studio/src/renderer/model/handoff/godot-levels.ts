@@ -1,3 +1,5 @@
+import type { IrNote } from './ir';
+import { todoLines } from './notes';
 import type { GeneratedFile } from './engines';
 import { slabFaces, slabPrisms, type IrLevel, type IrLevelItem, type IrPiece } from './levels';
 
@@ -924,12 +926,15 @@ export const levelTscn = (level: IrLevel, root: string): string => {
 };
 
 /** The level's data, for VCGSLevel. */
-export const levelScript = (level: IrLevel, names: Record<string, string>, gd: (v: unknown) => string, header: string): string =>
+export const levelScript = (level: IrLevel, names: Record<string, string>, gd: (v: unknown) => string, header: string, notes: IrNote[] = []): string =>
   [
     header,
     `class_name Level${level.key.split('_').map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : '')).join('')}`,
     'extends VCGSLevel',
     `## ${level.name} · ${level.export_name} · ${level.items.length} items`,
+    // Open comments and tasks on the level and its items (spec §16).
+    ...todoLines(notes.filter((n) => n.on.kind === 'level' && n.on.key === level.guid), '#'),
+    ...level.items.flatMap((i) => todoLines(notes.filter((n) => n.on.kind === 'levelItem' && n.on.key === i.guid), `# ${i.export_name}:`)),
     '',
     `const KEY := ${gd(level.key)}`,
     `const GUID := ${gd(level.guid)}`,

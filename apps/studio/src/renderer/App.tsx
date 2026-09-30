@@ -19,6 +19,8 @@ import { useStudio, isBlank } from './use-studio';
 import { deletionImpact, removalImpact } from './model/impact';
 import type { Menu, MenuItem } from './components/menu/MenuBar';
 import { AboutDialog, PreferencesDialog, PreviewSaveDialog, ShortcutsDialog } from './components/menu/Dialogs';
+import { CommentsPanel } from './components/collab/lazy';
+import type { Target } from './model/collab';
 import { openProjectFile, openRecent, recentFiles, clearRecent, type Opened, type Recent } from './files';
 import { createProject } from './model/project';
 import { REPORTS, type ReportKey } from './model/reports';
@@ -87,7 +89,7 @@ export const App = () => {
   const routeRef = useRef<Route>({ view: 'graph' });
   const [toast, setToast] = useState<string | null>(null);
   const [ask, setAsk] = useState<ConfirmRequest | null>(null);
-  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | null>(null);
+  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | null>(null);
   const [recent, setRecent] = useState<Recent[]>(() => recentFiles());
   const [renameRequest, setRenameRequest] = useState(0);
   const [searching, setSearching] = useState(false);
@@ -178,6 +180,18 @@ export const App = () => {
     if (!box) return;
     const { w, h } = canvasSize();
     setViewState((v) => ({ ...v, panX: (w + 130) / 2 - (box.x + box.w / 2) * v.zoom, panY: h / 2 - (box.y + box.h / 2) * v.zoom }));
+  };
+
+  /** Open what a comment or a change is about (spec §16). */
+  const goToTarget = (target: Target) => {
+    setDialog(null);
+    if (target.kind === 'level' || target.kind === 'levelItem') return openLevels(target.id);
+    if (target.kind === 'code') return openEngine();
+    const id = target.kind === 'connection' ? project.connections.find((c) => c.id === target.id)?.sourceId : target.id;
+    if (!id || !project.objects[id]) return;
+    // A node on the graph is shown there; anything else opens in the Bible, where its comments are.
+    if (project.placements[id]) navigate({ kind: 'graph', id });
+    else openBible(id);
   };
 
   /** Frame a node: centred, and big enough to read (Zoom to selection). */
@@ -690,6 +704,7 @@ export const App = () => {
         { label: 'Levels', shortcut: 'Mod+L', checked: route.view === 'level', onClick: () => openLevels() },
         { label: 'Note Sorter', checked: route.view === 'notes', onClick: () => (route.view === 'notes' ? setRoute(route.back) : openNotes()) },
         { label: 'Engine handoff', shortcut: 'Mod+E', checked: route.view === 'engine', onClick: () => openEngine() },
+        { label: 'Comments and changes', checked: dialog === 'comments', onClick: () => setDialog('comments') },
         { label: 'Play-through', shortcut: 'F5', checked: route.view === 'play', onClick: () => openPlay() },
         {
           label: 'Play from here',
@@ -883,6 +898,8 @@ export const App = () => {
           onLevels={() => (route.view === 'level' ? setRoute(route.back) : openLevels(route.view === 'scene' ? route.sceneId : route.view === 'graph' ? (selection ?? undefined) : undefined))}
           levelsOn={route.view === 'level'}
           onNotes={() => (route.view === 'notes' ? setRoute(route.back) : openNotes())}
+          onComments={() => setDialog(dialog === 'comments' ? null : 'comments')}
+          openComments={(project.comments ?? []).filter((c) => !c.done).length}
           notesOn={route.view === 'notes'}
           saveState={studio.saveState}
           issueCount={route.view === 'graph' ? issues.length : 0}
@@ -1003,7 +1020,7 @@ export const App = () => {
                 onMode={(mode) => setRoute((r) => (r.view === 'level' ? { ...r, mode } : r))}
               />
             )}
-            {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} />}
+            {route.view === 'engine' && <EngineHandoff project={project} onReplace={studio.replace} onNavigate={navigate} onSay={say} focus={route.focus} onCommit={commit} />}
           </Suspense>
           {route.view === 'graph' && Object.keys(project.objects).length <= 3 && (
             <div className="sample-card">
@@ -1088,6 +1105,7 @@ export const App = () => {
         {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
         {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
         {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
+        {dialog === 'comments' && <CommentsPanel project={project} onCommit={commit} onGo={goToTarget} onClose={() => setDialog(null)} />}
         {dialog === 'previewSave' && <PreviewSaveDialog onClose={() => setDialog(null)} />}
         {toast && (
           <div className="toast" role="status">

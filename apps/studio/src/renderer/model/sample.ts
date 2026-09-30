@@ -3,6 +3,7 @@ import { spineLane } from './layout';
 import { addLane, connect, createProject, makeObject, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
 import { sampleLevel } from './level/sample-level';
 import { addPath, pathOf, playBy } from './paths';
+import type { Who } from './collab';
 import { addElement, addLine, setSceneData, updateLine, useInScene } from './scene';
 import { addBranch, addEvent, moveEvent, sceneTimeline, updateBranch, updateEvent } from './timeline';
 import type { Condition } from './rules';
@@ -233,5 +234,28 @@ export const sunkenVault = (): Project => {
   // Two expected paths, checked in the play-through: straight on to Shared Light, and every other way to Heavy Pockets.
   p = addPath(p, pathOf(playBy(p, 'first'), 'Straight on to Shared Light', undefined, Date.UTC(2026, 8, 1)));
   p = addPath(p, pathOf(playBy(p, 'last'), 'Through the squeeze, pockets full', undefined, Date.UTC(2026, 8, 1)));
+
+  // The team's comments and tasks (spec §16): on the key, a branch and a level item.
+  const at = (day: number) => Date.UTC(2026, 8, day, 10);
+  const writer: Who = { name: 'Ana', role: 'writer' };
+  const designer: Who = { name: 'Ben', role: 'level' };
+  const pocket = p.connections.find((c) => c.kind === 'branch' && c.label === 'Pocket it')!;
+  const maraItem = p.levels!.items.find((i) => i.name === 'Mara')!;
+  p = {
+    ...p,
+    comments: [
+      { id: 'cmt_sample_key', target: { kind: 'object', id: key }, kind: 'task', for: 'audio', text: 'The key needs a heavy bronze clink when it is picked up.', by: writer, at: at(2) },
+      {
+        id: 'cmt_sample_pocket',
+        target: { kind: 'connection', id: pocket.id },
+        kind: 'comment',
+        text: 'Is pocketing the ring too tempting? Most playtesters took it.',
+        by: designer,
+        at: at(3),
+        replies: [{ id: 're_sample_pocket', text: 'That is the point: it should cost them later.', by: writer, at: at(4) }],
+      },
+      { id: 'cmt_sample_mara', target: { kind: 'levelItem', id: maraItem.id }, kind: 'task', for: 'gameplay', text: 'Mara should turn to face the player when spoken to.', by: designer, at: at(5) },
+    ],
+  };
   return p;
 };

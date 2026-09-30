@@ -371,6 +371,20 @@ Godot `VCGSSceneFlow.dual_requested(line_id, with_line_id)`, Unity
 component's Blueprint event `OnDualDialogue` (both lines' speaker, text and
 direction). The Play-through preview pairs lines by the same rule.
 
+## Comments and tasks
+
+The IR's `notes` are the project's open comments and tasks (spec §16), oldest
+first. Each has its kind, text, author, a task's role, replies, and `on`: what
+it is about, in engine terms (a story key and identifier, a branch's keys, a
+level or item's GUID and export name, or a generated file's path). Every
+adapter writes `TASKS.md` from them (`notes.ts`, `tasksMarkdown`). It also
+puts TODO(VCGS) lines beside the thing itself: in Unity's `StoryKeys.cs` and
+Unreal's `VcgsStoryKeys.h` above the key constant, in Godot at the top of the
+level's script, and for a comment on a file at the top of that file
+(`withCodeNotes`). The JSON adapter keeps them in `story.json`. Story data and
+row fingerprints are made without the notes (`withoutNotes`), so a comment
+never marks the story as changed. See [COLLABORATION.md](COLLABORATION.md).
+
 ## Saved games
 
 Every runtime saves and loads the game in one format, so a save from one

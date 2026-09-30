@@ -1,3 +1,5 @@
+import { CommentsHistory } from '../collab/CommentsHistory';
+import { openCount } from '../../model/collab';
 import { useEffect, useMemo, useState } from 'react';
 import type { Destination } from '../../model/details';
 import { ENGINES, hunksOf, lineDiff, planHandoff, recordExport, reviewSend, setTarget, type Row, type SendFile, type SendReview } from '../../model/handoff';
@@ -19,6 +21,8 @@ interface Props {
   onSay: (message: string) => void;
   /** An element to show the code for, when opened from its detail. */
   focus?: string;
+  /** Comments on generated files are project edits (spec §16). */
+  onCommit?: (project: Project) => void;
 }
 
 const GROUPS: OutputGroup[] = ['Story', 'People + words', 'World', 'Logic'];
@@ -75,7 +79,7 @@ const saveZip = (name: string, files: { path: string; content: string }[]) => {
  * (it's generated, read-only, and hideable), and send it once the checks are
  * clear: Godot 4, Unity 6, Unreal Engine 5, or plain JSON for any other engine.
  */
-export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: Props) => {
+export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, onCommit }: Props) => {
   const plan = useMemo(() => planHandoff(project), [project]);
   const bridge = desktop();
   const [selected, setSelected] = useState<string | null>(focus ?? null);
@@ -451,6 +455,15 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus }: 
           <pre className="code" aria-label={file?.path}>
             {file?.content}
           </pre>
+          {file && onCommit && (
+            <details className="code-comments" open={openCount(project, { kind: 'code', id: file.path }) > 0 || undefined}>
+              <summary>
+                Comments on {file.path.split('/').pop()}
+                {openCount(project, { kind: 'code', id: file.path }) ? ` · ${openCount(project, { kind: 'code', id: file.path })}` : ''}
+              </summary>
+              <CommentsHistory key={file.path} project={project} target={{ kind: 'code', id: file.path }} onCommit={onCommit} what={file.path} />
+            </details>
+          )}
           <p className="code-foot">
             You never have to touch this. Change {row?.label ?? 'the element'} in the story and the code regenerates on the next export; code of your own between its BEGIN CUSTOM and END CUSTOM lines is kept.
           </p>

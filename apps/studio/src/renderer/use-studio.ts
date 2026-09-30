@@ -5,7 +5,8 @@ import { commit, redo, startHistory, undo, type History } from './model/history'
 import { createProject } from './model/project';
 import { canSave, loadProject, saveProject } from './model/storage';
 import type { Project } from './model/types';
-import { getPreferences, usePreferences } from './preferences';
+import { getPreferences, usePreferences, whoAmI } from './preferences';
+import { recordEdits } from './model/collab';
 import { getShared, isPanel, listen, post, setSharedProject, subscribeShared, type Command } from './windows';
 
 type Action =
@@ -25,7 +26,8 @@ const keepHandoff = (next: History, from: History): History =>
 const reduce = (history: History, action: Action): History => {
   switch (action.type) {
     case 'commit':
-      return commit(history, action.project);
+      // Each thing the commit changed gets a revision in its history (spec §16).
+      return commit(history, recordEdits(history.present, action.project, whoAmI()));
     case 'replace':
       return action.project === history.present ? history : { ...history, present: action.project };
     case 'reset':

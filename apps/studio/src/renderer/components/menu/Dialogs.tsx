@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { desktop } from '../../desktop';
 import { isPreview, PURCHASE_URL } from '../../edition';
+import { ROLES } from '../../model/collab';
 import { DEFAULT_PREFERENCES, resetPreferences, setPreferences, usePreferences, type Preferences } from '../../preferences';
 import { shortcutLabel } from './MenuBar';
 
@@ -57,6 +58,22 @@ export const PreferencesDialog = ({ onClose }: { onClose: () => void }) => {
   return (
     <Modal title="Preferences" onClose={onClose}>
       <div className="prefs">
+        <h3>You</h3>
+        <label className="pref-row">
+          <span className="pref-text">
+            <span>Your name</span>
+            <span className="pref-hint">On your comments and in the history of what you change. Kept on this computer.</span>
+          </span>
+          <input className="inp small" aria-label="Your name" placeholder="You" defaultValue={p.authorName} onBlur={(e) => set({ authorName: e.currentTarget.value.trim() })} />
+        </label>
+        <Choice<'authorRole'>
+          label="Your role"
+          hint="Tasks for your role come first in Comments and changes."
+          value={p.authorRole}
+          options={[{ value: '', label: 'None' }, ...ROLES.map((r) => ({ value: r.id, label: r.label }))]}
+          onChange={(authorRole) => set({ authorRole })}
+        />
+
         <h3>Saving</h3>
         <Toggle
           label="Save to the project file as I work"

@@ -1,3 +1,4 @@
+import { CommentsHistory } from '../collab/lazy';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { laneRows, laneSequence, nodeBox, nodeSize, spanRange, spineSequence, type Box, type LaneRow } from '../../model/layout';
 import {
@@ -632,6 +633,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
             <RuleEditor project={project} rule={c.conditions} label="Offered when" onChange={(r) => props.onCommit(setConnectionRules(project, c.id, { conditions: r }))} />
             <EffectsEditor project={project} effects={c.effects} label="Taking it" onChange={(e) => props.onCommit(setConnectionRules(project, c.id, { effects: e }))} />
             {project.objects[c.sourceId]?.type === 'choice' && <OptionBehaviourEditor value={c} onChange={(patch) => props.onCommit(setConnectionRules(project, c.id, patch))} />}
+            <CommentsHistory project={project} target={{ kind: 'connection', id: c.id }} onCommit={props.onCommit} what={c.label || `${from} → ${to}`} />
           </div>
         );
       })()}

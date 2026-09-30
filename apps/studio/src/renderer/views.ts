@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { preloadCollab } from './components/collab/lazy';
 
 /**
  * The views that stand aside from the graph and scenes: the Bible, the shot
@@ -15,6 +16,7 @@ const loaders = {
   engine: () => import('./components/engine/EngineHandoff'),
   levels: () => import('./components/level/LevelDesigner'),
   notes: () => import('./components/notes/NoteSorter'),
+  collab: preloadCollab,
 };
 
 export const GameBible = lazy(() => loaders.bible().then((m) => ({ default: m.GameBible })));

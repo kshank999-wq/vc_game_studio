@@ -31,6 +31,9 @@ export interface Preferences {
   paletteCollapsed: Record<string, boolean>;
   /** Level Play Mode's controls (spec §9.2): only what differs from the defaults in components/level/input.ts. */
   playControls: PlayControlPrefs;
+  /** Your name and role, on your comments and in each thing's edit history (spec §16). */
+  authorName: string;
+  authorRole: string;
 }
 
 export interface PlayControlPrefs {
@@ -55,7 +58,15 @@ export const DEFAULT_PREFERENCES: Preferences = {
   pinned: { graph: [], scene: [] },
   paletteCollapsed: {},
   playControls: { keys: {}, pad: {}, lookSpeed: 1, invertY: false, deadzone: 0.18 },
+  authorName: '',
+  authorRole: '',
 };
+
+/** Who you are in comments and history: your name (or "You") and role. */
+export const whoAmI = (p: Preferences = current): { name: string; role?: import('./model/collab').Role } => ({
+  name: p.authorName.trim() || 'You',
+  ...(p.authorRole ? { role: p.authorRole as import('./model/collab').Role } : {}),
+});
 
 const KEY = 'vcgs.prefs.v1';
 

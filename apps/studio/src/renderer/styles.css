@@ -8321,3 +8321,183 @@ button.bible-dual-col:hover {
   color: #ffd89a;
   border-color: #8a6f2f;
 }
+
+/* ─── Comments, tasks and history (spec §16) ─────────────────────────── */
+.collab {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.collab-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.collab-tabs button {
+  padding: 4px 10px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.collab-tabs button.on {
+  color: var(--text);
+  border-bottom-color: var(--gold-lo);
+}
+
+.collab-owner {
+  margin: 2px 0;
+}
+
+.collab-after {
+  color: #e0a84e;
+}
+
+.collab-list,
+.collab-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.collab-comment,
+.collab-history li {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.collab-comment.task {
+  border-left: 3px solid var(--gold-lo);
+}
+
+.collab-comment.done {
+  opacity: 0.6;
+}
+
+.collab-comment.done .collab-text {
+  text-decoration: line-through;
+}
+
+.collab-comment-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.collab-kind {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--gold-hi);
+}
+
+.collab-done {
+  gap: 6px;
+}
+
+.collab-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.collab-reply {
+  margin-left: 12px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
+.collab-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.collab-new {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.collab-new textarea {
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.collab-form-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.collab-filters {
+  margin: 10px 0;
+}
+
+.collab-target {
+  text-align: left;
+  font-size: 12px;
+}
+
+.collab-panel {
+  max-height: min(80vh, 720px);
+  overflow: auto;
+}
+
+.collab-panel .collab-tabs {
+  margin-bottom: 8px;
+}
+
+.comments-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.comments-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--gold-lo);
+  color: #111;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.code-comments {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.code-comments summary {
+  cursor: pointer;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.rules-popover .collab {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}

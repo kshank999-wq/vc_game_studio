@@ -253,4 +253,8 @@ export interface Project {
   notes?: NoteSet;
   /** Expected paths through the story, checked in the play-through (spec §15). */
   paths?: import('./paths').ExpectedPath[];
+  /** Comments and tasks on anything in the project (spec §16). */
+  comments?: import('./collab').Comment[];
+  /** Each element's, connection's, level's and level item's edit history, by target key (spec §16). */
+  revisions?: Record<string, import('./collab').Revision[]>;
 }

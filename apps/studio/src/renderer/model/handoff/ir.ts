@@ -1,3 +1,4 @@
+import { describeTarget, whoLabel, type Who } from '../collab';
 import { interactionsOf, initialState, statesOf } from '../details';
 import { laneSequence, spineSequence } from '../layout';
 import { CATEGORIES, dualWith, elementsIn, sceneLines } from '../scene';
@@ -319,6 +320,30 @@ export interface HandoffIR {
   lines: IrLine[];
   /** The Level Designer's levels (docs/LEVEL-DESIGNER.md). */
   levels: IrLevel[];
+  /** Open comments and tasks (spec §16), for the engine team: each engine lists them in TASKS.md and beside what they are about. */
+  notes: IrNote[];
+}
+
+/** An open comment or task, and what it is about in the engine's terms. */
+export interface IrNote {
+  kind: 'comment' | 'task';
+  text: string;
+  /** Who wrote it: "Ana (Writer)". */
+  by: string;
+  /** A task's role, snake_case ("gameplay"), or absent for anyone. */
+  for?: string;
+  at: string;
+  replies: { by: string; text: string }[];
+  on: {
+    kind: 'object' | 'connection' | 'level' | 'levelItem' | 'code';
+    /** The story key, the level or item GUID, the connection's "from → to" keys, or the file's path. */
+    key: string;
+    name: string;
+    /** A level item's (or level's) export name. */
+    export_name?: string;
+    /** A story element's identifier, for the key constants (Scenes.Sc03TheVaultDoor). */
+    type?: string;
+  };
 }
 
 /**
@@ -380,6 +405,7 @@ export const buildIR = (project: Project): HandoffIR => {
     const full = item && set?.items.find((i) => i.id === item.id);
     return !!full && !full.hidden && paramOf(set!, full, 'export') !== false;
   };
+  const levels = buildLevels(project, { key, rule, effects, toKey });
   const scenes: IrScene[] = of('scene').map((s) => {
     const tracks = sceneTimeline(project, s.id);
     const code = s.data.code ?? '';
@@ -613,8 +639,49 @@ export const buildIR = (project: Project): HandoffIR => {
         ...((partner) => (partner ? { dual: lineId(project.objects[l.sceneId]!.data.code ?? '', partner.order) } : {}))(dualWith(project, l.id)),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
-    levels: buildLevels(project, { key, rule, effects, toKey }),
+    levels,
+    notes: notesOf(project, ids, levels),
   };
 };
+
+const byLabel = (by: Who) => whoLabel(by);
+
+/** The project's open comments and tasks, oldest first, each with what it is about in engine terms. */
+const notesOf = (project: Project, ids: Map<string, Ident>, levels: IrLevel[]): IrNote[] =>
+  (project.comments ?? [])
+    .filter((c) => !c.done)
+    .sort((a, b) => a.at - b.at)
+    .flatMap((c): IrNote[] => {
+      const t = describeTarget(project, c.target);
+      if (!t.exists) return [];
+      let on: IrNote['on'];
+      if (c.target.kind === 'object') {
+        const ident = ids.get(c.target.id);
+        if (!ident) return [];
+        on = { kind: 'object', key: ident.key, name: t.label, type: ident.type };
+      } else if (c.target.kind === 'connection') {
+        const conn = project.connections.find((x) => x.id === c.target.id)!;
+        on = { kind: 'connection', key: `${ids.get(conn.sourceId)?.key ?? '?'} → ${ids.get(conn.targetId)?.key ?? '?'}`, name: t.label };
+      } else if (c.target.kind === 'level') {
+        const level = levels.find((l) => l.guid === c.target.id);
+        if (!level) return [];
+        on = { kind: 'level', key: level.guid, name: level.name, export_name: level.export_name };
+      } else if (c.target.kind === 'levelItem') {
+        const item = levels.flatMap((l) => l.items).find((i) => i.guid === c.target.id);
+        if (!item) return [];
+        on = { kind: 'levelItem', key: item.guid, name: item.name, export_name: item.export_name };
+      } else on = { kind: 'code', key: c.target.id, name: t.label };
+      return [
+        {
+          kind: c.kind,
+          text: c.text,
+          by: byLabel(c.by),
+          ...(c.kind === 'task' && c.for ? { for: c.for } : {}),
+          at: new Date(c.at).toISOString(),
+          replies: (c.replies ?? []).map((r) => ({ by: byLabel(r.by), text: r.text })),
+          on,
+        },
+      ];
+    });
 
 export { sceneLines };

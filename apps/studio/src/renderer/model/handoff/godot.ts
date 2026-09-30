@@ -1,3 +1,4 @@
+import { tasksMarkdown, withCodeNotes } from './notes';
 import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GenerateOptions, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
@@ -1422,7 +1423,7 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
   );
   for (const level of ir.levels) {
     const scene = add(`levels/${level.key}.tscn`, levelTscn(level, root));
-    const script = add(`levels/${level.key}.gd`, levelScript(level, names, gd, HEADER));
+    const script = add(`levels/${level.key}.gd`, levelScript(level, names, gd, HEADER, ir.notes));
     const play = add(`levels/play_${level.key}.tscn`, playTscn(level, root));
     row({ id: level.guid, label: level.name, symbol: 'environment', group: 'World', generates: `Level scene · ${level.items.length} items (${level.export_name})`, files: [scene, script, play] }, level);
   }
@@ -1515,7 +1516,22 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
     ),
   );
   void readme;
-  return { files, elements };
+
+  // Open comments and tasks (spec §16), for the Godot team.
+  const tasks = add(
+    'TASKS.md',
+    tasksMarkdown(ir, 'Godot', (n) =>
+      n.on.kind === 'level'
+        ? `res://${root}/levels/${ir.levels.find((l) => l.guid === n.on.key)?.key ?? ''}.tscn`
+        : n.on.kind === 'levelItem'
+          ? `${ir.levels.find((l) => l.items.some((i) => i.guid === n.on.key))?.export_name ?? ''}/${n.on.export_name}`
+          : n.on.kind === 'code'
+            ? `res://${n.on.key}`
+            : n.on.key,
+    ),
+  );
+  row({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'TASKS.md · TODO(VCGS) beside what each is about', files: [tasks] }, ir.notes);
+  return { files: withCodeNotes(files, ir), elements };
 };
 
 export const godot: EngineAdapter = {

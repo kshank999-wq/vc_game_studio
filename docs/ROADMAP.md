@@ -65,7 +65,9 @@ Key decisions already made in `@vc/core`:
    order: project wizard → Bible → spine/Player Lane timeline → scene editor
    (graph + layer panels) → simulator with state inspector → validation panel.
 2. **Persistence beyond a single JSON file**: autosave, revision history per
-   object, and later collaboration.
+   object, and later collaboration. Revision history per object, comments and
+   tasks are in (see [COLLABORATION.md](COLLABORATION.md)); sharing a project
+   live is still to come.
 3. **Game Studio, phase 2**: the first engine adapter. Godot is the fastest
    to prove out because scenes and scripts are plain text. Generate a
    placeholder level per scene (grey-box geometry, labelled markers for

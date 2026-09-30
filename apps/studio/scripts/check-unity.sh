@@ -17,5 +17,10 @@ text = text.replace("    // BEGIN CUSTOM: code\n", "    // BEGIN CUSTOM: code\n 
 open(path, "w").write(text)
 PY
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$work" unity > /dev/null)
+# The team's open comments and tasks (spec §16): TASKS.md, and a TODO line above the key's constant (compiled below).
+gen="$work/Assets/VCGS/Generated"
+grep -q "Task for Audio: The key needs a heavy bronze clink" "$gen/TASKS.md" || { echo "TASKS.md should list the key's task"; exit 1; }
+grep -B1 'public const string VaultKey' "$gen/StoryKeys.cs" | grep -q "TODO(VCGS) Task for Audio" || { echo "StoryKeys.cs should carry the key's task above VaultKey"; exit 1; }
+echo "tasks: $(grep -c '^- ' "$gen/TASKS.md") open"
 cd "$work"
 dotnet run --nologo -v q

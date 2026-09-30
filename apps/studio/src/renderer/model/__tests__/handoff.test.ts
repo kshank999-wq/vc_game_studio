@@ -143,7 +143,7 @@ describe('the JSON adapter', () => {
     const { json, storySchema, JSON_FORMAT } = await import('../handoff/json');
     const ir = buildIR(sunkenVault());
     const out = json.generate!(ir, 'vcgs');
-    expect(out.files.map((f) => f.path)).toEqual(['vcgs/story.json', 'vcgs/story.schema.json', 'vcgs/README.md']);
+    expect(out.files.map((f) => f.path)).toEqual(['vcgs/story.json', 'vcgs/story.schema.json', 'vcgs/README.md', 'vcgs/TASKS.md']);
     const story = JSON.parse(out.files[0]!.content);
     expect(story).toMatchObject({ ...JSON_FORMAT, $schema: './story.schema.json', project: { name: 'The Sunken Vault' } });
     expect(story.scenes.find((s: { name: string }) => s.name === 'The Vault Door').main[4].ends).toEqual({ match: 'all', items: [{ kind: 'flag', ref: 'door_solved', op: 'is', value: 'yes' }] });

@@ -1,3 +1,4 @@
+import { sameButHistory } from '../../model/collab';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePreferences } from '../../preferences';
 import { newId } from '../../model/project';
@@ -98,6 +99,8 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
   // is a change from outside — an undo, the timeline, the inspector — and
   // the script is read again.
   const basis = useRef({ project, sceneId });
+  // Recording the edit in its history is not a change from outside.
+  if (basis.current.sceneId === sceneId && basis.current.project !== project && sameButHistory(basis.current.project, project)) basis.current = { project, sceneId };
   if (basis.current.project !== project || basis.current.sceneId !== sceneId) {
     basis.current = { project, sceneId };
     const fresh = toElements(project, sceneId);

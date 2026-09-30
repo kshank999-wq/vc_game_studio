@@ -1,3 +1,5 @@
+import { CommentsHistory } from '../collab/CommentsHistory';
+import { openCount } from '../../model/collab';
 import { useState } from 'react';
 import { areaOf, assetOf, corners, frameOf, num, OUTLINED_KINDS, outlineOf, paramOf, perimeterOf, sizeOf } from '../../model/level/geometry';
 import { GROUPS } from '../../model/level/library';
@@ -243,6 +245,9 @@ export const LevelInspector = (props: Props) => {
             ))}
           </div>
         </Section>
+        <Section title="Comments and history" open={!closed.has('collab')} onToggle={() => toggle('collab')} count={openCount(project, { kind: 'level', id: level.id }) || undefined}>
+          <CommentsHistory project={project} target={{ kind: 'level', id: level.id }} onCommit={onCommit} what={level.name} />
+        </Section>
       </aside>
     );
   }
@@ -444,6 +449,11 @@ export const LevelInspector = (props: Props) => {
               </div>
             </div>
           ) : null,
+        )}
+        {(!q || matches('comments tasks history changes')) && (
+          <Section title="Comments and history" open={!closed.has('collab') || !!q} onToggle={() => toggle('collab')} count={openCount(project, { kind: 'levelItem', id: item.id }) || undefined}>
+            <CommentsHistory project={project} target={{ kind: 'levelItem', id: item.id }} onCommit={onCommit} what={item.name} />
+          </Section>
         )}
         {!q && <SaveToLibrary name={saveName} setName={setSaveName} onSave={props.onSaveToLibrary} placeholder={`${item.name} (custom)`} />}
       </div>

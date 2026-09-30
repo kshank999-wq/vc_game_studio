@@ -17,5 +17,10 @@ text = text.replace("# BEGIN CUSTOM: code\n", "# BEGIN CUSTOM: code\nstatic func
 open(path, "w").write(text)
 PY
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$work" > /dev/null)
+# The team's open comments and tasks (spec §16): TASKS.md, and TODO lines beside the level items they are about.
+gen="$work/vcgs/generated"
+grep -q "Task for Audio: The key needs a heavy bronze clink" "$gen/TASKS.md" || { echo "TASKS.md should list the key's task"; exit 1; }
+grep -q "_Mara_[0-9]*: TODO(VCGS) Task for Gameplay programmer" "$gen/levels/sunken_vault.gd" || { echo "the level script should carry Mara's task"; exit 1; }
+echo "tasks: $(grep -c '^- ' "$gen/TASKS.md") open"
 "${GODOT:?Set GODOT to a Godot 4 binary}" --headless --path "$work" --import > /dev/null 2>&1 || true
 "$GODOT" --headless --path "$work" -s check.gd

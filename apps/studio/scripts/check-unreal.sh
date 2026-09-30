@@ -22,6 +22,10 @@ text = text.replace("    // BEGIN CUSTOM: code\n", "    // BEGIN CUSTOM: code\n 
 open(path, "w").write(text)
 PY
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$work" unreal > /dev/null)
+# The team's open comments and tasks (spec §16): TASKS.md, and a TODO line above the key's constant (compiled below).
+grep -q "Task for Audio: The key needs a heavy bronze clink" "$work/Content/VCGS/Generated/TASKS.md" || { echo "TASKS.md should list the key's task"; exit 1; }
+grep -B1 'constexpr const TCHAR\* VaultKey' "$work/Plugins/VCGS/Source/VCGS/Public/Generated/VcgsStoryKeys.h" | grep -q "TODO(VCGS) Task for Audio" || { echo "VcgsStoryKeys.h should carry the key's task above VaultKey"; exit 1; }
+echo "tasks: $(grep -c '^- ' "$work/Content/VCGS/Generated/TASKS.md") open"
 cxx="${CXX:-g++}"
 flags=(-std=c++17 -Wall -Wextra -Werror -fno-exceptions -fno-rtti)
 public="$work/Plugins/VCGS/Source/VCGS/Public"

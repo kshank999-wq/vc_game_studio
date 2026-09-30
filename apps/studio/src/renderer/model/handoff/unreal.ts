@@ -1,3 +1,4 @@
+import { tasksMarkdown, todoLines, withCodeNotes, withoutNotes } from './notes';
 import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
@@ -1217,13 +1218,24 @@ IMPLEMENT_MODULE(FDefaultModuleImpl, VCGS)
 
 const cppString = (s: string) => JSON.stringify(s);
 
-const keySection = (name: string, summary: string, list: { ident: Ident }[]): string[] =>
+/** A key's constants, each with the open comments and tasks on its element as TODO lines above it (spec §16). */
+const keySection = (name: string, summary: string, list: { ident: Ident }[], notes: HandoffIR['notes'] = []): string[] =>
   list.length
-    ? [`    /** ${summary} */`, `    namespace ${name}`, '    {', ...list.map((x) => `        constexpr const TCHAR* ${x.ident.type} = TEXT(${cppString(x.ident.key)});`), '    }', '']
+    ? [
+        `    /** ${summary} */`,
+        `    namespace ${name}`,
+        '    {',
+        ...list.flatMap((x) => [
+          ...todoLines(notes.filter((n) => n.on.kind === 'object' && n.on.key === x.ident.key), '//', '        '),
+          `        constexpr const TCHAR* ${x.ident.type} = TEXT(${cppString(x.ident.key)});`,
+        ]),
+        '    }',
+        '',
+      ]
     : [];
 
-export const storyKeysHeader = (ir: HandoffIR): string =>
-  [
+export const storyKeysHeader = (ir: HandoffIR): string => {
+  return [
     HEADER,
     '#pragma once',
     '',
@@ -1232,22 +1244,23 @@ export const storyKeysHeader = (ir: HandoffIR): string =>
     `/** Every key in ${ir.project.name.replace(/\*\//g, '')}, for game code: VcgsKeys::Scenes::Sc03TheVaultDoor. */`,
     'namespace VcgsKeys',
     '{',
-    ...keySection('Scenes', 'Story scenes, for UVcgsSceneFlowComponent.', ir.scenes),
-    ...keySection('Choices', 'Choices, on the graph and in scenes.', ir.choices),
-    ...keySection('Characters', 'Characters and NPCs.', ir.characters),
-    ...keySection('Objects', 'Interactive objects, for UVcgsInteractableComponent.', ir.objects.filter((o) => o.kind === 'object')),
-    ...keySection('Puzzles', 'Puzzles.', ir.objects.filter((o) => o.kind === 'puzzle')),
-    ...keySection('Items', 'Inventory items.', ir.items),
-    ...keySection('Locations', 'Locations.', ir.locations),
-    ...DESIGN_LISTS.flatMap((d) => keySection(d.folder, `${d.folder} (DT_${d.folder}).`, ir[d.list])),
-    ...keySection('Cinematics', 'Cinematics.', ir.cinematics),
-    ...keySection('Flags', 'States the game remembers.', ir.flags),
-    ...keySection('Triggers', 'Triggers.', ir.triggers.filter((t) => t.kind === 'trigger')),
-    ...keySection('Gates', 'Gates.', ir.triggers.filter((t) => t.kind === 'gate')),
+    ...keySection('Scenes', 'Story scenes, for UVcgsSceneFlowComponent.', ir.scenes, ir.notes),
+    ...keySection('Choices', 'Choices, on the graph and in scenes.', ir.choices, ir.notes),
+    ...keySection('Characters', 'Characters and NPCs.', ir.characters, ir.notes),
+    ...keySection('Objects', 'Interactive objects, for UVcgsInteractableComponent.', ir.objects.filter((o) => o.kind === 'object'), ir.notes),
+    ...keySection('Puzzles', 'Puzzles.', ir.objects.filter((o) => o.kind === 'puzzle'), ir.notes),
+    ...keySection('Items', 'Inventory items.', ir.items, ir.notes),
+    ...keySection('Locations', 'Locations.', ir.locations, ir.notes),
+    ...DESIGN_LISTS.flatMap((d) => keySection(d.folder, `${d.folder} (DT_${d.folder}).`, ir[d.list], ir.notes)),
+    ...keySection('Cinematics', 'Cinematics.', ir.cinematics, ir.notes),
+    ...keySection('Flags', 'States the game remembers.', ir.flags, ir.notes),
+    ...keySection('Triggers', 'Triggers.', ir.triggers.filter((t) => t.kind === 'trigger'), ir.notes),
+    ...keySection('Gates', 'Gates.', ir.triggers.filter((t) => t.kind === 'gate'), ir.notes),
     ...customRegion('//', 'code', '    ', 'Your own keys and helpers'),
     '}',
     '',
   ].join('\n');
+};
 
 /** A CSV cell as Unreal's DataTable importer reads it. */
 const cell = (v: string | number | boolean) => {
@@ -1384,7 +1397,7 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
   for (const [name, content] of Object.entries(PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
   if (ir.levels.length) for (const [name, content] of Object.entries(LEVEL_PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
 
-  const storyPath = put(`${root}/story.json`, JSON.stringify({ ...JSON_FORMAT, generator: 'VC Game Studio', ...ir }, null, 2), 'generated');
+  const storyPath = put(`${root}/story.json`, JSON.stringify({ ...JSON_FORMAT, generator: 'VC Game Studio', ...withoutNotes(ir) }, null, 2), 'generated');
   const keysPath = put(`${SOURCE}/Public/Generated/VcgsStoryKeys.h`, storyKeysHeader(ir), 'generated');
   const tables = dataTables(ir);
   const tablePaths: Record<string, string> = {};
@@ -1394,7 +1407,7 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
 
   const elements: ElementOutput[] = [];
   const row = (e: Omit<ElementOutput, 'fingerprint'>, data: unknown) => elements.push({ ...e, fingerprint: fingerprint(`${VERSION}:${JSON.stringify(data)}`) });
-  row({ id: 'story', label: 'Story graph', symbol: 'plotPoint', group: 'Story', generates: `story.json · VcgsStoryKeys.h · ${ir.graph.length} nodes`, files: [storyPath, keysPath, scriptPath] }, { graph: ir.graph, keys: storyKeysHeader(ir) });
+  row({ id: 'story', label: 'Story graph', symbol: 'plotPoint', group: 'Story', generates: `story.json · VcgsStoryKeys.h · ${ir.graph.length} nodes`, files: [storyPath, keysPath, scriptPath] }, { graph: ir.graph, keys: storyKeysHeader(withoutNotes(ir)) });
   for (const s of ir.scenes) row({ id: s.id, label: `${s.code} ${s.name}`.trim(), symbol: 'scene', group: 'Story', generates: `UVcgsSceneFlowComponent · ${s.main.length} events · VcgsKeys::Scenes::${s.ident.type}`, files: [storyPath] }, s);
   for (const c of ir.cinematics) row({ id: c.id, label: `${c.code} ${c.name}`.trim(), symbol: 'cinematic', group: 'Story', generates: `DT_Cinematics row${c.shots ? ` · ${c.shots.length} DT_Shots rows` : ''}`, files: [tablePaths.Cinematics!, tablePaths.Shots!] }, c);
   for (const c of ir.choices) row({ id: c.id, label: `${c.code} ${c.name}`.trim(), symbol: 'choice', group: 'Story', generates: `Choice · ${c.options.length} options`, files: [storyPath] }, c);
@@ -1440,7 +1453,22 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
     ),
     'generated',
   );
-  return { files, elements };
+  // Open comments and tasks (spec §16), for the Unreal team.
+  const tasksPath = put(
+    `${root}/TASKS.md`,
+    tasksMarkdown(ir, 'Unreal', (n) =>
+      n.on.kind === 'object'
+        ? `VcgsKeys::*::${n.on.type} ("${n.on.key}")`
+        : n.on.kind === 'level'
+          ? `${n.on.export_name} (AVcgsLevelDirector)`
+          : n.on.kind === 'levelItem'
+            ? `${n.on.export_name} (AVcgsLevelItem, Guid ${n.on.key})`
+            : n.on.key,
+    ),
+    'generated',
+  );
+  row({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'TASKS.md · TODO(VCGS) in VcgsStoryKeys.h', files: [tasksPath] }, ir.notes);
+  return { files: withCodeNotes(files, ir), elements };
 };
 
 export const unreal: EngineAdapter = {

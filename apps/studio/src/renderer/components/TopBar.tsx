@@ -36,6 +36,9 @@ interface Props {
   levelsOn?: boolean;
   /** The Note Sorter: raw notes into the game. */
   onNotes?: () => void;
+  /** Comments and changes (spec §16), with how many comments and tasks are open. */
+  onComments?: () => void;
+  openComments?: number;
   notesOn?: boolean;
   saveState: SaveState;
   issueCount: number;
@@ -162,6 +165,14 @@ export const TopBar = (props: Props) => {
       {props.onFit && (
         <button className="tb-btn" title="Zoom to fit (Ctrl+0)" onClick={props.onFit}>
           Fit
+        </button>
+      )}
+      {props.onComments && (
+        <button className="tb-btn comments-btn" aria-label={`Comments and changes${props.openComments ? `, ${props.openComments} open` : ''}`} title="Comments, tasks and recent changes" onClick={props.onComments}>
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6a1.5 1.5 0 0 1-1.5 1.5H7l-3 3v-3h-.5A1.5 1.5 0 0 1 2 9.5z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+          </svg>
+          {!!props.openComments && <span className="comments-count">{props.openComments}</span>}
         </button>
       )}
       <button className="bible-btn" onClick={props.onBible}>

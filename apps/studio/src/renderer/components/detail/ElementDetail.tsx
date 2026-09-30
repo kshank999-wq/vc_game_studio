@@ -1,3 +1,4 @@
+import { CommentsHistory } from '../collab/lazy';
 import { runningTime, shotsOf } from '../../model/shots';
 import { useNav } from '../../nav';
 import { useState } from 'react';
@@ -442,6 +443,11 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
           </button>
         ))}
         {!allUses && uses.length > shownUses.length && <span className="detail-text muted">+ {uses.length - shownUses.length} more in the Bible</span>}
+      </section>
+
+      <section className="detail-section">
+        <h3>Comments and history</h3>
+        <CommentsHistory project={project} target={{ kind: 'object', id }} onCommit={onCommit} what={object.name} />
       </section>
 
       {(onOpenBible || onOpenCode || onDelete) && (
