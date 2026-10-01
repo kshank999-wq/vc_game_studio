@@ -3,7 +3,9 @@ import { levelsOf } from '../../model/level/level';
 import { partsOfItem, roleOf } from '../../model/level/puzzles';
 import {
   addNode,
+  addRequire,
   childrenOf,
+  descendantsOf,
   createPuzzle,
   definitionOf,
   flatten,
@@ -18,6 +20,7 @@ import {
   puzzleIssues,
   puzzles,
   removeNode,
+  removeRequire,
   reorderNode,
   RESETS,
   SCALES,
@@ -35,6 +38,8 @@ import { describeRule, type Effect, type Rule } from '../../model/rules';
 import { setValue } from '../../model/details';
 import type { Project } from '../../model/types';
 import { ConditionEditor, EffectsEditor, RuleEditor } from '../rules/RuleEditor';
+import { badgesOf } from './badges';
+import { PuzzleGraph } from './PuzzleGraph';
 
 interface Props {
   project: Project;
@@ -81,7 +86,7 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
   const all = puzzles(project);
   const [selected, setSelected] = useState<string | null>(() => (focus && project.objects[focus]?.type === 'puzzle' ? focus : (all[0]?.id ?? null)));
   const [node, setNode] = useState<string | null>(null);
-  const [tab, setTab] = useState<'writing' | 'steps'>(() => (focus && nodesOf(project.objects[focus]).length ? 'steps' : 'writing'));
+  const [tab, setTab] = useState<'writing' | 'steps' | 'graph'>(() => (focus && nodesOf(project.objects[focus]).length ? 'steps' : 'writing'));
   const [query, setQuery] = useState('');
   const [newName, setNewName] = useState('');
   const [newScale, setNewScale] = useState<PuzzleScale>('area');
@@ -154,8 +159,13 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
           >
             <span className="pz-mark">{KIND_MARK[n.kind]}</span>
             <span className="pz-node-label">{n.label}</span>
-            {n.kind === 'goal' && <span className="pz-badge">{n.gate === 'any' ? 'ANY' : 'ALL'}</span>}
+            {n.kind === 'goal' && <span className="pz-badge">{n.gate === 'any' ? 'ANY' : n.gate === 'sequence' ? 'SEQ' : 'ALL'}</span>}
             {n.optional && <span className="pz-badge soft">optional</span>}
+            {!compact && badgesOf(n).map((b) => (
+              <span key={b} className="pz-badge soft">
+                {b}
+              </span>
+            ))}
             {n.hidden && <span className="pz-badge soft">hidden</span>}
             {!compact && <span className="pz-when">{nodeWhenText(project, n)}</span>}
           </button>
@@ -234,6 +244,9 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
                 <button role="tab" aria-selected={tab === 'steps'} className={tab === 'steps' ? 'on' : ''} onClick={() => setTab('steps')}>
                   Steps <span className="lvl-count">{nodes.length}</span>
                 </button>
+                <button role="tab" aria-selected={tab === 'graph'} className={tab === 'graph' ? 'on' : ''} onClick={() => setTab('graph')}>
+                  Graph
+                </button>
               </div>
             </header>
             {tab === 'writing' ? (
@@ -309,6 +322,22 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
                 </div>
                 <Field label="What a failure does" value={def.failState} placeholder="The chamber floods" onCommit={(v) => def1({ failState: v })} />
               </div>
+            ) : tab === 'graph' ? (
+              nodes.length ? (
+                <PuzzleGraph
+                  project={project}
+                  puzzleId={current.id}
+                  objective={def.objective || current.name}
+                  nodes={nodes}
+                  selected={node}
+                  broken={(id) => issues.some((i) => i.nodeId === id && i.severity === 'error')}
+                  onSelect={setNode}
+                  onCommit={onCommit}
+                  onSay={onSay}
+                />
+              ) : (
+                <p className="lvl-hint">No steps to draw yet. Add some in Steps, or write the discoveries in Writing and turn them into steps.</p>
+              )
             ) : (
               <div className="pz-steps">
                 <div className="pz-toolbar" role="toolbar" aria-label="Steps">
@@ -445,9 +474,10 @@ const NodeInspector = ({ project, puzzleId, node, goals, onCommit, onSay, onOpen
       {node.kind === 'goal' ? (
         <label className="pz-field">
           <span className="pz-label">Done when</span>
-          <select className="inp small" aria-label="Done when" value={node.gate ?? 'all'} onChange={(e) => patch({ gate: e.target.value as 'all' | 'any' })}>
+          <select className="inp small" aria-label="Done when" value={node.gate ?? 'all'} onChange={(e) => patch({ gate: e.target.value as 'all' | 'any' | 'sequence' })}>
             <option value="all">All of its steps are (AND)</option>
             <option value="any">Any one of its steps is (OR: alternate paths)</option>
+            <option value="sequence">All of them, in order (sequence)</option>
           </select>
           <span className="pref-hint">{childrenOf(nodes, node.id).length} steps under it.</span>
         </label>
@@ -482,9 +512,81 @@ const NodeInspector = ({ project, puzzleId, node, goals, onCommit, onSay, onOpen
           </div>
         </>
       )}
+      {node.kind === 'goal' && (
+        <label className="pz-field">
+          <span className="pz-label">Within (s)</span>
+          <input
+            className="inp small"
+            type="number"
+            min={0}
+            aria-label="Within (s)"
+            value={node.within ?? 0}
+            onChange={(e) => patch({ within: Math.max(0, Number(e.target.value) || 0) || undefined })}
+          />
+          <span className="pref-hint">0: no time limit. With one, its clock starts at its first step done; run out and what was done under it is undone.</span>
+        </label>
+      )}
+      <section className="pz-sec">
+        <span className="pz-label">Needs first</span>
+        {(node.requires ?? []).map((r) => (
+          <span key={r} className="pz-need">
+            {nodes.find((n) => n.id === r)?.label ?? r}
+            <button className="icon-btn small" aria-label={`Doesn’t need ${nodes.find((n) => n.id === r)?.label ?? r}`} onClick={() => onCommit(removeRequire(project, puzzleId, node.id, r))}>
+              ×
+            </button>
+          </span>
+        ))}
+        <select
+          className="inp small"
+          aria-label="Add a step it needs first"
+          value=""
+          onChange={(e) => {
+            if (!e.target.value) return;
+            const next = addRequire(project, puzzleId, node.id, e.target.value);
+            if (next === project) onSay('That step can’t come first: it would go round in a circle, or one is part of the other.');
+            else onCommit(next);
+          }}
+        >
+          <option value="">+ a step it needs done first…</option>
+          {nodes
+            .filter((n) => n.id !== node.id && !node.requires?.includes(n.id) && !descendantsOf(nodes, node.id).some((d) => d.id === n.id) && !descendantsOf(nodes, n.id).some((d) => d.id === node.id))
+            .map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.label}
+              </option>
+            ))}
+        </select>
+      </section>
+      <EffectsEditor project={project} effects={node.effects} label="When done (the first time)" onChange={(e) => patch({ effects: e?.length ? e : undefined })} />
+      {node.kind !== 'goal' && (
+        <section className="pz-sec pz-wrong">
+          <span className="pz-label">A wrong move</span>
+          <ConditionEditor project={project} condition={node.fail?.when} label="Wrong when" onChange={(c) => patch({ fail: c || node.fail?.effects?.length ? { ...node.fail, when: c } : undefined })} />
+          {node.fail?.when && (
+            <>
+              <EffectsEditor project={project} effects={node.fail.effects} label="It does" onChange={(e) => patch({ fail: { ...node.fail, effects: e?.length ? e : undefined } })} />
+              <label className="lvl-toggle">
+                <input type="checkbox" checked={!!node.fail.forward} onChange={(e) => patch({ fail: { ...node.fail, forward: e.target.checked || undefined } })} /> Fail-forward: it still counts as done (the story goes on, worse off)
+              </label>
+            </>
+          )}
+        </section>
+      )}
       <label className="lvl-toggle">
         <input type="checkbox" checked={!!node.optional} onChange={(e) => patch({ optional: e.target.checked || undefined })} /> Optional: a reward, a shortcut, an extra clue
       </label>
+      {node.optional && (
+        <label className="pz-field">
+          <span className="pz-label">Branch</span>
+          <select className="inp small" aria-label="Branch" value={node.branch ?? ''} onChange={(e) => patch({ branch: (e.target.value || undefined) as PuzzleNode['branch'] })}>
+            <option value="">—</option>
+            <option value="reward">A reward</option>
+            <option value="shortcut">A shortcut</option>
+            <option value="clue">An extra clue</option>
+            <option value="alternate">An alternate way</option>
+          </select>
+        </label>
+      )}
       <label className="lvl-toggle">
         <input type="checkbox" checked={!!node.hidden} onChange={(e) => patch({ hidden: e.target.checked || undefined })} /> Hidden from the player until reached
       </label>

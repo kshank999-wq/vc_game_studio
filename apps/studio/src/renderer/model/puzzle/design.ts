@@ -105,8 +105,8 @@ export const updateDefinition = (project: Project, id: string, patch: Partial<Pu
 
 // ---------------------------------------------------------------- the tree
 
-export { nodesOf, treeDrives } from './tree';
-import { nodesOf } from './tree';
+export { nodesOf, treeDrives, usesProgress } from './tree';
+import { nodesOf, treeDrives, usesProgress } from './tree';
 
 /** A node's steps, in order. */
 export const childrenOf = (nodes: readonly PuzzleNode[], parentId: string | null): PuzzleNode[] => nodes.filter((n) => (n.parentId ?? null) === parentId);
@@ -151,12 +151,19 @@ export const compileTree = (nodes: readonly PuzzleNode[], puzzleId: string): Rul
   const of = (n: PuzzleNode, seen: Set<string>): Rule | Condition => {
     if (seen.has(n.id)) return NEVER;
     const next = new Set(seen).add(n.id);
+    let own: Rule | Condition;
     if (n.kind === 'goal') {
       const steps = childrenOf(nodes, n.id).filter((c) => !c.optional);
-      if (!steps.length) return NEVER;
-      return { match: n.gate === 'any' ? 'any' : 'all', items: steps.map((c) => of(c, next)) };
+      // A sequence comes to all of its steps: the order is kept by the puzzle's progress (§6).
+      own = steps.length ? { match: n.gate === 'any' ? 'any' : 'all', items: steps.map((c) => of(c, next)) } : NEVER;
+    } else {
+      const base = n.when ?? NEVER;
+      // Fail-forward: a wrong move counts as the step done.
+      own = n.fail?.forward && n.fail.when ? { match: 'any', items: [base, n.fail.when] } : base;
     }
-    return n.when ?? NEVER;
+    // What it needs first must hold as well.
+    const needs = (n.requires ?? []).map((r) => nodes.find((x) => x.id === r)).filter((x): x is PuzzleNode => !!x);
+    return needs.length ? { match: 'all', items: [own, ...needs.map((x) => of(x, next))] } : own;
   };
   const top = childrenOf(nodes, null).filter((c) => !c.optional);
   return { match: 'all', items: top.length ? top.map((c) => of(c, new Set())) : [NEVER] };
@@ -209,7 +216,12 @@ export const updateNode = (project: Project, id: string, nodeId: string, patch: 
       if (next.kind === 'goal') {
         next.gate ??= 'all';
         delete next.when;
-      } else delete next.gate;
+        delete next.fail;
+      } else {
+        delete next.gate;
+        delete next.within;
+      }
+      if (!next.optional) delete next.branch;
       return next;
     }),
   );
@@ -219,7 +231,55 @@ export const updateNode = (project: Project, id: string, nodeId: string, patch: 
 export const removeNode = (project: Project, id: string, nodeId: string): Project => {
   const nodes = nodesOf(project.objects[id]);
   const gone = new Set([nodeId, ...descendantsOf(nodes, nodeId).map((n) => n.id)]);
-  return setTree(project, id, nodes.filter((n) => !gone.has(n.id)));
+  // Links to what is gone go with it.
+  return setTree(
+    project,
+    id,
+    nodes.filter((n) => !gone.has(n.id)).map((n) => (n.requires?.some((r) => gone.has(r)) ? withRequires(n, n.requires.filter((r) => !gone.has(r))) : n)),
+  );
+};
+
+const withRequires = (n: PuzzleNode, requires: string[]): PuzzleNode => {
+  const { requires: _, ...rest } = n;
+  return requires.length ? { ...rest, requires } : rest;
+};
+
+/** Whether `from` can't be done until `to` is: through links, sub-goals and sequences (so a link back would never open). */
+export const dependsOn = (nodes: readonly PuzzleNode[], from: string, to: string): boolean => {
+  const seen = new Set<string>();
+  const walk = (id: string): boolean => {
+    if (id === to) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    const n = nodes.find((x) => x.id === id);
+    if (!n) return false;
+    const next = [...(n.requires ?? []), ...(n.kind === 'goal' ? childrenOf(nodes, n.id).filter((c) => !c.optional).map((c) => c.id) : [])];
+    const parent = n.parentId ? nodes.find((x) => x.id === n.parentId) : undefined;
+    if (parent?.gate === 'sequence') {
+      const steps = childrenOf(nodes, parent.id).filter((c) => !c.optional);
+      const at = steps.findIndex((c) => c.id === n.id);
+      if (at > 0) next.push(steps[at - 1]!.id);
+    }
+    return next.some(walk);
+  };
+  return walk(from);
+};
+
+/**
+ * Link two steps (§6, §15 PuzzleEdge): `nodeId` can't be done until `needs`
+ * is. Refused when it would make a loop (the two could never be done).
+ */
+export const addRequire = (project: Project, id: string, nodeId: string, needs: string): Project => {
+  const nodes = nodesOf(project.objects[id]);
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node || nodeId === needs || !nodes.some((n) => n.id === needs) || node.requires?.includes(needs)) return project;
+  if (dependsOn(nodes, needs, nodeId) || descendantsOf(nodes, nodeId).some((d) => d.id === needs) || descendantsOf(nodes, needs).some((d) => d.id === nodeId)) return project;
+  return setTree(project, id, nodes.map((n) => (n.id === nodeId ? withRequires(n, [...(n.requires ?? []), needs]) : n)));
+};
+
+export const removeRequire = (project: Project, id: string, nodeId: string, needs: string): Project => {
+  const nodes = nodesOf(project.objects[id]);
+  return setTree(project, id, nodes.map((n) => (n.id === nodeId ? withRequires(n, (n.requires ?? []).filter((r) => r !== needs)) : n)));
 };
 
 /** Put a node under another sub-goal (or the puzzle's goal), never under itself. */
@@ -346,7 +406,18 @@ export const puzzleIssues = (project: Project, id: string): PuzzleIssue[] => {
     if (n.kind === 'goal' && !childrenOf(nodes, n.id).some((c) => !c.optional)) out.push({ severity: 'error', nodeId: n.id, message: `“${n.label}” has no required steps under it.` });
     if (n.kind === 'goal' && n.gate === 'any' && childrenOf(nodes, n.id).filter((c) => !c.optional).length === 1) out.push({ severity: 'warning', nodeId: n.id, message: `“${n.label}” takes any one of its steps, but has only one.` });
     if (n.when?.kind === 'puzzle' && n.when.ref === id) out.push({ severity: 'error', nodeId: n.id, message: `“${n.label}” needs the puzzle itself solved: it never can be.` });
+    for (const r of n.requires ?? []) {
+      const other = nodes.find((x) => x.id === r);
+      if (!other) out.push({ severity: 'error', nodeId: n.id, message: `“${n.label}” needs a step that is gone.` });
+      else if (dependsOn(nodes, r, n.id)) out.push({ severity: 'error', nodeId: n.id, message: `“${n.label}” and “${other.label}” each need the other first: neither can be done.` });
+    }
+    if (n.kind === 'goal' && n.within !== undefined && !(n.within > 0)) out.push({ severity: 'error', nodeId: n.id, message: `“${n.label}” has a time limit of nothing.` });
+    if (n.kind === 'goal' && n.gate === 'sequence' && childrenOf(nodes, n.id).some((c) => c.optional)) out.push({ severity: 'warning', nodeId: n.id, message: `“${n.label}” is a sequence with optional steps: they are left out of the order.` });
+    if (n.fail?.when && !n.fail.forward && definitionOf(puzzle).reset === 'never' && !n.optional)
+      out.push({ severity: 'warning', nodeId: n.id, message: `A wrong move at “${n.label}” stops the puzzle for good: make it fail-forward, or let the puzzle reset on a failure.` });
   }
+  if (usesProgress(nodes) && treeDrives(puzzle))
+    out.push({ severity: 'warning', message: 'Its order, time limits, links, rewards and wrong moves play in the studio. The engines get the conditions its steps come to for now; puzzle export brings the rest.' });
   return out;
 };
 

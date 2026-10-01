@@ -9490,3 +9490,152 @@ button.bible-dual-col:hover {
     letter-spacing: 0.04em;
   }
 }
+
+/* Puzzle graph (puzzle spec §5) */
+.pz-graph-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.pz-graph-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.pz-edge-picked {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gold);
+  font-size: 12px;
+}
+
+.pz-graph {
+  flex: none;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.pz-graph-wrap {
+  overflow: auto;
+}
+
+.pz-part path {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+}
+
+.pz-part.optional path {
+  stroke-dasharray: 2 4;
+}
+
+.pz-order {
+  fill: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pz-needs {
+  cursor: pointer;
+}
+
+.pz-needs-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12;
+}
+
+.pz-needs-line {
+  fill: none;
+  stroke: #d88a4a;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+
+.pz-needs.on .pz-needs-line {
+  stroke: var(--gold);
+  stroke-width: 2.5;
+}
+
+.pz-arrowhead {
+  fill: #d88a4a;
+}
+
+.pz-drag {
+  stroke: var(--gold);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.pz-gnode {
+  cursor: pointer;
+}
+
+.pz-gnode rect {
+  fill: var(--panel, #1c1c22);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+.pz-gnode.root rect,
+.pz-gnode.pz-k-goal rect {
+  stroke: var(--gold-lo);
+}
+
+.pz-gnode.pz-k-requirement rect {
+  stroke: #4a86d8;
+}
+
+.pz-gnode.pz-k-interaction rect {
+  stroke: #6cc4d6;
+}
+
+.pz-gnode.optional rect {
+  stroke-dasharray: 4 3;
+}
+
+.pz-gnode.broken rect {
+  stroke: #d85a4a;
+}
+
+.pz-gnode.on rect {
+  stroke: var(--gold);
+  stroke-width: 2.5;
+}
+
+.pz-gl {
+  fill: var(--text, #e8e4da);
+  font-size: 12px;
+}
+
+.pz-gb {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.pz-port {
+  fill: #d88a4a;
+  stroke: var(--panel, #1c1c22);
+  stroke-width: 2;
+  cursor: crosshair;
+}
+
+.pz-port:hover {
+  fill: var(--gold);
+}
+
+.pz-need {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  font-size: 12px;
+}

@@ -1,4 +1,4 @@
-import type { Condition } from '../rules';
+import type { Condition, Effect } from '../rules';
 import type { StoryObject } from '../types';
 
 /**
@@ -17,8 +17,22 @@ export interface PuzzleNode {
   kind: NodeKind;
   label: string;
   notes?: string;
-  /** For a sub-goal: all of its steps, or any one of them (alternate paths). */
-  gate?: 'all' | 'any';
+  /** For a sub-goal (§6): all of its steps (AND), any one of them (OR: alternate paths), or all in order (sequence). */
+  gate?: 'all' | 'any' | 'sequence';
+  /** For a sub-goal: done within this many seconds of its first step, or its steps are undone (a timed gate). */
+  within?: number;
+  /** Other steps that must be done before this one can be: dependency links across the tree (§6, §15 PuzzleEdge). */
+  requires?: string[];
+  /** What doing it gives, the first time: an optional branch's reward, an extra clue, a state change. */
+  effects?: Effect[];
+  /** What an optional step is for (§6). */
+  branch?: 'reward' | 'shortcut' | 'clue' | 'alternate';
+  /**
+   * A wrong move (§6): when this holds the step has failed; its effects change
+   * the puzzle. Fail-forward, the step still counts as done; otherwise it
+   * blocks until the puzzle resets.
+   */
+  fail?: { when?: Condition; effects?: Effect[]; forward?: boolean };
   /** For a requirement or interaction: what in the game means it is done. Without one it can't be done yet. */
   when?: Condition;
   /** Not needed to solve: a reward, a shortcut, an extra clue. */
@@ -37,3 +51,7 @@ export const nodesOf = (puzzle: StoryObject | undefined): PuzzleNode[] => {
 /** Whether the tree writes the puzzle's "Solved when" rule (on unless the designer keeps a rule of their own). */
 export const treeDrives = (puzzle: StoryObject | undefined): boolean => nodesOf(puzzle).length > 0 && puzzle?.data.treeRule !== false;
 
+
+/** Whether a puzzle's steps need its progress remembered (order, time, links, rewards, wrong moves), not just its rule. */
+export const usesProgress = (nodes: readonly PuzzleNode[]): boolean =>
+  nodes.some((n) => n.gate === 'sequence' || (n.within ?? 0) > 0 || !!n.requires?.length || !!n.effects?.length || !!n.fail?.when);

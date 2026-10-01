@@ -1,6 +1,7 @@
 import { startPoses, stepActors, type ActorPose } from './actors';
 import { craftCheck, recipeOf, recipesOf } from '../crafting';
 import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
+import { nodesOf, treeDrives } from '../puzzle/tree';
 import { applyStoryEffects, craftIn, gearIn, learnSkillIn, settleWorld, startWorld, useStoryObject, type Entry, type PlayWorld } from '../play';
 import { learnCheck, skillsOf } from '../skills';
 import { describeEffect, describeRule, evaluate, isEmpty } from '../rules';
@@ -327,6 +328,20 @@ export const playCinematic = (project: Project, state: LevelPlayState, cinematic
   return { ...state, cinematic: { id: cinematicId, name: c.name, seconds, until: state.time + seconds } };
 };
 
+const runPuzzleClock = (project: Project, state: LevelPlayState): LevelPlayState => {
+  const timed = Object.values(project.objects).filter((o) => o.type === 'puzzle' && !state.world.solved[o.id] && treeDrives(o) && nodesOf(o).some((n) => (n.within ?? 0) > 0));
+  if (!timed.length) return state;
+  const world = { ...state.world, clock: state.time };
+  const ranOut = timed.some((o) => nodesOf(o).some((n) => {
+    const at = world.steps?.[o.id];
+    const start = at?.begun[n.id];
+    return start !== undefined && !at!.done[n.id] && (n.within ?? 0) > 0 && state.time - start > n.within!;
+  }));
+  if (!ranOut) return { ...state, world };
+  const settled = settleWorld(project, world);
+  return changeWorld(project, state, settled.world, settled.log, undefined, 0);
+};
+
 /** Skip or finish what is playing over the level: a cinematic, or a scene's card. */
 export const dismiss = (state: LevelPlayState): LevelPlayState =>
   state.cinematic ? log({ ...state, cinematic: undefined }, { kind: 'info', text: `${state.cinematic.name} ends` }) : state.scene ? { ...state, scene: undefined } : state;
@@ -472,6 +487,9 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
       s = fuel > 0 ? { ...s, light: { ...s.light, fuel } } : log(say({ ...s, light: { on: false, fuel: 0 } }, 'Your light goes out: no fuel left.'), { kind: 'warn', text: 'The light ran out of fuel' });
     }
   }
+
+  // Timed puzzle steps run on the play clock: one that ran out is undone (puzzle spec §6).
+  s = runPuzzleClock(project, s);
 
   // Patrols walk on, companions keep up.
   const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => present(project, s, i), global);

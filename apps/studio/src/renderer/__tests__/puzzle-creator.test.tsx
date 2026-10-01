@@ -92,4 +92,43 @@ describe('the Puzzle Creator (puzzle spec)', () => {
     expect(within(steps).queryByRole('treeitem', { name: 'New requirement, Requirement' })).toBeNull();
     expect(within(steps).getByRole('treeitem', { name: 'Find the code, Sub-goal' }).textContent).toContain('ANY');
   });
+
+  it('draws the steps as a graph, links one to need another first, and sets sequence, time and wrong moves', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    await opened();
+    fireEvent.click(screen.getByRole('tab', { name: 'Graph' }));
+    const graph = screen.getByRole('group', { name: 'Puzzle graph' });
+    expect(within(graph).getAllByRole('button', { name: /\(graph\)$/ }).map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Pull the Rusted Lever (graph)',
+      'The seam drains (graph)',
+      'Drain the seam (graph)',
+      'Hear Mara at the door (graph)',
+      'Open the vault door (graph)',
+    ]);
+    // Hearing Mara first, through the inspector: an arrow appears.
+    fireEvent.click(within(graph).getByRole('button', { name: 'Pull the Rusted Lever (graph)' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Add a step it needs first' }), { target: { value: within(screen.getByRole('combobox', { name: 'Add a step it needs first' })).getByRole('option', { name: 'Hear Mara at the door' }).getAttribute('value') } });
+    const arrow = within(screen.getByRole('group', { name: 'Puzzle graph' })).getByRole('button', { name: 'Pull the Rusted Lever needs Hear Mara at the door first' });
+    fireEvent.click(arrow);
+    expect(screen.getByText(/needs Hear Mara at the door first/, { selector: '.pz-edge-picked' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove link' }));
+    expect(within(screen.getByRole('group', { name: 'Puzzle graph' })).queryByRole('button', { name: /needs Hear Mara/ })).toBeNull();
+
+    // The sub-goal in order, against the clock; the steps say so in the tree.
+    fireEvent.click(within(screen.getByRole('group', { name: 'Puzzle graph' })).getByRole('button', { name: 'Drain the seam (graph)' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Done when' }), { target: { value: 'sequence' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Within (s)' }), { target: { value: '30' } });
+    expect(within(screen.getByRole('group', { name: 'Puzzle graph' })).getByRole('button', { name: 'Drain the seam (graph)' }).textContent).toContain('SEQ · ⏱ 30s');
+    fireEvent.click(screen.getByRole('tab', { name: /Steps/ }));
+    const steps = screen.getByRole('tree', { name: 'Puzzle steps' });
+    expect(within(steps).getByRole('treeitem', { name: 'Drain the seam, Sub-goal' }).textContent).toContain('SEQ');
+    expect(within(steps).getByRole('treeitem', { name: 'Pull the Rusted Lever, Interaction' }).textContent).toContain('STATE');
+    // The optional step is a reward branch; the engines' approximation is said.
+    fireEvent.click(within(steps).getByRole('treeitem', { name: 'Hear Mara at the door, Requirement' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'clue' } });
+    expect(within(steps).getByRole('treeitem', { name: 'Hear Mara at the door, Requirement' }).textContent).toContain('? clue');
+    expect(screen.getByText(/engines get the conditions its steps come to/)).toBeTruthy();
+  });
 });

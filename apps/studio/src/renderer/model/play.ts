@@ -1,4 +1,6 @@
 import { describeCost, kindOf, learnCheck, payFor, ranksOf, treeOf } from './skills';
+import { advance as advancePuzzle, type StepProgress } from './puzzle/progress';
+import { nodesOf, treeDrives, usesProgress } from './puzzle/tree';
 import { equipCheck, equipmentOf, isEquipped, statsOf, useCheck } from './equipment';
 import { craftCheck, recipeOf } from './crafting';
 import { initialState, interactionsOf, statesOf } from './details';
@@ -36,6 +38,10 @@ export interface PlayWorld extends PlayState {
   been: Record<string, boolean>;
   /** Objects the player has used, in the order first used (for the codex). */
   used: Record<string, boolean>;
+  /** How far the player is through puzzles whose steps need remembering (order, time, links, wrong moves), by puzzle (puzzle spec §6). */
+  steps?: Record<string, StepProgress>;
+  /** Seconds of play, where there is a clock (Play Mode): timed puzzle steps run on it. */
+  clock?: number;
 }
 
 export type { QuestState };
@@ -292,7 +298,21 @@ const settle = (d: Doing) => {
         fire(d, o.id);
         moved = true;
       }
-      if (o.type === 'puzzle' && !isEmpty(ruleOf(o)) && !d.world.solved[o.id] && evaluate(ruleOf(o), d.world)) {
+      if (o.type === 'puzzle' && !d.world.solved[o.id] && treeDrives(o) && usesProgress(nodesOf(o))) {
+        // Its steps are remembered as they are done: in order, in time, with their rewards and wrong moves (puzzle spec §6).
+        const world = d.world;
+        const r = advancePuzzle(o, world.steps?.[o.id], (rule) => evaluate(rule, d.world), world.clock);
+        if (r.changed) {
+          d.world = { ...d.world, steps: { ...d.world.steps, [o.id]: r.progress } };
+          for (const e of r.events) d.log.push({ kind: 'fired', text: `${o.name}: ${e.label} ${e.what === 'done' ? 'done' : e.what === 'failed' ? '— a wrong move' : e.what === 'expired' ? '— out of time, undone' : '— the puzzle resets'}` });
+          doEffects(d, r.effects);
+          moved = true;
+        }
+        if (r.solved) {
+          solve(d, o.id);
+          moved = true;
+        }
+      } else if (o.type === 'puzzle' && !isEmpty(ruleOf(o)) && !d.world.solved[o.id] && evaluate(ruleOf(o), d.world)) {
         solve(d, o.id);
         moved = true;
       }
