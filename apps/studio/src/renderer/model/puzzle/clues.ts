@@ -3,7 +3,7 @@ import { newId } from '../project';
 import type { Project, StoryObject } from '../types';
 import type { PuzzleIssue } from './design';
 import { elementKindOf, elementsOf, revealedBy, stepsUsing } from './elements';
-import { screenIssues, screenOf } from './screens';
+import { screenIssues } from './screens';
 import { nodesOf } from './tree';
 import { cuesOf, CUE_KINDS, hintsOf, type CueKind, type HintStage, type SolveCue } from './staged';
 
@@ -164,9 +164,7 @@ export const elementIssues = (project: Project, puzzleId: string): PuzzleIssue[]
     if (elementKindOf(e) === 'code' && !String(e.data.answer ?? '').trim()) out.push({ severity: 'warning', elementId: e.id, message: `The code “${e.name}” has no true code yet.` });
   }
   for (const e of elementsOf(project, puzzleId)) for (const m of screenIssues(project, e)) out.push({ severity: 'error', elementId: e.id, message: m });
-  if (elementsOf(project, puzzleId).some((e) => screenOf(e))) out.push({ severity: 'warning', message: 'Its screen puzzles play in the studio; puzzle export brings them to the engines (there, the interaction they open on is used as it is).' });
   for (const h of hintsOf(puzzle)) if (!h.afterFails && !h.when) out.push({ severity: 'warning', message: `The hint “${h.text}” is never given: give it wrong moves to wait for, or a condition.` });
   for (const c of cuesOf(puzzle)) if (CUE_KINDS.find((k) => k.id === c.kind)?.ref && !c.ref) out.push({ severity: 'warning', message: `A ${c.kind} played when it is solved names no ${c.kind}.` });
-  if (hintsOf(puzzle).length || cuesOf(puzzle).length) out.push({ severity: 'warning', message: 'Its hints and what solving it plays are in the studio; puzzle export brings them to the engines.' });
   return out;
 };

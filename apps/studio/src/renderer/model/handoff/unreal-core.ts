@@ -5,6 +5,7 @@
  * it can be compiled and run outside Unreal, and is.
  */
 import { MAIL_ON_CLIPBOARD, MAILTO_LIMIT, NOTES_PRINT_STYLE } from '../play';
+import { UNREAL_PUZZLES, UNREAL_STEP_PROGRESS } from './unreal-puzzles';
 
 export const VCGS_CORE_H = String.raw`// VCGS Runtime for Unreal: the story's logic in portable C++17.
 // The same for every project; safe to commit. No exceptions, no RTTI.
@@ -13,6 +14,7 @@ export const VCGS_CORE_H = String.raw`// VCGS Runtime for Unreal: the story's lo
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <functional>
 #include <map>
@@ -355,6 +357,7 @@ namespace vcgs
         void GainRank(const std::string& skill, GameState& game);
     }
 
+${UNREAL_STEP_PROGRESS}
     /**
      * Everything a playthrough knows. After every change, triggers fire and
      * puzzles solve themselves when their rules hold (unless AutoRules is off).
@@ -424,6 +427,43 @@ namespace vcgs
         std::function<void(const std::string&)> OnItemFound;
         std::function<void(const std::string&)> OnLocationVisited;
         std::function<void(const std::string&)> OnObjectUsed;
+        /** Each puzzle's step progress (PuzzleRuntime), staged hints given, wrong answers at each screen puzzle. */
+        std::map<std::string, StepProgress> PuzzleSteps;
+        std::set<std::string> Hinted;
+        std::map<std::string, int> ScreenFails;
+        /** Seconds of play: timed puzzle steps run on it (the level director advances it each frame). */
+        double Clock = 0;
+        /** A puzzle step done, failed (a wrong move), expired (out of time) or reset: the puzzle, the step, what (puzzle spec §6). */
+        std::function<void(const std::string&, const std::string&, const std::string&)> OnPuzzleStep;
+        /** A staged hint given: the puzzle, the hint (puzzle spec §10). */
+        std::function<void(const std::string&, const std::string&)> OnHint;
+        /** Something a puzzle plays when solved: the puzzle, its kind, its text, what it plays (puzzle spec §11). */
+        std::function<void(const std::string&, const std::string&, const std::string&, const std::string&)> OnPuzzleCue;
+        /** An interaction asks for its object's screen puzzle: show it, then call Interactions::AnswerScreen (puzzle spec §8). */
+        std::function<void(const std::string&, const std::string&)> OnScreenRequested;
+        std::function<void(const std::string&, bool)> OnScreenAnswered;
+
+        /** Move the play clock on; a timed puzzle step that runs out is undone. */
+        void AdvanceClock(double seconds)
+        {
+            Clock += seconds;
+            for (const auto& p : PuzzleSteps)
+                if (!p.second.Begun.empty())
+                {
+                    Changed();
+                    return;
+                }
+        }
+
+        /** Whether a puzzle's step is done. */
+        bool StepDone(const std::string& puzzle, const std::string& step) const
+        {
+            const auto it = PuzzleSteps.find(puzzle);
+            return it != PuzzleSteps.end() && it->second.Done.count(step) > 0;
+        }
+
+        /** Something the rules can see changed outside the setters (a wrong answer counted). */
+        void Touch() { Changed(); }
 
         void Reset()
         {
@@ -433,6 +473,7 @@ namespace vcgs
             Loaded = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
             Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear(); Equipped.clear(); Wear.clear();
+            PuzzleSteps.clear(); Hinted.clear(); ScreenFails.clear(); Clock = 0;
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -717,6 +758,19 @@ namespace vcgs
         }
 
         /** A string as JSON writes it. */
+        /** A number as JSON writes it: as short as it can be and still read back the same. */
+        static std::string Number(double n)
+        {
+            char buf[32];
+            std::snprintf(buf, sizeof buf, "%.17g", n);
+            for (int digits = 1; digits <= 17; ++digits)
+            {
+                std::snprintf(buf, sizeof buf, "%.*g", digits, n);
+                if (std::strtod(buf, nullptr) == n) break;
+            }
+            return buf;
+        }
+
         static std::string JsonQuote(const std::string& s)
         {
             std::string out = "\"";
@@ -762,6 +816,30 @@ namespace vcgs
                 for (const auto& e : m) { out += (first ? "" : ", ") + JsonQuote(e.first) + ": " + std::to_string(e.second); first = false; }
                 return out + "}";
             };
+            auto puzzles = [this]()
+            {
+                auto ints = [](const std::map<std::string, int>& m)
+                {
+                    std::string out = "{";
+                    bool first = true;
+                    for (const auto& e : m) { out += (first ? "" : ", ") + JsonQuote(e.first) + ": " + std::to_string(e.second); first = false; }
+                    return out + "}";
+                };
+                std::string out = "{";
+                bool first = true;
+                for (const auto& e : PuzzleSteps)
+                {
+                    const StepProgress& p = e.second;
+                    std::string begun = "{", wrong = "{", stale = "{";
+                    for (const auto& b : p.Begun) begun += (begun.size() > 1 ? ", " : "") + JsonQuote(b.first) + ": " + Number(b.second);
+                    for (const auto& w : p.Wrong) wrong += (wrong.size() > 1 ? ", " : "") + JsonQuote(w.first) + ": " + (w.second ? "true" : "false");
+                    for (const auto& st : p.Stale) stale += (stale.size() > 1 ? ", " : "") + JsonQuote(st) + ": true";
+                    out += (first ? "" : ", ") + JsonQuote(e.first) + ": {\"done\": " + ints(p.Done) + ", \"failed\": " + ints(p.Failed) + ", \"begun\": " + begun + "}, \"seq\": " + std::to_string(p.Seq) +
+                           ", \"fails\": " + std::to_string(p.Fails) + ", \"wrong\": " + wrong + "}, \"stale\": " + stale + "}}";
+                    first = false;
+                }
+                return out + "}";
+            };
             auto learned = [this]()
             {
                 std::string out = "{";
@@ -780,7 +858,8 @@ namespace vcgs
                    ",\n  \"fired\": " + list(Fired) + ",\n  \"picked\": " + list(Picked) + ",\n  \"won\": " + list(Won) + ",\n  \"met\": " + list(MetEncounters) +
                    ",\n  \"characters\": " + list(MetCharacters) + ",\n  \"found\": " + list(FoundItems) + ",\n  \"locations\": " + list(VisitedLocations) +
                    ",\n  \"used\": " + list(UsedObjects) + ",\n  \"lore\": " + list(KnownLore) + ",\n  \"mechanics\": " + list(MechanicOrder) +
-                   ",\n  \"skills\": " + learned() + ",\n  \"equipped\": " + strings(Equipped) + ",\n  \"wear\": " + numbers(Wear);
+                   ",\n  \"skills\": " + learned() + ",\n  \"equipped\": " + strings(Equipped) + ",\n  \"wear\": " + numbers(Wear) +
+                   ",\n  \"puzzles\": " + puzzles() + ",\n  \"hinted\": " + list(Hinted) + ",\n  \"screenFails\": " + numbers(ScreenFails) + ",\n  \"clock\": " + Number(Clock);
         }
 
         /** Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it. */
@@ -859,6 +938,21 @@ namespace vcgs
             ordered("met", MetEncounters); ordered("characters", MetCharacters); ordered("found", FoundItems); ordered("locations", VisitedLocations);
             ordered("used", UsedObjects); ordered("lore", KnownLore); ordered("mechanics", MechanicOrder);
             Mechanics.insert(MechanicOrder.begin(), MechanicOrder.end());
+            PuzzleSteps.clear(); Hinted.clear(); ScreenFails.clear();
+            for (const auto& e : data["puzzles"].fields)
+            {
+                StepProgress& p = PuzzleSteps[e.first];
+                for (const auto& d : e.second["done"].fields) p.Done[d.first] = static_cast<int>(d.second.Num());
+                for (const auto& d : e.second["failed"].fields) p.Failed[d.first] = static_cast<int>(d.second.Num());
+                for (const auto& d : e.second["begun"].fields) p.Begun[d.first] = d.second.Num();
+                for (const auto& d : e.second["wrong"].fields) p.Wrong[d.first] = d.second.Bool();
+                for (const auto& d : e.second["stale"].fields) p.Stale.insert(d.first);
+                p.Seq = static_cast<int>(e.second["seq"].Num());
+                p.Fails = static_cast<int>(e.second["fails"].Num());
+            }
+            for (const Value& h : data["hinted"].items) if (h.type == Value::Type::String) Hinted.insert(h.text);
+            for (const auto& e : data["screenFails"].fields) ScreenFails[e.first] = static_cast<int>(e.second.Num());
+            Clock = data["clock"].Num();
             Checkpoint(data["at"].Str());
             Loaded = true;
             Changed();
@@ -999,6 +1093,7 @@ namespace vcgs
         }
     };
 
+${UNREAL_PUZZLES}
     // ------------------------------------------------------------ rules
 
     namespace Rules
@@ -1105,7 +1200,37 @@ namespace vcgs
         {
             if (game.Solved.count(puzzle)) return;
             game.MarkSolved(puzzle);
-            Apply(Story::Find(game.StoryData.Objects, puzzle)["effects"], game);
+            const Value& p = Story::Find(game.StoryData.Objects, puzzle);
+            if (game.OnPuzzleCue)
+                for (const auto& cue : p["design"]["cues"].items) game.OnPuzzleCue(puzzle, cue["kind"].Str(), cue["text"].Str(), cue["ref"].Str());
+            Apply(p["effects"], game);
+        }
+
+        /**
+         * Staged hints (puzzle spec §10): for each puzzle under way, each hint once
+         * its wrong moves are made (at its steps and its elements' screens) and its
+         * condition holds.
+         */
+        inline void GiveHints(GameState& game)
+        {
+            for (const auto& o : game.StoryData.Objects)
+            {
+                const Value& design = (*o.second)["design"];
+                if (design["hints"].items.empty() || game.Solved.count(o.first)) continue;
+                if (design.Has("entry") && !Check(design["entry"], game)) continue;
+                const auto progress = game.PuzzleSteps.find(o.first);
+                int fails = progress == game.PuzzleSteps.end() ? 0 : progress->second.Fails;
+                for (const auto& e : design["elements"].items)
+                {
+                    const auto f = game.ScreenFails.find(e.Str());
+                    if (f != game.ScreenFails.end()) fails += f->second;
+                }
+                for (const Value* h : PuzzleRuntime::DueHints(design, fails, game.Hinted, game))
+                {
+                    game.Hinted.insert((*h)["id"].Str());
+                    if (game.OnHint) game.OnHint(o.first, (*h)["text"].Str());
+                }
+            }
         }
 
         /**
@@ -1155,12 +1280,35 @@ namespace vcgs
                 for (const auto& p : game.StoryData.Objects)
                 {
                     const Value& puzzle = *p.second;
-                    if (puzzle["kind"].Str() != "puzzle" || !puzzle.Has("solvedWhen") || game.Solved.count(p.first) || !Check(puzzle["solvedWhen"], game)) continue;
+                    if (puzzle["kind"].Str() != "puzzle" || game.Solved.count(p.first)) continue;
+                    const Value& design = puzzle["design"];
+                    if (design["progress"].Bool())
+                    {
+                        // Its steps are kept as they are done: in order, in time, with their rewards and wrong moves.
+                        const auto before = game.PuzzleSteps.find(p.first);
+                        PuzzleRuntime::Advanced r = PuzzleRuntime::Advance(design, before == game.PuzzleSteps.end() ? nullptr : &before->second, game, game.Clock);
+                        if (r.Changed)
+                        {
+                            game.PuzzleSteps[p.first] = r.Progress;
+                            if (game.OnPuzzleStep)
+                                for (const auto& e : r.Events) game.OnPuzzleStep(p.first, e.Step, e.What);
+                            Apply(r.Effects, game);
+                            moved = true;
+                        }
+                        if (r.Solved)
+                        {
+                            Solve(p.first, game);
+                            moved = true;
+                        }
+                        continue;
+                    }
+                    if (!puzzle.Has("solvedWhen") || !Check(puzzle["solvedWhen"], game)) continue;
                     Solve(p.first, game);
                     moved = true;
                 }
-                if (!moved) return;
+                if (!moved) break;
             }
+            GiveHints(game);
         }
 
         /** Complete a quest now, started or not, and pay its reward (once). */
@@ -1819,18 +1967,69 @@ namespace vcgs
             return verbs;
         }
 
+        /** Do what an interaction does. */
+        inline void Use(GameState& game, const std::string& obj, const Value& i)
+        {
+            game.UseObject(obj);
+            if (!i["becomes"].Str().empty()) game.SetObjectState(obj, i["becomes"].Str());
+            if (i["sets"].IsObject()) game.SetFlag(i["sets"]["flag"].Str(), i["sets"]["value"].Str());
+            if (!i["fires"].Str().empty()) Rules::Fire(i["fires"].Str(), game);
+            Rules::Apply(i["effects"], game);
+        }
+
         inline bool Interact(GameState& game, const std::string& obj, const std::string& verb)
         {
             for (const auto& i : Story::Find(game.StoryData.Objects, obj)["interactions"].items)
             {
                 if (i["verb"].Str() != verb || !Allowed(i, obj, game)) continue;
-                game.UseObject(obj);
-                if (!i["becomes"].Str().empty()) game.SetObjectState(obj, i["becomes"].Str());
-                if (i["sets"].IsObject()) game.SetFlag(i["sets"]["flag"].Str(), i["sets"]["value"].Str());
-                if (!i["fires"].Str().empty()) Rules::Fire(i["fires"].Str(), game);
-                Rules::Apply(i["effects"], game);
+                // It opens the screen puzzle: what it does waits for AnswerScreen.
+                if (i["screen"].Bool())
+                {
+                    if (game.OnScreenRequested) game.OnScreenRequested(obj, verb);
+                    return true;
+                }
+                Use(game, obj, i);
                 return true;
             }
+            return false;
+        }
+
+        /** An object's screen puzzle (null when it has none). */
+        inline const Value& ScreenOf(const GameState& game, const std::string& obj) { return Story::Find(game.StoryData.Objects, obj)["screen"]; }
+
+        /** Out of tries: it won't take another answer. */
+        inline bool ScreenLocked(const GameState& game, const std::string& obj)
+        {
+            const int tries = static_cast<int>(ScreenOf(game, obj)["attempts"].Num());
+            const auto f = game.ScreenFails.find(obj);
+            return tries > 0 && f != game.ScreenFails.end() && f->second >= tries;
+        }
+
+        /**
+         * Answer an object's screen puzzle (see PuzzleRuntime::CheckScreen for
+         * what an answer is). Right: the interaction it opens on does what it
+         * does. Wrong: a wrong move for the puzzle's staged hints, and its
+         * wrong-answer effects. Returns whether it was right.
+         */
+        inline bool AnswerScreen(GameState& game, const std::string& obj, const Value& answer)
+        {
+            const Value& screen = ScreenOf(game, obj);
+            if (!screen.IsObject() || ScreenLocked(game, obj)) return false;
+            if (PuzzleRuntime::CheckScreen(screen, answer))
+            {
+                for (const auto& i : Story::Find(game.StoryData.Objects, obj)["interactions"].items)
+                    if (i["screen"].Bool())
+                    {
+                        Use(game, obj, i);
+                        break;
+                    }
+                if (game.OnScreenAnswered) game.OnScreenAnswered(obj, true);
+                return true;
+            }
+            game.ScreenFails[obj] += 1;
+            Rules::Apply(screen["onWrong"], game);
+            if (game.OnScreenAnswered) game.OnScreenAnswered(obj, false);
+            game.Touch();
             return false;
         }
     }

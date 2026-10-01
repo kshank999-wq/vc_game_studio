@@ -49,7 +49,7 @@ written once, here, and level items and other rules point at it.
 - **A wrong move:** a condition that is the player getting it wrong at a step, and what it does. It counts once when it happens, not while it lasts. **Fail-forward** counts it as the step done (the story goes on, worse off); otherwise it is a failure, and a puzzle that **resets on a failure** starts over (a step undone that still holds must stop holding and hold again before it counts).
 - The play-through and Play Mode keep each puzzle's progress (what is done, in what order, when a timed sub-goal began, the wrong moves). A puzzle of plain all / any steps is solved by its rule alone, as before.
 - **Validation** adds: links to missing steps or round in a circle, a time limit of zero or less, a sequence with optional steps in it, a wrong move that isn't fail-forward in a puzzle that never resets (it can't be put right).
-- **In the engines (for now):** the engines get the condition the steps come to: a sequence as all of its steps, links as both holding, fail-forward as either; time limits, rewards and wrong moves aren't there yet. The panel below says so for a puzzle that uses them. The puzzle engine phase brings the progress itself to Godot, Unity and Unreal.
+- **In the engines:** Godot, Unity and Unreal play the steps themselves, as Play Mode does: a sequence in order, needs first, time limits on the game's clock, rewards on done, wrong moves, fail-forward and resetting on a failure. The progress is saved with the game (`puzzles`, `hinted`, `screenFails`, `clock`), the same keys in every engine.
 
 ## Elements (spec §9, §11)
 
@@ -100,7 +100,7 @@ written once, here, and level items and other rules point at it.
 
 ## In the engines
 
-Elements are objects, items, lore, states and triggers, so they go to Godot, Unity and Unreal as they always have: their states, interactions, and (as fields) their kind, properties and clue fields. Staged hints, what solving it plays and screen puzzles wait for the puzzle engine phase (until then the interaction a screen opens on works as it is there); the panel below says so for a puzzle that has them.
+Elements are objects, items, lore, states and triggers, so they go to Godot, Unity and Unreal as they always have: their states, interactions, and (as fields) their kind, properties and clue fields. story.json carries each puzzle's design (its steps, hints, cues and elements) and each screen puzzle, and every engine has a puzzle runtime that plays them: `puzzle_runtime.gd` in Godot, `Puzzles.cs` in Unity and `PuzzleRuntime` in the Unreal plugin's core. Staged hints are given after enough wrong tries, cues play when the puzzle is solved, and the interaction a screen opens on asks the game to show the screen (`screen_requested` in Godot, `ScreenRequested` in Unity, `OnScreenRequested` in Unreal); the game answers with the player's input and the runtime checks it, counts wrong answers and locks the screen after its tries. Each export has a plain stand-in screen to try it with until the real one is built. Each engine's README lists the calls.
 
 ## The sample
 
@@ -117,7 +117,7 @@ the door*. It solves as it did before. The Rusted Lever is a lever element; solv
 | §3 Scales | Done as the puzzle's scale; screen-level authoring comes with §8. |
 | §4 Definition | Done: id and title, purpose, objective, solution, difficulty, minutes, entry rule, success (its steps or a rule), failure, reset and tries, outputs (When solved). Location: the levels it is bound in (Level Designer V2 §14). |
 | §5 Hierarchy | Done: sub-goals, requirements, interactions, nested, ordered, optional, hidden, grouped, alternate paths (any), and the dependency graph (part of, needs first, drag to link). |
-| §6 Gates | Done in the studio: AND, OR, sequence, state, inventory, knowledge, needs first, timed, optional branches, rewards on done, wrong moves and fail-forward, with progress in the play-through and Play Mode. Engines: an approximation until the engine phase. |
+| §6 Gates | Done in the studio: AND, OR, sequence, state, inventory, knowledge, needs first, timed, optional branches, rewards on done, wrong moves and fail-forward, with progress in the play-through and Play Mode. Engines: the same progress in Godot, Unity and Unreal. |
 | §7 Example | Done as the built-in Safe code template, with its keypad. |
 | §8 Screen-level puzzles | Done: every template type, components, states, input, constraints, validation, feedback, completion (the interaction it opens on), art and audio placeholders, a preview that plays it. |
 | §9 Element library | Done: every kind, icons, properties, logic-only or linked to level items, personal templates. |
@@ -126,4 +126,4 @@ the door*. It solves as it did before. The Rusted Lever is a lever element; solv
 | §12 Level Designer | Done: a puzzle from a room or an object, badges in 2D and 3D, locate a step's items, open an item's puzzles, breadcrumbs, logic kept in the Puzzle Creator. |
 | §13 Validation and testing | Done: missing prerequisites, unconnected elements, circular links (unless intended), needed clues that can't be found, steps that can be skipped or bypassed, "Can the player solve this?", test mode with a log. |
 | §14 Layout | Done: library and tree left; writing, steps, graph, elements, clues, screen and test centre; inspector right; validation below; breadcrumbs above. |
-| Engines | The puzzle's compiled rule goes to every engine as before (sequence, links and fail-forward folded into it); the step progress, time limits, rewards and wrong moves come with the engine phase. |
+| Engines | Done: the steps' progress, time limits, rewards, wrong moves, fail-forward, staged hints, cues and screen puzzles play in Godot, Unity and Unreal, saved under the same keys; each engine's check plays the built-in templates (the safe's keypad, the plates in order against the clock, the lever) and every screen kind. |

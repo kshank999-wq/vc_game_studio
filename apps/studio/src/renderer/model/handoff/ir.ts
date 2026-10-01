@@ -7,7 +7,10 @@ import { laneSequence, spineSequence } from '../layout';
 import { CATEGORIES, dualWith, elementsIn, sceneLines } from '../scene';
 import { hasInline, plainInline } from '../inline';
 import { eventTitle, loseOf, sceneTimeline } from '../timeline';
-import { describeRule, isEmpty, isRule, type Effect, type Rule } from '../rules';
+import { describeRule, isEmpty, isRule, type Condition, type Effect, type Rule } from '../rules';
+import { nodesOf, treeDrives, usesProgress } from '../puzzle/tree';
+import { cuesOf, hintsOf } from '../puzzle/staged';
+import { codeFor, screenOf } from '../puzzle/screens';
 import { cinematicTiming, shotsOf } from '../shots';
 import type { ObjectType, Project, StoryObject } from '../types';
 import { buildLevels, type IrLevel } from './levels';
@@ -108,6 +111,81 @@ export interface IrInteraction {
   fires?: string;
   requires?: IrRule;
   effects?: IrEffect[];
+  /** It opens the object's screen puzzle: what it does happens once that is solved (puzzle spec §8). */
+  screen?: true;
+}
+
+/** A puzzle step (puzzle spec §5, §6), as the runtimes play it. */
+export interface IrStep {
+  id: string;
+  parent: string | null;
+  kind: 'goal' | 'requirement' | 'interaction';
+  label: string;
+  /** A sub-goal: all, any, or all in order. */
+  gate?: 'all' | 'any' | 'sequence';
+  /** A sub-goal: seconds from its first step done. */
+  within?: number;
+  /** Steps that must be done first. */
+  requires?: string[];
+  /** A requirement or interaction: what marks it done. */
+  when?: IrRule;
+  /** What it does the first time it is done. */
+  effects?: IrEffect[];
+  optional?: boolean;
+  /** A wrong move at it, what that does, and whether it still counts as done (fail-forward). */
+  fail?: { when?: IrRule; effects?: IrEffect[]; forward?: boolean };
+}
+
+/** A puzzle's design (puzzle spec §5–§11): its steps, how it resets, its staged hints and what solving it plays. */
+export interface IrPuzzleDesign {
+  /** Its steps keep progress (order, time, links, wrong moves, rewards): the runtime plays them. Otherwise solvedWhen alone decides. */
+  progress: boolean;
+  /** never, onFail, onLeave or byHand. */
+  reset: string;
+  /** When it can begin (no rule: at once). */
+  entry?: IrRule;
+  steps: IrStep[];
+  hints: { id: string; text: string; afterFails?: number; when?: IrRule }[];
+  cues: { kind: string; text: string; ref?: string }[];
+  /** The elements it is made of. */
+  elements: string[];
+}
+
+/** A screen puzzle on an object (puzzle spec §8): its kind, its parts and answer, its feedback. The keypad's code is resolved. */
+export interface IrScreen {
+  kind: string;
+  prompt: string;
+  code?: string;
+  keys?: string;
+  positions?: number;
+  combination?: number[];
+  size?: number;
+  shuffle?: number;
+  symbols?: string[];
+  answer?: string[];
+  rings?: number;
+  segments?: number;
+  start?: number[];
+  linked?: boolean;
+  width?: number;
+  height?: number;
+  cells?: { piece: string; rot: number }[];
+  source?: number;
+  sink?: number;
+  parts?: { id: string; label: string }[];
+  slots?: { id: string; label: string; accepts: string }[];
+  pairs?: { left: string; right: string }[];
+  items?: string[];
+  switches?: string[];
+  links?: number[][];
+  startOn?: boolean[];
+  target?: boolean[];
+  text?: string;
+  feedback: { correct: string; wrong: string };
+  attempts?: number;
+  onWrong?: IrEffect[];
+  art?: string;
+  audio?: string;
 }
 
 export interface IrObject {
@@ -124,6 +202,10 @@ export interface IrObject {
   /** A puzzle: what solves it, and what solving it does. */
   solvedWhen?: IrRule;
   effects?: IrEffect[];
+  /** A puzzle built in the Puzzle Creator: its steps, hints and cues. */
+  design?: IrPuzzleDesign;
+  /** An object with a screen puzzle. */
+  screen?: IrScreen;
 }
 
 export interface IrThing {
@@ -441,6 +523,45 @@ export const buildIR = (project: Project): HandoffIR => {
     });
     return items.length ? { match: r.match, items } : undefined;
   };
+  const one = (c: Condition | undefined): IrRule | undefined => (c ? rule({ match: 'all', items: [c] }) : undefined);
+  /** A puzzle's design for the runtimes: its steps (ids as they are), hints and cues. */
+  const design = (o: StoryObject): IrPuzzleDesign => {
+    const nodes = nodesOf(o);
+    return {
+      progress: treeDrives(o) && usesProgress(nodes),
+      reset: String(o.data.reset ?? 'never'),
+      ...(rule(o.data.entry as Rule | undefined) ? { entry: rule(o.data.entry as Rule | undefined) } : {}),
+      steps: nodes.map((n): IrStep => {
+        const fw = one(n.fail?.when);
+        const fe = effects(n.fail?.effects);
+        return {
+          id: n.id,
+          parent: n.parentId ?? null,
+          kind: n.kind,
+          label: n.label,
+          ...(n.kind === 'goal' ? { gate: n.gate ?? 'all' } : {}),
+          ...(n.kind === 'goal' && (n.within ?? 0) > 0 ? { within: n.within } : {}),
+          ...(n.requires?.length ? { requires: n.requires.filter((r) => nodes.some((x) => x.id === r)) } : {}),
+          ...(n.kind !== 'goal' && one(n.when) ? { when: one(n.when) } : {}),
+          ...(effects(n.effects) ? { effects: effects(n.effects) } : {}),
+          ...(n.optional ? { optional: true } : {}),
+          ...(n.kind !== 'goal' && (fw || fe) ? { fail: { ...(fw ? { when: fw } : {}), ...(fe ? { effects: fe } : {}), ...(n.fail?.forward ? { forward: true } : {}) } } : {}),
+        };
+      }),
+      hints: hintsOf(o).map((h) => ({ id: h.id, text: h.text, ...(h.afterFails ? { afterFails: h.afterFails } : {}), ...(one(h.when) ? { when: one(h.when) } : {}) })),
+      cues: cuesOf(o).map((c) => ({ kind: c.kind, text: c.text, ...(c.ref && key(c.ref) ? { ref: key(c.ref)! } : {}) })),
+      elements: (((o.data.elements as string[] | undefined) ?? []).map((e) => key(e)).filter(Boolean) as string[]),
+    };
+  };
+  /** An object's screen for the runtimes: the keypad's code read from its code element, wrong-answer effects keyed. */
+  const screen = (o: StoryObject): IrScreen => {
+    const { codeRef: _ref, onWrong, ...rest } = screenOf(o)!;
+    const wrong = effects(onWrong);
+    const out: IrScreen = { ...(rest as Omit<IrScreen, 'onWrong'>) };
+    if (rest.kind === 'keypad') out.code = codeFor(project, screenOf(o)!);
+    if (wrong) out.onWrong = wrong;
+    return out;
+  };
   const effects = (list: Effect[] | undefined): IrEffect[] | undefined => {
     const out = (list ?? []).flatMap((e): IrEffect[] => {
       const ref = key(e.ref);
@@ -580,9 +701,12 @@ export const buildIR = (project: Project): HandoffIR => {
         ...(i.fires && key(i.fires) ? { fires: key(i.fires)! } : {}),
         ...(rule(i.requires) ? { requires: rule(i.requires) } : {}),
         ...(effects(i.effects) ? { effects: effects(i.effects) } : {}),
+        ...(i.screen && screenOf(o) ? { screen: true as const } : {}),
       })),
       notes: o.notes,
       fields: fieldsOf(o),
+      ...(o.type === 'puzzle' && nodesOf(o).length ? { design: design(o) } : {}),
+      ...(o.type === 'object' && screenOf(o) ? { screen: screen(o) } : {}),
       ...(o.type === 'puzzle' && rule(o.data.rule as Rule | undefined) ? { solvedWhen: rule(o.data.rule as Rule | undefined) } : {}),
       ...(o.type === 'puzzle' && effects(o.data.effects as Effect[] | undefined) ? { effects: effects(o.data.effects as Effect[] | undefined) } : {}),
     })),

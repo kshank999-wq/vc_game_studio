@@ -24,3 +24,10 @@ grep -q "_Mara_[0-9]*: TODO(VCGS) Task for Gameplay programmer" "$gen/levels/sun
 echo "tasks: $(grep -c '^- ' "$gen/TASKS.md") open"
 "${GODOT:?Set GODOT to a Godot 4 binary}" --headless --path "$work" --import > /dev/null 2>&1 || true
 "$GODOT" --headless --path "$work" -s check.gd
+# The puzzle runtime (puzzle spec §6–§10): the sample with the built-in puzzle templates.
+puzzles="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles"' EXIT
+cp "$here/godot-check/project.godot" "$here/godot-check/check_puzzles.gd" "$puzzles/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$puzzles" godot puzzles > /dev/null)
+"$GODOT" --headless --path "$puzzles" --import > /dev/null 2>&1 || true
+"$GODOT" --headless --path "$puzzles" -s check_puzzles.gd

@@ -423,8 +423,6 @@ export const puzzleIssues = (project: Project, id: string): PuzzleIssue[] => {
     if (n.fail?.when && !n.fail.forward && definitionOf(puzzle).reset === 'never' && !n.optional)
       out.push({ severity: 'warning', nodeId: n.id, message: `A wrong move at “${n.label}” stops the puzzle for good: make it fail-forward, or let the puzzle reset on a failure.` });
   }
-  if (usesProgress(nodes) && treeDrives(puzzle))
-    out.push({ severity: 'warning', message: 'Its order, time limits, links, rewards and wrong moves play in the studio. The engines get the conditions its steps come to for now; puzzle export brings the rest.' });
   return out;
 };
 

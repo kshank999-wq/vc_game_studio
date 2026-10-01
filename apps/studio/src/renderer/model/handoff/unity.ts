@@ -144,6 +144,14 @@ project.
    (\`MechanicAvailable\`, \`HasMechanic\`, \`Story.MechanicDetail\`) as their
    conditions come true;
    \`StoryWalker\` follows the graph between scenes.
+5. **Puzzles** built in the Puzzle Creator play their steps as the studio does
+   (order, links, time limits on \`State.Clock\`, which VcgsGame advances,
+   rewards, wrong moves, resets): \`PuzzleStep\`, \`StepDone\`, \`HintGiven\` and
+   \`PuzzleCue\` (what solving one plays). An interaction that opens a **screen
+   puzzle** raises \`ScreenRequested\` instead of acting: show your screen, then
+   call \`Interactions.AnswerScreen(state, object, answer)\` (see
+   \`PuzzleRuntime.CheckScreen\` for each kind's answer). **VcgsScreenPanel** is a
+   stand-in to try them with.
 
 To try the story before your game has its own screens, add **VcgsCodex** next
 to VcgsGame: a Codex button (and C) opens the quest log and the lore found. The

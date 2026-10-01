@@ -114,7 +114,8 @@ describe('puzzle progress (puzzle spec §6)', () => {
     expect(messages).toMatch(/time limit/i);
     expect(messages).toMatch(/optional/i);
     expect(messages).toMatch(/for good/i);
-    expect(messages).toMatch(/engines get the conditions/);
+    // The engines play the steps as the studio does: nothing to warn about there.
+    expect(messages).not.toMatch(/engines/);
   });
 
   it('plays through in the story: steps done in order solve the puzzle and fire their effects', () => {

@@ -24,3 +24,10 @@ grep -B1 'public const string VaultKey' "$gen/StoryKeys.cs" | grep -q "TODO(VCGS
 echo "tasks: $(grep -c '^- ' "$gen/TASKS.md") open"
 cd "$work"
 dotnet run --nologo -v q
+# The puzzle runtime (puzzle spec §6–§10): the sample with the built-in puzzle templates.
+puzzles="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles"' EXIT
+cp "$here/unity-check/UnityStubs.cs" "$here/unity-puzzle-check/"* "$puzzles/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$puzzles" unity puzzles > /dev/null)
+cd "$puzzles"
+dotnet run --nologo -v q

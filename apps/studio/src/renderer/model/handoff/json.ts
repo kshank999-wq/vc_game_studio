@@ -310,9 +310,55 @@ export const storySchema = () => ({
     },
     thing: obj({ id: str, ident, code: str, name: str, type: str, notes: str, fields: { type: 'object', additionalProperties: str }, shots: { type: 'array', items: ref('shot') } }, ['id', 'ident', 'code', 'name', 'type', 'notes', 'fields']),
     shot: obj({ framing: str, move: str, lens: str, characters: strings, action: str, line: str, audio: str, vfx: str, seconds: num, transition: str, notes: str }, ['framing', 'move', 'seconds', 'transition']),
-    interaction: obj({ verb: str, when: str, becomes: str, sets: obj({ flag: str, value: str }), fires: str, requires: ref('rule'), effects: ref('effects') }, ['verb']),
+    interaction: obj({ verb: str, when: str, becomes: str, sets: obj({ flag: str, value: str }), fires: str, requires: ref('rule'), effects: ref('effects'), screen: { const: true, description: 'It opens the object\'s screen puzzle: what it does happens once that is solved.' } }, ['verb']),
+    step: {
+      ...obj(
+        {
+          id: str,
+          parent: { type: ['string', 'null'] },
+          kind: { enum: ['goal', 'requirement', 'interaction'] },
+          label: str,
+          gate: { enum: ['all', 'any', 'sequence'] },
+          within: num,
+          requires: strings,
+          when: ref('rule'),
+          effects: ref('effects'),
+          optional: { type: 'boolean' },
+          fail: obj({ when: ref('rule'), effects: ref('effects'), forward: { type: 'boolean' } }, []),
+        },
+        ['id', 'parent', 'kind', 'label'],
+      ),
+      description: 'A puzzle step: a sub-goal (all, any, or all in order; within seconds of its first step), or a requirement or interaction done when `when` holds and the steps it requires are done. Done stays done. `effects` happen the first time; a wrong move (`fail.when` coming true) does `fail.effects`, and counts as done when `fail.forward`.',
+    },
+    design: {
+      ...obj(
+        {
+          progress: { type: 'boolean' },
+          reset: { enum: ['never', 'onFail', 'onLeave', 'byHand'] },
+          entry: ref('rule'),
+          steps: { type: 'array', items: ref('step') },
+          hints: { type: 'array', items: obj({ id: str, text: str, afterFails: num, when: ref('rule') }, ['id', 'text']) },
+          cues: { type: 'array', items: obj({ kind: { enum: ['animation', 'audio', 'vfx', 'message', 'dialogue', 'cinematic'] }, text: str, ref: str }, ['kind', 'text']) },
+          elements: strings,
+        },
+        ['progress', 'reset', 'steps', 'hints', 'cues', 'elements'],
+      ),
+      description: 'A puzzle built in the Puzzle Creator. With `progress`, the runtime keeps its steps (see the README); without, `solvedWhen` alone solves it. Hints are given once each, after `afterFails` wrong moves and once `when` holds; cues play when it is solved.',
+    },
+    screen: {
+      type: 'object',
+      required: ['kind', 'prompt', 'feedback'],
+      properties: {
+        kind: { enum: ['keypad', 'dial', 'tiles', 'symbols', 'rings', 'circuit', 'assembly', 'matching', 'ordering', 'levers', 'custom'] },
+        prompt: str,
+        feedback: obj({ correct: str, wrong: str }, ['correct', 'wrong']),
+        attempts: num,
+        onWrong: ref('effects'),
+      },
+      description: 'A screen puzzle on an object: the parts and answer of its kind (code and keys; positions and combination; size; symbols and answer; rings, segments, start and linked; width, height, cells, source and sink; parts and slots; pairs; items; switches, links, startOn and target; text). Solved, its interaction (marked `screen`) does what it does.',
+    },
     object: obj(
-      { id: str, ident, code: str, name: str, kind: { enum: ['object', 'puzzle'] }, states: strings, initial: str, interactions: { type: 'array', items: ref('interaction') }, notes: str, fields: { type: 'object' }, solvedWhen: ref('rule'), effects: ref('effects') },
+      { id: str, ident, code: str, name: str, kind: { enum: ['object', 'puzzle'] }, states: strings, initial: str, interactions: { type: 'array', items: ref('interaction') }, notes: str, fields: { type: 'object' }, solvedWhen: ref('rule'), effects: ref('effects'), design: ref('design'), screen: ref('screen') },
       ['id', 'ident', 'code', 'name', 'kind', 'states', 'interactions', 'notes', 'fields'],
     ),
     trigger: obj({ id: str, ident, name: str, kind: { enum: ['trigger', 'gate'] }, condition: str, effect: str, sets: obj({ flag: str, value: str }), rule: ref('rule'), effects: ref('effects') }, ['id', 'ident', 'name', 'kind', 'condition', 'effect']),
@@ -399,6 +445,36 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
    none). One with \`byEffect: true\` waits for an effect instead
    (\`startQuest\`, \`revealLore\`, \`enableMechanic\`): a codex shows the lore known, and a system switches on with its
    mechanic. Do this once when a new game begins too.
+
+   **A puzzle with a \`design\` and \`progress: true\`** is solved by its steps,
+   not \`solvedWhen\`. Keep, per puzzle: the steps done (and the order), the
+   wrong moves made, when each timed sub-goal began, a count of wrong moves, and
+   which steps were undone while their condition held. After every change:
+   first, a sub-goal with \`within\` whose first step was done more than that
+   many seconds ago (on your play clock) loses what is done under it. Then, until
+   nothing more changes: a requirement or interaction whose \`fail.when\` has just
+   come true (it was false last time) is a wrong move — do \`fail.effects\`; with
+   \`fail.forward\` it counts as done, else it counts one wrong move and, when the
+   puzzle's \`reset\` is \`onFail\`, everything done is undone. A step is open when
+   the steps in its \`requires\` are done, in a \`sequence\` sub-goal the
+   (non-optional) step before it is done, and its sub-goal is open. An open
+   requirement or interaction is done when \`when\` holds (one undone while it held
+   must stop holding first); a sub-goal when all (or, with \`gate: "any"\`, any)
+   of its non-optional steps are. Done stays done; a step's \`effects\` happen the
+   first time. The puzzle is solved when all its top-level non-optional steps
+   are. Hints are given once each, while the puzzle is unsolved and \`entry\` holds,
+   after \`afterFails\` wrong moves (its own, plus wrong answers at its
+   \`elements\`' screens) and once \`when\` holds. When it is solved, play its
+   \`cues\`.
+
+   **An object with a \`screen\`**: the interaction marked \`screen: true\` shows the
+   screen puzzle instead of doing anything. A right answer (the \`code\`, the
+   \`combination\`, the \`answer\` symbols, the \`items\` in order, each pair's
+   \`right\` in order, each slot's \`accepts\`, the \`target\` switches, every ring
+   turned to 0, the tiles in order, or the circuit joined from \`source\` to
+   \`sink\`) does what that interaction does; a wrong one shows
+   \`feedback.wrong\`, does \`onWrong\` and counts toward the puzzle's hints. After
+   \`attempts\` wrong answers (when it has them) it takes no more.
 6. **An \`encounter\` event** is a fight, chase or the like for your game to play;
    its \`ref\` is a key in \`encounters\`. A win counts only when \`winWhen\` holds;
    it does \`onWin\` and the scene goes on. A loss does \`onLose\`, then plays the

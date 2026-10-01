@@ -193,6 +193,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsQuestSignature, const FString&,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsSceneSignature, const FString&, Scene);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsSkillSignature, const FString&, Skill, int32, Rank);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsGearSignature, const FString&, Item, const FString&, Slot);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FVcgsPuzzleStepSignature, const FString&, Puzzle, const FString&, Step, const FString&, What);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsHintSignature, const FString&, Puzzle, const FString&, Text);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVcgsCueSignature, const FString&, Puzzle, const FString&, Kind, const FString&, Text, const FString&, Ref);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsScreenSignature, const FString&, Object, const FString&, Verb);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsScreenAnsweredSignature, const FString&, Object, bool, bRight);
 
 /**
  * The one playthrough of the story: reads story.json when the game starts and
@@ -366,6 +371,33 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnLocationVisited;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnObjectUsed;
 
+    /** A puzzle step done, failed (a wrong move), expired (out of time) or reset (puzzle spec §6). */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Puzzles") FVcgsPuzzleStepSignature OnPuzzleStep;
+    /** A staged hint given (puzzle spec §10). */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Puzzles") FVcgsHintSignature OnHintGiven;
+    /** Something a puzzle plays when solved: animation, audio, vfx, message, dialogue or cinematic (Ref) (puzzle spec §11). */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Puzzles") FVcgsCueSignature OnPuzzleCue;
+    /** An interaction asks for its object's screen puzzle: show it, then call AnswerScreen (puzzle spec §8). */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Puzzles") FVcgsScreenSignature OnScreenRequested;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Puzzles") FVcgsScreenAnsweredSignature OnScreenAnswered;
+    /** Whether a puzzle's step is done. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Puzzles") bool StepDone(const FString& Puzzle, const FString& Step) const;
+    /** An object's screen puzzle: its kind and what the player is told (empty kind when it has none). */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Puzzles") void GetScreen(const FString& Object, FString& Kind, FString& Prompt) const;
+    /** Out of tries: it won't take another answer. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Puzzles") bool ScreenLocked(const FString& Object) const;
+    /**
+     * Answer an object's screen puzzle, the answer as JSON: "4271" (a keypad's code,
+     * quoted), [12, 30, 7] (a dial), ["a", "b"] (symbols, ordering, matching),
+     * {"s1": "p1"} (assembly), [true, false] (levers), and so on. Right: its
+     * interaction does what it does. Returns whether it was right.
+     */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Puzzles") bool AnswerScreen(const FString& Object, const FString& AnswerJson);
+    /** Answer a keypad or a custom screen with the text entered. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Puzzles") bool AnswerScreenText(const FString& Object, const FString& Text);
+    /** Move the play clock on (the level director does each frame): timed puzzle steps run on it. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Puzzles") void AdvanceClock(float Seconds);
+
     /** Where a graph node goes next: its first route whose conditions hold, else on along the spine. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") FString Onward(const FString& Node);
     /** "scene", "choice", "plotPoint", "cinematic", "begin", "end"... */
@@ -456,7 +488,49 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     Game->OnItemFound = [this](const std::string& Item) { OnItemFound.Broadcast(ToF(Item)); };
     Game->OnLocationVisited = [this](const std::string& Location) { OnLocationVisited.Broadcast(ToF(Location)); };
     Game->OnObjectUsed = [this](const std::string& Object) { OnObjectUsed.Broadcast(ToF(Object)); };
+    Game->OnPuzzleStep = [this](const std::string& Puzzle, const std::string& Step, const std::string& What) { OnPuzzleStep.Broadcast(ToF(Puzzle), ToF(Step), ToF(What)); };
+    Game->OnHint = [this](const std::string& Puzzle, const std::string& Text) { OnHintGiven.Broadcast(ToF(Puzzle), ToF(Text)); };
+    Game->OnPuzzleCue = [this](const std::string& Puzzle, const std::string& Kind, const std::string& Text, const std::string& Ref) { OnPuzzleCue.Broadcast(ToF(Puzzle), ToF(Kind), ToF(Text), ToF(Ref)); };
+    Game->OnScreenRequested = [this](const std::string& Object, const std::string& Verb) { OnScreenRequested.Broadcast(ToF(Object), ToF(Verb)); };
+    Game->OnScreenAnswered = [this](const std::string& Object, bool bRight) { OnScreenAnswered.Broadcast(ToF(Object), bRight); };
     return true;
+}
+
+bool UVcgsSubsystem::StepDone(const FString& Puzzle, const FString& Step) const { return Game && Game->StepDone(ToStd(Puzzle), ToStd(Step)); }
+
+void UVcgsSubsystem::GetScreen(const FString& Object, FString& Kind, FString& Prompt) const
+{
+    Kind = FString();
+    Prompt = FString();
+    if (!Game) return;
+    const std::string Key = ToStd(Object);
+    const vcgs::Value Screen = vcgs::Interactions::ScreenOf(*Game, Key);
+    Kind = ToF(Screen["kind"].Str());
+    Prompt = ToF(Screen["prompt"].Str());
+}
+
+bool UVcgsSubsystem::ScreenLocked(const FString& Object) const { return Game && vcgs::Interactions::ScreenLocked(*Game, ToStd(Object)); }
+
+bool UVcgsSubsystem::AnswerScreen(const FString& Object, const FString& AnswerJson)
+{
+    if (!Game) return false;
+    std::string Error;
+    const vcgs::Value Answer = vcgs::JsonReader::Parse(ToStd(AnswerJson), &Error);
+    return Error.empty() && vcgs::Interactions::AnswerScreen(*Game, ToStd(Object), Answer);
+}
+
+bool UVcgsSubsystem::AnswerScreenText(const FString& Object, const FString& Text)
+{
+    if (!Game) return false;
+    vcgs::Value Answer;
+    Answer.type = vcgs::Value::Type::String;
+    Answer.text = ToStd(Text);
+    return vcgs::Interactions::AnswerScreen(*Game, ToStd(Object), Answer);
+}
+
+void UVcgsSubsystem::AdvanceClock(float Seconds)
+{
+    if (Game) Game->AdvanceClock(Seconds);
 }
 
 void UVcgsSubsystem::NewGame()
@@ -1432,6 +1506,15 @@ all Blueprint-callable). Quests start and complete by their rules (\`OnQuestStar
 \`HasMechanic\`, \`GetMechanicDetail\`). Triggers fire and puzzles solve themselves as their
 conditions come true; \`Onward\` and \`ChooseOnGraph\` follow the graph between
 scenes.
+
+**Puzzles** built in the Puzzle Creator play their steps as the studio does
+(order, links, time limits on the play clock, which the level director advances
+or \`AdvanceClock\` does, rewards, wrong moves, resets): \`OnPuzzleStep\`,
+\`StepDone\`, \`OnHintGiven\` and \`OnPuzzleCue\` (what solving one plays). An
+interaction that opens a **screen puzzle** broadcasts \`OnScreenRequested\` instead
+of acting: show your widget (\`GetScreen\` gives its kind and prompt), then call
+\`AnswerScreen\` with the answer as JSON (\`AnswerScreenText\` for a keypad or a
+typed answer); \`ScreenLocked\` says when it takes no more.
 `;
 
 export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput => {

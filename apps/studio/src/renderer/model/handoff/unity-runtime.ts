@@ -6,10 +6,12 @@
  */
 
 import { MAIL_ON_CLIPBOARD, MAILTO_LIMIT, NOTES_PRINT_STYLE } from '../play';
+import { UNITY_PUZZLES } from './unity-puzzles';
 
 const HEAD = '// VCGS Runtime for Unity. The same for every project; safe to commit.';
 
 export const RUNTIME_FILES: Record<string, string> = {
+  'Puzzles.cs': UNITY_PUZZLES,
   'Json.cs': String.raw`${HEAD}
 using System;
 using System.Collections.Generic;
@@ -344,6 +346,44 @@ namespace VCGS
         public readonly Dictionary<string, string> Equipped = new Dictionary<string, string>();
         /// <summary>How many times each item of equipment has been used, toward its durability.</summary>
         public readonly Dictionary<string, int> Wear = new Dictionary<string, int>();
+        /// <summary>Each puzzle's step progress (PuzzleRuntime), by puzzle.</summary>
+        public readonly Dictionary<string, StepProgress> PuzzleSteps = new Dictionary<string, StepProgress>();
+        /// <summary>Staged hints given, and wrong answers at each object's screen puzzle.</summary>
+        public readonly HashSet<string> Hinted = new HashSet<string>();
+        public readonly Dictionary<string, int> ScreenFails = new Dictionary<string, int>();
+        /// <summary>Seconds of play: timed puzzle steps run on it (VcgsGame advances it each frame).</summary>
+        public double Clock;
+
+        /// <summary>A puzzle step done, failed (a wrong move), expired (out of time) or reset (puzzle spec §6).</summary>
+        public event Action<string, string, string> PuzzleStep;
+        /// <summary>A staged hint given: the puzzle, the hint (puzzle spec §10).</summary>
+        public event Action<string, string> HintGiven;
+        /// <summary>Something a puzzle plays when solved: the puzzle, its kind (animation, audio, vfx, message, dialogue, cinematic), its text, what it plays (puzzle spec §11).</summary>
+        public event Action<string, string, string, string> PuzzleCue;
+        /// <summary>An interaction asks for its object's screen puzzle: show it, then call Interactions.AnswerScreen (puzzle spec §8).</summary>
+        public event Action<string, string> ScreenRequested;
+        public event Action<string, bool> ScreenAnswered;
+        internal void RaisePuzzleStep(string puzzle, string step, string what) => PuzzleStep?.Invoke(puzzle, step, what);
+        internal void RaiseHint(string puzzle, string text) => HintGiven?.Invoke(puzzle, text);
+        internal void RaiseCue(string puzzle, string kind, string text, string what) => PuzzleCue?.Invoke(puzzle, kind, text, what);
+        internal void RaiseScreenRequested(string obj, string verb) => ScreenRequested?.Invoke(obj, verb);
+        internal void RaiseScreenAnswered(string obj, bool right) => ScreenAnswered?.Invoke(obj, right);
+        internal void Touch() => OnChanged();
+
+        /// <summary>Move the play clock on; a timed puzzle step that runs out is undone.</summary>
+        public void AdvanceClock(double seconds)
+        {
+            Clock += seconds;
+            foreach (var p in PuzzleSteps.Values)
+                if (p.Begun.Count > 0)
+                {
+                    OnChanged();
+                    return;
+                }
+        }
+
+        /// <summary>Whether a puzzle's step is done.</summary>
+        public bool StepDone(string puzzle, string step) => PuzzleSteps.TryGetValue(puzzle ?? "", out var p) && p.Done.ContainsKey(step ?? "");
 
         /// <summary>Anything the story's conditions can see has changed.</summary>
         public event Action Changed;
@@ -383,6 +423,7 @@ namespace VCGS
             Loaded = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
             Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear(); Equipped.Clear(); Wear.Clear();
+            PuzzleSteps.Clear(); Hinted.Clear(); ScreenFails.Clear(); Clock = 0;
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -796,7 +837,9 @@ namespace VCGS
                 ",\n  \"met\": " + InOrder(MetEncounters) + ",\n  \"characters\": " + InOrder(MetCharacters) + ",\n  \"found\": " + InOrder(FoundItems) + ",\n  \"locations\": " + InOrder(VisitedLocations) +
                 ",\n  \"used\": " + InOrder(UsedObjects) + ",\n  \"lore\": " + InOrder(KnownLore) + ",\n  \"mechanics\": " + InOrder(AvailableMechanics) +
                 ",\n  \"skills\": " + Map(Skills, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
-                ",\n  \"equipped\": " + Map(Equipped, Q) + ",\n  \"wear\": " + Map(Wear, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                ",\n  \"equipped\": " + Map(Equipped, Q) + ",\n  \"wear\": " + Map(Wear, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
+                ",\n  \"puzzles\": " + Map(PuzzleSteps, p => p.ToJson()) + ",\n  \"hinted\": " + Sorted(Hinted) + ",\n  \"screenFails\": " + Map(ScreenFails, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
+                ",\n  \"clock\": " + Clock.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
         }
 
         /// <summary>Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it.</summary>
@@ -833,12 +876,17 @@ namespace VCGS
             AutoRules = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
             Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear(); Equipped.Clear(); Wear.Clear();
+            PuzzleSteps.Clear(); Hinted.Clear(); ScreenFails.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
                 var initial = D.Str(o.Value, "initial");
                 if (D.Str(o.Value, "kind") == "object" && initial != "") ObjectStates[o.Key] = initial;
             }
+            foreach (var e in D.Map(data, "puzzles")) PuzzleSteps[e.Key] = StepProgress.FromJson(D.Map(e.Value));
+            foreach (var h in D.List(data, "hinted")) if (h is string hint) Hinted.Add(hint);
+            foreach (var e in D.Map(data, "screenFails")) ScreenFails[e.Key] = (int)D.Num(e.Value, 0);
+            Clock = D.Num(data, "clock");
             foreach (var e in D.Map(data, "flags")) Flags[e.Key] = D.Str(data["flags"] as Dictionary<string, object>, e.Key);
             foreach (var e in D.Map(data, "objects")) ObjectStates[e.Key] = D.Str(data["objects"] as Dictionary<string, object>, e.Key);
             foreach (var e in D.Map(data, "chosen")) Chosen[e.Key] = D.Str(data["chosen"] as Dictionary<string, object>, e.Key);
@@ -985,7 +1033,34 @@ namespace VCGS
             if (game.Solved.Contains(puzzle)) return;
             game.MarkSolved(puzzle);
             game.Story.Objects.TryGetValue(puzzle, out var p);
+            foreach (var c in D.List(D.Map(p, "design"), "cues"))
+            {
+                var cue = D.Map(c);
+                game.RaiseCue(puzzle, D.Str(cue, "kind"), D.Str(cue, "text"), D.Str(cue, "ref"));
+            }
             Apply(D.Get(p, "effects"), game);
+        }
+
+        /// <summary>
+        /// Staged hints (puzzle spec §10): for each puzzle under way, each hint
+        /// once its wrong moves are made (at its steps and its elements'
+        /// screens) and its condition holds.
+        /// </summary>
+        public static void GiveHints(GameState game)
+        {
+            foreach (var p in game.Story.Objects)
+            {
+                var design = D.Map(p.Value, "design");
+                if (D.List(design, "hints").Count == 0 || game.Solved.Contains(p.Key)) continue;
+                if (design.ContainsKey("entry") && !Check(D.Get(design, "entry"), game)) continue;
+                var fails = game.PuzzleSteps.TryGetValue(p.Key, out var progress) ? progress.Fails : 0;
+                foreach (var e in D.List(design, "elements")) if (e is string el && game.ScreenFails.TryGetValue(el, out var n)) fails += n;
+                foreach (var h in PuzzleRuntime.DueHints(design, fails, game.Hinted, game))
+                {
+                    game.Hinted.Add(D.Str(h, "id"));
+                    game.RaiseHint(p.Key, D.Str(h, "text"));
+                }
+            }
         }
 
         /// <summary>
@@ -1032,12 +1107,34 @@ namespace VCGS
                 }
                 foreach (var p in game.Story.Objects)
                 {
-                    if (D.Str(p.Value, "kind") != "puzzle" || !p.Value.ContainsKey("solvedWhen") || game.Solved.Contains(p.Key) || !Check(D.Get(p.Value, "solvedWhen"), game)) continue;
+                    if (D.Str(p.Value, "kind") != "puzzle" || game.Solved.Contains(p.Key)) continue;
+                    var design = D.Map(p.Value, "design");
+                    if (D.Bool(design, "progress"))
+                    {
+                        // Its steps are kept as they are done: in order, in time, with their rewards and wrong moves.
+                        game.PuzzleSteps.TryGetValue(p.Key, out var before);
+                        var r = PuzzleRuntime.Advance(design, before, game, game.Clock);
+                        if (r.changed)
+                        {
+                            game.PuzzleSteps[p.Key] = r.progress;
+                            foreach (var e in r.events) game.RaisePuzzleStep(p.Key, e.Step, e.What);
+                            Apply(r.effects, game);
+                            moved = true;
+                        }
+                        if (r.solved)
+                        {
+                            Solve(p.Key, game);
+                            moved = true;
+                        }
+                        continue;
+                    }
+                    if (!p.Value.ContainsKey("solvedWhen") || !Check(D.Get(p.Value, "solvedWhen"), game)) continue;
                     Solve(p.Key, game);
                     moved = true;
                 }
-                if (!moved) return;
+                if (!moved) break;
             }
+            GiveHints(game);
         }
 
         /// <summary>
@@ -1166,16 +1263,66 @@ namespace VCGS
             {
                 var i = D.Map(item);
                 if (D.Str(i, "verb") != verb || !Allowed(i, obj, game)) continue;
-                game.UseObject(obj);
-                var becomes = D.Str(i, "becomes");
-                if (becomes != "") game.SetObjectState(obj, becomes);
-                var sets = D.Map(i, "sets");
-                if (sets.Count > 0) game.SetFlag(D.Str(sets, "flag"), D.Str(sets, "value"));
-                var fires = D.Str(i, "fires");
-                if (fires != "") Rules.Fire(fires, game);
-                Rules.Apply(D.Get(i, "effects"), game);
+                // It opens the screen puzzle: what it does waits for AnswerScreen.
+                if (D.Bool(i, "screen"))
+                {
+                    game.RaiseScreenRequested(obj, verb);
+                    return true;
+                }
+                Use(game, obj, i);
                 return true;
             }
+            return false;
+        }
+
+        /// <summary>Do what an interaction does.</summary>
+        public static void Use(GameState game, string obj, Dictionary<string, object> i)
+        {
+            game.UseObject(obj);
+            var becomes = D.Str(i, "becomes");
+            if (becomes != "") game.SetObjectState(obj, becomes);
+            var sets = D.Map(i, "sets");
+            if (sets.Count > 0) game.SetFlag(D.Str(sets, "flag"), D.Str(sets, "value"));
+            var fires = D.Str(i, "fires");
+            if (fires != "") Rules.Fire(fires, game);
+            Rules.Apply(D.Get(i, "effects"), game);
+        }
+
+        /// <summary>An object's screen puzzle (empty when it has none).</summary>
+        public static Dictionary<string, object> ScreenOf(GameState game, string obj) => game.Story.Objects.TryGetValue(obj ?? "", out var o) ? D.Map(o, "screen") : new Dictionary<string, object>();
+
+        /// <summary>Out of tries: it won't take another answer.</summary>
+        public static bool ScreenLocked(GameState game, string obj)
+        {
+            var tries = (int)D.Num(ScreenOf(game, obj), "attempts");
+            return tries > 0 && game.ScreenFails.TryGetValue(obj ?? "", out var n) && n >= tries;
+        }
+
+        /// <summary>
+        /// Answer an object's screen puzzle (see PuzzleRuntime.CheckScreen for what
+        /// an answer is). Right: the interaction it opens on does what it does.
+        /// Wrong: a wrong move for the puzzle's staged hints, and its wrong-answer
+        /// effects. Returns whether it was right.
+        /// </summary>
+        public static bool AnswerScreen(GameState game, string obj, object answer)
+        {
+            var screen = ScreenOf(game, obj);
+            if (screen.Count == 0 || ScreenLocked(game, obj)) return false;
+            if (PuzzleRuntime.CheckScreen(screen, answer))
+            {
+                foreach (var item in D.List(game.Story.Objects[obj], "interactions"))
+                    if (D.Bool(D.Map(item), "screen"))
+                    {
+                        Use(game, obj, D.Map(item));
+                        break;
+                    }
+                game.RaiseScreenAnswered(obj, true);
+                return true;
+            }
+            game.ScreenFails[obj] = (game.ScreenFails.TryGetValue(obj, out var n) ? n : 0) + 1;
+            Rules.Apply(D.Get(screen, "onWrong"), game);
+            game.RaiseScreenAnswered(obj, false);
+            game.Touch();
             return false;
         }
 
@@ -2398,6 +2545,9 @@ namespace VCGS
             State = new GameState(Story);
         }
 
+        /// <summary>The play clock runs while the game does (timed puzzle steps).</summary>
+        void Update() => State?.AdvanceClock(Time.deltaTime);
+
         /// <summary>A saved game was loaded: open the Unity scene for this story scene key ("" for the story's beginning), whose VcgsSceneFlow plays it from its start.</summary>
         public event System.Action<string> GameLoaded;
 
@@ -2429,6 +2579,126 @@ namespace VCGS
             var at = State.LoadSave(text);
             if (at != null) GameLoaded?.Invoke(at);
             return at;
+        }
+    }
+}
+`,
+
+  'VcgsScreenPanel.cs': String.raw`${HEAD}
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace VCGS
+{
+    /// <summary>
+    /// A stand-in for an object's screen puzzle (puzzle spec §8), drawn with
+    /// IMGUI: when an interaction asks for a screen, type the answer (keypad,
+    /// dial, symbols, ordering, matching, custom), or for a board worked by
+    /// hand, solve it or get it wrong. Put it next to VcgsGame; your own UI
+    /// replaces it (listen to GameState.ScreenRequested, answer with
+    /// Interactions.AnswerScreen).
+    /// </summary>
+    public sealed class VcgsScreenPanel : MonoBehaviour
+    {
+        string objectKey = "";
+        string entry = "";
+        string said = "";
+        GUIStyle text;
+
+        void Start()
+        {
+            if (VcgsGame.Instance != null) VcgsGame.Instance.State.ScreenRequested += (obj, verb) => { objectKey = obj; entry = ""; said = ""; };
+        }
+
+        static bool Typed(string kind) => kind == "keypad" || kind == "custom" || kind == "dial" || kind == "symbols" || kind == "ordering" || kind == "matching";
+
+        /// <summary>What the typed text is as an answer, by kind.</summary>
+        public static object Parse(string kind, string typed)
+        {
+            var parts = new List<object>();
+            switch (kind)
+            {
+                case "dial":
+                    foreach (var p in typed.Replace(",", " ").Split(' ')) if (double.TryParse(p, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n)) parts.Add(n);
+                    return parts;
+                case "symbols":
+                    foreach (var p in typed.Split(' ')) if (p != "") parts.Add(p);
+                    return parts;
+                case "ordering":
+                case "matching":
+                    foreach (var p in typed.Split(',')) if (p.Trim() != "") parts.Add(p.Trim());
+                    return parts;
+            }
+            return typed;
+        }
+
+        /// <summary>The answer a board puzzle's stand-in gives when told to solve it.</summary>
+        public static object Solution(Dictionary<string, object> screen)
+        {
+            var list = new List<object>();
+            switch (D.Str(screen, "kind"))
+            {
+                case "assembly":
+                    var placed = new Dictionary<string, object>();
+                    foreach (var slot in D.List(screen, "slots")) placed[D.Str(D.Map(slot), "id")] = D.Str(D.Map(slot), "accepts");
+                    return placed;
+                case "levers":
+                    return new List<object>(D.List(screen, "target"));
+                case "rings":
+                    for (var i = 0; i < (int)D.Num(screen, "rings"); i++) list.Add(0.0);
+                    return list;
+                case "circuit":
+                    foreach (var c in D.List(screen, "cells")) list.Add(D.Num(D.Map(c), "rot"));
+                    return list;
+                case "tiles":
+                    var n = System.Math.Max(2, (int)D.Num(screen, "size", 3));
+                    for (var i = 1; i < n * n; i++) list.Add((double)i);
+                    list.Add(0.0);
+                    return list;
+            }
+            return list;
+        }
+
+        void Answer(GameState game, Dictionary<string, object> screen, object answer)
+        {
+            var feedback = D.Map(screen, "feedback");
+            if (Interactions.AnswerScreen(game, objectKey, answer))
+            {
+                said = D.Str(feedback, "correct");
+                objectKey = "";
+            }
+            else said = D.Str(feedback, "wrong");
+            entry = "";
+        }
+
+        void OnGUI()
+        {
+            if (VcgsGame.Instance == null) return;
+            text ??= new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 16 };
+            var game = VcgsGame.Instance.State;
+            if (objectKey == "")
+            {
+                if (said != "") GUI.Box(new Rect(20, 20, 420, 40), said);
+                return;
+            }
+            var screen = Interactions.ScreenOf(game, objectKey);
+            var kind = D.Str(screen, "kind");
+            GUILayout.BeginArea(new Rect(UnityEngine.Screen.width / 2f - 220, 80, 440, 320));
+            GUILayout.Label("[Screen · " + kind + "] " + D.Str(screen, "prompt"), text);
+            if (said != "") GUILayout.Label(said, text);
+            if (Interactions.ScreenLocked(game, objectKey)) GUILayout.Label("It won't take another try.", text);
+            else if (Typed(kind))
+            {
+                entry = GUILayout.TextField(entry);
+                if (GUILayout.Button("Enter")) Answer(game, screen, Parse(kind, entry));
+            }
+            else
+            {
+                if (GUILayout.Button("Solve it (stand-in)")) Answer(game, screen, Solution(screen));
+                if (GUILayout.Button("Get it wrong (stand-in)")) Answer(game, screen, new List<object>());
+            }
+            if (GUILayout.Button("Leave")) objectKey = "";
+            GUILayout.EndArea();
         }
     }
 }

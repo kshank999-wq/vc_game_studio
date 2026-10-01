@@ -33,6 +33,13 @@ public="$work/Plugins/VCGS/Source/VCGS/Public"
 "$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$public" -o "$work/check" "$here/unreal-check/check.cpp"
 (cd "$work" && ./check)
 
+# The puzzle runtime (puzzle spec §6–§10): the sample with the built-in puzzle templates.
+puzzles="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles"' EXIT
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$puzzles" unreal puzzles > /dev/null)
+"$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$puzzles/Plugins/VCGS/Source/VCGS/Public" -o "$puzzles/puzzle_check" "$here/unreal-check/puzzle_check.cpp"
+(cd "$puzzles" && ./puzzle_check)
+
 # Unreal Header Tool writes the .generated.h files; for the check they are empty.
 mkdir -p "$work/generated"
 for header in "$public"/*.h; do : > "$work/generated/$(basename "${header%.h}").generated.h"; done

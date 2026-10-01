@@ -50,8 +50,8 @@ describe('the Puzzle Creator (puzzle spec)', () => {
     ]);
     // With nothing selected, the puzzle: its rule comes from its steps.
     expect(container.querySelector('.pz-says')!.textContent).toBe('(Rusted Lever is up and door_solved is yes)');
-    // Nothing stops it; its cues wait for puzzle export to reach the engines.
-    expect([...container.querySelectorAll('.pz-issue')].map((b) => b.textContent)).toEqual(['○ Its hints and what solving it plays are in the studio; puzzle export brings them to the engines.']);
+    expect(screen.getByText('✓ Nothing stops it being solved.')).toBeTruthy();
+    expect(container.querySelectorAll('.pz-issue')).toHaveLength(0);
     expect(screen.getByRole('button', { name: /Bronze Door/ })).toBeTruthy();
   });
 
@@ -128,11 +128,10 @@ describe('the Puzzle Creator (puzzle spec)', () => {
     const steps = screen.getByRole('tree', { name: 'Puzzle steps' });
     expect(within(steps).getByRole('treeitem', { name: 'Drain the seam, Sub-goal' }).textContent).toContain('SEQ');
     expect(within(steps).getByRole('treeitem', { name: 'Pull the Rusted Lever, Interaction' }).textContent).toContain('STATE');
-    // The optional step is a reward branch; the engines' approximation is said.
+    // The optional step is a clue branch.
     fireEvent.click(within(steps).getByRole('treeitem', { name: 'Hear Mara at the door, Requirement' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'clue' } });
     expect(within(steps).getByRole('treeitem', { name: 'Hear Mara at the door, Requirement' }).textContent).toContain('? clue');
-    expect(screen.getByText(/engines get the conditions its steps come to/)).toBeTruthy();
   });
 
   it('makes the safe-code puzzle from a template, adds an element and a step from it, traces the clues and keeps it as a template', async () => {

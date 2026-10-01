@@ -356,6 +356,8 @@ namespace vcgs
         void Tick(double dt)
         {
             Time += dt;
+            // Timed puzzle steps run on the play clock.
+            Game.AdvanceClock(dt);
             BurnLight(dt);
             // Patrols walk on, companions keep up (the same rules as the studio's Play Mode).
             for (auto& pair : Poses)
