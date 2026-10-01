@@ -47,7 +47,31 @@ interface Props {
   /** Show what the player collides with, and where they can walk from the start. */
   collision: boolean;
   walkable: boolean;
+  /** Items that are part of a puzzle: a small badge floats over each (puzzle spec §12). */
+  badges?: ReadonlyMap<string, string[]>;
 }
+
+/** The puzzle badge's picture, made once. */
+let badgeTexture: THREE.Texture | null = null;
+const badgeMap = () => {
+  if (badgeTexture) return badgeTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const g = canvas.getContext('2d');
+  if (g) {
+    g.fillStyle = '#6cc4d6';
+    g.beginPath();
+    g.arc(32, 32, 28, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#0b0a07';
+    g.font = 'bold 30px sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('?', 32, 34);
+  }
+  badgeTexture = new THREE.CanvasTexture(canvas);
+  return badgeTexture;
+};
 
 export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
   const { project, levelId, floorId, global } = props;
@@ -60,6 +84,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     content: THREE.Group;
     handles: THREE.Group;
     overlay: THREE.Group;
+    badges: THREE.Group;
     grid: THREE.GridHelper;
     sun: THREE.DirectionalLight;
     /** The map's extent (a building's footprint and height), as an outline. */
@@ -129,6 +154,8 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     scene.add(handles);
     const overlay = new THREE.Group();
     scene.add(overlay);
+    const badges = new THREE.Group();
+    scene.add(badges);
     const render = () => renderer.render(scene, camera);
     controls.addEventListener('change', render);
     const resize = () => {
@@ -140,7 +167,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     };
     const observer = new ResizeObserver(resize);
     observer.observe(el);
-    three.current = { renderer, scene, camera, controls, content, handles, overlay, grid, render, sun };
+    three.current = { renderer, scene, camera, controls, content, handles, overlay, badges, grid, render, sun };
     resize();
     return () => {
       observer.disconnect();
@@ -236,6 +263,31 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     if (editable) buildHandles(t.handles, set, editable, props.tool, props.axes, itemElevation, global);
     t.render();
   }, [set, editable, props.tool, props.axes, itemElevation, global]);
+
+  // A badge over each item in a puzzle, above its top.
+  useEffect(() => {
+    const t = three.current;
+    if (!t) return;
+    for (const c of [...t.badges.children]) {
+      t.badges.remove(c);
+      (c as THREE.Sprite).material.dispose();
+    }
+    const tops = new Map<string, { x: number; y: number; z: number }>();
+    for (const m of meshes) {
+      if (!props.badges?.has(m.itemId)) continue;
+      const top = m.y + m.sy / 2;
+      const had = tops.get(m.itemId);
+      if (!had || top > had.y) tops.set(m.itemId, { x: m.x, y: top, z: m.z });
+    }
+    for (const [, at] of tops) {
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeMap(), depthTest: false, transparent: true }));
+      sprite.position.set(at.x, at.y + 0.6, at.z);
+      sprite.scale.set(0.7, 0.7, 0.7);
+      sprite.renderOrder = 10;
+      t.badges.add(sprite);
+    }
+    t.render();
+  }, [meshes, props.badges]);
 
   // Collision and where the player can walk.
   const colliders = useMemo(

@@ -5,6 +5,8 @@ import type { AssetDefinition, PuzzleRole } from '../../model/level/types';
 import type { Project } from '../../model/types';
 import { Section } from './fields';
 import { useNav } from '../../nav';
+import { puzzleFromItem } from '../../model/puzzle/level-link';
+import { elementsOf } from '../../model/puzzle/elements';
 
 const Chip = ({ role, count }: { role: PuzzleRole; count?: number }) => {
   const r = roleOf(role);
@@ -126,6 +128,9 @@ export const ItemPuzzles = ({
             <span className="muted">{p.why}</span>
             {!p.bound && <span className="muted"> · read from the level</span>}
           </span>
+          <button className="icon-btn small" aria-label={`Open ${project.objects[p.puzzle]?.name} in the Puzzle Creator`} title="Open it in the Puzzle Creator" onClick={() => openPuzzle(p.puzzle)}>
+            ↗
+          </button>
           {p.bound && (
             <button className="icon-btn small" disabled={item.locked} aria-label={`Unbind ${roleOf(p.role).label} of ${project.objects[p.puzzle]?.name}`} title="Unbind: undoes what binding did" onClick={() => onCommit(unbindFromPuzzle(project, itemId, { puzzle: p.puzzle, role: p.role }, global))}>
               ×
@@ -133,6 +138,33 @@ export const ItemPuzzles = ({
           )}
         </div>
       ))}
+      {/* What it stands for in a puzzle (spec §12): the element it is linked to. */}
+      {all
+        .filter((pz) => !parts.some((p) => p.puzzle === pz.id) && elementsOf(project, pz.id).some((e) => item.links?.includes(e.id)))
+        .map((pz) => (
+          <div key={pz.id} className="lvl-puzzle-part-row">
+            <span className="lvl-puzzle-chip">🧩 Element</span>
+            <span>
+              {elementsOf(project, pz.id).find((e) => item.links?.includes(e.id))?.name} in <strong>{pz.name}</strong>
+            </span>
+            <button className="icon-btn small" aria-label={`Open ${pz.name} in the Puzzle Creator`} onClick={() => openPuzzle(pz.id)}>
+              ↗
+            </button>
+          </div>
+        ))}
+      <button
+        className="tb-btn small"
+        disabled={item.locked}
+        title="A room or area is where it is played; anything else is what it is about, its first element and step"
+        onClick={() => {
+          const made = puzzleFromItem(project, itemId, global);
+          if (!made.puzzleId) return;
+          onCommit(made.project);
+          if (nav.openPuzzles) nav.openPuzzles(made.puzzleId);
+        }}
+      >
+        🧩 New puzzle from this
+      </button>
       {!all.length ? (
         <p className="lvl-hint">No puzzles in the story yet: make one in the Puzzle Creator (the Bible), then bind this to it.</p>
       ) : (

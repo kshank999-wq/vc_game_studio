@@ -411,7 +411,12 @@ export const puzzleIssues = (project: Project, id: string): PuzzleIssue[] => {
     for (const r of n.requires ?? []) {
       const other = nodes.find((x) => x.id === r);
       if (!other) out.push({ severity: 'error', nodeId: n.id, message: `“${n.label}” needs a step that is gone.` });
-      else if (dependsOn(nodes, r, n.id)) out.push({ severity: 'error', nodeId: n.id, message: `“${n.label}” and “${other.label}” each need the other first: neither can be done.` });
+      else if (dependsOn(nodes, r, n.id))
+        out.push(
+          puzzle.data.cycles === 'allowed'
+            ? { severity: 'warning', nodeId: n.id, message: `“${n.label}” and “${other.label}” each need the other first (allowed: something else must break the circle).` }
+            : { severity: 'error', nodeId: n.id, message: `“${n.label}” and “${other.label}” each need the other first: neither can be done.` },
+        );
     }
     if (n.kind === 'goal' && n.within !== undefined && !(n.within > 0)) out.push({ severity: 'error', nodeId: n.id, message: `“${n.label}” has a time limit of nothing.` });
     if (n.kind === 'goal' && n.gate === 'sequence' && childrenOf(nodes, n.id).some((c) => c.optional)) out.push({ severity: 'warning', nodeId: n.id, message: `“${n.label}” is a sequence with optional steps: they are left out of the order.` });

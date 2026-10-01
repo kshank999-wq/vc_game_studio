@@ -1,4 +1,4 @@
-import { setData } from '../details';
+import { interactionsOf, setData } from '../details';
 import { newId } from '../project';
 import type { Project, StoryObject } from '../types';
 import type { PuzzleIssue } from './design';
@@ -143,6 +143,22 @@ export const elementIssues = (project: Project, puzzleId: string): PuzzleIssue[]
   for (const t of traceClues(project, puzzleId)) {
     if (!t.used) out.push({ severity: 'warning', elementId: t.clue.id, message: `The clue “${t.clue.name}” helps no step: say which it helps, or have a step need it known.` });
     if (t.reached === 'nothing' && t.info.mandatory) out.push({ severity: 'warning', elementId: t.clue.id, message: `Nothing reveals the clue “${t.clue.name}”: bind it to a clue in a level, or reveal it from an interaction.` });
+  }
+  // Unconnected (§13): no step uses it, nothing in the puzzle names it, and what it does changes nothing else.
+  const els = elementsOf(project, puzzleId);
+  const named = new Set<string>();
+  const collect = (x: unknown) => {
+    if (typeof x === 'string') named.add(x);
+    else if (Array.isArray(x)) x.forEach(collect);
+    else if (x && typeof x === 'object') Object.values(x).forEach(collect);
+  };
+  collect([puzzle.data.tree, puzzle.data.hints, puzzle.data.cues, puzzle.data.effects]);
+  for (const e of els) {
+    const others = els.filter((x) => x.id !== e.id);
+    const reachesOut = interactionsOf(e).some((i) => i.setsFlag || i.fires || i.effects?.length || i.screen);
+    const namedByOthers = others.some((x) => JSON.stringify(x.data).includes(`"${e.id}"`));
+    if (!isClue(e) && !named.has(e.id) && !namedByOthers && !reachesOut && !stepsUsing(project, puzzleId, e.id).length)
+      out.push({ severity: 'warning', elementId: e.id, message: `“${e.name}” is part of it, but nothing connects it: no step needs it, and it changes nothing a step does.` });
   }
   for (const e of elementsOf(project, puzzleId)) {
     if (elementKindOf(e) === 'code' && !String(e.data.answer ?? '').trim()) out.push({ severity: 'warning', elementId: e.id, message: `The code “${e.name}” has no true code yet.` });

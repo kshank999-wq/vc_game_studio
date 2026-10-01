@@ -10135,3 +10135,114 @@ button.bible-dual-col:hover {
   background: transparent;
   border: none;
 }
+
+/* Puzzle badges on the map (puzzle spec §12) */
+.lvl-puzzle-badge circle {
+  fill: #12100b;
+  stroke: #6cc4d6;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Puzzle testing (puzzle spec §13) and where a puzzle is (§14) */
+.pz-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pz-crumb {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gold);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pz-crumb:hover {
+  text-decoration: underline;
+}
+
+.pz-test {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pz-test-split {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr) minmax(200px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.pz-solve {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.pz-solve.yes {
+  border-color: #6cc46c;
+}
+
+.pz-solve.no {
+  border-color: #d85a4a;
+}
+
+.pz-path {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.pz-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pz-step-states {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.pz-step-states li.done button {
+  color: #9fe29f;
+}
+
+.pz-step-states li.locked button {
+  color: var(--muted);
+}
+
+.pz-solved-flag {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.pz-solved-flag.yes {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.pz-test-log {
+  max-height: 320px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #0b0a07;
+  font-size: 12px;
+  white-space: pre-wrap;
+}

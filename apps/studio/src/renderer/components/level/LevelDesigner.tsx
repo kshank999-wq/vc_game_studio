@@ -1,3 +1,4 @@
+import { elementsOf, itemsFor } from '../../model/puzzle/elements';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { assetOf, frameOf, type Point } from '../../model/level/geometry';
 import { findAsset } from '../../model/level/library';
@@ -142,6 +143,17 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const issues = useMemo(() => levelIssues(project, global), [project, global]);
   // Puzzles with a part on this map, and the ones the overlay shows.
   const onMap = useMemo(() => (level ? puzzlesOnMap(project, level.id, global) : []), [project, level, global]);
+  // Every item that is part of a puzzle, or stands for one of its elements, carries a badge (puzzle spec §12).
+  const badges = useMemo(() => {
+    const m = new Map<string, string[]>();
+    const add = (id: string, name: string) => m.set(id, [...new Set([...(m.get(id) ?? []), name])]);
+    for (const o of onMap) for (const part of o.parts) if (part.itemId) add(part.itemId, o.puzzle.name);
+    for (const pz of Object.values(project.objects)) {
+      if (pz.type !== 'puzzle') continue;
+      for (const e of elementsOf(project, pz.id)) for (const i of itemsFor(project, e.id)) if (i.levelId === level?.id) add(i.id, pz.name);
+    }
+    return m;
+  }, [onMap, project, level]);
   const shownPuzzles = useMemo(() => {
     if (!puzzleFocus) return onMap;
     const one = level && puzzleOverlay(project, puzzleFocus, level.id, global);
@@ -926,12 +938,14 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onOpen3D={(id) => (id && (childOfItem(set, id) || opensAsMap(set, id, global)) ? openChild(id) : open3D(id))}
             onHover={setHover}
             puzzles={overlays.puzzles ? shownPuzzles : undefined}
+            badges={badges}
             issues={issueMap}
           />
         ) : (
           <Suspense fallback={<div className="view-loading" role="status">Opening the graybox…</div>}>
             <Graybox
               ref={box}
+              badges={badges}
               project={project}
               levelId={level.id}
               floorId={floor.id}

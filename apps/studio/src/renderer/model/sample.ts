@@ -165,9 +165,9 @@ export const sunkenVault = (): Project => {
       { id: newId('pzn'), parentId: null, kind: 'requirement', label: 'Hear Mara at the door', optional: true, when: { kind: 'visited', ref: vaultDoor, op: 'visited' }, notes: 'Her warning is the clue: the water holds it shut.' },
     ]);
   }
-  // Its elements (puzzle spec §9): the lever is a lever, and the key is part of it; solving it plays a sound and a line (§11).
+  // Its elements (puzzle spec §9): the lever is a lever; solving it plays a sound and a line (§11). (The key turns after, in a choice.)
   p = setValue(p, lever, 'elementKind', 'lever');
-  p = setValue(p, puzzle, 'elements', [lever, key]);
+  p = setValue(p, puzzle, 'elements', [lever]);
   p = setValue(p, puzzle, 'cues', [
     { id: newId('cue'), kind: 'audio', text: 'Water drains from the seam with a long gurgle' },
     { id: newId('cue'), kind: 'message', text: 'The seam is dry. The bronze door shifts.' },

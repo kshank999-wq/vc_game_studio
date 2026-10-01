@@ -42,6 +42,8 @@ import { badgesOf } from './badges';
 import { CuesEditor, CluesTab, ElementInspector, ElementsTab } from './ElementsPanel';
 import { Field } from './Field';
 import { ScreenTab } from './ScreenPanel';
+import { TestTab } from './TestPanel';
+import { itemsForStep, placeOf } from '../../model/puzzle/level-link';
 import { forgetTemplate, saveTemplate, useTemplates } from './template-library';
 import { elementIssues } from '../../model/puzzle/clues';
 import { puzzleFromTemplate, templateFrom } from '../../model/puzzle/templates';
@@ -84,7 +86,7 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
   const templates = useTemplates();
   const [templateId, setTemplateId] = useState('');
   const [templateName, setTemplateName] = useState('');
-  const [tab, setTab] = useState<'writing' | 'steps' | 'graph' | 'elements' | 'clues' | 'screen'>(() => (focus && nodesOf(project.objects[focus]).length ? 'steps' : 'writing'));
+  const [tab, setTab] = useState<'writing' | 'steps' | 'graph' | 'elements' | 'clues' | 'screen' | 'test'>(() => (focus && nodesOf(project.objects[focus]).length ? 'steps' : 'writing'));
   const [query, setQuery] = useState('');
   const [newName, setNewName] = useState('');
   const [newScale, setNewScale] = useState<PuzzleScale>('area');
@@ -106,6 +108,8 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
       return parts.length ? [{ item: i, level: set.levels.find((l) => l.id === i.levelId)?.name ?? '', roles: parts.map((p) => p.role) }] : [];
     });
   }, [project, current]);
+
+  const place = useMemo(() => (current ? placeOf(project, current.id) : undefined), [project, current]);
 
   if (selected && !current && all[0]) setSelected(all[0].id);
 
@@ -294,6 +298,25 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
           </div>
         ) : (
           <>
+            {place && (
+              <nav className="pz-crumbs" aria-label="Where it is">
+                <span>{project.name}</span>
+                {place.maps.map((m) => (
+                  <span key={m.id}>› {m.name}</span>
+                ))}
+                {place.room && (
+                  <button className="pz-crumb" onClick={() => onOpenLevels?.(place.room!.id)}>
+                    › {place.room.name}
+                  </button>
+                )}
+                {place.item !== place.room && (
+                  <button className="pz-crumb" onClick={() => onOpenLevels?.(place.item.id)}>
+                    › {place.item.name}
+                  </button>
+                )}
+                <span>› {current.name}</span>
+              </nav>
+            )}
             <header className="pz-head">
               <span className="mono muted">{current.data.code ?? ''}</span>
               <h2>{current.name}</h2>
@@ -315,6 +338,9 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
                 </button>
                 <button role="tab" aria-selected={tab === 'screen'} className={tab === 'screen' ? 'on' : ''} onClick={() => setTab('screen')}>
                   Screen
+                </button>
+                <button role="tab" aria-selected={tab === 'test'} className={tab === 'test' ? 'on' : ''} onClick={() => setTab('test')}>
+                  Test
                 </button>
               </div>
             </header>
@@ -393,6 +419,8 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
               </div>
             ) : tab === 'elements' ? (
               <ElementsTab project={project} puzzleId={current.id} onCommit={onCommit} onSay={onSay} selected={element} onSelect={setElement} />
+            ) : tab === 'test' ? (
+              <TestTab key={current.id} project={project} puzzleId={current.id} onSelectNode={setNode} />
             ) : tab === 'screen' ? (
               <ScreenTab project={project} puzzleId={current.id} onCommit={onCommit} selected={element} onSelect={setElement} />
             ) : tab === 'clues' ? (
@@ -480,7 +508,7 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
             parentFor={null}
           />
         ) : current && picked ? (
-          <NodeInspector project={project} puzzleId={current.id} node={picked} goals={goals} onCommit={onCommit} onSay={onSay} onOpenBible={onOpenBible} />
+          <NodeInspector project={project} puzzleId={current.id} node={picked} goals={goals} onCommit={onCommit} onSay={onSay} onOpenBible={onOpenBible} onOpenLevels={onOpenLevels} />
         ) : current ? (
           <div className="pz-inspector">
             <span className="lvl-kind">Puzzle</span>
@@ -501,6 +529,9 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
             <RuleEditor project={project} rule={current.data.entry as Rule | undefined} label="Can begin when (empty: at once)" onChange={(r) => onCommit(setValue(project, current.id, 'entry', r))} />
             <EffectsEditor project={project} effects={current.data.effects as Effect[] | undefined} label="When solved" onChange={(e) => onCommit(setValue(project, current.id, 'effects', e))} />
             <CuesEditor project={project} puzzleId={current.id} onCommit={onCommit} />
+            <label className="lvl-toggle">
+              <input type="checkbox" checked={current.data.cycles === 'allowed'} onChange={(e) => onCommit(setValue(project, current.id, 'cycles', e.target.checked ? 'allowed' : undefined))} /> Circular links are intentional (something else breaks the circle)
+            </label>
             <section className="pz-sec">
               <span className="pz-label">In the levels</span>
               {places.length ? (
@@ -554,7 +585,8 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
 };
 
 /** The selected step: what it is, what marks it done (or the element to make for it), and where it sits. */
-const NodeInspector = ({ project, puzzleId, node, goals, onCommit, onSay, onOpenBible }: { project: Project; puzzleId: string; node: PuzzleNode; goals: PuzzleNode[]; onCommit: (p: Project) => void; onSay: (t: string) => void; onOpenBible: (id?: string) => void }) => {
+const NodeInspector = ({ project, puzzleId, node, goals, onCommit, onSay, onOpenBible, onOpenLevels }: { project: Project; puzzleId: string; node: PuzzleNode; goals: PuzzleNode[]; onCommit: (p: Project) => void; onSay: (t: string) => void; onOpenBible: (id?: string) => void; onOpenLevels?: (itemId?: string) => void }) => {
+  const placed = itemsForStep(project, puzzleId, node.id);
   const patch = (p: Partial<Omit<PuzzleNode, 'id'>>) => onCommit(updateNode(project, puzzleId, node.id, p));
   const nodes = nodesOf(project.objects[puzzleId]);
   const ref = node.when && project.objects[node.when.ref];
@@ -704,6 +736,21 @@ const NodeInspector = ({ project, puzzleId, node, goals, onCommit, onSay, onOpen
             ))}
         </select>
       </label>
+      {node.kind !== 'goal' && (
+        <section className="pz-sec">
+          <span className="pz-label">In the levels</span>
+          {placed.length ? (
+            placed.map((i) => (
+              <button key={i.id} className="lvl-link-go" onClick={() => onOpenLevels?.(i.id)}>
+                {i.name}
+                <span className="muted">locate it in the Level Designer ↗</span>
+              </button>
+            ))
+          ) : (
+            <p className="lvl-hint">Nothing in a level stands for it yet.</p>
+          )}
+        </section>
+      )}
       <Field label="Group" value={node.group ?? ''} placeholder="e.g. Study, Upstairs" onCommit={(v) => patch({ group: v.trim() || undefined })} />
       <Field label="Notes" multiline rows={3} value={node.notes ?? ''} onCommit={(v) => patch({ notes: v.trim() || undefined })} />
     </div>

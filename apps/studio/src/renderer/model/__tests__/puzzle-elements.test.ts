@@ -50,9 +50,9 @@ describe('the puzzle element library (puzzle spec §9, §11)', () => {
     const dial = addElement(project, id, 'dial');
     project = dial.project;
     expect(interactionsOf(project.objects[dial.elementId]).map((i) => `${i.when}→${i.becomes}`)).toEqual(['1→2', '2→3', '3→4', '4→1']);
-    // The sample's puzzle lists the lever and the key, and its steps name door_solved too.
+    // The sample's puzzle lists the lever, and its steps name door_solved too.
     const vault = Object.values(project.objects).find((o) => o.type === 'puzzle' && o.name === 'The Vault Door')!;
-    expect(elementsOf(project, vault.id).map((e) => e.name)).toEqual(['Rusted Lever', 'Vault Key', 'door_solved']);
+    expect(elementsOf(project, vault.id).map((e) => e.name)).toEqual(['Rusted Lever', 'door_solved']);
     expect(elementKindOf(byName(project, 'Rusted Lever'))).toBe('lever');
     project = unlinkElement(linkElement(project, id, byName(project, 'Vault Key').id), id, dial.elementId);
     expect(elementsOf(project, id).map((e) => e.name)).toEqual(['Vault Key']);

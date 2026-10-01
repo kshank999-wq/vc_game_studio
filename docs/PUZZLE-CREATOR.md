@@ -17,7 +17,8 @@ written once, here, and level items and other rules point at it.
 ## The screen (spec §14)
 
 - **Left:** the puzzle library (find, and **+ Puzzle** with a name and a scale), and the open puzzle's steps as a tree.
-- **Centre:** **Writing** (the puzzle in words and its definition), **Steps** (the hierarchy, to build), **Graph** (the same steps as a dependency graph), **Elements** (what it is made of), **Clues** (each clue and what it is for, and the staged hints) or **Screen** (the screen-puzzle canvas: design one and play it).
+- **Centre:** **Writing** (the puzzle in words and its definition), **Steps** (the hierarchy, to build), **Graph** (the same steps as a dependency graph), **Elements** (what it is made of), **Clues** (each clue and what it is for, and the staged hints) **Screen** (the screen-puzzle canvas: design one and play it) or **Test** (can the player solve it, and test mode).
+- **Above:** where it is, when it is in a level: Project › World › Level › Room › the item › the puzzle; the room and the item open the Level Designer on them.
 - **Left, under New puzzle:** **From a template…** (built in, or yours) and **+ From template**.
 - **Right:** what is selected: a step, or (nothing selected) the puzzle: when it is solved, when it can begin, what solving it does, where it is in the levels.
 - **Below:** what stops it being solved, each a click away from its step.
@@ -83,6 +84,20 @@ written once, here, and level items and other rules point at it.
 - **Checks:** a keypad with no code or a code using keys it hasn't got, a combination off the dial, an answer with a symbol not on it, a circuit that doesn't join even solved, switches that can never all be set right, linked rings that can never line up, an assembly slot with no part, a screen with no interaction to open it.
 - The built-in **Safe code** template's safe has its keypad: four digits from the Safe code element, three tries.
 
+## Testing it (spec §13)
+
+- **Can the player solve this?** searches what the player can do, through the same rules as the play-through: the interactions of the objects that matter (a screen puzzle's counted as solvable when nothing is wrong with it), the pickups and clues in the levels that give or reveal what it needs, the scenes its steps name. It follows back from what the steps need to what changes it, so it looks only at what can matter. It answers with the shortest way it found, in order, or says what stops it: steps that can never be done, needed clues that can never be found. It also says when a step is done before the player does anything (it can be skipped), and when the puzzle can be solved without a required step (a bypass, as when a puzzle's own rule asks for less than its steps). **From this test's state** asks again from wherever the test has got to.
+- **Test mode:** mark items carried, clues known, states and object states set, scenes reached; see what the player can do now (only what changes something), do it, and watch each step: done, can be done, or waiting. The test log says what was marked and done, and what that did.
+- **Checks** (below, all the time) add: elements nothing connects (no step needs them and they change nothing a step does), and circular links, which are errors unless the puzzle says **Circular links are intentional**, when they are warnings.
+
+## In the Level Designer (spec §12)
+
+- **🧩 New puzzle from this** (an item's Puzzles section): a room or area becomes where an area puzzle is played (its entry); anything else (a door, a safe, a terminal, an altar, a machine) becomes what an object puzzle is about: its element (the story element it stands for, or a new one of the kind its name suggests, linked to it) and its first step. The Puzzle Creator opens on it.
+- **Badges:** every item that is part of a puzzle, or stands for one of its elements, carries a 🧩 badge on the map and a marker over it in the 3D graybox; hover the badge for which puzzles.
+- **Locate:** a step's **In the levels** lists the items that stand for it; each opens the Level Designer with the item selected.
+- **Open the puzzle:** an item's Puzzles section has ↗ by each part it plays, and lists the puzzles whose element it stands for.
+- The logic stays in the Puzzle Creator; level items point at it.
+
 ## In the engines
 
 Elements are objects, items, lore, states and triggers, so they go to Godot, Unity and Unreal as they always have: their states, interactions, and (as fields) their kind, properties and clue fields. Staged hints, what solving it plays and screen puzzles wait for the puzzle engine phase (until then the interaction a screen opens on works as it is there); the panel below says so for a puzzle that has them.
@@ -92,7 +107,7 @@ Elements are objects, items, lore, states and triggers, so they go to Godot, Uni
 The Vault Door is written (its objective, concept, purpose, what the player
 knows) and built: **Drain the seam** (all of: *Pull the Rusted Lever*, the
 lever up; *The seam drains*, door_solved yes), and the optional *Hear Mara at
-the door*. It solves as it did before. The Rusted Lever is a lever element and the Vault Key is listed with it; solving it plays the water draining and a line on screen.
+the door*. It solves as it did before. The Rusted Lever is a lever element; solving it plays the water draining and a line on screen.
 
 ## Status against the spec
 
@@ -108,5 +123,7 @@ the door*. It solves as it did before. The Rusted Lever is a lever element and t
 | §9 Element library | Done: every kind, icons, properties, logic-only or linked to level items, personal templates. |
 | §10 Clue system | Done: form, content, location, discovery, knowledge, requirements supported, needed or optional, hint strength, used / unused, staged hints. |
 | §11 States and interactions | Done (the Bible's states and interactions, with the named states and verbs offered); what solving it plays. |
-| §12–§13 | Partly (the Level Designer's puzzle overlay and binding, basic validation); the full solvability pass, test mode and badges come later. |
+| §12 Level Designer | Done: a puzzle from a room or an object, badges in 2D and 3D, locate a step's items, open an item's puzzles, breadcrumbs, logic kept in the Puzzle Creator. |
+| §13 Validation and testing | Done: missing prerequisites, unconnected elements, circular links (unless intended), needed clues that can't be found, steps that can be skipped or bypassed, "Can the player solve this?", test mode with a log. |
+| §14 Layout | Done: library and tree left; writing, steps, graph, elements, clues, screen and test centre; inspector right; validation below; breadcrumbs above. |
 | Engines | The puzzle's compiled rule goes to every engine as before (sequence, links and fail-forward folded into it); the step progress, time limits, rewards and wrong moves come with the engine phase. |

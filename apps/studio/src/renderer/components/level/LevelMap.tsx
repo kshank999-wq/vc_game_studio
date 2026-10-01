@@ -53,6 +53,8 @@ interface Props {
   issues: ReadonlyMap<string, string>;
   /** Puzzles to show the parts of (spec V2 §14): entries, required objects, clues, gates and outputs. */
   puzzles?: readonly PuzzleOverlay[];
+  /** Items that are part of a puzzle, and which: each gets a small badge (puzzle spec §12). */
+  badges?: ReadonlyMap<string, string[]>;
 }
 
 type Drag =
@@ -819,6 +821,21 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
             />
           ))}
           {[...focused].sort((a, b) => order(a) - order(b)).filter((i) => assetOf(set, i, global).kind !== 'space').map((i) => drawItem(i))}
+          {focused
+            .filter((i) => props.badges?.has(i.id))
+            .map((i) => {
+              const c = corners(frameOf(set, i, global));
+              const at = { x: Math.max(...c.map((p) => p.x)), y: Math.min(...c.map((p) => p.y)) };
+              return (
+                <g key={`badge-${i.id}`} className="lvl-puzzle-badge" data-badge={i.id} pointerEvents="none">
+                  <title>{`Puzzle: ${props.badges!.get(i.id)!.join(', ')}`}</title>
+                  <circle cx={at.x} cy={at.y} r={px(8)} />
+                  <text x={at.x} y={at.y} fontSize={px(10)} textAnchor="middle" dominantBaseline="central">
+                    🧩
+                  </text>
+                </g>
+              );
+            })}
           {props.focusRoom && focusFrame && (
             <polygon points={pointsAttr(corners(focusFrame))} className="lvl-focus-ring" fill="none" stroke="var(--gold-hi)" strokeWidth={px(2)} strokeDasharray={`${px(8)} ${px(4)}`} pointerEvents="none" />
           )}

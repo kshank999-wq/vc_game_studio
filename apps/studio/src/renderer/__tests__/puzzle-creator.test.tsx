@@ -214,4 +214,29 @@ describe('the Puzzle Creator (puzzle spec)', () => {
     // The painting's Inspect changes nothing, so the tiles get an interaction of their own.
     expect((screen.getByRole('combobox', { name: 'Opens on' }) as HTMLSelectElement).selectedOptions[0]!.textContent).toBe('Slide the tiles');
   });
+
+  it('tests a puzzle: marks clues found, does what opens up, and asks whether the player can solve it', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    await opened();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Template' }), { target: { value: 'builtin.safe' } });
+    fireEvent.click(screen.getByRole('button', { name: '+ From template' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Test' }));
+    const states = () => within(screen.getByRole('list', { name: 'Step states' })).getAllByRole('listitem').map((li) => li.textContent);
+    expect(states()).toContain('○ Learn the first two digits can be done');
+    expect(states()).toContain('· Enter the code waits');
+    fireEvent.click(screen.getByRole('checkbox', { name: /First two digits known/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /The order known/ }));
+    expect(states()).toContain('✓ Work out the code done');
+    fireEvent.click(within(screen.getByRole('group', { name: 'Player actions' })).getByRole('button', { name: 'Safe: Enter code (solve its screen)' }));
+    expect(screen.getByText('★ Solved')).toBeTruthy();
+    expect(screen.getByLabelText('Test log').textContent).toContain('▸ Safe: Enter code (solve its screen)\n  ✓ Enter the code');
+    fireEvent.click(screen.getByRole('button', { name: 'Start the test again' }));
+    expect(screen.getByText('Not solved yet')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Can the player solve this?' }));
+    const verdict = screen.getByRole('status', { name: 'Solvability' });
+    expect(verdict.textContent).toContain('✓ Yes: in 3 actions, from the start');
+    expect(within(verdict).getAllByRole('listitem').map((li) => li.textContent)).toEqual(expect.arrayContaining(['Painting: Inspect', 'Desk drawer: Open']));
+  });
 });
