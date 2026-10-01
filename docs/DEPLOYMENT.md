@@ -12,6 +12,50 @@ for Mac or Windows. Projects stay on the customer's computer, as files.
 | Payments | The Stripe account VC Writer uses | Two plans (VC Game Writer, VC Game Studio), each monthly and yearly |
 | Email | Resend | The license email |
 
+## Setting it up: six commands
+
+Each step below is one command. Each is safe to run again, and all of them
+share one git-ignored file, `apps/web/.env.production.local`. Run them on
+your own computer, from the repository root, after `npm install`.
+
+1. **Start the file** with the keys only you hold:
+
+   ```bash
+   cp apps/web/.env.example apps/web/.env.production.local
+   ```
+
+   Fill in `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `STRIPE_SECRET_KEY` and `RESEND_API_KEY` (the same values VC Writer's
+   Vercel project uses). Also fill in two personal tokens that are only for
+   these steps and never uploaded:
+   - `VERCEL_TOKEN`: Vercel → Account Settings → Tokens;
+   - `SUPABASE_ACCESS_TOKEN`: supabase.com → Account → Access Tokens.
+2. `npm run setup -w @vcgs/web -- keys` makes the license key pair. It
+   prints the public half for GitHub.
+3. `npm run setup -w @vcgs/web -- stripe --writer-monthly=19 --writer-yearly=190 --studio-monthly=39 --studio-yearly=390`
+   (your prices) makes:
+   - the two products and four prices;
+   - the webhook (its secret goes into the file);
+   - **a customer portal of Game Studio's own**.
+
+   It must be its own portal: VC Writer's Writers Room uses the account's
+   default one, and its customers must not be offered Game Studio plans.
+4. `npm run setup -w @vcgs/web -- resend` adds vc-gamestudio.com to Resend,
+   puts its DNS records in Vercel and asks Resend to verify it.
+5. `npm run setup -w @vcgs/web -- supabase` adds
+   `https://vc-gamestudio.com/auth/callback` to the shared project's
+   sign-in redirect list, keeping VC Writer's entries. It also checks
+   whether the sign-in email shows the six-digit code the desktop app needs
+   (see Supabase below).
+6. `npm run setup -w @vcgs/web -- vercel` does the Vercel side:
+   - creates the `vc-game-studio` project, linked to this repository, with
+     root `apps/web`;
+   - attaches vc-gamestudio.com and www;
+   - uploads every variable from the file (secrets as write-only).
+
+`npm run setup -w @vcgs/web -- check` lists anything still missing. The
+manual equivalents of each step are described below.
+
 ## How a sale works
 
 1. The customer signs in on vc-gamestudio.com with an emailed link. It is the
@@ -56,7 +100,10 @@ It is tested against VC Writer's own suite. Apply it to `kshank999-wq/VCWriter`
 and deploy it before the first Game Studio sale:
 
 ```bash
-cd VCWriter && git apply ../vc_game_studio/docs/commerce/vcwriter-stripe-scope.patch
+cd VCWriter && git checkout main && git pull
+git apply ../vc_game_studio/docs/commerce/vcwriter-stripe-scope.patch
+git add -A && git commit -m "Stripe webhook: leave VC Game Studio's events alone, no licence for a room seat"
+git push   # main deploys vc-writer.com
 ```
 
 ## Vercel: the project
@@ -90,6 +137,7 @@ project.
 | `STRIPE_PRICE_WRITER_YEARLY` | Stripe price id | New |
 | `STRIPE_PRICE_STUDIO_MONTHLY` | Stripe price id | New |
 | `STRIPE_PRICE_STUDIO_YEARLY` | Stripe price id | New |
+| `STRIPE_PORTAL_CONFIGURATION` | `bpc_…`, made by the stripe step | New: Game Studio's own customer portal, so VC Writer's default portal is left as it is |
 | `RESEND_API_KEY` | Resend → API keys | Same as VC Writer, or a new key. **Secret** |
 | `RESEND_FROM_ADDRESS` | `VC Game Studio <noreply@vc-gamestudio.com>` | Needs vc-gamestudio.com verified in Resend |
 | `LICENSE_SIGNING_PRIVATE_KEY` | The first line printed by `npm run keys:license -w @vcgs/web` | **Secret.** Signs what the app may do |
@@ -137,7 +185,9 @@ with the new public key.
 3. **Customer portal** (Settings → Billing → Customer portal): allow
    cancelling, updating the card, and **switching plans between the four
    prices**. That switch is how a customer upgrades from VC Game Writer to VC
-   Game Studio. It is the same portal VC Writer's Writers Room uses.
+   Game Studio. Make this a **separate configuration**, not the default (VC
+   Writer's Writers Room uses the default), and put its id in
+   `STRIPE_PORTAL_CONFIGURATION`. The stripe setup step does all of this.
 4. **Stripe Tax:** checkout already asks for automatic tax, as VC Writer's
    does.
 

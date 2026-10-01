@@ -26,6 +26,8 @@ export async function POST(): Promise<Response> {
     const session = await stripe().billingPortal.sessions.create({
       customer: data.stripe_customer_id as string,
       return_url: `${env.siteUrl}/account`,
+      // Game Studio's plans to switch between, not VC Writer's default portal.
+      ...(env.stripePortalConfiguration ? { configuration: env.stripePortalConfiguration } : {}),
     });
     return NextResponse.json({ url: session.url });
   } catch (cause) {

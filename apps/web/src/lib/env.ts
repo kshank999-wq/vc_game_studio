@@ -61,6 +61,14 @@ export const env = {
       studio: { month: required('STRIPE_PRICE_STUDIO_MONTHLY'), year: required('STRIPE_PRICE_STUDIO_YEARLY') },
     };
   },
+  /**
+   * This product's own customer portal (made by `npm run setup -- stripe`).
+   * Not the account default, which VC Writer's Writers Room uses; without it
+   * the portal falls back to that default, so set it before selling.
+   */
+  get stripePortalConfiguration(): string | undefined {
+    return process.env['STRIPE_PORTAL_CONFIGURATION']?.trim() || undefined;
+  },
   get resendApiKey(): string {
     return required('RESEND_API_KEY');
   },
