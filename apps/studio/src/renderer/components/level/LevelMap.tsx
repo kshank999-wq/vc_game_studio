@@ -6,6 +6,7 @@ import type { AssetCategory, AssetDefinition, LevelItem, LevelSet, TravelKind, T
 import { spineSequence } from '../../model/layout';
 import { boundsOf as mapBoundsOf, itemsInRoom } from '../../model/level/hierarchy';
 import { referenceDepth, referencesOf } from '../../model/level/references';
+import { roleOf, type PuzzleOverlay } from '../../model/level/puzzles';
 import { addTravel, moveTravelPoint, travelLabel, travelLength, travelPoints } from '../../model/level/travel';
 import type { Project } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
@@ -50,6 +51,8 @@ interface Props {
   onOpen3D: (id: string) => void;
   onHover: (at: Point | null) => void;
   issues: ReadonlyMap<string, string>;
+  /** Puzzles to show the parts of (spec V2 §14): entries, required objects, clues, gates and outputs. */
+  puzzles?: readonly PuzzleOverlay[];
 }
 
 type Drag =
@@ -887,6 +890,61 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
                 </g>
               );
             })}
+          {(props.puzzles ?? []).map((o) => {
+            // Each part where it is, in its role's colour; what it needs and its clues lead in to where it is played, which leads out to what it opens.
+            const placed = o.parts
+              .map((part) => {
+                if (part.itemId) {
+                  const item = set.items.find((i) => i.id === part.itemId);
+                  if (!item || item.floorId !== floorId || item.levelId !== levelId) return null;
+                  const f = frameOf(set, item, global);
+                  return { part, f, at: { x: f.x, y: f.y } as Point };
+                }
+                const route = routes.find((r) => r.link.id === part.travelId);
+                return route ? { part, f: null, at: midpoint(route.points) } : null;
+              })
+              .filter((x): x is NonNullable<typeof x> => !!x);
+            if (!placed.length) return null;
+            const entries = placed.filter((x) => x.part.role === 'entry');
+            const ins = placed.filter((x) => x.part.role === 'required' || x.part.role === 'clue');
+            const centre = (xs: typeof placed) => ({ x: xs.reduce((n, x) => n + x.at.x, 0) / xs.length, y: xs.reduce((n, x) => n + x.at.y, 0) / xs.length });
+            const hub = entries.length ? entries[0]!.at : centre(ins.length ? ins : placed);
+            return (
+              <g key={`puzzle-${o.puzzle.id}`} className="lvl-puzzle" data-puzzle={o.puzzle.id} pointerEvents="none">
+                {placed
+                  .filter((x) => x.part.role !== 'entry')
+                  .map((x, n) => {
+                    const c = roleOf(x.part.role).color;
+                    const out = x.part.role === 'gate' || x.part.role === 'output';
+                    const [a, b] = out ? [hub, x.at] : [x.at, hub];
+                    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+                    const head = px(8);
+                    return Math.hypot(b.x - a.x, b.y - a.y) > px(12) ? (
+                      <g key={`link-${n}`} className="lvl-puzzle-link">
+                        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={c} strokeOpacity={0.7} strokeWidth={px(1.5)} strokeDasharray={`${px(5)} ${px(4)}`} />
+                        <path d={`M ${b.x} ${b.y} L ${b.x - head * Math.cos(ang - 0.4)} ${b.y - head * Math.sin(ang - 0.4)} M ${b.x} ${b.y} L ${b.x - head * Math.cos(ang + 0.4)} ${b.y - head * Math.sin(ang + 0.4)}`} stroke={c} strokeWidth={px(1.5)} fill="none" />
+                      </g>
+                    ) : null;
+                  })}
+                {placed.map((x, n) => {
+                  const r = roleOf(x.part.role);
+                  const corner = x.f ? corners(x.f)[1]! : x.at;
+                  return (
+                    <g key={`part-${n}`} className={`lvl-puzzle-part ${x.part.role}`} data-role={x.part.role} data-id={x.part.itemId ?? x.part.travelId}>
+                      {x.f && <polygon points={pointsAttr(corners(x.f))} fill="none" stroke={r.color} strokeWidth={px(x.part.bound ? 2.5 : 1.8)} strokeDasharray={x.part.bound ? undefined : `${px(4)} ${px(3)}`} />}
+                      <circle cx={corner.x} cy={corner.y} r={px(8)} fill={r.color} stroke="var(--ground)" strokeWidth={px(1)} />
+                      <text x={corner.x} y={corner.y + px(3.5)} fontSize={px(10)} textAnchor="middle" fill="#0b0a07" fontWeight={700}>
+                        {r.mark}
+                      </text>
+                    </g>
+                  );
+                })}
+                <text x={hub.x} y={hub.y + px(36)} fontSize={px(11)} textAnchor="middle" fill="#6cc4d6" className="lvl-puzzle-name">
+                  🧩 {o.puzzle.name}
+                </text>
+              </g>
+            );
+          })}
           {patrols.map((pt) => (
             <g key={`patrol-${pt.name}`} pointerEvents="none" className="lvl-patrol">
               <polygon points={pointsAttr(pt.stops)} fill="none" stroke="#d9607a" strokeOpacity={0.7} strokeWidth={px(1.5)} strokeDasharray={`${px(6)} ${px(4)}`} />

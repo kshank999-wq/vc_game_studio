@@ -47,6 +47,7 @@ import { BoolField, NumberField, RefField, Section, SelectField, TextField } fro
 import { itemsInRoom, anchorOf, boundsOf as mapBounds, BOUNDARIES, childOfItem, childrenOf, descendantsOf, kindLabel, kindOf, MAP_KINDS, moveMap, STATUSES, statusOf, updateMap } from '../../model/level/hierarchy';
 import { formatLength } from './units';
 import { ReferencesSection } from './ReferencesSection';
+import { ItemPuzzles, MapPuzzles } from './PuzzlesSection';
 import { canTravel, kindLabelOf, TRANSITIONS, TRAVEL_KINDS, travelById, travelLabel, travelLength, travelPoints, updateTravel } from '../../model/level/travel';
 import { emptyState } from '../../model/rules';
 
@@ -73,6 +74,8 @@ interface Props {
   focusRoom?: string | null;
   /** A line in the status bar. */
   onSay?: (text: string) => void;
+  /** Show a puzzle's parts on the map (spec V2 §14). */
+  onShowPuzzle?: (puzzleId: string) => void;
 }
 
 const LINKABLE: ObjectType[] = ['plotPoint', 'scene', 'environment', 'character', 'object', 'inventory', 'puzzle', 'cinematic', 'choice', 'dialogue', 'trigger', 'gate', 'state'];
@@ -196,6 +199,7 @@ export const LevelInspector = (props: Props) => {
         </Section>
         <MapSection project={project} levelId={level.id} global={global} open={!closed.has('map')} onToggle={() => toggle('map')} onCommit={onCommit} onOpenMap={props.onOpenMap} />
         <ReferencesSection project={project} levelId={level.id} floorId={floorId} global={global} open={!closed.has('references')} onToggle={() => toggle('references')} onCommit={onCommit} onSay={props.onSay} />
+        <MapPuzzles project={project} levelId={level.id} global={global} open={!closed.has('puzzles')} onToggle={() => toggle('puzzles')} onShow={props.onShowPuzzle} onOpenStory={props.onOpenStory} onOpenMap={props.onOpenMap} />
         <Section title="Floors" open={!closed.has('floors')} onToggle={() => toggle('floors')} count={floors.length}>
           {floors
             .slice()
@@ -493,6 +497,9 @@ export const LevelInspector = (props: Props) => {
               </div>
             </div>
           ) : null,
+        )}
+        {(!q || matches('puzzle entry required clue gate output')) && (
+          <ItemPuzzles project={project} itemId={item.id} global={global} open={!closed.has('puzzles') || !!q} onToggle={() => toggle('puzzles')} onCommit={onCommit} onOpenStory={props.onOpenStory} onShow={props.onShowPuzzle} />
         )}
         {(!q || matches('comments tasks history changes')) && (
           <Section title="Comments and history" open={!closed.has('collab') || !!q} onToggle={() => toggle('collab')} count={openCount(project, { kind: 'levelItem', id: item.id }) || undefined}>

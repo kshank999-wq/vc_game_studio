@@ -30,6 +30,7 @@ import type { Destination } from '../../model/details';
 import type { Project } from '../../model/types';
 import type { View } from '../../view';
 import type { ConfirmRequest } from '../canvas/StoryCanvas';
+import { puzzleOverlay, puzzlesOf, puzzlesOnMap } from '../../model/level/puzzles';
 import { forgetAsset, promoteAsset, useGlobalAssets } from './global-library';
 import type { GrayboxApi } from './Graybox';
 import { AssetIcon, LevelLibrary } from './LevelLibrary';
@@ -107,7 +108,9 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   pickRef.current = pick;
   const [leftTab, setLeftTab] = useState<'library' | 'outliner'>('library');
   const [hidden, setHidden] = useState<ReadonlySet<AssetCategory>>(() => new Set());
-  const [overlays, setOverlays] = useState({ story: true, dims: true, ghost: true });
+  const [overlays, setOverlays] = useState({ story: true, dims: true, ghost: true, puzzles: false });
+  // The puzzle shown on the map (spec V2 §14): one, or every puzzle with a part here ('').
+  const [puzzleFocus, setPuzzleFocus] = useState('');
   const [view3d, setView3d] = useState<{ ceilings: boolean; allFloors: boolean; logic: boolean; collision: boolean; walkable: boolean; tool: Tool3d; axes: Axes }>({
     ceilings: false,
     allFloors: false,
@@ -137,6 +140,18 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
 
   playingRef.current = !!playing;
   const issues = useMemo(() => levelIssues(project, global), [project, global]);
+  // Puzzles with a part on this map, and the ones the overlay shows.
+  const onMap = useMemo(() => (level ? puzzlesOnMap(project, level.id, global) : []), [project, level, global]);
+  const shownPuzzles = useMemo(() => {
+    if (!puzzleFocus) return onMap;
+    const one = level && puzzleOverlay(project, puzzleFocus, level.id, global);
+    return one ? [one] : [];
+  }, [onMap, puzzleFocus, project, level, global]);
+  const showPuzzle = (id: string) => {
+    setPuzzleFocus(id);
+    setOverlays((o) => ({ ...o, puzzles: true }));
+    setMode('2d');
+  };
   const levelIssuesHere = issues.filter((i) => i.levelId === level?.id);
   const issueMap = useMemo(() => new Map(issues.map((i) => [i.id, i.message])), [issues]);
 
@@ -693,6 +708,18 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             <label className="lvl-toggle"><input type="checkbox" checked={overlays.story} onChange={(e) => setOverlays((o) => ({ ...o, story: e.target.checked }))} /> Story</label>
             <label className="lvl-toggle"><input type="checkbox" checked={overlays.dims} onChange={(e) => setOverlays((o) => ({ ...o, dims: e.target.checked }))} /> Sizes</label>
             <label className="lvl-toggle"><input type="checkbox" checked={overlays.ghost} onChange={(e) => setOverlays((o) => ({ ...o, ghost: e.target.checked }))} /> Floor below</label>
+            <label className="lvl-toggle" title="Where each puzzle’s parts are: entry, required objects, clues, gates and outputs"><input type="checkbox" checked={overlays.puzzles} onChange={(e) => setOverlays((o) => ({ ...o, puzzles: e.target.checked }))} /> Puzzles</label>
+            {overlays.puzzles && (
+              <select className="inp small lvl-puzzle-pick" aria-label="Puzzle shown" value={puzzleFocus} onChange={(e) => setPuzzleFocus(e.target.value)}>
+                <option value="">Every puzzle here ({onMap.length})</option>
+                {puzzlesOf(project).map((pz) => (
+                  <option key={pz.id} value={pz.id}>
+                    {pz.name}
+                    {onMap.some((o) => o.puzzle.id === pz.id) ? '' : ' (nothing here yet)'}
+                  </option>
+                ))}
+              </select>
+            )}
           </>
         ) : (
           <>
@@ -898,6 +925,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onPlace={putDown}
             onOpen3D={(id) => (id && (childOfItem(set, id) || opensAsMap(set, id, global)) ? openChild(id) : open3D(id))}
             onHover={setHover}
+            puzzles={overlays.puzzles ? shownPuzzles : undefined}
             issues={issueMap}
           />
         ) : (
@@ -966,6 +994,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         onFocusRoom={setFocusRoom}
         focusRoom={focusRoom}
         onSay={onSay}
+        onShowPuzzle={showPuzzle}
       />
       {newWorld && (
         <NewWorldDialog

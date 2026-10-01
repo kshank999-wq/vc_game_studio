@@ -1,5 +1,6 @@
 import type { Project } from '../types';
 import { addLevel, linkItem, placeAsset, resizeItem, setOutline, setParam, updateItem, updateLevel } from './level';
+import { bindToPuzzle } from './puzzles';
 import type { LevelItem } from './types';
 
 /**
@@ -77,6 +78,9 @@ export const sampleLevel = (
   patch(mara, { rules: [{ id: 'rule_oil', on: 'interact', actions: [{ kind: 'refuel', target: start }] }] });
   const guide = put('pres.dialogue', 'Mara at the door', 12.5, -17);
   set(guide, { speaker: refs.mara });
+  // The Vault Door puzzle (spec V2 §14): played in the chamber, Mara's warning its clue. (The lever, the door and the water are read from the level.)
+  p = bindToPuzzle(p, vault, { puzzle: refs.puzzle, role: 'entry' });
+  p = bindToPuzzle(p, guide, { puzzle: refs.puzzle, role: 'clue' });
 
   // The key in the silt, and what it does.
   const key = put('play.item', 'Vault Key', 11.5, -10.5);

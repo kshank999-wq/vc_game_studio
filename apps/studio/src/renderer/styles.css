@@ -8992,3 +8992,66 @@ button.bible-dual-col:hover {
 .lvl-hint.warn {
   color: #e8a35c;
 }
+
+/* Puzzles in the level (Level Designer V2 §14) */
+.lvl-puzzle-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line, #2a2516);
+}
+
+.lvl-puzzle-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.lvl-puzzle-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 9px;
+  font-size: 11px;
+  white-space: nowrap;
+  flex: none;
+}
+
+.lvl-puzzle-part-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.lvl-puzzle-part-row > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.lvl-link-go.inline {
+  display: inline;
+  padding: 0;
+  width: auto;
+}
+
+.lvl-puzzle-bind {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.lvl-puzzle-bind select {
+  width: 100%;
+}
+
+.lvl-puzzle-pick {
+  width: auto;
+  max-width: 220px;
+  flex: none;
+}

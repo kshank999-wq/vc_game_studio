@@ -295,9 +295,26 @@ export interface LevelItem {
   /** Present in the level only while this holds (choices and state gates, spec §7.1). */
   activeWhen?: Rule;
   rules?: LevelRule[];
+  /** The parts it plays in puzzles (spec V2 §14): an entry, a required object, a clue, a gate, an output. */
+  puzzles?: PuzzleBinding[];
   /** Why a regeneration left it out of place (spec §5.3): flagged, never deleted. */
   invalid?: string;
   notes?: string;
+}
+
+/** What an item is to a puzzle (spec V2 §14). */
+export type PuzzleRole = 'entry' | 'required' | 'clue' | 'gate' | 'output';
+
+/**
+ * An item bound to a puzzle (spec V2 §14). The puzzle's logic stays in the
+ * puzzle: binding only points the item at it (and, for a step, at the story
+ * element the step is about), so nothing is written twice.
+ */
+export interface PuzzleBinding {
+  puzzle: string;
+  role: PuzzleRole;
+  /** The step it is: a story element the puzzle's rule needs (an object, an item, a trigger), or for a clue the lore it reveals. */
+  node?: string;
 }
 
 export interface Floor {
