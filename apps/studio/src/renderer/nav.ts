@@ -5,6 +5,8 @@ export interface Nav {
   openShots?: (cinematicId: string) => void;
   /** The Level Designer, on an item or on the items linked to a story element. */
   openLevels?: (focus?: string) => void;
+  /** The Puzzle Creator, on a puzzle. */
+  openPuzzles?: (puzzleId?: string) => void;
 }
 
 export const NavContext = createContext<Nav>({});

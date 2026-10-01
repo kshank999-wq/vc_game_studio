@@ -40,7 +40,8 @@ import { TYPE_LABEL } from '../../model/semantics';
 import type { ObjectType, Project, StoryObject } from '../../model/types';
 import { Symbol } from '../Symbol';
 import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
-import type { Effect, Rule } from '../../model/rules';
+import { describeRule, type Effect, type Rule } from '../../model/rules';
+import { nodesOf, treeDrives } from '../../model/puzzle/tree';
 
 /** What can stand somewhere in a level (spec §7): shown with where it is. */
 const LEVEL_TYPES = new Set<ObjectType>(['plotPoint', 'scene', 'environment', 'character', 'object', 'inventory', 'puzzle', 'cinematic', 'choice', 'dialogue', 'trigger', 'gate']);
@@ -423,8 +424,33 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
           {RULES[object.type]!.starts && !(object.data.byEffect && BY_EFFECT[object.type]?.rule === 'starts') && (
             <RuleEditor project={project} rule={object.data.starts as Rule | undefined} label={RULES[object.type]!.starts!} onChange={(r) => onCommit(setValue(project, id, 'starts', r))} />
           )}
-          {!(object.data.byEffect && BY_EFFECT[object.type]?.rule === 'rule') && (
-            <RuleEditor project={project} rule={object.data.rule as Rule | undefined} label={RULES[object.type]!.rule} onChange={(r) => onCommit(setValue(project, id, 'rule', r))} />
+          {object.type === 'puzzle' && treeDrives(object) ? (
+            // Its steps in the Puzzle Creator write this rule (puzzle spec §5): edit them there.
+            <div className="rule">
+              <div className="rule-head">
+                <span className="rule-label">{RULES[object.type]!.rule}</span>
+                <span className="rule-says">{describeRule(project, object.data.rule as Rule | undefined)}</span>
+              </div>
+              <p className="pref-hint">
+                Set by its {nodesOf(object).length} steps in the Puzzle Creator.{' '}
+                {nav.openPuzzles && (
+                  <button className="chip-add small" onClick={() => nav.openPuzzles?.(id)}>
+                    Open in the Puzzle Creator ↗
+                  </button>
+                )}
+              </p>
+            </div>
+          ) : (
+            !(object.data.byEffect && BY_EFFECT[object.type]?.rule === 'rule') && (
+              <>
+                <RuleEditor project={project} rule={object.data.rule as Rule | undefined} label={RULES[object.type]!.rule} onChange={(r) => onCommit(setValue(project, id, 'rule', r))} />
+                {object.type === 'puzzle' && nav.openPuzzles && (
+                  <button className="chip-add small" onClick={() => nav.openPuzzles?.(id)}>
+                    Build its steps in the Puzzle Creator ↗
+                  </button>
+                )}
+              </>
+            )
           )}
           {RULES[object.type]!.effects && (
             <EffectsEditor

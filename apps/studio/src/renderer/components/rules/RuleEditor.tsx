@@ -3,6 +3,7 @@ import { statesOf } from '../../model/details';
 import {
   EFFECTS,
   SUBJECTS,
+  describeCondition,
   describeEffects,
   describeRule,
   effectKindOf,
@@ -98,6 +99,28 @@ const ConditionRow = ({ project, condition, onChange, onRemove }: { project: Pro
       <button className="icon-btn small" aria-label="Remove condition" onClick={onRemove}>
         ×
       </button>
+    </div>
+  );
+};
+
+/** One condition (a puzzle step's "Done when"), or a way to give it one. */
+export const ConditionEditor = ({ project, condition, onChange, label }: { project: Project; condition: Condition | undefined; onChange: (c: Condition | undefined) => void; label: string }) => {
+  const firstKind: Condition['kind'] = objectsOf(project, 'inventory').length ? 'item' : objectsOf(project, 'state').length ? 'flag' : 'visited';
+  return (
+    <div className="rule">
+      <div className="rule-head">
+        <span className="rule-label">{label}</span>
+        <span className="rule-says">{condition ? describeCondition(project, condition) : 'Nothing yet'}</span>
+      </div>
+      {condition ? (
+        <ConditionRow project={project} condition={condition} onChange={onChange} onRemove={() => onChange(undefined)} />
+      ) : (
+        <div className="rule-add">
+          <button className="chip-add small" onClick={() => onChange(newCondition(firstKind, objectsOf(project, subjectOf(firstKind).type)[0]?.id ?? ''))}>
+            + Condition
+          </button>
+        </div>
+      )}
     </div>
   );
 };

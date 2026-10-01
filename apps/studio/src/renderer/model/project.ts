@@ -90,6 +90,21 @@ const CODE_FORMAT: Partial<Record<ObjectType, { prefix: string; pad: number }>> 
 };
 const SUBPLOT_POINT = { prefix: 'SP', pad: 0 };
 
+/** The codes new Bible entries get (the Bible and the Puzzle Creator number alike). */
+export const ENTRY_CODE: Partial<Record<ObjectType, { prefix: string; pad: number }>> = {
+  character: { prefix: 'CH-', pad: 2 },
+  environment: { prefix: 'ENV-', pad: 2 },
+  object: { prefix: 'OBJ-', pad: 2 },
+  inventory: { prefix: 'ITM-', pad: 2 },
+  puzzle: { prefix: 'PZ-', pad: 2 },
+  state: { prefix: 'ST-', pad: 2 },
+  lore: { prefix: 'LORE-', pad: 2 },
+  quest: { prefix: 'QST-', pad: 2 },
+  mechanic: { prefix: 'MEC-', pad: 2 },
+  encounter: { prefix: 'ENC-', pad: 2 },
+  skill: { prefix: 'SK-', pad: 2 },
+};
+
 /** The code format a type is numbered by on the graph, if it has one. */
 export const codeFormatFor = (type: ObjectType) => CODE_FORMAT[type];
 

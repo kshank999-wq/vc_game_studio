@@ -85,8 +85,8 @@ describe('export status', () => {
     const lever = Object.values(p.objects).find((o) => o.name === 'Rusted Lever')!;
     p = renameObject(p, lever.id, 'Old Lever');
     const edited = planHandoff(p);
-    // The lever, the scene that lists it, and the trigger whose rule watches it.
-    expect(edited.rows.filter((r) => r.status !== 'ready').map((r) => r.label).sort()).toEqual(['Old Lever', 'SC-03 The Vault Door', 'Seam drains', 'Sunken Vault']);
+    // The lever, the scene that lists it, and the trigger and the puzzle whose rules watch it.
+    expect(edited.rows.filter((r) => r.status !== 'ready').map((r) => r.label).sort()).toEqual(['Old Lever', 'SC-03 The Vault Door', 'Seam drains', 'Sunken Vault', 'The Vault Door']);
     expect(edited.rows.find((r) => r.label === 'Mara')!.status).toBe('ready');
   });
 

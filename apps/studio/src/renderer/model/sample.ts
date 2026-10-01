@@ -1,6 +1,6 @@
 import { addInteraction, interactionsOf, setField, setNotes, setSceneUse, setStates, setValue, toggleTag, updateInteraction } from './details';
 import { spineLane } from './layout';
-import { addLane, connect, createProject, makeObject, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
+import { addLane, connect, createProject, makeObject, newId, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
 import { sampleLevel } from './level/sample-level';
 import { addPath, pathOf, playBy } from './paths';
 import type { Who } from './collab';
@@ -8,6 +8,7 @@ import { addElement, addLine, setSceneData, updateLine, useInScene } from './sce
 import { addBranch, addEvent, moveEvent, sceneTimeline, updateBranch, updateEvent } from './timeline';
 import type { Condition } from './rules';
 import { addShot, updateShot } from './shots';
+import { setTree, updateDefinition } from './puzzle/design';
 import type { ObjectType, Project } from './types';
 
 /**
@@ -144,6 +145,26 @@ export const sunkenVault = (): Project => {
   p = setField(p, key, 'persists', 'Between scenes');
   p = setField(p, puzzle, 'solution', 'Drain the seam, then turn the key');
   p = setField(p, puzzle, 'failState', 'The chamber floods');
+  // Its design in the Puzzle Creator (puzzle spec §2, §4, §5): written first, then its steps, which decide when it is solved.
+  p = updateDefinition(p, puzzle, {
+    scale: 'area',
+    objective: 'Open the vault door',
+    concept: 'The vault door is a slab of green bronze held shut by water in its seam. Somewhere in the chamber an old sluice lever drains it; Mara knows there is one but not where. With the seam dry, the Vault Key turns.',
+    purpose: 'The Order sealed the vault. Getting it open is the turn of the act, and the moment Mara starts to trust the explorer.',
+    knows: 'The door is sealed and wet. Mara says the water is holding it shut and there is a lever somewhere.',
+    discoveries: 'Drain the seam:\nPull the Rusted Lever\nThe seam drains\n\nHear Mara at the door',
+    difficulty: 2,
+    minutes: 4,
+  });
+  {
+    const drainId = newId('pzn');
+    p = setTree(p, puzzle, [
+      { id: drainId, parentId: null, kind: 'goal', label: 'Drain the seam', gate: 'all' },
+      { id: newId('pzn'), parentId: drainId, kind: 'interaction', label: 'Pull the Rusted Lever', when: is('object', lever, 'up') },
+      { id: newId('pzn'), parentId: drainId, kind: 'requirement', label: 'The seam drains', when: is('flag', solved, 'yes') },
+      { id: newId('pzn'), parentId: null, kind: 'requirement', label: 'Hear Mara at the door', optional: true, when: { kind: 'visited', ref: vaultDoor, op: 'visited' }, notes: 'Her warning is the clue: the water holds it shut.' },
+    ]);
+  }
   p = setField(p, turn, 'prompt', 'Turn the key?');
   p = setField(p, cinematic, 'camera', 'Slow push in on the seam');
 

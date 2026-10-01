@@ -4,6 +4,7 @@ import { bindableNodes, bindToPuzzle, PUZZLE_ROLES, puzzleRolesOf, puzzlesOf, pu
 import type { AssetDefinition, PuzzleRole } from '../../model/level/types';
 import type { Project } from '../../model/types';
 import { Section } from './fields';
+import { useNav } from '../../nav';
 
 const Chip = ({ role, count }: { role: PuzzleRole; count?: number }) => {
   const r = roleOf(role);
@@ -40,6 +41,8 @@ export const MapPuzzles = ({
   onOpenMap?: (levelId: string) => void;
 }) => {
   const set = levelsOf(project);
+  const nav = useNav();
+  const openPuzzle = (id: string) => (nav.openPuzzles ? nav.openPuzzles(id) : onOpenStory(id));
   const here = puzzlesOnMap(project, levelId, global);
   const all = puzzlesOf(project);
   return (
@@ -64,7 +67,7 @@ export const MapPuzzles = ({
             <button className="tb-btn small" onClick={() => onShow?.(o.puzzle.id)}>
               Show on the map
             </button>
-            <button className="tb-btn small" onClick={() => onOpenStory(o.puzzle.id)} title="Its rule and what solving it does live there, once">
+            <button className="tb-btn small" onClick={() => openPuzzle(o.puzzle.id)} title="Its rule and what solving it does live there, once">
               Open in the Puzzle Creator ↗
             </button>
           </div>
@@ -100,6 +103,8 @@ export const ItemPuzzles = ({
   onShow?: (puzzleId: string) => void;
 }) => {
   const all = puzzlesOf(project);
+  const nav = useNav();
+  const openPuzzle = (id: string) => (nav.openPuzzles ? nav.openPuzzles(id) : onOpenStory(id));
   const item = levelsOf(project).items.find((i) => i.id === itemId);
   const [puzzle, setPuzzle] = useState('');
   const [role, setRole] = useState<PuzzleRole>('required');
@@ -170,7 +175,7 @@ export const ItemPuzzles = ({
               Bind
             </button>
             {chosen && (
-              <button className="tb-btn small" onClick={() => onOpenStory(chosen)}>
+              <button className="tb-btn small" onClick={() => openPuzzle(chosen)}>
                 Open in the Puzzle Creator ↗
               </button>
             )}

@@ -5,6 +5,7 @@ import { interactWith, present, startLevelPlay } from '../level/play';
 import { bindableNodes, bindToPuzzle, puzzleOverlay, puzzleRolesOf, puzzlesOf, puzzlesOnMap, puzzleSteps, unbindFromPuzzle } from '../level/puzzles';
 import { addTravel, updateTravel } from '../level/travel';
 import { sunkenVault } from '../sample';
+import { setValue } from '../details';
 import type { Project } from '../types';
 
 const setup = () => {
@@ -22,13 +23,17 @@ const named = (p: Project, id?: string) => levelsOf(p).items.find((i) => i.id ==
 describe('puzzles in the level (Level Designer spec V2 §14)', () => {
   it('reads a puzzle’s steps back from its rule: the state it needs, what sets it, and what that needs', () => {
     const { project, puzzle } = setup();
+    // The sample's steps (built in the Puzzle Creator) name the lever and the drained seam.
     expect(puzzleSteps(project, puzzle.id).map((s) => [s.name, s.type, s.depth])).toEqual([
+      ['Rusted Lever', 'object', 1],
       ['door_solved', 'state', 1],
       ['Seam drains', 'trigger', 1],
-      ['Rusted Lever', 'object', 2],
     ]);
+    // A step a step back: a rule of its own that only names door_solved still finds the lever through the trigger.
+    const plain = setValue(project, puzzle.id, 'rule', { match: 'all', items: [{ kind: 'flag', ref: Object.values(project.objects).find((o) => o.name === 'door_solved')!.id, op: 'is', value: 'yes' }] });
+    expect(puzzleSteps(plain, puzzle.id).map((s) => [s.name, s.depth])).toEqual([['door_solved', 1], ['Seam drains', 1], ['Rusted Lever', 2]]);
     // A required object binds to the steps there are things for; a clue to lore.
-    expect(bindableNodes(project, puzzle.id, 'required').map((n) => n.label)).toEqual(['Seam drains (sets door_solved)', 'Rusted Lever (Rusted Lever is up, for Seam drains)']);
+    expect(bindableNodes(project, puzzle.id, 'required').map((n) => n.label)).toEqual(['Rusted Lever (Rusted Lever is up)', 'Seam drains (sets door_solved)']);
     expect(bindableNodes(project, puzzle.id, 'clue').map((n) => n.label)).toContain('Reveals The Last Expedition');
   });
 
@@ -43,7 +48,7 @@ describe('puzzles in the level (Level Designer spec V2 §14)', () => {
       ['gate', 'Flooded seam', false],
     ]);
     expect(o.parts.find((p) => named(project, p.itemId) === 'Flooded seam')!.why).toBe('there while Rusted Lever is not up');
-    expect(o.parts.find((p) => named(project, p.itemId) === 'Rusted Lever')!.why).toBe('is Rusted Lever — Rusted Lever is up, for Seam drains');
+    expect(o.parts.find((p) => named(project, p.itemId) === 'Rusted Lever')!.why).toBe('is Rusted Lever — Rusted Lever is up');
     expect(puzzlesOnMap(project, level.id).map((x) => x.puzzle.name)).toEqual(['The Vault Door']);
   });
 

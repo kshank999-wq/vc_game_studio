@@ -36,6 +36,8 @@ interface Props {
   levelsOn?: boolean;
   /** The Note Sorter: raw notes into the game. */
   onNotes?: () => void;
+  onPuzzles?: () => void;
+  puzzlesOn?: boolean;
   /** Comments and changes (spec §16), with how many comments and tasks are open. */
   onComments?: () => void;
   openComments?: number;
@@ -181,6 +183,11 @@ export const TopBar = (props: Props) => {
       {props.onNotes && (
         <button className={`tb-btn levels-btn${props.notesOn ? ' on' : ''}`} title="Sort raw notes into the game: lore, characters, mechanics, scenes, levels" onClick={props.onNotes}>
           NOTES
+        </button>
+      )}
+      {props.onPuzzles && (
+        <button className={`tb-btn levels-btn${props.puzzlesOn ? ' on' : ''}`} title="Write puzzles, then build their steps: goals, requirements, clues, interactions" onClick={props.onPuzzles}>
+          PUZZLES
         </button>
       )}
       <button className={`tb-btn levels-btn${props.levelsOn ? ' on' : ''}`} title="Lay out levels: rooms, doors, pickups, triggers (Ctrl+L)" onClick={props.onLevels}>

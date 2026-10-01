@@ -109,7 +109,7 @@ export const HAS_ASSETS: readonly ObjectType[] = ['character', 'object', 'enviro
 
 export const PRODUCTION_TAGS = ['Art', 'Model', 'Rig', 'Animation', 'VFX', 'Audio', 'VO', 'Music', 'UI'] as const;
 
-const setData = (project: Project, id: string, patch: Record<string, unknown>): Project => {
+export const setData = (project: Project, id: string, patch: Record<string, unknown>): Project => {
   const object = project.objects[id];
   if (!object) return project;
   const data = { ...object.data };

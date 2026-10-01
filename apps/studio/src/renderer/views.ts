@@ -16,6 +16,7 @@ const loaders = {
   engine: () => import('./components/engine/EngineHandoff'),
   levels: () => import('./components/level/LevelDesigner'),
   notes: () => import('./components/notes/NoteSorter'),
+  puzzles: () => import('./components/puzzle/PuzzleCreator'),
   collab: preloadCollab,
 };
 
@@ -23,6 +24,7 @@ export const GameBible = lazy(() => loaders.bible().then((m) => ({ default: m.Ga
 export const ShotList = lazy(() => loaders.shots().then((m) => ({ default: m.ShotList })));
 export const PlayView = lazy(() => loaders.play().then((m) => ({ default: m.PlayView })));
 export const LevelDesigner = lazy(() => loaders.levels().then((m) => ({ default: m.LevelDesigner })));
+export const PuzzleCreator = lazy(() => loaders.puzzles().then((m) => ({ default: m.PuzzleCreator })));
 export const NoteSorter = lazy(() => loaders.notes().then((m) => ({ default: m.NoteSorter })));
 export const EngineHandoff = lazy(() => loaders.engine().then((m) => ({ default: m.EngineHandoff })));
 

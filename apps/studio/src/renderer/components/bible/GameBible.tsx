@@ -3,7 +3,7 @@ import { BibleChips } from './BibleChips';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { VIEWS, viewCount, viewGroups, voProgress, type Entry, type ViewKey } from '../../model/bible';
 import type { Destination } from '../../model/details';
-import { makeObject, nextCode } from '../../model/project';
+import { ENTRY_CODE, makeObject, nextCode } from '../../model/project';
 import { REPORTS, buildReport, type ReportKey } from '../../model/reports';
 import { speakers, updateLine } from '../../model/scene';
 import { TYPE_LABEL } from '../../model/semantics';
@@ -97,18 +97,7 @@ const CREATES: Partial<Record<ViewKey, ObjectType>> = {
   skills: 'skill',
 };
 
-const CREATE_CODE: Partial<Record<ObjectType, { prefix: string; pad: number }>> = {
-  character: { prefix: 'CH-', pad: 2 },
-  environment: { prefix: 'ENV-', pad: 2 },
-  object: { prefix: 'OBJ-', pad: 2 },
-  puzzle: { prefix: 'PZ-', pad: 2 },
-  state: { prefix: 'ST-', pad: 2 },
-  lore: { prefix: 'LORE-', pad: 2 },
-  quest: { prefix: 'QST-', pad: 2 },
-  mechanic: { prefix: 'MEC-', pad: 2 },
-  encounter: { prefix: 'ENC-', pad: 2 },
-  skill: { prefix: 'SK-', pad: 2 },
-};
+const CREATE_CODE = ENTRY_CODE;
 
 const viewFor = (project: Project, id: string | undefined): ViewKey => {
   const type = id ? project.objects[id]?.type : undefined;

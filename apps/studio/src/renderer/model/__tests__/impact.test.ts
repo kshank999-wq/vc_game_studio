@@ -17,7 +17,7 @@ describe('what a delete takes with it', () => {
 
   it('an element in rules elsewhere says which', () => {
     const lever = deletionImpact(p, id('Rusted Lever'));
-    expect(lever.some((l) => l.includes('will point at nothing: Seam drains'))).toBe(true);
+    expect(lever.some((l) => l.includes('will point at nothing: The Vault Door, Seam drains'))).toBe(true);
   });
 
   it('a scene: its script and timeline, and the elements only it used', () => {

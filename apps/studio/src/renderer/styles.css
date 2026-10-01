@@ -9055,3 +9055,438 @@ button.bible-dual-col:hover {
   max-width: 220px;
   flex: none;
 }
+
+/* ─── Puzzle Creator (puzzle spec §14) ─── */
+.pz {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 330px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'left centre right'
+    'left bottom right';
+  background: var(--ground);
+}
+
+.pz .inp.small {
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 12.5px;
+}
+
+.pz-left,
+.pz-right {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.pz-left {
+  grid-area: left;
+  border-right: 1px solid var(--border);
+}
+
+.pz-right {
+  grid-area: right;
+  border-left: 1px solid var(--border);
+}
+
+.pz-center {
+  grid-area: centre;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 22px 28px;
+}
+
+.pz-bottom {
+  grid-area: bottom;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  padding: 8px 14px;
+  max-height: 160px;
+  overflow-y: auto;
+  font-size: 12.5px;
+}
+
+.pz-new {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+
+.pz-new .inp:first-child {
+  grid-column: 1 / -1;
+}
+
+.pz-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pz-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-soft);
+  text-align: left;
+}
+
+.pz-item:hover {
+  background: var(--node);
+}
+
+.pz-item.on {
+  border-color: var(--gold-lo);
+  background: var(--node);
+  color: var(--text);
+}
+
+.pz-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.pz-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-error);
+}
+
+.pz-label {
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pz-tree-head {
+  margin-top: 8px;
+}
+
+.pz-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.pz-head h2 {
+  margin: 0;
+  flex: 1;
+  font-size: 20px;
+}
+
+.pz-empty {
+  max-width: 560px;
+  margin: 60px auto;
+  color: var(--text-soft);
+}
+
+.pz-writing,
+.pz-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+}
+
+.pz-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pz-field textarea {
+  resize: vertical;
+  font-family: var(--font-body, inherit);
+  line-height: 1.45;
+}
+
+.pz-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pz-scales {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.pz-scale {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--node);
+  cursor: pointer;
+}
+
+.pz-scale input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pz-scale.on {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold-lo);
+}
+
+.pz-discover {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.pz-discover .pz-field {
+  align-self: stretch;
+}
+
+.pz-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.pz-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.pz-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pz-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-soft);
+  text-align: left;
+  font-size: 13px;
+}
+
+.pz-tree.compact .pz-node {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.pz-node:hover {
+  background: var(--node);
+}
+
+.pz-node.on {
+  border-color: var(--gold-lo);
+  background: var(--node);
+  color: var(--text);
+}
+
+.pz-node.pz-k-goal .pz-mark {
+  color: var(--gold);
+}
+
+.pz-node.pz-k-requirement .pz-mark {
+  color: #4a86d8;
+}
+
+.pz-node.pz-k-interaction .pz-mark {
+  color: #6cc4d6;
+}
+
+.pz-node.optional {
+  opacity: 0.75;
+}
+
+.pz-node.broken .pz-node-label {
+  text-decoration: underline wavy var(--c-error);
+}
+
+.pz-node.root {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pz-node-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pz-badge {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--gold-lo);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--gold);
+}
+
+.pz-badge.soft {
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.pz-when {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+
+.pz-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pz-says {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.pz-make {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pz-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pz-issue {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  text-align: left;
+  color: var(--text-soft);
+}
+
+.pz-issue.error {
+  color: #f19a9d;
+}
+
+.pz-ok {
+  color: #8fc98a;
+}
+
+/* The top bar on narrower windows: what can go goes first, so every button stays in reach. */
+@media (max-width: 1720px) {
+  .topbar .view-name {
+    display: none;
+  }
+}
+
+@media (max-width: 1560px) {
+  .topbar .search-btn .tb-label,
+  .topbar .search-btn kbd,
+  .topbar .tb-btn .tb-label {
+    display: none;
+  }
+
+  .topbar .levels-btn {
+    letter-spacing: 0.06em;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .topbar .bible-btn {
+    padding: 0 12px;
+    letter-spacing: 0.1em;
+  }
+}
+
+@media (max-width: 1400px) {
+  .topbar .brand {
+    display: none;
+  }
+
+  .topbar .project-name {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar {
+    gap: 6px;
+  }
+
+  .topbar .menu-title {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .topbar .levels-btn {
+    letter-spacing: 0.03em;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .topbar .save-state {
+    display: none;
+  }
+
+  .topbar .project-name {
+    display: none;
+  }
+
+  .topbar .back-btn {
+    max-width: 104px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar .bible-btn {
+    padding: 0 8px;
+    letter-spacing: 0.04em;
+  }
+}
