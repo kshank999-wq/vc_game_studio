@@ -82,6 +82,12 @@ const EntryView = ({ entry }: { entry: Entry }) => {
       return <div className="play-effect">{entry.text}</div>;
     case 'fired':
       return <div className="play-fired">⚡ {entry.text}</div>;
+    case 'hint':
+      return (
+        <div className="play-hint">
+          💡 Hint · {entry.detail}: {entry.text}
+        </div>
+      );
     case 'skip':
       return (
         <div className="play-skip" title={`Needs: ${entry.needs}`}>

@@ -16,6 +16,8 @@ import {
   PRODUCTION_TAGS,
   USE_FIELDS,
   addInteraction,
+  STATE_NAMES,
+  VERBS,
   describeInteraction,
   initialState,
   interactionsOf,
@@ -112,7 +114,7 @@ const Text = ({ spec, value, onSave }: { spec: FieldSpec; value: string; onSave:
 );
 
 /** A list of states or values: chips in order, one of them where it starts. */
-const StateList = ({ object, onCommit, project, label }: { object: StoryObject; project: Project; onCommit: (p: Project) => void; label: string }) => {
+export const StateList = ({ object, onCommit, project, label }: { object: StoryObject; project: Project; onCommit: (p: Project) => void; label: string }) => {
   const states = statesOf(object);
   const start = initialState(object);
   const [adding, setAdding] = useState(false);
@@ -140,6 +142,7 @@ const StateList = ({ object, onCommit, project, label }: { object: StoryObject; 
             className="inp state-new"
             autoFocus
             placeholder="new state"
+            list="vcgs-state-names"
             onBlur={(e) => {
               setAdding(false);
               if (e.currentTarget.value.trim()) onCommit(setStates(project, object.id, [...states, e.currentTarget.value]));
@@ -154,12 +157,17 @@ const StateList = ({ object, onCommit, project, label }: { object: StoryObject; 
             + State
           </button>
         )}
+        <datalist id="vcgs-state-names">
+          {STATE_NAMES.filter((n) => !states.includes(n)).map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
       </div>
     </div>
   );
 };
 
-const Interactions = ({ object, project, onCommit }: { object: StoryObject; project: Project; onCommit: (p: Project) => void }) => {
+export const Interactions = ({ object, project, onCommit }: { object: StoryObject; project: Project; onCommit: (p: Project) => void }) => {
   const states = statesOf(object);
   const flags = Object.values(project.objects).filter((o) => o.type === 'state');
   const triggers = Object.values(project.objects).filter((o) => o.type === 'trigger');
@@ -172,7 +180,7 @@ const Interactions = ({ object, project, onCommit }: { object: StoryObject; proj
         return (
           <div key={i.id} className="interaction">
             <div className="interaction-row">
-              <input key={i.verb} className="inp verb" aria-label="Verb" defaultValue={i.verb} onBlur={(e) => save({ verb: e.currentTarget.value.trim() || 'Use' })} />
+              <input key={i.verb} className="inp verb" aria-label="Verb" list="vcgs-verbs" defaultValue={i.verb} onBlur={(e) => save({ verb: e.currentTarget.value.trim() || 'Use' })} />
               {states.length > 0 && (
                 <>
                   <select className="inp" aria-label="Only when" value={i.when ?? ''} onChange={(e) => save({ when: e.currentTarget.value })}>
@@ -237,6 +245,11 @@ const Interactions = ({ object, project, onCommit }: { object: StoryObject; proj
       <button className="chip-add small" onClick={() => onCommit(addInteraction(project, object.id))}>
         + Interaction
       </button>
+      <datalist id="vcgs-verbs">
+        {VERBS.map((v) => (
+          <option key={v} value={v} />
+        ))}
+      </datalist>
     </div>
   );
 };

@@ -166,6 +166,12 @@ export const setSceneUse = (project: Project, sceneId: string, id: string, key: 
 
 // ---------------------------------------------------------------- states and interactions
 
+/** Named states an object can have (puzzle spec §11), offered when adding one. */
+export const STATE_NAMES = ['Locked', 'Unlocked', 'Closed', 'Open', 'Powered', 'Broken', 'Solved', 'Empty', 'Full', 'Hidden', 'Revealed'] as const;
+
+/** Verbs an interaction can be (puzzle spec §11), offered when naming one. */
+export const VERBS = ['Inspect', 'Use', 'Combine', 'Enter code', 'Rotate', 'Push', 'Pull', 'Place', 'Remove', 'Activate'] as const;
+
 /** An interaction with an object: a verb, when it's allowed, and what it changes. */
 export interface Interaction {
   id: string;

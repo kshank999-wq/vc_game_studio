@@ -17,7 +17,8 @@ written once, here, and level items and other rules point at it.
 ## The screen (spec §14)
 
 - **Left:** the puzzle library (find, and **+ Puzzle** with a name and a scale), and the open puzzle's steps as a tree.
-- **Centre:** **Writing** (the puzzle in words and its definition), **Steps** (the hierarchy, to build) or **Graph** (the same steps as a dependency graph).
+- **Centre:** **Writing** (the puzzle in words and its definition), **Steps** (the hierarchy, to build), **Graph** (the same steps as a dependency graph), **Elements** (what it is made of) or **Clues** (each clue and what it is for, and the staged hints).
+- **Left, under New puzzle:** **From a template…** (built in, or yours) and **+ From template**.
 - **Right:** what is selected: a step, or (nothing selected) the puzzle: when it is solved, when it can begin, what solving it does, where it is in the levels.
 - **Below:** what stops it being solved, each a click away from its step.
 
@@ -49,12 +50,38 @@ written once, here, and level items and other rules point at it.
 - **Validation** adds: links to missing steps or round in a circle, a time limit of zero or less, a sequence with optional steps in it, a wrong move that isn't fail-forward in a puzzle that never resets (it can't be put right).
 - **In the engines (for now):** the engines get the condition the steps come to: a sequence as all of its steps, links as both holding, fail-forward as either; time limits, rewards and wrong moves aren't there yet. The panel below says so for a puzzle that uses them. The puzzle engine phase brings the progress itself to Godot, Unity and Unreal.
 
+## Elements (spec §9, §11)
+
+- **The library:** clue, key, code, note, symbol, lock, container, switch, lever, dial, button, pressure plate, movable object, collectible piece, power source, socket, sequence trigger, timer, door, reward, custom. Each has an icon, the story element it is (an object with states, an item, lore, a trigger), its states and verbs, and its own properties (a code's true code, a key's door, a timer's seconds, how many pieces).
+- **Add** one (named, or named after its kind) and it is in the Bible like any other element, and part of this puzzle. **+ one already in the Bible** adds an existing element. Elements a step names join the puzzle by themselves.
+- **States and interactions (§11):** an object's named states (Locked, Unlocked, Closed, Open, Powered, Broken, Solved, Empty, Full, Hidden, Revealed are offered, any name will do) and its interactions: a verb (inspect, use, combine, enter code, rotate, push, pull, place, remove, activate are offered), the state it needs, the state it leaves, a state it sets, a trigger it fires, what else it needs and what else it does. They are the Bible's own states and interactions, so the play-through, Play Mode and every engine play them already. A dial turns round through its positions.
+- **+ Step: (a state)** (an object) or **+ Step that needs it** (an item, a clue, a state) makes a step done when the element is so. The inspector lists the steps that use it and the level items that stand for it; an element can also stay a piece of logic with nothing placed.
+
+## Clues (spec §10)
+
+- A **clue** is lore, known once something reveals it, with its **form** (text, visual, audio, environmental), **what it is**, **where**, **how it is found** (inspect, read, hear, find, overhear, combine, be told), **what it tells the player**, its **hint strength** (subtle, moderate, explicit), whether it is **needed** or an optional extra, and the steps it **helps with**.
+- **Clues** lists them all with what each is for. A clue no step needs and that helps no step is marked **unused**; a needed clue nothing reveals (no interaction, trigger, level clue or other effect) says so.
+- **Staged hints:** each given once, after so many wrong moves, once its condition holds, or both, while the puzzle is under way (its entry rule holds). The play-through shows them; Play Mode shows them on screen.
+
+## What solving it plays (spec §11)
+
+- **When solved, it plays:** animations, audio, VFX, a message on screen, a dialogue, a cinematic. The play-through lists them; Play Mode plays the cinematic and shows the message. Doors and travel links it opens are bound in the Level Designer; items and state changes are **When solved**.
+
+## Templates (spec §9, §15)
+
+- **Save as a template** (with nothing selected, the puzzle's inspector) keeps its definition, steps, elements (with their states, interactions and clue fields), hints and cues on this computer, for any project. Anything outside the puzzle (a scene, a character) is left out, and counted.
+- **From a template…** makes a new puzzle with fresh elements in the Bible and fresh steps. Built in: **Safe code** (spec §7: a safe whose code is entered once two clues are found, a painting and a drawer that reveal them, an optional third clue, two staged hints), **Lever and door**, **Plates in order**. Forget one of yours with ×; puzzles made from it stay.
+
+## In the engines
+
+Elements are objects, items, lore, states and triggers, so they go to Godot, Unity and Unreal as they always have: their states, interactions, and (as fields) their kind, properties and clue fields. Staged hints and what solving it plays wait for the puzzle engine phase; the panel below says so for a puzzle that has them.
+
 ## The sample
 
 The Vault Door is written (its objective, concept, purpose, what the player
 knows) and built: **Drain the seam** (all of: *Pull the Rusted Lever*, the
 lever up; *The seam drains*, door_solved yes), and the optional *Hear Mara at
-the door*. It solves as it did before.
+the door*. It solves as it did before. The Rusted Lever is a lever element and the Vault Key is listed with it; solving it plays the water draining and a line on screen.
 
 ## Status against the spec
 
@@ -65,6 +92,10 @@ the door*. It solves as it did before.
 | §4 Definition | Done: id and title, purpose, objective, solution, difficulty, minutes, entry rule, success (its steps or a rule), failure, reset and tries, outputs (When solved). Location: the levels it is bound in (Level Designer V2 §14). |
 | §5 Hierarchy | Done: sub-goals, requirements, interactions, nested, ordered, optional, hidden, grouped, alternate paths (any), and the dependency graph (part of, needs first, drag to link). |
 | §6 Gates | Done in the studio: AND, OR, sequence, state, inventory, knowledge, needs first, timed, optional branches, rewards on done, wrong moves and fail-forward, with progress in the play-through and Play Mode. Engines: an approximation until the engine phase. |
-| §7–§11 | Next: clues, the element library, object states, screen-level puzzles. |
+| §7 Example | Done as the built-in Safe code template; entering the code on its own screen comes with §8. |
+| §8 Screen-level puzzles | Next. |
+| §9 Element library | Done: every kind, icons, properties, logic-only or linked to level items, personal templates. |
+| §10 Clue system | Done: form, content, location, discovery, knowledge, requirements supported, needed or optional, hint strength, used / unused, staged hints. |
+| §11 States and interactions | Done (the Bible's states and interactions, with the named states and verbs offered); what solving it plays. |
 | §12–§13 | Partly (the Level Designer's puzzle overlay and binding, basic validation); the full solvability pass, test mode and badges come later. |
 | Engines | The puzzle's compiled rule goes to every engine as before (sequence, links and fail-forward folded into it); the step progress, time limits, rewards and wrong moves come with the engine phase. |

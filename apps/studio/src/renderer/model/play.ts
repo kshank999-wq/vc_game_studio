@@ -1,6 +1,7 @@
 import { describeCost, kindOf, learnCheck, payFor, ranksOf, treeOf } from './skills';
 import { advance as advancePuzzle, type StepProgress } from './puzzle/progress';
 import { nodesOf, treeDrives, usesProgress } from './puzzle/tree';
+import { cuesOf, describeCue, dueHints, hintsOf } from './puzzle/staged';
 import { equipCheck, equipmentOf, isEquipped, statsOf, useCheck } from './equipment';
 import { craftCheck, recipeOf } from './crafting';
 import { initialState, interactionsOf, statesOf } from './details';
@@ -42,6 +43,8 @@ export interface PlayWorld extends PlayState {
   steps?: Record<string, StepProgress>;
   /** Seconds of play, where there is a clock (Play Mode): timed puzzle steps run on it. */
   clock?: number;
+  /** Staged hints already given, by hint (puzzle spec §10). */
+  hinted?: Record<string, boolean>;
 }
 
 export type { QuestState };
@@ -63,6 +66,8 @@ export type Entry =
   | { kind: 'did'; text: string }
   | { kind: 'effect'; text: string }
   | { kind: 'fired'; text: string }
+  /** A staged hint, given as the player struggles (puzzle spec §10). */
+  | { kind: 'hint'; text: string; detail: string }
   | { kind: 'quest'; text: string; state: QuestState; detail?: string }
   | { kind: 'encounter'; text: string; detail?: string }
   | { kind: 'lore'; text: string }
@@ -271,6 +276,8 @@ const solve = (d: Doing, id: string) => {
   if (d.world.solved[id] || !d.project.objects[id]) return;
   d.world = { ...d.world, solved: { ...d.world.solved, [id]: true } };
   d.log.push({ kind: 'fired', text: `${name(d.project, id)} is solved` });
+  // What solving it plays (puzzle spec §11): Play Mode plays its cinematic and shows its message.
+  for (const c of cuesOf(d.project.objects[id])) d.log.push({ kind: 'effect', text: `▶ ${describeCue(d.project, c)}` });
   doEffects(d, effectsOf(d.project.objects[id]));
 };
 
@@ -335,9 +342,24 @@ const settle = (d: Doing) => {
         }
       }
     }
-    if (!moved) return;
+    if (!moved) break;
   }
+  giveHints(d);
   d.world = { ...d.world, stats: statsOf(d.project, d.world) };
+};
+
+/** Staged hints (puzzle spec §10): for a puzzle under way, each once its wrong moves are made and its condition holds. */
+const giveHints = (d: Doing) => {
+  for (const o of Object.values(d.project.objects)) {
+    if (o.type !== 'puzzle' || d.world.solved[o.id] || !hintsOf(o).length) continue;
+    const entry = o.data.entry as Rule | undefined;
+    if (!isEmpty(entry) && !evaluate(entry, d.world)) continue;
+    const due = dueHints(o, d.world.steps?.[o.id]?.fails ?? 0, d.world.hinted ?? {}, (c) => evaluate({ match: 'all', items: [c] }, d.world));
+    for (const h of due) {
+      d.world = { ...d.world, hinted: { ...d.world.hinted, [h.id]: true } };
+      d.log.push({ kind: 'hint', text: h.text, detail: o.name });
+    }
+  }
 };
 
 /** A cinematic as it plays: its running time and camera notes, and each shot of its shot list. */

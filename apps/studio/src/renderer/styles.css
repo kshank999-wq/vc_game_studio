@@ -9639,3 +9639,138 @@ button.bible-dual-col:hover {
   margin-right: 6px;
   font-size: 12px;
 }
+
+/* Puzzle elements, clues, hints, cues (puzzle spec §9–§11) */
+.pz-elements,
+.pz-clues {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 900px;
+}
+
+.pz-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 6px;
+}
+
+.pz-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pz-kind:hover {
+  border-color: var(--gold-lo);
+}
+
+.pz-kind-icon {
+  flex: none;
+  width: 20px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.pz-element-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pz-element {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pz-element:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pz-element.on {
+  border-color: var(--gold-lo);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pz-element-name {
+  min-width: 140px;
+}
+
+.pz-element .muted {
+  flex: 1;
+  font-size: 12px;
+}
+
+.pz-clue-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.pz-clue-table th {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+.pz-clue-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: top;
+}
+
+.pz-warn {
+  color: #d8a14a;
+}
+
+.pz-hint,
+.pz-cue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.pz-hint .pz-field:first-of-type {
+  flex: 1;
+  min-width: 220px;
+}
+
+.pz-cue .inp:nth-of-type(3),
+.pz-cue input.inp {
+  flex: 1;
+  min-width: 120px;
+}
+
+.pz-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.play-hint {
+  margin: 4px 0;
+  color: #e8c46a;
+  font-size: 13px;
+}

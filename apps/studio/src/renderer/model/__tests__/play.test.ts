@@ -193,8 +193,8 @@ describe('quests and encounters', () => {
     const end = playThrough(rewarded);
     expect(end.world.quests[quest]).toBe('done');
     const texts = end.log.map((e) => `${e.kind}:${e.text}`);
-    // Done as the door is solved, and the reward is paid then, once (the key choice adds one more).
-    expect(texts.indexOf('quest:Open the vault', 1)).toBe(texts.indexOf('fired:The Vault Door is solved') + 1);
+    // Done as the door is solved (after the two cues solving it plays), and the reward is paid then, once (the key choice adds one more).
+    expect(texts.indexOf('quest:Open the vault', 1)).toBe(texts.indexOf('fired:The Vault Door is solved') + 3);
     expect(end.world.arcs[id(p, 'Mara')]).toBe(3);
   });
 

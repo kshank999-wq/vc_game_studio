@@ -1,6 +1,7 @@
 import { startPoses, stepActors, type ActorPose } from './actors';
 import { craftCheck, recipeOf, recipesOf } from '../crafting';
 import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
+import { cuesOf } from '../puzzle/staged';
 import { nodesOf, treeDrives } from '../puzzle/tree';
 import { applyStoryEffects, craftIn, gearIn, learnSkillIn, settleWorld, startWorld, useStoryObject, type Entry, type PlayWorld } from '../play';
 import { learnCheck, skillsOf } from '../skills';
@@ -222,11 +223,28 @@ const log = (state: LevelPlayState, entry: Omit<LevelLogEntry, 't'>): LevelPlayS
 const say = (state: LevelPlayState, text: string, seconds = 3): LevelPlayState => ({ ...state, message: { text, until: state.time + seconds } });
 
 const fromStory = (state: LevelPlayState, entries: Entry[], itemId?: string): LevelPlayState =>
-  entries.reduce((s, e) => ('text' in e ? log(s, { kind: e.kind === 'fired' ? 'event' : 'effect', text: e.text, itemId }) : s), state);
+  entries.reduce((s, e) => {
+    // A staged hint is shown, as well as logged (puzzle spec §10).
+    if (e.kind === 'hint') return say(log(s, { kind: 'info', text: `Hint (${e.detail}): ${e.text}`, itemId }), `Hint: ${e.text}`, 5);
+    return 'text' in e ? log(s, { kind: e.kind === 'fired' ? 'event' : 'effect', text: e.text, itemId }) : s;
+  }, state);
+
+/** What a puzzle solved just now plays (puzzle spec §11): its cinematic, its message. */
+const playSolveCues = (project: Project, before: PlayWorld, state: LevelPlayState): LevelPlayState => {
+  let s = state;
+  for (const id of Object.keys(s.world.solved)) {
+    if (!s.world.solved[id] || before.solved[id]) continue;
+    for (const c of cuesOf(project.objects[id])) {
+      if (c.kind === 'cinematic' && c.ref && project.objects[c.ref]?.type === 'cinematic' && !s.cinematic) s = playCinematic(project, s, c.ref);
+      else if (c.kind === 'message' && c.text) s = say(s, c.text, 4);
+    }
+  }
+  return s;
+};
 
 const changeWorld = (project: Project, state: LevelPlayState, world: PlayWorld, entries: Entry[], itemId: string | undefined, depth: number): LevelPlayState => {
   const before = JSON.stringify(state.world);
-  let next = fromStory({ ...state, world }, entries, itemId);
+  let next = playSolveCues(project, state.world, fromStory({ ...state, world }, entries, itemId));
   // Rules waiting on the story changing get their turn.
   if (depth < MAX_DEPTH && JSON.stringify(world) !== before) {
     const set = levelsOf(project);

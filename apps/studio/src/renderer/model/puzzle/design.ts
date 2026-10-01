@@ -387,6 +387,8 @@ export const nodeWhenText = (project: Project, node: PuzzleNode): string =>
 export interface PuzzleIssue {
   severity: 'error' | 'warning';
   nodeId?: string;
+  /** The element it is about (puzzle spec §9, §10). */
+  elementId?: string;
   message: string;
 }
 

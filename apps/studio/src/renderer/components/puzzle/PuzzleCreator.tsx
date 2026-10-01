@@ -39,6 +39,11 @@ import { setValue } from '../../model/details';
 import type { Project } from '../../model/types';
 import { ConditionEditor, EffectsEditor, RuleEditor } from '../rules/RuleEditor';
 import { badgesOf } from './badges';
+import { CuesEditor, CluesTab, ElementInspector, ElementsTab } from './ElementsPanel';
+import { Field } from './Field';
+import { forgetTemplate, saveTemplate, useTemplates } from './template-library';
+import { elementIssues } from '../../model/puzzle/clues';
+import { puzzleFromTemplate, templateFrom } from '../../model/puzzle/templates';
 import { PuzzleGraph } from './PuzzleGraph';
 
 interface Props {
@@ -55,26 +60,6 @@ interface Props {
 
 const KIND_MARK: Record<NodeKind, string> = { goal: '◆', requirement: '●', interaction: '▸' };
 
-/** A text field that commits when you leave it, so a paragraph is one undo step. */
-const Field = ({ label, value, onCommit, multiline, rows = 3, placeholder, hint }: { label: string; value: string; onCommit: (v: string) => void; multiline?: boolean; rows?: number; placeholder?: string; hint?: string }) => {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  const commit = () => {
-    if (draft !== value) onCommit(draft);
-  };
-  return (
-    <label className="pz-field">
-      <span className="pz-label">{label}</span>
-      {multiline ? (
-        <textarea className="inp" aria-label={label} rows={rows} value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} onBlur={commit} />
-      ) : (
-        <input className="inp" aria-label={label} value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()} />
-      )}
-      {hint && <span className="pref-hint">{hint}</span>}
-    </label>
-  );
-};
-
 /**
  * The Puzzle Creator (docs/specs/puzzle-creator-spec.md): write a puzzle in
  * plain words first (§2), define it (§4), then build it into a hierarchy of
@@ -85,8 +70,20 @@ const Field = ({ label, value, onCommit, multiline, rows = 3, placeholder, hint 
 export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, onSay, focus }: Props) => {
   const all = puzzles(project);
   const [selected, setSelected] = useState<string | null>(() => (focus && project.objects[focus]?.type === 'puzzle' ? focus : (all[0]?.id ?? null)));
-  const [node, setNode] = useState<string | null>(null);
-  const [tab, setTab] = useState<'writing' | 'steps' | 'graph'>(() => (focus && nodesOf(project.objects[focus]).length ? 'steps' : 'writing'));
+  const [node, setNodeOnly] = useState<string | null>(null);
+  const [element, setElementOnly] = useState<string | null>(null);
+  const setNode = (id: string | null) => {
+    setNodeOnly(id);
+    setElementOnly(null);
+  };
+  const setElement = (id: string | null) => {
+    setElementOnly(id);
+    setNodeOnly(null);
+  };
+  const templates = useTemplates();
+  const [templateId, setTemplateId] = useState('');
+  const [templateName, setTemplateName] = useState('');
+  const [tab, setTab] = useState<'writing' | 'steps' | 'graph' | 'elements' | 'clues'>(() => (focus && nodesOf(project.objects[focus]).length ? 'steps' : 'writing'));
   const [query, setQuery] = useState('');
   const [newName, setNewName] = useState('');
   const [newScale, setNewScale] = useState<PuzzleScale>('area');
@@ -95,7 +92,7 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
   const nodes = nodesOf(current);
   const picked = node ? nodes.find((n) => n.id === node) : undefined;
   const def = definitionOf(current);
-  const issues = useMemo(() => (current ? puzzleIssues(project, current.id) : []), [project, current]);
+  const issues = useMemo(() => (current ? [...puzzleIssues(project, current.id), ...elementIssues(project, current.id)] : []), [project, current]);
   const q = query.trim().toLowerCase();
   const shown = all.filter((p) => !q || `${p.data.code ?? ''} ${p.name} ${definitionOf(p).objective}`.toLowerCase().includes(q));
 
@@ -119,6 +116,26 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
     setTab('writing');
     setNewName('');
     onSay(`${newName.trim() || 'New puzzle'} made. Describe it in plain words first.`);
+  };
+
+  const fromTemplate = () => {
+    const t = templates.find((x) => x.id === templateId);
+    if (!t) return;
+    const made = puzzleFromTemplate(project, t, newName || undefined);
+    onCommit(made.project);
+    setSelected(made.id);
+    setNode(null);
+    setTab('steps');
+    setNewName('');
+    onSay(`${made.project.objects[made.id]!.name} made from “${t.name}”, with its elements in the Bible.`);
+  };
+
+  const keepAsTemplate = () => {
+    if (!current) return;
+    const { template, blanked } = templateFrom(project, current.id, templateName || current.name);
+    const kept = saveTemplate(template);
+    setTemplateName('');
+    onSay(`“${template.name}” is in your templates${kept ? '' : ' until the page closes (the browser had no room to keep it)'}.${blanked ? ` ${blanked} reference${blanked === 1 ? '' : 's'} to things outside the puzzle left out.` : ''}`);
   };
 
   const def1 = (patch: Partial<PuzzleDefinition>) => current && onCommit(updateDefinition(project, current.id, patch));
@@ -190,6 +207,48 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
             + Puzzle
           </button>
         </div>
+        <div className="pz-new">
+          <select className="inp small" aria-label="Template" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+            <option value="">From a template…</option>
+            <optgroup label="Built in">
+              {templates
+                .filter((t) => t.builtIn)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+            </optgroup>
+            {templates.some((t) => !t.builtIn) && (
+              <optgroup label="Mine">
+                {templates
+                  .filter((t) => !t.builtIn)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
+          <button className="tb-btn small" disabled={!templateId} onClick={fromTemplate}>
+            + From template
+          </button>
+          {templates.find((t) => t.id === templateId && !t.builtIn) && (
+            <button
+              className="icon-btn small"
+              aria-label="Forget this template"
+              title="Forget this template (puzzles made from it stay)"
+              onClick={() => {
+                forgetTemplate(templateId);
+                setTemplateId('');
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+        {templateId && <p className="pref-hint">{templates.find((t) => t.id === templateId)?.description}</p>}
         <input className="inp small" aria-label="Find a puzzle" placeholder="Find a puzzle" value={query} onChange={(e) => setQuery(e.target.value)} />
         <div className="pz-list" role="listbox" aria-label="Puzzle library">
           {shown.map((p) => {
@@ -246,6 +305,12 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
                 </button>
                 <button role="tab" aria-selected={tab === 'graph'} className={tab === 'graph' ? 'on' : ''} onClick={() => setTab('graph')}>
                   Graph
+                </button>
+                <button role="tab" aria-selected={tab === 'elements'} className={tab === 'elements' ? 'on' : ''} onClick={() => setTab('elements')}>
+                  Elements
+                </button>
+                <button role="tab" aria-selected={tab === 'clues'} className={tab === 'clues' ? 'on' : ''} onClick={() => setTab('clues')}>
+                  Clues
                 </button>
               </div>
             </header>
@@ -322,6 +387,10 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
                 </div>
                 <Field label="What a failure does" value={def.failState} placeholder="The chamber floods" onCommit={(v) => def1({ failState: v })} />
               </div>
+            ) : tab === 'elements' ? (
+              <ElementsTab project={project} puzzleId={current.id} onCommit={onCommit} onSay={onSay} selected={element} onSelect={setElement} />
+            ) : tab === 'clues' ? (
+              <CluesTab project={project} puzzleId={current.id} onCommit={onCommit} onSay={onSay} onSelect={setElement} />
             ) : tab === 'graph' ? (
               nodes.length ? (
                 <PuzzleGraph
@@ -389,7 +458,22 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
       </section>
 
       <aside className="pz-right" aria-label="Properties">
-        {current && picked ? (
+        {current && element && project.objects[element] ? (
+          <ElementInspector
+            project={project}
+            puzzleId={current.id}
+            elementId={element}
+            onCommit={onCommit}
+            onSay={onSay}
+            onOpenBible={onOpenBible}
+            onOpenLevels={onOpenLevels}
+            onSelectNode={(id) => {
+              setNode(id);
+              setTab('steps');
+            }}
+            parentFor={null}
+          />
+        ) : current && picked ? (
           <NodeInspector project={project} puzzleId={current.id} node={picked} goals={goals} onCommit={onCommit} onSay={onSay} onOpenBible={onOpenBible} />
         ) : current ? (
           <div className="pz-inspector">
@@ -410,6 +494,7 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
             </section>
             <RuleEditor project={project} rule={current.data.entry as Rule | undefined} label="Can begin when (empty: at once)" onChange={(r) => onCommit(setValue(project, current.id, 'entry', r))} />
             <EffectsEditor project={project} effects={current.data.effects as Effect[] | undefined} label="When solved" onChange={(e) => onCommit(setValue(project, current.id, 'effects', e))} />
+            <CuesEditor project={project} puzzleId={current.id} onCommit={onCommit} />
             <section className="pz-sec">
               <span className="pz-label">In the levels</span>
               {places.length ? (
@@ -425,6 +510,16 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
                 <p className="lvl-hint">Not in a level yet. In the Level Designer, select an item and bind it under Puzzles.</p>
               )}
             </section>
+            <section className="pz-sec">
+              <span className="pz-label">Keep as a template</span>
+              <div className="pz-row">
+                <input className="inp small" aria-label="Template name" placeholder={current.name} value={templateName} onChange={(e) => setTemplateName(e.target.value)} />
+                <button className="tb-btn small" onClick={keepAsTemplate}>
+                  Save as a template
+                </button>
+              </div>
+              <span className="pref-hint">Its definition, steps, elements, clues, hints and cues, for any project on this computer.</span>
+            </section>
             <button className="tb-btn small" onClick={() => onOpenBible(current.id)}>
               Open in the Bible ↗
             </button>
@@ -438,7 +533,7 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
             <ul className="pz-issues">
               {issues.map((i, n) => (
                 <li key={n}>
-                  <button className={`pz-issue ${i.severity}`} onClick={() => i.nodeId && (setNode(i.nodeId), setTab('steps'))}>
+                  <button className={`pz-issue ${i.severity}`} onClick={() => (i.nodeId ? (setNode(i.nodeId), setTab('steps')) : i.elementId && (setElement(i.elementId), setTab('elements')))}>
                     {i.severity === 'error' ? '●' : '○'} {i.message}
                   </button>
                 </li>

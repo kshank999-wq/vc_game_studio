@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { sunkenVault } from '../model/sample';
 import { resetPreferences } from '../preferences';
+import { resetTemplateCache } from '../components/puzzle/template-library';
 
 const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull(), { timeout: 5000 });
 
@@ -20,6 +21,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   resetPreferences();
+  resetTemplateCache();
 });
 
 const write = (label: string, text: string) => {
@@ -48,7 +50,8 @@ describe('the Puzzle Creator (puzzle spec)', () => {
     ]);
     // With nothing selected, the puzzle: its rule comes from its steps.
     expect(container.querySelector('.pz-says')!.textContent).toBe('(Rusted Lever is up and door_solved is yes)');
-    expect(screen.getByText('✓ Nothing stops it being solved.')).toBeTruthy();
+    // Nothing stops it; its cues wait for puzzle export to reach the engines.
+    expect([...container.querySelectorAll('.pz-issue')].map((b) => b.textContent)).toEqual(['○ Its hints and what solving it plays are in the studio; puzzle export brings them to the engines.']);
     expect(screen.getByRole('button', { name: /Bronze Door/ })).toBeTruthy();
   });
 
@@ -130,5 +133,53 @@ describe('the Puzzle Creator (puzzle spec)', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Branch' }), { target: { value: 'clue' } });
     expect(within(steps).getByRole('treeitem', { name: 'Hear Mara at the door, Requirement' }).textContent).toContain('? clue');
     expect(screen.getByText(/engines get the conditions its steps come to/)).toBeTruthy();
+  });
+
+  it('makes the safe-code puzzle from a template, adds an element and a step from it, traces the clues and keeps it as a template', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    await opened();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Template' }), { target: { value: 'builtin.safe' } });
+    fireEvent.click(screen.getByRole('button', { name: '+ From template' }));
+    expect(screen.getByRole('heading', { name: 'Safe code' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Elements' }));
+    const list = () => screen.getByRole('listbox', { name: 'Puzzle elements' });
+    expect(within(list()).getAllByRole('option').map((o) => o.querySelector('.pz-element-name')!.textContent)).toEqual(['Safe', 'Safe code', 'First two digits', 'The order', 'Confirmation', 'Painting', 'Desk drawer']);
+    fireEvent.change(screen.getByRole('textbox', { name: 'New element name' }), { target: { value: 'Brass lever' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Lever' }));
+    expect(within(list()).getByRole('option', { name: /Brass lever/ }).getAttribute('aria-selected')).toBe('true');
+    expect(within(list()).getByRole('option', { name: /Brass lever/ }).textContent).toContain('Down → Up');
+    expect(screen.getAllByRole('combobox', { name: 'Verb' }).map((v) => (v as HTMLInputElement).value)).toEqual(['Pull', 'Push']);
+    fireEvent.click(screen.getByRole('button', { name: '+ Step: Up' }));
+    expect(within(screen.getByRole('tree', { name: 'Puzzle steps' })).getByRole('treeitem', { name: 'Brass lever: Up, Interaction' }).textContent).toContain('Brass lever is Up');
+
+    // The clues and what each is for; the optional one says so.
+    fireEvent.click(screen.getByRole('tab', { name: 'Clues' }));
+    const rows = within(screen.getByRole('table', { name: 'Clues' })).getAllByRole('row').slice(1);
+    expect(rows.map((r) => r.querySelector('td')!.textContent)).toEqual(['First two digitsneeded', 'The orderneeded', 'Confirmationoptional']);
+    expect(rows[0]!.textContent).toContain('Learn the first two digits');
+    expect(rows[0]!.textContent).toContain('revealed');
+    fireEvent.click(within(rows[1]!).getByRole('button', { name: /The order/ }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Hint strength' }), { target: { value: 'Explicit' } });
+    expect(within(screen.getByRole('table', { name: 'Clues' })).getAllByRole('row')[2]!.textContent).toContain('Explicit');
+    expect(screen.getAllByRole('textbox', { name: /^Hint \d$/ })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: '+ Hint' }));
+    expect(screen.getAllByRole('textbox', { name: /^Hint \d$/ })).toHaveLength(3);
+
+    // The puzzle: its cues, and kept as a template of mine.
+    fireEvent.click(within(screen.getByRole('tree', { name: 'Steps' })).getAllByRole('treeitem')[0]!);
+    expect(screen.getAllByRole('textbox', { name: /^Cue \d$/ }).map((c) => (c as HTMLInputElement).value)).toEqual(['A heavy click', 'The safe door swings open']);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Template name' }), { target: { value: 'Study safe' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save as a template' }));
+    const mine = within(screen.getByRole('combobox', { name: 'Template' })).getByRole('option', { name: 'Study safe' }) as HTMLOptionElement;
+    fireEvent.change(screen.getByRole('combobox', { name: 'Template' }), { target: { value: mine.value } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'New puzzle name' }), { target: { value: 'The Attic Safe' } });
+    fireEvent.click(screen.getByRole('button', { name: '+ From template' }));
+    expect(screen.getByRole('heading', { name: 'The Attic Safe' })).toBeTruthy();
+    expect(within(screen.getByRole('tree', { name: 'Puzzle steps' })).getAllByRole('treeitem')).toHaveLength(7);
+    expect(JSON.parse(localStorage.getItem('vcgs.puzzle-templates.v1')!)[0].name).toBe('Study safe');
+    expect(container.querySelector('.pz-bottom')!.textContent).not.toContain('Nothing reveals');
   });
 });
