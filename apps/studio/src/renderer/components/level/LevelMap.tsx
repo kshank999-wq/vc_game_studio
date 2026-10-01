@@ -2,9 +2,10 @@ import { patrolStops } from '../../model/level/actors';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { areaOf, assetOf, boundsOf, CATEGORY_COLOR, contains, corners, frameOf, INVALID_COLOR, meshesFor, num, outlineOf, paramOf, selfIntersects, toLocal, toPlan, triangulate, type Frame, type Point } from '../../model/level/geometry';
 import { insertCorner, levelsOf, mapGrid, moveCorner, pivotPoint, moveItems, placeAsset, placeAt, removeCorner, resizeItem, setOutline, snap, withGroups } from '../../model/level/level';
-import type { AssetCategory, AssetDefinition, LevelItem, LevelSet } from '../../model/level/types';
+import type { AssetCategory, AssetDefinition, LevelItem, LevelSet, TravelKind, TravelLink } from '../../model/level/types';
 import { spineSequence } from '../../model/layout';
 import { boundsOf as mapBoundsOf } from '../../model/level/hierarchy';
+import { addTravel, moveTravelPoint, travelLabel, travelLength, travelPoints } from '../../model/level/travel';
 import type { Project } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
 import type { View } from '../../view';
@@ -20,8 +21,8 @@ export interface MapApi {
   frame: (ids?: readonly string[]) => void;
 }
 
-/** Select and move; drag out a rectangle; or click the corners of a freeform outline. */
-export type MapTool = 'select' | 'draw' | 'outline';
+/** Select and move; drag out a rectangle; click the corners of a freeform outline; or draw a route between places. */
+export type MapTool = 'select' | 'draw' | 'outline' | 'route';
 
 interface Props {
   project: Project;
@@ -38,6 +39,8 @@ interface Props {
   tool: MapTool;
   /** What the draw tool draws. */
   drawAsset: string;
+  /** What the route tool draws (spec V2 §5). */
+  routeKind?: TravelKind;
   /** An asset picked up from the library: the next click puts it down. */
   placing: string | null;
   onPlace: (at: Point) => void;
@@ -53,7 +56,8 @@ type Drag =
   | { kind: 'draw'; start: Point; at: Point }
   | { kind: 'corner'; id: string; index: number; moved: boolean }
   | { kind: 'insert'; id: string; wall: number; at: Point; moved: boolean }
-  | { kind: 'marquee'; start: Point; at: Point; base: string[] };
+  | { kind: 'marquee'; start: Point; at: Point; base: string[] }
+  | { kind: 'routePoint'; id: string; index: number; moved: boolean };
 
 const HANDLES: { key: string; lx: number; ly: number }[] = [
   { key: 'nw', lx: -1, ly: -1 },
@@ -66,7 +70,39 @@ const HANDLES: { key: string; lx: number; ly: number }[] = [
   { key: 'w', lx: -1, ly: 0 },
 ];
 
+/** How each kind of route is drawn (spec V2 §5): roads wide, trails dashed, rivers blue, fast travel dotted. */
+const ROUTE_STYLE: Partial<Record<TravelKind, { color: string; width: number; dash?: number[]; opacity?: number }>> = {
+  road: { color: '#c2a56c', width: 4 },
+  trail: { color: '#a8916a', width: 2, dash: [6, 4] },
+  river: { color: '#5e9fc0', width: 6, opacity: 0.75 },
+  route: { color: '#c9a45c', width: 2.5 },
+  progression: { color: '#d9607a', width: 2.5, dash: [10, 5] },
+  fastTravel: { color: '#b07fd0', width: 2.5, dash: [2, 5] },
+  door: { color: '#8fa8c4', width: 2, dash: [8, 4, 2, 4] },
+  elevator: { color: '#8fa8c4', width: 2, dash: [8, 4, 2, 4] },
+  portal: { color: '#6cc4d6', width: 2, dash: [8, 4, 2, 4] },
+  cinematic: { color: '#9a7fc0', width: 2, dash: [8, 4, 2, 4] },
+  loading: { color: '#8a8a8a', width: 2, dash: [8, 4, 2, 4] },
+};
+
+const midpoint = (pts: readonly Point[]): Point => {
+  const total = travelLength(pts);
+  let left = total / 2;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]!;
+    const b = pts[i]!;
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    if (d >= left && d > 0) return { x: a.x + ((b.x - a.x) * left) / d, y: a.y + ((b.y - a.y) * left) / d };
+    left -= d;
+  }
+  return pts[0]!;
+};
+
+/** Markers that are places on a map (spec V2 §5): their names are drawn beside them. */
+const NAMED_MARKERS = new Set(['destination', 'landmark', 'portal', 'waypoint']);
+
 const ROLE_GLYPH: Partial<Record<string, string>> = {
+  landmark: '▲',
   playerStart: 'P',
   npc: 'N',
   companion: 'C',
@@ -125,6 +161,8 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   };
   // The outline being drawn: the corners clicked so far, and where the pointer is.
   const [draftCorners, setDraftCorners] = useState<Point[]>([]);
+  // The route being drawn (spec V2 §5): its points, and the items its ends are on.
+  const [draftRoute, setDraftRoute] = useState<{ points: Point[]; from?: string } | null>(null);
   const [pointer, setPointer] = useState<Point | null>(null);
   const shown = preview ?? project;
   const set = levelsOf(shown);
@@ -215,6 +253,9 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
         // The opposite edge stays where it is.
         const shift = toPlan({ ...f, x: 0, y: 0 }, (h.lx * (w - f.w)) / 2, (h.ly * (dd - f.d)) / 2);
         setPreview(placeAt(resizeItem(project, cur.id, { w, d: dd }, global), cur.id, { x: Math.round((f.x + shift.x) * 1000) / 1000, y: Math.round((f.y + shift.y) * 1000) / 1000 }));
+      } else if (cur.kind === 'routePoint') {
+        setPreview(moveTravelPoint(project, cur.id, cur.index, snapPoint(at)));
+        if (!cur.moved) setDrag({ ...cur, moved: true });
       } else if (cur.kind === 'corner') {
         setPreview(moveCorner(project, cur.id, cur.index, at, global));
         if (!cur.moved) setDrag({ ...cur, moved: true });
@@ -294,6 +335,10 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       addDraftCorner(at, e.clientX, e.clientY);
       return;
     }
+    if (e.button === 0 && props.tool === 'route') {
+      addRoutePoint(snapPoint(at));
+      return;
+    }
     if (e.button === 0 && e.shiftKey) {
       beginWindowDrag({ kind: 'marquee', start: at, at, base: [...selection] });
       return;
@@ -303,6 +348,13 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
 
   const onItemDown = (e: React.PointerEvent, item: LevelItem) => {
     if (e.button !== 0) return;
+    // Drawing a route: a place clicked is an end (or a stop on the way), tied to it.
+    if (props.tool === 'route' && !props.placing) {
+      e.stopPropagation();
+      const f = frameOf(levelsOf(project), item, global);
+      addRoutePoint({ x: f.x, y: f.y }, item.id);
+      return;
+    }
     if (props.placing || props.tool !== 'select') {
       onBackgroundDown(e);
       return;
@@ -370,6 +422,63 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     setDraftCorners([...draftCorners, p]);
   };
 
+  // ------------------------------------------------------------ drawing a route (spec V2 §5)
+
+  const finishRoute = (route: { points: Point[]; from?: string }, to?: string) => {
+    setDraftRoute(null);
+    if (route.points.length < 2) return;
+    const made = addTravel(project, { levelId, floorId, kind: props.routeKind ?? 'route', points: route.points, from: route.from, to });
+    if (!made.id) return;
+    props.onCommit(made.project);
+    props.onSelect([made.id]);
+  };
+
+  /** A point on the route: on a place, the first ties the start there and any after it finishes the route there. */
+  const addRoutePoint = (p: Point, itemId?: string) => {
+    if (!draftRoute) {
+      setDraftRoute({ points: [p], ...(itemId ? { from: itemId } : {}) });
+      return;
+    }
+    const last = draftRoute.points[draftRoute.points.length - 1];
+    if (last && Math.hypot(last.x - p.x, last.y - p.y) < 1e-6) return;
+    if (itemId && itemId !== draftRoute.from) {
+      finishRoute({ ...draftRoute, points: [...draftRoute.points, p] }, itemId);
+      return;
+    }
+    setDraftRoute({ ...draftRoute, points: [...draftRoute.points, p] });
+  };
+
+  // While a route is drawn: Enter or a double-click ends it where it is, Backspace takes back a point, Escape drops it.
+  useEffect(() => {
+    if (props.tool !== 'route') {
+      if (draftRoute) setDraftRoute(null);
+      return;
+    }
+    if (!draftRoute) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') finishRoute(draftRoute);
+      else if (e.key === 'Backspace' || e.key === 'Delete') setDraftRoute(draftRoute.points.length > 1 ? { ...draftRoute, points: draftRoute.points.slice(0, -1) } : null);
+      else if (e.key === 'Escape') setDraftRoute(null);
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
+
+  const onRouteDown = (e: React.PointerEvent, link: TravelLink) => {
+    if (e.button !== 0 || props.placing || props.tool !== 'select') return;
+    e.stopPropagation();
+    props.onSelect([link.id]);
+  };
+
+  const onRoutePointDown = (e: React.PointerEvent, link: TravelLink, index: number) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    beginWindowDrag({ kind: 'routePoint', id: link.id, index, moved: false });
+  };
+
   // While an outline is being drawn: Enter closes it, Backspace takes back a corner, Escape drops it.
   useEffect(() => {
     if (props.tool !== 'outline') {
@@ -408,6 +517,8 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   const units = set.settings.units;
   const grid = mapGrid(set, levelId);
   const minor = grid * scale >= 7 ? grid : grid * Math.ceil(7 / (grid * scale));
+  // Travel links on this map (spec V2 §13), their ends where their places are.
+  const routes = (set.travel ?? []).filter((t) => t.levelId === levelId && (!t.floorId || t.floorId === floorId)).map((link) => ({ link, points: travelPoints(set, link, global) })).filter((r) => r.points.length >= 2);
   // Items that open into their own map (spec V2 §5): marked, with the map's name.
   const opensInto = new Map(set.levels.filter((l) => l.parentId === levelId && l.anchorId).map((l) => [l.anchorId!, l.name]));
   // How far the grid goes: well past the map's edge.
@@ -507,6 +618,16 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
           <polygon points={pointsAttr([nose, left, right])} fill={color} />
           <circle cx={f.x} cy={f.y} r={r} fill="var(--node)" stroke={color} strokeWidth={px(2)} />
           {label(ROLE_GLYPH[def.role] ?? def.name[0]!, f, 10, color)}
+          {!faint && NAMED_MARKERS.has(def.role) && (
+            <text x={f.x + r + px(5)} y={f.y} fontSize={px(11)} fill="var(--text)" dominantBaseline="middle" className="lvl-label">
+              {item.name}
+              {(() => {
+                const cls = String(paramOf(set, item, 'classification', global) ?? '');
+                const custom = String(paramOf(set, item, 'customType', global) ?? '').trim();
+                return cls ? <tspan fill="var(--muted)" fontSize={px(9)}> · {cls === 'Custom' && custom ? custom : cls}</tspan> : null;
+              })()}
+            </text>
+          )}
         </g>
       );
     }
@@ -597,13 +718,17 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       onPointerMove={(e) => {
         const at = toWorld(e.clientX, e.clientY);
         props.onHover(at);
-        if (props.tool === 'outline') setPointer(at);
+        if (props.tool === 'outline' || props.tool === 'route') setPointer(at);
       }}
       onPointerLeave={() => {
         props.onHover(null);
         setPointer(null);
       }}
-      onDoubleClick={() => props.tool === 'outline' && draftCorners.length >= 3 && finishOutline(draftCorners)}
+      onDoubleClick={() => {
+        if (props.tool === 'outline' && draftCorners.length >= 3) finishOutline(draftCorners);
+        // The double-click's two clicks each put a point down: the last is a repeat.
+        if (props.tool === 'route' && draftRoute) finishRoute(draftRoute);
+      }}
       aria-label="Level map"
       role="application"
     >
@@ -648,6 +773,60 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
             />
           ))}
           {[...items].sort((a, b) => order(a) - order(b)).filter((i) => assetOf(set, i, global).kind !== 'space').map((i) => drawItem(i))}
+          {routes.map(({ link, points }) => {
+            const style = ROUTE_STYLE[link.kind] ?? ROUTE_STYLE.route!;
+            const on = selected.has(link.id);
+            const mid = midpoint(points);
+            const end = points[points.length - 1]!;
+            const prev = points[points.length - 2]!;
+            const ang = Math.atan2(end.y - prev.y, end.x - prev.x);
+            const head = px(9);
+            return (
+              <g key={link.id} className={`lvl-route ${link.kind}${on ? ' on' : ''}${link.locked ? ' locked' : ''}`} data-id={link.id}>
+                <polyline points={pointsAttr(points)} fill="none" stroke="transparent" strokeWidth={px(14)} onPointerDown={(e) => onRouteDown(e, link)} style={{ cursor: props.tool === 'select' ? 'pointer' : undefined }} />
+                {on && <polyline points={pointsAttr(points)} fill="none" stroke="var(--gold-hi)" strokeOpacity={0.35} strokeWidth={px(style.width + 6)} pointerEvents="none" />}
+                <polyline points={pointsAttr(points)} fill="none" stroke={link.locked ? '#e07a6a' : style.color} strokeOpacity={style.opacity ?? 0.9} strokeWidth={px(style.width)} strokeDasharray={style.dash?.map(px).join(' ')} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />
+                {(link.oneWay || link.kind === 'progression') && (
+                  <polygon
+                    points={pointsAttr([end, { x: end.x - Math.cos(ang - 0.45) * head, y: end.y - Math.sin(ang - 0.45) * head }, { x: end.x - Math.cos(ang + 0.45) * head, y: end.y - Math.sin(ang + 0.45) * head }])}
+                    fill={link.locked ? '#e07a6a' : style.color}
+                    pointerEvents="none"
+                  />
+                )}
+                <text x={mid.x} y={mid.y - px(8)} fontSize={px(10)} fill={link.locked ? '#e07a6a' : style.color} textAnchor="middle" className="lvl-label" pointerEvents="none">
+                  {link.locked ? '🔒 ' : ''}
+                  {travelLabel(set, link)}
+                  {link.toMap ? ' ⇢' : ''}
+                </text>
+                {on &&
+                  props.tool === 'select' &&
+                  points.map((p, i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r={px(i === 0 || i === points.length - 1 ? 6 : 4.5)} className="lvl-route-point" fill={i === 0 || i === points.length - 1 ? 'var(--node)' : 'var(--gold-hi)'} stroke="var(--gold-hi)" strokeWidth={px(1.5)} onPointerDown={(e) => onRoutePointDown(e, link, i)} aria-label={`Move point ${i + 1} of ${travelLabel(set, link)}`} />
+                  ))}
+              </g>
+            );
+          })}
+          {draftRoute && (
+            <g pointerEvents="none" className="lvl-route-draft">
+              {(() => {
+                const ahead = pointer ? [...draftRoute.points, snapPoint(pointer)] : draftRoute.points;
+                const style = ROUTE_STYLE[props.routeKind ?? 'route'] ?? ROUTE_STYLE.route!;
+                return (
+                  <>
+                    <polyline points={pointsAttr(ahead)} fill="none" stroke={style.color} strokeWidth={px(style.width)} strokeDasharray={style.dash?.map(px).join(' ')} strokeLinecap="round" />
+                    {draftRoute.points.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r={px(i === 0 ? 6 : 4)} fill={i === 0 ? 'none' : 'var(--gold-hi)'} stroke="var(--gold-hi)" strokeWidth={px(1.5)} />
+                    ))}
+                    {pointer && (
+                      <text x={snapPoint(pointer).x + px(10)} y={snapPoint(pointer).y - px(10)} fontSize={px(11)} fill="var(--gold-hi)">
+                        {formatLength(travelLength(ahead), units)}
+                      </text>
+                    )}
+                  </>
+                );
+              })()}
+            </g>
+          )}
           {items
             .filter((i) => opensInto.has(i.id))
             .map((i) => {

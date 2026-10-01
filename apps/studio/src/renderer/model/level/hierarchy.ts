@@ -1,7 +1,7 @@
 import type { Project } from '../types';
-import { assetOf, frameOf } from './geometry';
+import { assetOf, frameOf, paramOf } from './geometry';
 import { guid, levelsOf, withSet } from './level';
-import type { AssetDefinition, Floor, Level, LevelItem, LevelSet, MapBoundary, MapKind, MapStatus } from './types';
+import type { AssetCategory, AssetDefinition, Floor, Level, LevelItem, LevelSet, MapBoundary, MapKind, MapStatus } from './types';
 
 /**
  * The spatial hierarchy (Level Designer spec V2 §4): a world holds regions,
@@ -60,6 +60,28 @@ export const kindBelow = (kind: MapKind): MapKind => {
   const order: MapKind[] = ['world', 'region', 'level', 'district', 'building', 'interior'];
   return order[Math.min(order.length - 1, order.indexOf(kind) + 1)]!;
 };
+
+/**
+ * Tools for the scale (spec V2 §7): the library shows what belongs on this
+ * kind of map first (regions and routes on a world, streets and building
+ * masses in a district, rooms and furniture in a building), with the rest a
+ * click away. A plain level shows everything but the world's.
+ */
+export type MapScale = 'world' | 'city' | 'level' | 'building';
+
+export const scaleOf = (kind: MapKind): MapScale => (kind === 'world' || kind === 'region' ? 'world' : kind === 'district' ? 'city' : kind === 'building' || kind === 'interior' ? 'building' : 'level');
+
+export const SCALE_LABEL: Record<MapScale, string> = { world: 'World and region tools', city: 'Town and city tools', level: 'Level tools', building: 'Building and room tools' };
+
+const SCALE_CATEGORIES: Record<MapScale, readonly AssetCategory[]> = {
+  world: ['world', 'settlement', 'navigation', 'custom'],
+  city: ['settlement', 'spaces', 'architecture', 'primitives', 'gameplay', 'actors', 'logic', 'spawning', 'navigation', 'presentation', 'custom'],
+  level: ['settlement', 'spaces', 'architecture', 'primitives', 'props', 'lighting', 'gameplay', 'actors', 'logic', 'presentation', 'spawning', 'navigation', 'custom'],
+  building: ['spaces', 'architecture', 'primitives', 'props', 'lighting', 'gameplay', 'actors', 'logic', 'presentation', 'spawning', 'navigation', 'custom'],
+};
+
+/** Whether a library category belongs at this scale. */
+export const categoryAtScale = (scale: MapScale, category: AssetCategory): boolean => SCALE_CATEGORIES[scale].includes(category);
 
 /** A new map's snap step, by its size: a hundredth of it, in a round number. */
 const gridFor = (size: number): number => {
@@ -229,10 +251,16 @@ export const openChildMap = (project: Project, itemId: string, kind?: MapKind, g
   };
 };
 
+/** Whether an item is a place meant to be opened as a map (spec V2 §5): its asset says what it opens as (a region, a town, a building). */
+export const opensAsMap = (set: LevelSet, itemId: string, global?: readonly AssetDefinition[]): boolean => {
+  const item = set.items.find((i) => i.id === itemId);
+  return !!item && assetOf(set, item, global).params.some((p) => p.key === 'opens');
+};
+
 /** What an item on a map opens into: a building or room opens as a building, anything else the scale below its map. */
 const kindFromItem = (set: LevelSet, item: LevelItem, parent: Level, global?: readonly AssetDefinition[]): MapKind => {
   const def = assetOf(set, item, global);
-  const hint = String(item.params?.opens ?? '').trim();
+  const hint = String(paramOf(set, item, 'opens', global) ?? '').trim();
   if (MAP_KINDS.some((k) => k.id === hint)) return hint as MapKind;
   if (def.role === 'room' || def.role === 'stairwell' || def.role === 'corridor' || def.role === 'arena') return 'interior';
   return kindBelow(kindOf(parent));
@@ -274,7 +302,8 @@ export const removalOfMap = (set: LevelSet, id: string): { maps: Level[]; items:
 export const removeMap = (project: Project, id: string): Project => {
   const set = levelsOf(project);
   const ids = new Set(removalOfMap(set, id).maps.map((m) => m.id));
-  return withSet(project, { ...set, levels: set.levels.filter((l) => !ids.has(l.id)), items: set.items.filter((i) => !ids.has(i.levelId)) });
+  const travel = set.travel?.filter((t) => !ids.has(t.levelId)).map((t) => (t.toMap && ids.has(t.toMap) ? (({ toMap: _, ...rest }) => rest)(t) : t));
+  return withSet(project, { ...set, levels: set.levels.filter((l) => !ids.has(l.id)), items: set.items.filter((i) => !ids.has(i.levelId)), ...(travel ? { travel } : {}) });
 };
 
 /** The child maps these items open into, which deleting the items would leave without their place. */

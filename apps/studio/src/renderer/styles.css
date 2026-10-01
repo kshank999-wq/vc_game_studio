@@ -6762,6 +6762,24 @@ kbd {
   }
 }
 
+.lvl-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.lvl-scale .lvl-toggle {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
 .lvl-tabs {
   display: flex;
   border-bottom: 1px solid var(--border);

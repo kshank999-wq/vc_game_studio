@@ -32,7 +32,7 @@ import {
   mapGrid,
 } from '../../model/level/level';
 import { exportNameOf, levelExportName, NAMING_LABEL } from '../../model/level/naming';
-import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelRule, NamingClass, ParamDef, PlayNote, PropertyGroup } from '../../model/level/types';
+import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelRule, NamingClass, ParamDef, PlayNote, PropertyGroup, TravelLink } from '../../model/level/types';
 import { removePreset, resolveNote } from '../../model/level/play';
 import { eventsAt } from '../../model/level/places';
 import { eventTitle } from '../../model/timeline';
@@ -46,6 +46,8 @@ import { Symbol } from '../Symbol';
 import { BoolField, NumberField, RefField, Section, SelectField, TextField } from './fields';
 import { anchorOf, boundsOf as mapBounds, BOUNDARIES, childOfItem, childrenOf, descendantsOf, kindLabel, kindOf, MAP_KINDS, moveMap, STATUSES, statusOf, updateMap } from '../../model/level/hierarchy';
 import { formatLength } from './units';
+import { canTravel, kindLabelOf, TRANSITIONS, TRAVEL_KINDS, travelById, travelLabel, travelLength, travelPoints, updateTravel } from '../../model/level/travel';
+import { emptyState } from '../../model/rules';
 
 interface Props {
   project: Project;
@@ -127,6 +129,8 @@ export const LevelInspector = (props: Props) => {
     });
   const units = set.settings.units;
   const matches = (label: string) => !q || label.toLowerCase().includes(q);
+  const route = selection.length === 1 ? travelById(set, selection[0]!) : undefined;
+  if (route) return <RouteInspector project={project} link={route} global={global} onCommit={onCommit} onDelete={props.onDelete} onSelect={props.onSelect} />;
 
   if (!level) return <aside className="lvl-right" aria-label="Properties" />;
 
@@ -779,6 +783,83 @@ export const ChildMapRow = ({ project, itemId, onOpenChild }: { project: Project
       </button>
       {child && <span className="muted">{kindLabel(kindOf(child))} · its own map</span>}
     </div>
+  );
+};
+
+/**
+ * A travel link (spec V2 §5, §13): what it is, the places it joins (or the
+ * map it takes the player to), how the game takes them along it, one way or
+ * both, and whether it is locked until a rule holds.
+ */
+const RouteInspector = ({ project, link, global, onCommit, onDelete, onSelect }: { project: Project; link: TravelLink; global: readonly AssetDefinition[]; onCommit: (p: Project) => void; onDelete: () => void; onSelect: (ids: string[]) => void }) => {
+  const set = levelsOf(project);
+  const units = set.settings.units;
+  const points = travelPoints(set, link, global);
+  const name = (id?: string) => (id ? set.items.find((i) => i.id === id)?.name : undefined);
+  const others = set.levels.filter((l) => l.id !== link.levelId);
+  const patch = (p: Parameters<typeof updateTravel>[2]) => onCommit(updateTravel(project, link.id, p));
+  return (
+    <aside className="lvl-right" aria-label="Properties">
+      <header className="lvl-right-head">
+        <span className="lvl-kind">{kindLabelOf(link.kind)}</span>
+        <h2>{travelLabel(set, link)}</h2>
+        <p className="muted">
+          {formatLength(travelLength(points), units)} · {points.length} points{link.locked ? (canTravel(link, emptyState()) ? ' · opens at the start' : ' · locked') : ''}
+        </p>
+      </header>
+      <div className="lvl-secs">
+        <Section title="Route" open onToggle={() => {}}>
+          <TextField label="Name" value={link.name ?? ''} placeholder={travelLabel(set, { ...link, name: undefined })} onCommit={(v) => patch({ name: v.trim() || undefined })} />
+          <SelectField label="Kind" value={link.kind} options={TRAVEL_KINDS.map((k) => ({ value: k.id, label: k.label }))} onCommit={(v) => patch({ kind: v as TravelLink['kind'] })} />
+          <p className="lvl-hint">{TRAVEL_KINDS.find((k) => k.id === link.kind)?.hint}</p>
+          <div className="lvl-kv">
+            <span>From</span>
+            <span>
+              {link.from ? (
+                <button className="tb-btn small" onClick={() => onSelect([link.from!])}>
+                  {name(link.from)}
+                </button>
+              ) : (
+                'a point on the map'
+              )}
+            </span>
+          </div>
+          <div className="lvl-kv">
+            <span>To</span>
+            <span>
+              {link.to ? (
+                <button className="tb-btn small" onClick={() => onSelect([link.to!])}>
+                  {name(link.to)}
+                </button>
+              ) : (
+                'a point on the map'
+              )}
+            </span>
+          </div>
+          <SelectField
+            label="Takes the player to"
+            value={link.toMap ?? ''}
+            options={[{ value: '', label: 'Along it, on this map' }, ...others.map((l) => ({ value: l.id, label: `${l.name} (another map)` }))]}
+            onCommit={(v) => patch({ toMap: v || undefined })}
+          />
+          <SelectField label="Transition" value={link.transition ?? 'walk'} options={TRANSITIONS.map((t) => ({ value: t.id, label: t.label }))} onCommit={(v) => patch({ transition: v as TravelLink['transition'] })} />
+          <BoolField label="One way" value={!!link.oneWay} onCommit={(v) => patch({ oneWay: v || undefined })} />
+          <TextField label="Notes" value={link.notes ?? ''} onCommit={(v) => patch({ notes: v.trim() || undefined })} />
+        </Section>
+        <Section title="Lock and prerequisites" open onToggle={() => {}} count={link.locked ? 1 : undefined}>
+          <BoolField label="Locked" value={!!link.locked} hint="closed until its rule holds (or for good, without one)" onCommit={(v) => patch({ locked: v || undefined })} />
+          {link.locked && <RuleEditor project={project} rule={link.unlockWhen} label="Opens when" onChange={(r) => patch({ unlockWhen: r })} />}
+        </Section>
+        <div className="lvl-btnrow wrap">
+          <button className="tb-btn small" onClick={() => patch({ points: [...link.points].reverse(), from: link.to, to: link.from })}>
+            Reverse
+          </button>
+          <button className="tb-btn small danger-btn" onClick={onDelete}>
+            Delete route
+          </button>
+        </div>
+      </div>
+    </aside>
   );
 };
 

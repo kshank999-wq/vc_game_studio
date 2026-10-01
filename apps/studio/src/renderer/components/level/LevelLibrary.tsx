@@ -1,3 +1,4 @@
+import { categoryAtScale, SCALE_LABEL, type MapScale } from '../../model/level/hierarchy';
 import { useMemo, useState } from 'react';
 import { assetOf, CATEGORY_COLOR } from '../../model/level/geometry';
 import { CATEGORIES, STARTER } from '../../model/level/library';
@@ -78,6 +79,8 @@ const Lock = ({ closed }: { closed: boolean }) => (
 interface Props {
   /** The maps navigator (spec V2 §6), above the library. */
   navigator?: React.ReactNode;
+  /** The open map's scale (spec V2 §7): what the library shows first. */
+  scale?: MapScale;
   set: LevelSet;
   levelId: string;
   floorId: string;
@@ -102,6 +105,8 @@ interface Props {
  */
 export const LevelLibrary = (props: Props) => {
   const [query, setQuery] = useState('');
+  const [everything, setEverything] = useState(false);
+  const scale = props.scale ?? 'level';
   const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
   const q = query.trim().toLowerCase();
   const all = useMemo(() => [...STARTER, ...props.set.assets, ...props.global.filter((g) => !props.set.assets.some((a) => a.id === g.id))], [props.set.assets, props.global]);
@@ -132,7 +137,13 @@ export const LevelLibrary = (props: Props) => {
       {props.tab === 'library' ? (
         <div className="lvl-list">
           <p className="lvl-hint">Drag onto the map or the graybox, or click and then click where it goes.</p>
-          {CATEGORIES.map((cat) => {
+          <div className="lvl-scale">
+            <span>{SCALE_LABEL[scale]}</span>
+            <label className="lvl-toggle" title="Every category, whatever the map’s scale">
+              <input type="checkbox" checked={everything} onChange={(e) => setEverything(e.target.checked)} /> Show everything
+            </label>
+          </div>
+          {CATEGORIES.filter((cat) => everything || !!q || categoryAtScale(scale, cat.id)).map((cat) => {
             const assets = all.filter((a) => (a.source === 'starter' ? a.category === cat.id : cat.id === 'custom') && match(a));
             if (!assets.length) return null;
             const open = !closed.has(cat.id) || !!q;

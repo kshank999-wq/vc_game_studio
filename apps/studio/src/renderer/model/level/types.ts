@@ -10,6 +10,8 @@ import type { ObjectType } from '../types';
  */
 
 export type AssetCategory =
+  | 'world'
+  | 'settlement'
   | 'spaces'
   | 'architecture'
   | 'primitives'
@@ -46,7 +48,9 @@ export type AssetRole =
   | 'camera' | 'cinematic' | 'audio' | 'ambient' | 'dialogue'
   | 'spawn'
   | 'waypoint' | 'patrolPath' | 'traversal' | 'portal' | 'destination'
-  | 'assembly';
+  | 'assembly'
+  /** World and town scale (spec V2 §7): planning shapes, exported as data. */
+  | 'region' | 'biome' | 'streaming' | 'landmark' | 'road' | 'block' | 'building' | 'terrain' | 'vegetation';
 
 /** The inspector's sections (spec §6), in the order they appear. */
 export type PropertyGroup =
@@ -375,6 +379,40 @@ export interface ManifestEntry {
   replacementLocked?: boolean;
 }
 
+/** What a travel link is (spec V2 §5, §13): a way between places, drawn on the map. */
+export type TravelKind = 'road' | 'trail' | 'river' | 'route' | 'progression' | 'fastTravel' | 'door' | 'elevator' | 'portal' | 'cinematic' | 'loading';
+
+/** How the game takes the player along it. */
+export type TravelTransition = 'walk' | 'ride' | 'sail' | 'fade' | 'cinematic' | 'loading' | 'instant';
+
+/**
+ * A travel link (spec V2 §16, TravelLink): a line on a map from one place to
+ * another, through the points it passes. Its ends can be tied to items (a
+ * destination, a town, a door), and then follow them; it can lead off this
+ * map to another one (fast travel, a loading transition). Locked, it opens
+ * when its rule holds.
+ */
+export interface TravelLink {
+  id: string;
+  levelId: string;
+  floorId?: string;
+  kind: TravelKind;
+  name?: string;
+  /** The items its ends are tied to. */
+  from?: string;
+  to?: string;
+  /** A map elsewhere it takes the player to. */
+  toMap?: string;
+  /** Plan points from start to end; the ends are where the tied items are, when they are. */
+  points: { x: number; y: number }[];
+  oneWay?: boolean;
+  /** Closed until its rule holds (or for good, without one). */
+  locked?: boolean;
+  unlockWhen?: Rule;
+  transition?: TravelTransition;
+  notes?: string;
+}
+
 export interface LevelSet {
   settings: LevelSettings;
   levels: Level[];
@@ -386,4 +424,6 @@ export interface LevelSet {
   manifest?: ManifestEntry[];
   presets?: PlayPreset[];
   notes?: PlayNote[];
+  /** Travel links (spec V2 §13): roads, rivers, routes and transitions between places. */
+  travel?: TravelLink[];
 }

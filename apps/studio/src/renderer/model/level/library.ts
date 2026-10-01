@@ -7,6 +7,8 @@ import type { AssetCategory, AssetDefinition, AssetKind, AssetRole, EngineMappin
  */
 
 export const CATEGORIES: readonly { id: AssetCategory; label: string }[] = [
+  { id: 'world', label: 'World + regions' },
+  { id: 'settlement', label: 'Towns + structures' },
   { id: 'spaces', label: 'Spaces' },
   { id: 'architecture', label: 'Architecture' },
   { id: 'primitives', label: 'Primitives' },
@@ -153,7 +155,54 @@ const PICKUP = E('Area3D + VCGSPlaceholder', 'GameObject + VcgsInteractable', 'A
 const VOLUME = E('Area3D + CollisionShape3D', 'BoxCollider (trigger) + VcgsTrigger', 'ATriggerBox + VCGS component');
 const MARKER = E('Marker3D', 'Empty GameObject', 'ATargetPoint');
 
+/** What a place on a map opens into (spec V2 §5), and how a destination is classed. */
+const opens = (kind: string): ParamDef => ({ key: 'opens', label: 'Opens as', group: 'identity', type: 'select', default: kind, options: ['world', 'region', 'level', 'district', 'building', 'interior'], hint: 'The map it becomes when opened.' });
+const CLASSES = ['Level', 'Area', 'Hub', 'Landmark', 'Transition', 'Custom'] as const;
+const classed = (cls: (typeof CLASSES)[number]): ParamDef[] => [
+  { key: 'classification', label: 'Classified as', group: 'identity', type: 'select', default: cls, options: CLASSES },
+  { key: 'customType', label: 'Custom type', group: 'identity', type: 'text', default: '', hint: 'For Custom: what it is (a shrine, a camp).', advanced: true },
+];
+const BIOMES = ['plains', 'forest', 'jungle', 'desert', 'mountains', 'hills', 'swamp', 'coast', 'ocean', 'tundra', 'volcanic', 'urban', 'underground', 'custom'] as const;
+const biome = (b: (typeof BIOMES)[number]): ParamDef => ({ key: 'biome', label: 'Biome', group: 'presentation', type: 'select', default: b, options: BIOMES });
+/** A structure's floors (spec V2 §8): how many, how tall, so its building map starts with them. */
+const storeys = (floors: number, height = 3): ParamDef[] => [
+  { key: 'floors', label: 'Floors', group: 'dimensions', type: 'number', unit: 'count', default: floors, min: 1, max: 200, step: 1 },
+  { key: 'floorHeight', label: 'Floor height', group: 'dimensions', type: 'number', unit: 'length', default: height, min: 2, max: 20, step: 0.25 },
+  { key: 'wallThickness', label: 'Wall thickness', group: 'dimensions', type: 'number', unit: 'length', default: 0.3, min: 0.05, max: 5, step: 0.05 },
+];
+const ZONE = E('Area3D (data: a planning zone)', 'GameObject + BoxCollider (trigger), data', 'AVolume + VCGS component (data)');
+const MASS = E('CSGBox3D building mass', 'GameObject + MeshRenderer + Collider (mass)', 'StaticMeshActor (mass)');
+
 export const STARTER: readonly AssetDefinition[] = [
+  // World and region scale (spec V2 §5, §7): kilometres across, each opens into its own map.
+  ...group('world', [
+    { id: 'world.region', name: 'Region', kind: 'space', role: 'region', naming: 'room', size: [5000, 5000, 400], proxy: 'room', params: [opens('region'), biome('plains'), ...room(false, false)], engine: ZONE, description: 'A part of the world: a valley, an island, a province. Opens as a region.' },
+    { id: 'world.biome', name: 'Biome / terrain zone', kind: 'volume', role: 'biome', naming: 'logic', size: [3000, 3000, 300], proxy: 'box', params: [biome('forest'), { key: 'elevation', label: 'Ground height', group: 'dimensions', type: 'number', unit: 'length', default: 0, step: 10 }], engine: ZONE, description: 'What the land is like here: forest, desert, mountains.' },
+    { id: 'world.streaming', name: 'Streaming boundary', kind: 'volume', role: 'streaming', naming: 'logic', size: [4000, 4000, 1000], proxy: 'box', params: [{ key: 'loadDistance', label: 'Load within', group: 'gameplay', type: 'number', unit: 'length', default: 500, min: 0, step: 50, hint: 'How near the player comes before it loads.' }, { key: 'cell', label: 'Cell / sublevel', group: 'engine', type: 'text', default: '' }], engine: E('Node3D (load/unload area)', 'Additive scene trigger', 'World Partition / level streaming volume'), description: 'Where the game loads and unloads what is inside.' },
+    { id: 'world.destination', name: 'Destination', kind: 'marker', role: 'destination', naming: 'navigation', size: [40, 40, 10], proxy: 'marker', params: [...classed('Level'), opens('level')], engine: MARKER, description: 'A place on the world map: a level, area or hub. Opens as its map.' },
+    { id: 'world.landmark', name: 'Landmark', kind: 'marker', role: 'landmark', naming: 'navigation', size: [40, 40, 50], proxy: 'marker', params: [...classed('Landmark'), opens('district')], engine: MARKER, description: 'Something seen from far off: a tower, a peak, a ruin.' },
+    { id: 'world.entrance', name: 'Level entrance', kind: 'marker', role: 'portal', naming: 'navigation', size: [20, 20, 10], proxy: 'marker', params: [...classed('Transition'), { key: 'to', label: 'Leads to', group: 'gameplay', type: 'text', default: '' }], engine: MARKER, description: 'Where the player goes into a level from the world.' },
+    { id: 'world.node', name: 'Travel node', kind: 'marker', role: 'waypoint', naming: 'navigation', size: [20, 20, 5], proxy: 'marker', params: [{ key: 'fastTravel', label: 'Fast travel point', group: 'gameplay', type: 'boolean', default: false }], engine: MARKER, description: 'A crossroads, a stop on a route, a fast-travel point.' },
+  ]),
+  // Towns, cities and structures (spec V2 §5, §7, §9): the city scale, and what opens into a building.
+  ...group('settlement', [
+    { id: 'town.city', name: 'City / town', kind: 'space', role: 'zone', naming: 'room', size: [1500, 1200, 60], proxy: 'room', params: [opens('district'), ...classed('Hub'), ...room(false, false)], engine: ZONE, description: 'A settlement. Opens as a district to lay out its streets.' },
+    { id: 'town.dungeon', name: 'Dungeon', kind: 'space', role: 'zone', naming: 'room', size: [300, 300, 30], proxy: 'room', params: [opens('district'), ...classed('Level'), ...room(false, false)], engine: ZONE, description: 'An underground complex. Opens as a district.' },
+    { id: 'town.compound', name: 'Compound', kind: 'space', role: 'zone', naming: 'room', size: [200, 160, 20], proxy: 'room', params: [opens('district'), ...classed('Area'), ...room(false, false)], engine: ZONE, description: 'A walled site: a camp, a fort, a farm.' },
+    { id: 'town.block', name: 'City block', kind: 'space', role: 'block', naming: 'room', size: [80, 60, 1], proxy: 'room', params: [opens('district'), ...room(false, false)], engine: ZONE, description: 'Ground between streets, for buildings.' },
+    { id: 'town.road', name: 'Road', kind: 'solid', role: 'road', naming: 'architecture', size: [100, 8, 0.1], proxy: 'plane', params: [{ key: 'surface', label: 'Surface', group: 'appearance', type: 'select', default: 'paved', options: ['paved', 'cobbled', 'dirt', 'gravel', 'boardwalk'] }], engine: SOLID, description: 'A street or road; stretch it, turn it. For a route between places, draw a route.' },
+    { id: 'town.terrain', name: 'Terrain', kind: 'solid', role: 'terrain', naming: 'architecture', size: [200, 200, 2], proxy: 'box', params: [biome('plains')], engine: SOLID, description: 'A patch of ground at a height: a hill, a raised bank.' },
+    { id: 'town.vegetation', name: 'Vegetation proxy', kind: 'solid', role: 'vegetation', naming: 'prop', size: [8, 8, 10], proxy: 'cylinder', params: [{ key: 'density', label: 'Density', group: 'appearance', type: 'select', default: 'grove', options: ['single tree', 'grove', 'forest', 'hedge', 'brush'] }], engine: SOLID, description: 'Trees or bushes, as a block-out shape.' },
+    { id: 'town.wall', name: 'Town wall', kind: 'solid', role: 'wall', naming: 'architecture', size: [60, 2, 8], proxy: 'box', engine: SOLID, description: 'A city or castle wall.' },
+    { id: 'struct.mass', name: 'Building mass', kind: 'solid', role: 'building', naming: 'architecture', size: [16, 12, 9], proxy: 'box', params: [opens('building'), ...storeys(3)], engine: MASS, description: 'A gray box for a building. Open it to lay out its floors and rooms.' },
+    { id: 'struct.house', name: 'House', kind: 'solid', role: 'building', naming: 'architecture', size: [10, 8, 6], proxy: 'box', params: [opens('building'), ...storeys(2)], engine: MASS, description: 'A two-storey house.' },
+    { id: 'struct.shop', name: 'Shop', kind: 'solid', role: 'building', naming: 'architecture', size: [8, 12, 4], proxy: 'box', params: [opens('building'), ...storeys(1, 4)], engine: MASS, description: 'A shop on the street.' },
+    { id: 'struct.tower', name: 'Tower', kind: 'solid', role: 'building', naming: 'architecture', size: [8, 8, 24], proxy: 'cylinder', params: [opens('building'), ...storeys(6, 4)], engine: MASS, description: 'A tall round tower.' },
+    { id: 'struct.castle', name: 'Castle section', kind: 'solid', role: 'building', naming: 'architecture', size: [30, 20, 12], proxy: 'box', params: [opens('building'), ...storeys(3, 4)], engine: MASS, description: 'A keep or a wing of a castle.' },
+    { id: 'struct.temple', name: 'Temple', kind: 'solid', role: 'building', naming: 'architecture', size: [24, 36, 14], proxy: 'box', params: [opens('building'), ...storeys(1, 14)], engine: MASS, description: 'A temple or church: one tall hall.' },
+    { id: 'struct.pyramid', name: 'Pyramid', kind: 'solid', role: 'building', naming: 'architecture', size: [60, 60, 40], proxy: 'wedge', params: [opens('building'), ...storeys(4, 10)], engine: MASS, description: 'A pyramid. Open it for its chambers.' },
+    { id: 'struct.dungeonModule', name: 'Dungeon module', kind: 'solid', role: 'building', naming: 'architecture', size: [24, 24, 4], proxy: 'box', params: [opens('interior'), ...storeys(1, 4)], engine: MASS, description: 'A section of dungeon to open and fill.' },
+  ]),
   ...group('spaces', [
     { id: 'space.room', name: 'Room', kind: 'space', role: 'room', naming: 'room', size: [8, 6, 3], proxy: 'room', params: room(), engine: ROOM, description: 'Four walls, a floor and a ceiling. Doors and windows snap into its walls.' },
     {
@@ -165,6 +214,16 @@ export const STARTER: readonly AssetDefinition[] = [
     { id: 'space.stairwell', name: 'Stairwell', kind: 'space', role: 'stairwell', naming: 'room', size: [4, 6, 6], proxy: 'room', params: room(true, false), engine: ROOM, description: 'A tall room between floors. Put stairs in it.' },
     { id: 'space.exterior', name: 'Exterior zone', kind: 'space', role: 'zone', naming: 'room', size: [20, 20, 6], proxy: 'room', params: room(false, false), engine: ROOM, description: 'Open ground: a floor, no walls or ceiling.' },
     { id: 'space.arena', name: 'Arena', kind: 'space', role: 'arena', naming: 'room', size: [16, 16, 5], proxy: 'room', params: room(true, false), engine: ROOM, description: 'An open-roofed space for encounters.' },
+    { id: 'space.square', name: 'Square room', kind: 'space', role: 'room', naming: 'room', size: [6, 6, 3], proxy: 'room', params: room(), engine: ROOM, description: 'A square room.' },
+    { id: 'space.corridor', name: 'Corridor', kind: 'space', role: 'corridor', naming: 'room', size: [20, 2, 3], proxy: 'room', params: room(), engine: ROOM, description: 'A long passage between rooms.' },
+    { id: 'space.greatHall', name: 'Hall', kind: 'space', role: 'room', naming: 'room', size: [20, 12, 6], proxy: 'room', params: room(), engine: ROOM, description: 'A large, high room.' },
+    { id: 'space.lobby', name: 'Lobby', kind: 'space', role: 'room', naming: 'room', size: [12, 10, 4], proxy: 'room', params: room(), engine: ROOM, description: 'An entrance hall.' },
+    { id: 'space.warehouse', name: 'Warehouse', kind: 'space', role: 'room', naming: 'room', size: [30, 20, 8], proxy: 'room', params: room(), engine: ROOM, description: 'A big open store.' },
+    {
+      id: 'space.cave', name: 'Cave chamber', kind: 'space', role: 'room', naming: 'room', size: [14, 11, 5], proxy: 'room', params: room(true, true), engine: ROOM,
+      description: 'A rough chamber in the rock. Drag its corners to shape it.',
+      outline: [{ x: -0.42, y: -0.5 }, { x: 0.18, y: -0.44 }, { x: 0.5, y: -0.12 }, { x: 0.38, y: 0.36 }, { x: -0.06, y: 0.5 }, { x: -0.5, y: 0.22 }, { x: -0.36, y: -0.16 }],
+    },
     { id: 'space.platform', name: 'Platform', kind: 'solid', role: 'platform', naming: 'architecture', size: [4, 4, 0.5], proxy: 'box', engine: SOLID, description: 'A raised slab to stand on.' },
   ]),
   ...group('architecture', [
@@ -262,7 +321,7 @@ export const STARTER: readonly AssetDefinition[] = [
     { id: 'nav.waypoint', name: 'Waypoint', kind: 'marker', role: 'waypoint', naming: 'navigation', size: [0.4, 0.4, 0.4], proxy: 'marker', engine: MARKER, description: 'A point on a route.', params: [{ key: 'path', label: 'Route', group: 'gameplay', type: 'text', default: 'Route A' }, { key: 'order', label: 'Order', group: 'gameplay', type: 'number', unit: 'count', default: 1, min: 1, step: 1 }] },
     { id: 'nav.traversal', name: 'Traversal link', kind: 'marker', role: 'traversal', naming: 'navigation', size: [0.5, 2, 0.5], proxy: 'marker', engine: E('NavigationLink3D', 'OffMeshLink / NavMeshLink', 'NavLinkProxy'), description: 'A jump, climb or drop the AI can use.' },
     { id: 'nav.portal', name: 'Entry / exit portal', kind: 'volume', role: 'portal', naming: 'navigation', size: [2, 1, 2.5], proxy: 'box', engine: VOLUME, description: 'Leads to another level or floor.', params: [{ key: 'to', label: 'Leads to', group: 'gameplay', type: 'text', default: '' }, { key: 'required', label: 'Required exit', group: 'gameplay', type: 'boolean', default: false }] },
-    { id: 'nav.destination', name: 'Destination', kind: 'marker', role: 'destination', naming: 'navigation', size: [0.6, 0.6, 1], proxy: 'marker', engine: MARKER, description: 'Where a route or an objective ends.' },
+    { id: 'nav.destination', name: 'Route end', kind: 'marker', role: 'destination', naming: 'navigation', size: [0.6, 0.6, 1], proxy: 'marker', engine: MARKER, description: 'Where a route or an objective ends.' },
   ]),
 ];
 

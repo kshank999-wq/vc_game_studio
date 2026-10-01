@@ -36,6 +36,9 @@ later.
 - **Scale (spec V2 §12):** lengths are metres inside; the map reads kilometres (or miles) once a distance is that long. Each map has its own snap grid (a world snaps in hundreds of metres, a room in fractions of one), and its own origin, so detail is never drawn at huge coordinates. The map's edge is drawn, and an empty map frames it.
 - **How it is reached (spec V2 §13):** Continuous, Streamed, Instanced, Loaded by transition or Map only. The preflight only asks for a player start where the game loads a map on its own: not a world or region, not a map only for planning, not a building the player walks into from its parent.
 - **Status (spec V2 §6):** Empty, Grayboxed, Detailed, Gameplay complete or Final: worked out from what is on the map (spaces and solids, then props and lights, then a player start and something to do), or set by hand.
+- **The world map (spec V2 §5):** the library's **World + regions** (Region, Biome / terrain zone, Streaming boundary, Destination, Landmark, Level entrance, Travel node) and **Towns + structures** (City / town, Dungeon, Compound, City block, Road, Terrain, Vegetation proxy, Town wall, and building masses: Building mass, House, Shop, Tower, Castle section, Temple, Pyramid, Dungeon module). Destinations and landmarks are classed Level, Area, Hub, Landmark, Transition or a custom type, shown beside their names; a place that opens says what as (**Opens as**), and double-clicking it opens it.
+- **Routes (spec V2 §5, §13):** the **Route** tool (T) draws roads, trails, rivers, routes, progression paths, fast travel, doors, elevators, portals, cinematics and loading transitions. Click the place it starts at (or a point), the points it passes, and the place it ends at; Enter or a double-click ends it on a point, Backspace takes one back, Escape drops it. Its ends follow the places they are tied to; a deleted place leaves the end where it stood. Selected, its points can be dragged and the inspector sets its kind, name, transition (walk, ride, sail, fade, cinematic, loading screen, instant), one way, another map it takes the player to, and a lock with the rule that opens it. Each kind is drawn its own way: roads wide, trails dashed, rivers blue, fast travel dotted, locked routes red with 🔒.
+- **Tools for the scale (spec V2 §7):** the library shows a world's tools on a world or region, a town's in a district, rooms, architecture and furniture in a building or interior, and everything but the world's on a plain level; **Show everything** (or a search) shows the rest. New room presets: Square room, Corridor, Hall, Lobby, Warehouse, Cave chamber (outlined).
 - **Safety (spec V2 §15):** deleting a map lists the maps inside it and how many items go with them; deleting an item that opens into a map says the map stays, no longer tied to a place. A locked map turns changes to its items down. Every change is one undo step.
 
 ## What you can do
@@ -304,6 +307,7 @@ Its preflight is clean.
 
 | Path | What it is |
 | --- | --- |
+| `model/level/travel.ts` | Spec V2's travel links: kinds, transitions, drawing, ends that follow their places, locks and the rule that opens them (`canTravel`). |
 | `model/level/hierarchy.ts` | Spec V2's hierarchy: world presets, map kinds, boundaries and statuses; child maps from items, paths (breadcrumbs), bounds, per-map grids, moving, duplicating and deleting maps, and the navigator tree. |
 | `model/level/types.ts` | The entities in spec §13: `LevelSet` (settings, levels, items, project assets, serial counters, manifest), `Level`, `Floor`, `LevelItem` (the asset instance), `AssetDefinition`, `LevelRule`, `LevelAction`. Stored in `Project.levels`. |
 | `model/level/library.ts` | The starter catalog. Each asset has a kind, a role, a naming class, default size, proxy shape, parameters grouped by inspector section, and hints for the Godot, Unity and Unreal mappings. |
@@ -346,5 +350,8 @@ Against spec V2:
 | §4 Hierarchy | Done: kinds, parents, child maps from items, moving between parents. |
 | §6 Navigator | Done: tree to rooms, breadcrumbs, search, favourites, status, hide, lock, rename, duplicate, move (the Map section's *Part of*), delete with a warning. |
 | §11–§12 Map properties, scale | Done: extent, origin, grid, boundary, environment and navigation words; kilometres at world scale. |
-| §13 Boundaries | Done in the studio; travel links next. |
-| §5, §7–§10, §14, engine export | In progress: world destinations and travel links, libraries by scale, buildings with floors, reference images, personal models, puzzle overlays, and the hierarchy in the engines. |
+| §5 World map | Done: regions, biomes, streaming boundaries, destinations classed Level/Area/Hub/Landmark/Transition/custom, landmarks, entrances, travel nodes, towns, dungeons and structures; routes of every kind; opening a place by double-click. Background images come with §10. |
+| §7 Context-sensitive tools | Done for world, town, level and building scales; room scale comes with room focus. |
+| §9 Presets | Done: rooms (square, corridor, hall, stairwell, lobby, warehouse, arena, cave chamber), structures (house, tower, castle section, shop, temple, pyramid, dungeon module, city block, building mass), furniture and props, all parametric. |
+| §13 Boundaries and travel | Done in the studio: boundaries per map, travel links with kinds, transitions, locks and prerequisites. |
+| §8, §10, §14, engine export | Next: buildings opening into their floors, room focus, reference images and personal models, puzzle overlays, and the hierarchy and routes in the engines. |

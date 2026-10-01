@@ -412,6 +412,8 @@ export interface Mesh {
 
 /** The graybox palette: spaces in neutral stone, everything else in its category's colour (HANDOFF tokens). */
 export const CATEGORY_COLOR: Record<string, string> = {
+  world: '#6fae5e',
+  settlement: '#c9a45c',
   spaces: '#8b8473',
   architecture: '#9a927e',
   primitives: '#a59c86',

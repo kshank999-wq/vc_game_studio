@@ -45,6 +45,9 @@ export const levelsOf = (project: Project): LevelSet => {
           assets: Array.isArray(set.assets) ? set.assets : [],
           counters: set.counters ?? {},
           ...(set.manifest ? { manifest: set.manifest } : {}),
+          ...(set.presets ? { presets: set.presets } : {}),
+          ...(set.notes ? { notes: set.notes } : {}),
+          ...(set.travel ? { travel: set.travel } : {}),
           settings: { ...base, ...set.settings, prefixes: { ...base.prefixes, ...set.settings?.prefixes } },
         };
     normalised.set(set, out);
@@ -666,7 +669,25 @@ export const removeItems = (project: Project, ids: readonly string[]): Project =
   if (!set.items.some((i) => gone.has(i.id))) return project;
   // Rules elsewhere that act on a removed item are left to validation to point out;
   // timeline events that happened there lose the place.
-  return forgetPlaces(withSet(project, { ...set, items: set.items.filter((i) => !gone.has(i.id)) }), gone);
+  // Travel links tied to a removed item keep their end where it stood.
+  const travel = set.travel?.map((t) => {
+    if (!(t.from && gone.has(t.from)) && !(t.to && gone.has(t.to))) return t;
+    const points = t.points.map((p) => ({ ...p }));
+    const at = (id: string) => set.items.find((i) => i.id === id);
+    const n = { ...t, points };
+    if (t.from && gone.has(t.from)) {
+      const i = at(t.from);
+      if (i && points[0]) points[0] = { x: i.x, y: i.y };
+      delete n.from;
+    }
+    if (t.to && gone.has(t.to)) {
+      const i = at(t.to);
+      if (i && points.length) points[points.length - 1] = { x: i.x, y: i.y };
+      delete n.to;
+    }
+    return n;
+  });
+  return forgetPlaces(withSet(project, { ...set, items: set.items.filter((i) => !gone.has(i.id)), ...(travel ? { travel } : {}) }), gone);
 };
 
 export const groupItems = (project: Project, ids: readonly string[]): Project => {

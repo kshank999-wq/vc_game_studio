@@ -21,7 +21,7 @@ import {
   withGroups,
 } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
-import type { AssetCategory, AssetDefinition, Perspective } from '../../model/level/types';
+import type { AssetCategory, AssetDefinition, Perspective, TravelKind } from '../../model/level/types';
 import { levelIssues } from '../../model/level/validate';
 import { pointNear, startPoint } from '../../model/level/play';
 import type { PlayWorld } from '../../model/play';
@@ -37,8 +37,9 @@ import { LevelInspector } from './LevelInspector';
 import { LevelMap, type MapApi, type MapTool } from './LevelMap';
 import type { Axes, Tool3d } from './gizmo';
 import { formatLength } from './units';
-import { childOfItem, createWorld, duplicateMap, kindLabel, kindOf, mapsOwnedBy, openChildMap, pathTo, removalOfMap, removeMap, updateMap, addChildMap } from '../../model/level/hierarchy';
+import { opensAsMap, scaleOf, childOfItem, createWorld, duplicateMap, kindLabel, kindOf, mapsOwnedBy, openChildMap, pathTo, removalOfMap, removeMap, updateMap, addChildMap } from '../../model/level/hierarchy';
 import { MapNavigator } from './MapNavigator';
+import { removeTravel, travelById, TRAVEL_KINDS } from '../../model/level/travel';
 import { NewWorldDialog } from './NewWorldDialog';
 
 // three.js is big: it loads the first time the graybox is opened.
@@ -99,6 +100,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [selection, setSelection] = useState<string[]>(() => (focusItem ? [focusItem.id] : focusLinked.map((i) => i.id)));
   const [tool, setTool] = useState<MapTool>('select');
   const [drawAsset, setDrawAsset] = useState('space.room');
+  const [routeKind, setRouteKind] = useState<TravelKind>('road');
   const [pick, setPick] = useState<Pick | null>(null);
   const pickRef = useRef<Pick | null>(null);
   pickRef.current = pick;
@@ -139,7 +141,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
     if (level && !level.floors.some((f) => f.id === floorId)) setFloorId(level.floors[0]!.id);
     if (!set.levels.some((l) => l.id === levelId) && set.levels[0]) setLevelId(set.levels[0].id);
     setSelection((s) => {
-      const kept = s.filter((id) => set.items.some((i) => i.id === id));
+      const kept = s.filter((id) => set.items.some((i) => i.id === id) || (set.travel ?? []).some((t) => t.id === id));
       return kept.length === s.length ? s : kept;
     });
   }, [set, level, floorId, levelId]);
@@ -217,9 +219,21 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
 
   // ------------------------------------------------------------ commands
 
-  const remove = (ids: readonly string[] = selection) => {
-    if (!ids.length) return;
-    const p = latest.current.project;
+  const remove = (all: readonly string[] = selection) => {
+    if (!all.length) return;
+    const p0 = latest.current.project;
+    // Routes in the selection go at once (spec V2 §13); then the items.
+    const routeIds = all.filter((id) => travelById(levelsOf(p0), id));
+    const ids = all.filter((id) => !routeIds.includes(id));
+    if (routeIds.length) {
+      onCommit(removeTravel(p0, routeIds));
+      setSelection([]);
+      if (!ids.length) {
+        onSay(routeIds.length === 1 ? 'Deleted the route.' : `Deleted ${routeIds.length} routes.`);
+        return;
+      }
+    }
+    const p = routeIds.length ? removeTravel(p0, routeIds) : p0;
     const s = levelsOf(p);
     const also = removalOf(p, ids);
     const go = () => {
@@ -459,6 +473,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       else if (!mod && key === '3') open3D();
       else if (!mod && key === 'd') setTool((t) => (t === 'draw' ? 'select' : 'draw'));
       else if (!mod && key === 'o') outlineTool();
+      else if (!mod && key === 't') setTool((t) => (t === 'route' ? 'select' : 'route'));
       else if (!mod && key === 'v') setTool('select');
     };
     window.addEventListener('keydown', onKey);
@@ -611,11 +626,23 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               <button className={tool === 'draw' ? 'on' : ''} aria-pressed={tool === 'draw'} onClick={() => setTool('draw')} title="Drag out a space on the map (D)">
                 Draw
               </button>
+              <button className={tool === 'route' ? 'on' : ''} aria-pressed={tool === 'route'} onClick={() => setTool((t) => (t === 'route' ? 'select' : 'route'))} title="Draw a road, river or route: click the places it joins and the points between; it ends on a place, or with Enter or a double-click (T)">
+                Route
+              </button>
               <button className={tool === 'outline' ? 'on' : ''} aria-pressed={tool === 'outline'} onClick={outlineTool} title="Click the corners of a space or volume of any shape; click the first corner, double-click or press Enter to close it (O)">
                 Outline
               </button>
             </div>
-            {tool !== 'select' && (
+            {tool === 'route' && (
+              <select className="inp small lvl-pick" aria-label="Route kind" value={routeKind} onChange={(e) => setRouteKind(e.target.value as TravelKind)}>
+                {TRAVEL_KINDS.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {(tool === 'draw' || tool === 'outline') && (
               <select className="inp small lvl-pick" aria-label="Draw" value={drawAsset} onChange={(e) => setDrawAsset(e.target.value)}>
                 {(tool === 'outline' ? OUTLINE_ASSETS : DRAW_ASSETS).map((id) => (
                   <option key={id} value={id}>
@@ -751,6 +778,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           />
         }
         set={set}
+        scale={scaleOf(kindOf(level))}
         levelId={level.id}
         floorId={floor.id}
         global={global}
@@ -823,9 +851,10 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             overlays={overlays}
             tool={tool}
             drawAsset={drawAsset}
+            routeKind={routeKind}
             placing={pick?.sticky ? pick.assetId : null}
             onPlace={putDown}
-            onOpen3D={(id) => (id && childOfItem(set, id) ? openChild(id) : open3D(id))}
+            onOpen3D={(id) => (id && (childOfItem(set, id) || opensAsMap(set, id, global)) ? openChild(id) : open3D(id))}
             onHover={setHover}
             issues={issueMap}
           />

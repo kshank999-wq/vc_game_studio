@@ -39,27 +39,64 @@ describe('worlds, regions and child maps in the Level Designer (spec V2)', () =>
     const nav = screen.getByRole('tree', { name: 'Maps' });
     expect(within(nav).getByRole('button', { name: 'The Drowned Coast, world' })).toBeTruthy();
 
-    // An exterior zone on the world, opened as its own map: a region, its size.
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Place Exterior zone' }), { button: 0, clientX: 10, clientY: 10 });
+    // The world's library is the world's tools; a region on the world, opened as its own map, its size.
+    expect(screen.queryByRole('button', { name: 'Place Exterior zone' })).toBeNull();
+    expect(screen.getByText('World and region tools')).toBeTruthy();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Place Region' }), { button: 0, clientX: 10, clientY: 10 });
     act(() => {
       window.dispatchEvent(new PointerEvent('pointerup', { clientX: 10, clientY: 10 }));
     });
     fireEvent.pointerDown(screen.getByRole('application', { name: 'Level map' }), { button: 0, clientX: 200, clientY: 150 });
     fireEvent.click(screen.getByRole('button', { name: 'Open as a map ▸' }));
-    expect(within(crumbs).getAllByRole('button').map((b) => b.textContent)).toEqual(['The Drowned Coast', 'Exterior zone', '↑']);
+    expect(within(crumbs).getAllByRole('button').map((b) => b.textContent)).toEqual(['The Drowned Coast', 'Region', '↑']);
     expect(container.querySelector('.lvl-right-head')!.textContent).toContain('Region');
-    expect(within(nav).getByRole('button', { name: 'Exterior zone, region' })).toBeTruthy();
+    expect(container.querySelector('.lvl-bounds')!.textContent).toContain('Region · 5 km × 5 km');
+    expect(within(nav).getByRole('button', { name: 'Region, region' })).toBeTruthy();
     // Back up to the world, onto the zone, which now says it opens.
     fireEvent.click(screen.getByRole('button', { name: 'Back to the parent map' }));
     expect(within(crumbs).getByRole('button', { name: 'The Drowned Coast' }).getAttribute('aria-current')).toBe('location');
-    expect(container.querySelector('.lvl-opens')!.textContent).toContain('▸ Exterior zone');
-    expect(screen.getByRole('button', { name: 'Open Exterior zone ▸' })).toBeTruthy();
+    expect(container.querySelector('.lvl-opens')!.textContent).toContain('▸ Region');
+    expect(screen.getByRole('button', { name: 'Open Region ▸' })).toBeTruthy();
 
     // Deleting the world warns about the region inside it.
     fireEvent.click(within(nav).getByRole('button', { name: 'More for The Drowned Coast' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete…' }));
     const confirm = await screen.findByRole('alertdialog');
     expect(confirm.textContent).toContain('Delete “The Drowned Coast”?');
-    expect(confirm.textContent).toContain('Exterior zone (Region)');
+    expect(confirm.textContent).toContain('Region (Region)');
+  });
+
+  it('draws a road between two places on the world map, and locks it until a rule holds', async () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: '+ Start with a world' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'New world' })).getByRole('button', { name: 'Create world' }));
+    const map = screen.getByRole('application', { name: 'Level map' });
+    const place = (asset: string, x: number, y: number) => {
+      fireEvent.pointerDown(screen.getByRole('button', { name: `Place ${asset}` }), { button: 0, clientX: 10, clientY: 10 });
+      act(() => {
+        window.dispatchEvent(new PointerEvent('pointerup', { clientX: 10, clientY: 10 }));
+      });
+      fireEvent.pointerDown(map, { button: 0, clientX: x, clientY: y });
+    };
+    place('Destination', 150, 150);
+    place('Landmark', 300, 220);
+    const marker = (name: string) => [...container.querySelectorAll('.lvl-item')].find((g) => g.textContent?.includes(name))!;
+    const [a, b] = [marker('Destination'), marker('Landmark')];
+    expect(container.querySelector('.lvl-map')!.textContent).toContain('Destination · Level');
+    // The route tool: click one place, then the other, and the road is drawn and selected.
+    fireEvent.click(screen.getByRole('button', { name: 'Route' }));
+    expect((screen.getByRole('combobox', { name: 'Route kind' }) as HTMLSelectElement).value).toBe('road');
+    fireEvent.pointerDown(a!, { button: 0, clientX: 150, clientY: 150 });
+    fireEvent.pointerDown(b!, { button: 0, clientX: 300, clientY: 220 });
+    expect(container.querySelector('.lvl-route.road')).toBeTruthy();
+    expect(container.querySelector('.lvl-right-head')!.textContent).toContain('Road: Destination → Landmark');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Locked' }));
+    expect(container.querySelector('.lvl-route.locked')!.textContent).toContain('🔒');
+    expect(screen.getByText('Opens when')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete route' }));
+    expect(container.querySelector('.lvl-route')).toBeNull();
   });
 });
+
