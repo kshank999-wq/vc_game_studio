@@ -293,6 +293,28 @@ overwrite it or keep the engine's version; nothing is replaced silently. If
 you keep a file, it is pointed out again next time. Code in a generated
 script's custom region is always kept.
 
+**Maps and travel in the engines (spec V2 §12, §13).** Every map goes to the
+engines as a level of its own, with where it sits in the hierarchy (`map`:
+its kind, parent, anchor, boundary, extent, origin, grid, environment and
+navigation words, and the maps inside it) and its travel links (`travel`:
+points, the items its ends are tied to, the map it leads to, one way, lock and
+the rule that opens it). A child map that is continuous or streamed and
+details an item on its parent is placed there: its 0, 0, 0 at the item's
+centre plus its origin, turned with the item. How each engine builds it:
+
+| | Godot | Unity | Unreal |
+| --- | --- | --- | --- |
+| Hierarchy | Each map a scene; `map_data()` on its `VCGSLevel`. A continuous child is instanced under `Maps` at its placement when its parent is set up. | Each map a root with `VcgsLevel` (its `key`, `boundary`). Building a child or its parent puts the child under the parent's `Maps` at its placement, whichever comes first. | Each map's actors in the open level, tagged with their map; a continuous or streamed child is built at its placement in its parent's world, with its own director (`MapKey`, `Boundary`, `MapOrigin`, `MapYaw`). Set `LEVEL` in `build_level.py` to each map in turn. |
+| Streamed | Loaded at its placement as the player comes within `load_margin` of its footprint; freed beyond twice that (`map_loaded`, `map_unloaded`). | Switched on and off the same way (`VcgsLevel.Stream`, each frame). | The parent's director shows and hides the child's items the same way (`SetMapLoaded`). |
+| Transition, instanced | A map of its own, gone to by `level_requested`. | The same, by `LevelRequested`. | The same, by `OnLevelRequested`. |
+| Travel | `Path3D`s under `Travel`; `can_travel(key)`, `travel(key, reverse)` → `travel_requested` (and `level_requested` for one that leads to another map). | `VcgsTravelLink`s under `Travel`, drawn as gizmos; `VcgsLevel.Travel(key, reverse)` → `Logic.TravelRequested`. | `AVcgsTravelLink` spline actors; `Director->Travel(Key, bReverse)` → `OnTravelRequested`. |
+
+A locked link answers why not ("Down into the vault is closed.") until its
+rule holds; one way, it can't be taken back. Puzzle parts bound in the studio
+go with their items (`puzzles`), as does the map an item opens into
+(`opens`). A map only for planning (`mapOnly`) is exported as data and never
+loaded as a child.
+
 ## The sample
 
 *The Sunken Vault* (**File › New from the sample**) includes a level:
@@ -305,6 +327,12 @@ script's custom region is always kept.
 - **People and lighting:** Mara, pacing the Cave Mouth on the *Cave watch* patrol (two stops, a wait at each), a player start, lights, a camera marker and an ambient zone.
 - **The Crawlway** into the Squeeze is 1.3 m high: crouch to get through.
 - **The dark:** the player start's light burns Lantern oil, 90 seconds of it. Take the **Lantern** at the Cave Mouth to light it (it makes Lantern oil available); the **Squeeze dark** zone makes the Squeeze 96% dark; talking to Mara fills the lantern again.
+
+It sits in a world, **The Drowned Coast** (10 km): **Greywater Harbour**, whose
+**Old Quarter** is a district streamed in as the player nears it (a house and a
+quay), and the **Vault entrance** down the **Coast road**. **Down into the
+vault** is a one-way loading transition into the Sunken Vault, open once the
+cave mouth has been reached.
 
 Its preflight is clean.
 
@@ -365,4 +393,4 @@ Against spec V2:
 | §13 Boundaries and travel | Done in the studio: boundaries per map, travel links with kinds, transitions, locks and prerequisites. |
 | §10 Personal library and import | Done: reference images per map and floor (map, floor plan, heightmap, photo), sized in metres or metres per pixel; OBJ, glTF and GLB proxy models with unit and up-axis conversion, scale, pivot, collision, category, tags and a thumbnail, in Personal assets for every project. Scene files beyond these three formats aren't read. |
 | §14 Puzzles | Done: the overlay of entries, required objects, clues, gates and outputs, read from the level and bound by hand; binding through presence, links and rules, so play and export follow without new runtime code; routes and other maps' parts counted. |
-| Engine export of V2 | Next: the hierarchy, boundaries and routes in the engines. |
+| Engine export of V2 (§11, §12, §13) | Done: the hierarchy, boundaries, placements and travel links in the IR and JSON, and in Godot (scenes, child maps instanced and streamed, Path3D routes, travel with locks), Unity (nested roots, streaming, travel links) and Unreal (child maps in their parent's world, a director each, streaming, spline routes); checked in each. |

@@ -110,6 +110,13 @@ namespace VCGS
         public event Action PlayerDied;
         /// <summary>What is there, or which doors are open, may have changed.</summary>
         public event Action Refreshed;
+        /// <summary>A travel link was taken (spec V2 §13): its key, the map it leads to ("" for this one), how, and where it ends ({x, y, z}, level space).</summary>
+        public event Action<string, string, string, double[]> TravelRequested;
+
+        /// <summary>Where this map is in the hierarchy (spec V2 §4): kind, parent, boundary, extent, placement and the maps inside it.</summary>
+        public readonly Dictionary<string, object> Map;
+        /// <summary>Its travel links (spec V2 §13), by key.</summary>
+        public readonly Dictionary<string, Dictionary<string, object>> Travel = new Dictionary<string, Dictionary<string, object>>();
 
         public static LevelLogic FromJson(string json, GameState game) => new LevelLogic(D.Map(Json.Parse(json)), game);
 
@@ -125,6 +132,8 @@ namespace VCGS
             LightRange = D.Num(light, "range", 8);
             LightFuel = LightFuelFull;
             names = D.Map(data, "names");
+            Map = D.Map(data, "map");
+            foreach (var o in D.List(data, "travel")) Travel[D.Str(D.Map(o), "key")] = D.Map(o);
             foreach (var o in D.List(data, "items"))
             {
                 var item = D.Map(o);
@@ -150,6 +159,72 @@ namespace VCGS
         public double ParamNum(string guid, string key, double fallback) => D.Num(D.Map(Item(guid), "params"), key, fallback);
         public bool ParamBool(string guid, string key, bool fallback) => Param(guid, key) is bool b ? b : fallback;
         public string StoryName(string key) => D.Str(names, key) is var n && n != "" ? n : key;
+
+        // ---------------------------------------------------------------- maps and travel (spec V2)
+
+        /// <summary>The maps inside this one: key, name, boundary, anchor, placement, size, centre, load_margin.</summary>
+        public List<Dictionary<string, object>> ChildMaps() => D.List(Map, "children").ConvertAll(D.Map);
+
+        /// <summary>How far a point (level space) is outside a streamed child's footprint around its anchor; 0 inside.</summary>
+        public static double OutsideOf(Dictionary<string, object> child, double x, double z)
+        {
+            var centre = D.List(child, "centre");
+            var size = D.List(child, "size");
+            if (centre.Count < 3 || size.Count < 2) return double.PositiveInfinity;
+            var turn = D.Num(D.Map(child, "placement"), "turn", 0) * Math.PI / 180;
+            var dx = x - D.Num(centre[0], 0);
+            var dz = z - D.Num(centre[2], 0);
+            // Into the footprint's own frame: undo its turn (counter-clockwise from above).
+            var lx = dx * Math.Cos(turn) - dz * Math.Sin(turn);
+            var lz = dx * Math.Sin(turn) + dz * Math.Cos(turn);
+            var ox = Math.Max(0, Math.Abs(lx) - D.Num(size[0], 0) / 2);
+            var oz = Math.Max(0, Math.Abs(lz) - D.Num(size[1], 0) / 2);
+            return Math.Sqrt(ox * ox + oz * oz);
+        }
+
+        /// <summary>
+        /// Streamed children to load (the player within their margin) and to unload
+        /// (beyond twice it), given those loaded now. Uses Player; nothing changes without one.
+        /// </summary>
+        public List<string> StreamChanges(ICollection<string> loaded, List<string> unload)
+        {
+            var load = new List<string>();
+            if (Player == null) return load;
+            foreach (var child in ChildMaps())
+            {
+                if (D.Str(child, "boundary") != "streamed" || D.Map(child, "placement").Count == 0) continue;
+                var key = D.Str(child, "key");
+                var away = OutsideOf(child, Player[0], Player[2]);
+                var margin = D.Num(child, "load_margin", 25);
+                if (away <= margin && !loaded.Contains(key)) load.Add(key);
+                else if (away > margin * 2 && loaded.Contains(key)) unload?.Add(key);
+            }
+            return load;
+        }
+
+        /// <summary>Whether a travel link can be taken now: unlocked, or locked and its rule holds (locked without one, never).</summary>
+        public bool CanTravel(string key)
+        {
+            if (!Travel.TryGetValue(key, out var link)) return false;
+            if (!D.Bool(link, "locked")) return true;
+            var when = D.Map(link, "unlock_when");
+            return when.Count > 0 && Rules.Check(when, Game);
+        }
+
+        /// <summary>Take a travel link (backwards with reverse): "" when the player goes (TravelRequested says where), else why not. One that leads to another map asks for it too.</summary>
+        public string TakeTravel(string key, bool reverse = false)
+        {
+            if (!Travel.TryGetValue(key, out var link)) return "There is no such way.";
+            var name = D.Str(link, "name");
+            if (reverse && D.Bool(link, "one_way")) return name + " only goes one way.";
+            if (!CanTravel(key)) return name + " is closed.";
+            var points = D.List(link, "points");
+            var end = D.List(reverse ? points[0] : points[points.Count - 1]);
+            var toMap = reverse ? "" : D.Str(link, "to_map");
+            TravelRequested?.Invoke(key, toMap, D.Str(link, "transition"), new[] { D.Num(end[0], 0), D.Num(end[1], 0), D.Num(end[2], 0) });
+            if (toMap != "") LevelRequested?.Invoke(toMap);
+            return "";
+        }
 
         /// <summary>The GUID of the item with this export name, or "".</summary>
         public string GuidOf(string exportName)
@@ -593,6 +668,10 @@ namespace VCGS
     {
         [Tooltip("The generated level data (Assets/VCGS/Generated/Levels/<level>.json).")]
         public TextAsset level = null;
+        [Tooltip("The map's key in VC Game Studio: its children find their parent by it.")]
+        public string key = "";
+        [Tooltip("How the game reaches it (spec V2 §13): continuous, streamed, instanced, transition or mapOnly.")]
+        public string boundary = "continuous";
 
         public LevelLogic Logic { get; private set; }
         readonly Dictionary<string, VcgsLevelItem> items = new Dictionary<string, VcgsLevelItem>();
@@ -615,6 +694,8 @@ namespace VCGS
             items.Clear();
             foreach (var item in GetComponentsInChildren<VcgsLevelItem>(true))
             {
+                // A child map built inside this one (under Maps) runs its own items.
+                if (!OwnedBy(transform, item.transform)) continue;
                 items[item.guid] = item;
                 item.Level = this;
             }
@@ -637,7 +718,36 @@ namespace VCGS
             }
             Logic.Tick(Time.deltaTime);
             MoveActors();
+            Stream();
         }
+
+        /// <summary>The child maps built inside this one (under Maps), by key.</summary>
+        public Dictionary<string, VcgsLevel> ChildLevels()
+        {
+            var found = new Dictionary<string, VcgsLevel>();
+            var holder = transform.Find("Maps");
+            if (holder == null) return found;
+            for (var i = 0; i < holder.childCount; i++)
+            {
+                var child = holder.GetChild(i).GetComponent<VcgsLevel>();
+                if (child != null) found[child.key] = child;
+            }
+            return found;
+        }
+
+        /// <summary>Streamed children (spec V2 §13): switched on as the player nears them, off again when well away.</summary>
+        public void Stream()
+        {
+            var children = ChildLevels();
+            var loaded = new List<string>();
+            foreach (var pair in children) if (pair.Value.gameObject.activeSelf) loaded.Add(pair.Key);
+            var unload = new List<string>();
+            foreach (var k in Logic.StreamChanges(loaded, unload)) if (children.TryGetValue(k, out var c)) c.gameObject.SetActive(true);
+            foreach (var k in unload) if (children.TryGetValue(k, out var c)) c.gameObject.SetActive(false);
+        }
+
+        /// <summary>Take a travel link (spec V2 §13); "" when the player goes, else why not. Answer Logic.TravelRequested to move them.</summary>
+        public string Travel(string link, bool reverse = false) => Logic != null ? Logic.TakeTravel(link, reverse) : "";
 
         /// <summary>Put each actor that moves (patrols, companions) where LevelLogic has it, facing the way it goes.</summary>
         public void MoveActors()
@@ -667,6 +777,14 @@ namespace VCGS
                     if (child != null) child.gameObject.SetActive(shut);
                 }
             }
+        }
+
+        /// <summary>Whether this item is the level's own, not a nested child map's.</summary>
+        public static bool OwnedBy(Transform level, Transform t)
+        {
+            for (var at = t.parent; at != null && at != level; at = at.parent)
+                if (at.GetComponent<VcgsLevel>() != null) return false;
+            return true;
         }
 
         public VcgsLevelItem ItemFor(string guid) => items.TryGetValue(guid, out var item) ? item : null;
@@ -699,6 +817,34 @@ namespace VCGS
         public List<GearOption> GearMenu() => Logic != null ? Logic.GearMenu() : new List<GearOption>();
         public string GearText() => Logic != null ? Logic.GearText() : "";
         public string GearDo(string act, string key) => Logic != null ? Logic.GearDo(act, key) : "";
+    }
+}
+`,
+
+  'VcgsTravelLink.cs': String.raw`${HEAD}
+using UnityEngine;
+
+namespace VCGS
+{
+    /// <summary>
+    /// A travel link from VC Game Studio (spec V2 §13): a road, trail, river,
+    /// route or transition, drawn as a line in the Scene view. Take it with
+    /// VcgsLevel.Travel(key); its lock and where it leads are in the level data.
+    /// </summary>
+    public sealed class VcgsTravelLink : MonoBehaviour
+    {
+        public string key = "";
+        public string kind = "";
+        [Tooltip("The map it takes the player to, if any.")]
+        public string toMap = "";
+        public Vector3[] points = new Vector3[0];
+
+        void OnDrawGizmos()
+        {
+            Gizmos.color = toMap != "" ? new Color(0.6f, 0.5f, 0.75f) : new Color(0.79f, 0.64f, 0.36f);
+            Gizmos.matrix = transform.localToWorldMatrix;
+            for (var i = 1; i < points.Length; i++) Gizmos.DrawLine(points[i - 1], points[i]);
+        }
     }
 }
 `,
@@ -802,7 +948,10 @@ namespace VCGS.EditorTools
             var report = new List<string>();
             var data = D.Map(Json.Parse(json));
             var rootName = D.Str(data, "export_name");
-            var root = GameObject.Find(rootName);
+            var key = D.Str(data, "key");
+            var map = D.Map(data, "map");
+            // The map already in the scene, found by its key (a streamed child may be switched off), or by its name.
+            var root = FindLevel(key)?.gameObject ?? GameObject.Find(rootName);
             if (root == null)
             {
                 root = new GameObject(rootName);
@@ -816,7 +965,10 @@ namespace VCGS.EditorTools
             if (asset != null) level.level = asset;
 
             var existing = new Dictionary<string, VcgsLevelItem>();
-            foreach (var item in root.GetComponentsInChildren<VcgsLevelItem>(true)) existing[item.guid] = item;
+            foreach (var item in root.GetComponentsInChildren<VcgsLevelItem>(true))
+                if (VcgsLevel.OwnedBy(root.transform, item.transform)) existing[item.guid] = item;
+            level.key = key;
+            level.boundary = D.Str(map, "boundary") != "" ? D.Str(map, "boundary") : "continuous";
             var seen = new HashSet<string>();
 
             foreach (var o in D.List(data, "items"))
@@ -980,9 +1132,57 @@ namespace VCGS.EditorTools
             }
             foreach (var pair in existing)
                 if (!seen.Contains(pair.Key)) report.Add(pair.Value.name + " is no longer in the level: left in place for you to delete.");
+            // Travel links (spec V2 §13): one GameObject each under Travel, its points for the gizmo.
+            Clear(root.transform.Find("Travel"));
+            var travel = D.List(data, "travel");
+            if (travel.Count > 0)
+            {
+                var holder = Child(root.transform, "Travel");
+                foreach (var o in travel)
+                {
+                    var t = D.Map(o);
+                    var link = Child(holder, D.Str(t, "key")).gameObject.AddComponent<VcgsTravelLink>();
+                    link.key = D.Str(t, "key");
+                    link.kind = D.Str(t, "kind");
+                    link.toMap = D.Str(t, "to_map");
+                    link.points = D.List(t, "points").ConvertAll(p => ToUnity(D.List(p))).ToArray();
+                }
+            }
+            // The hierarchy (spec V2 §12): a child goes inside its parent's Maps at its placement, whichever is built first.
+            var parent = FindLevel(D.Str(map, "parent"));
+            if (parent != null && parent != level) Nest(parent, level, D.Map(map, "placement"), report);
+            foreach (var o in D.List(map, "children"))
+            {
+                var c = D.Map(o);
+                var child = FindLevel(D.Str(c, "key"));
+                if (child != null && child != level) Nest(level, child, D.Map(c, "placement"), report);
+            }
             EditorSceneManager.MarkSceneDirty(root.scene);
             report.Add(rootName + ": " + seen.Count + " items up to date.");
             return report;
+        }
+
+        /// <summary>The map with this key in the open scene, switched on or not.</summary>
+        static VcgsLevel FindLevel(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            foreach (var go in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+                foreach (var l in go.GetComponentsInChildren<VcgsLevel>(true))
+                    if (l.key == key) return l;
+            return null;
+        }
+
+        /// <summary>Put a child map inside its parent: under Maps at its placement (continuous and streamed children; a streamed one starts switched off). Others stay where they are.</summary>
+        static void Nest(VcgsLevel parent, VcgsLevel child, Dictionary<string, object> placement, List<string> report)
+        {
+            if (placement.Count == 0) return;
+            var maps = parent.transform.Find("Maps");
+            if (maps == null) maps = Child(parent.transform, "Maps");
+            child.transform.SetParent(maps, false);
+            child.transform.localPosition = ToUnity(D.List(placement, "position"));
+            child.transform.localRotation = Quaternion.Euler(0, -(float)D.Num(placement, "turn"), 0);
+            child.gameObject.SetActive(child.boundary != "streamed");
+            report.Add(child.gameObject.name + " is inside " + parent.gameObject.name + (child.boundary == "streamed" ? ", streamed in as the player nears it." : "."));
         }
 
         static void Place(Transform t, Dictionary<string, object> piece)

@@ -323,6 +323,7 @@ static class Check
         else Console.WriteLine("custom code: " + Scenes.Custom);
 
         CheckLevel(story);
+        CheckWorld(story);
 
         Console.WriteLine(failures == 0 ? "OK" : failures + " FAILED");
         return failures == 0 ? 0 : 1;
@@ -489,6 +490,57 @@ static class Check
         levelComponent.Setup(fresh);
         levelComponent.Interact(levelComponent.Logic.GuidOf("INT_VaultChamber_RustedLever_005"));
         if (root.transform.Find("TRG_VaultChamber_FloodedSeam_001").gameObject.activeSelf) Fail("VcgsLevel should switch the drained seam off");
+    }
+
+    // The world (spec V2): the old quarter built inside it at the harbour, streamed with the player; the coast's travel links and their lock.
+    static void CheckWorld(Story story)
+    {
+        var worldJson = File.ReadAllText("Assets/VCGS/Generated/Levels/the_drowned_coast.json");
+        var quarterJson = File.ReadAllText("Assets/VCGS/Generated/Levels/old_quarter.json");
+        // The child first, then its parent: the parent takes it in.
+        VCGS.EditorTools.VcgsLevelBuilder.Build(quarterJson, "Assets/VCGS/Generated/Levels/old_quarter.json", false);
+        var report = VCGS.EditorTools.VcgsLevelBuilder.Build(worldJson, "Assets/VCGS/Generated/Levels/the_drowned_coast.json", false);
+        var world = UnityEngine.GameObject.Find("LVL_TheDrownedCoast_02");
+        var quarter = world?.transform.Find("Maps")?.Find("LVL_OldQuarter_03");
+        Console.WriteLine("world built: " + string.Join(" / ", report.FindAll(l => l.Contains("inside"))));
+        if (quarter == null || quarter.localPosition != new UnityEngine.Vector3(-2000, 0, -1500) || quarter.gameObject.activeSelf)
+            Fail("the old quarter should be inside the world at the harbour (north is +Z), switched off until streamed in");
+        var worldItems = Array.FindAll(world.transform.GetComponentsInChildren<VcgsLevelItem>(true), i => VcgsLevel.OwnedBy(world.transform, i.transform));
+        if (worldItems.Length != 2) Fail("the world should own its two items, not the quarter's, got " + worldItems.Length);
+        var road = world.transform.Find("Travel")?.Find("coast_road")?.GetComponent<VcgsTravelLink>();
+        if (road == null || road.points.Length != 3 || road.points[2] != new UnityEngine.Vector3(1800, 0, 1200)) Fail("the coast road should be a travel link of three points");
+        // Building the quarter again finds it where it is, switched off, and adds nothing.
+        var again = VCGS.EditorTools.VcgsLevelBuilder.Build(quarterJson, "Assets/VCGS/Generated/Levels/old_quarter.json", false);
+        if (again.Exists(l => l.StartsWith("Created") || l.StartsWith("Added"))) Fail("building the quarter again should find it inside the world, got " + string.Join(" / ", again));
+
+        var component = world.GetComponent<VcgsLevel>();
+        component.level = new UnityEngine.TextAsset { text = worldJson };
+        var game = new GameState(story);
+        component.Setup(game);
+        var logic = component.Logic;
+        if (D.Str(logic.Map, "kind") != "world" || logic.ChildMaps().Count != 2) Fail("the world's data should say it is a world with two maps inside");
+        // Streaming: far off, nothing; near the harbour, the quarter comes in; well away, it goes.
+        logic.Player = new double[] { 3000, 0, -3000 };
+        component.Stream();
+        if (quarter.gameObject.activeSelf) Fail("the quarter should stay out 5 km away");
+        logic.Player = new double[] { -2000 + 650, 0, 1500 };
+        component.Stream();
+        if (!quarter.gameObject.activeSelf) Fail("the quarter should stream in as the player nears the harbour");
+        logic.Player = new double[] { -2000 + 1200, 0, 1500 };
+        component.Stream();
+        if (quarter.gameObject.activeSelf) Fail("the quarter should stream out once the player is well away");
+        Console.WriteLine("streamed: in at 50 m from the harbour's edge, out at 600 m");
+        // Travel: closed until the cave mouth is reached, then it leads into the vault.
+        var asked = new List<string>();
+        var went = new List<string>();
+        logic.LevelRequested += k => asked.Add(k);
+        logic.TravelRequested += (k, m, how, to) => went.Add(k + " → " + (m == "" ? "here" : m) + " (" + how + ") at " + to[0] + ", " + to[2]);
+        if (component.Travel("down_into_the_vault") != "Down into the vault is closed." || logic.CanTravel("down_into_the_vault")) Fail("the way down should be closed until the cave mouth is reached");
+        if (component.Travel("coast_road", true) != "" || went.Count != 1 || !went[0].EndsWith("at -2000, 1500")) Fail("the coast road should lead back to the harbour, got " + string.Join(" / ", went));
+        game.Visit(Scenes.Sc01TheCaveMouth);
+        if (component.Travel("down_into_the_vault", true) != "Down into the vault only goes one way.") Fail("the way down should go one way");
+        if (component.Travel("down_into_the_vault") != "" || asked.Count != 1 || asked[0] != "sunken_vault") Fail("the way down should lead into the vault once open, got " + string.Join(" / ", asked));
+        Console.WriteLine("travel: " + string.Join(" / ", went));
     }
 
     static string Serialize(object o)

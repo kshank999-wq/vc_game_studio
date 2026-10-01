@@ -120,5 +120,32 @@ gate_slabs = now["AUD_VaultChamber_DrippingEcho_001"].get_editor_property("slabs
 if len(gate_slabs) != 1 or not gate_slabs[0].get_editor_property("collide") or gate_slabs[0].get_editor_property("visible") or len(now["AUD_VaultChamber_DrippingEcho_001"].get_editor_property("zones")) != 1:
     fail("a blocking outlined gate should get an unseen colliding slab and keep its zone")
 
+# The world (spec V2): the old quarter built into it at the harbour, its own director streaming it; the coast's travel links as splines.
+build_level.LEVEL = "the_drowned_coast"
+world_report = build_level.build()
+build_level.LEVEL = "old_quarter"
+quarter_report = build_level.build()
+with open(os.path.join(work, "Content/VCGS/Generated/Levels/old_quarter.json"), encoding="utf-8") as f:
+    quarter_data = json.load(f)
+house = items()[quarter_data["items"][0]["export_name"]]
+x, _, z = quarter_data["items"][0]["position"]
+# Placed at the harbour (-2000, 1500 in the data): Unreal X north = -z, Y east = x, in cm.
+if (house.get_actor_location() - fake_unreal.Vector(-(1500 + z) * 100, (-2000 + x) * 100, 0)).length() > 0.5 or not house.actor_has_tag("vcgs_map:old_quarter"):
+    fail("the old quarter's house should be built at the harbour, got %r" % house.get_actor_location())
+directors = {d.get_editor_property("map_key"): d for d in fake_unreal._actors if isinstance(d, fake_unreal.VcgsLevelDirector)}
+quarter_director = directors.get("old_quarter")
+if set(directors) != {"sunken_vault", "the_drowned_coast", "old_quarter"} or quarter_director.get_editor_property("boundary") != "streamed" or (quarter_director.get_editor_property("map_origin") - fake_unreal.Vector(-150000, -200000, 0)).length() > 0.5:
+    fail("each map should have its own director, the quarter's streamed and placed at the harbour, got %r" % {k: d.get_editor_property("boundary") for k, d in directors.items()})
+links = {a.get_editor_property("key"): a for a in fake_unreal._actors if isinstance(a, fake_unreal.VcgsTravelLink)}
+if set(links) != {"coast_road", "down_into_the_vault"} or len(links["coast_road"].get_editor_property("points")) != 3 or links["down_into_the_vault"].get_editor_property("to_map") != "sunken_vault":
+    fail("the world's travel links should be splines, the way down leading to the vault")
+# The world's items are its own: building it again reports nothing missing of the vault's or the quarter's.
+again = build_level.build()
+build_level.LEVEL = "the_drowned_coast"
+again = build_level.build()
+if any("no longer in the level" in line for line in again) or len([a for a in fake_unreal._actors if isinstance(a, fake_unreal.VcgsTravelLink)]) != 2:
+    fail("building the world again should touch only its own items and links, got %s" % again)
+print("world: %s / %s" % (world_report[-1], next((line for line in quarter_report if "inside" in line), "?")))
+
 print("build_level.py OK" if not failures else "%d FAILED" % len(failures))
 sys.exit(1 if failures else 0)

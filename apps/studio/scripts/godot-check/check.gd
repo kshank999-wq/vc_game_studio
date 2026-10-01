@@ -608,6 +608,7 @@ func _initialize() -> void:
 	game.loaded = false
 
 	check_level(game)
+	check_world(game)
 
 	print("OK" if failures == 0 else str(failures) + " FAILED")
 	quit(0 if failures == 0 else 1)
@@ -795,3 +796,59 @@ func check_level(game: Node) -> void:
 	print("level gear: in hand ", level.in_hand(), ", Deep Breath rank ", game.skill_rank("deep_breath"), ", flares ", game.items.get("flare", 0))
 	game.load_text(before_level_gear)
 	game.loaded = false
+
+
+# The world (spec V2): its maps in a hierarchy, a streamed district loaded in place as the player nears it, and travel links with locks.
+func check_world(game: Node) -> void:
+	load("res://vcgs/generated/logic/rules.gd").reset(game)
+	var world: Node = load("res://vcgs/generated/levels/the_drowned_coast.tscn").instantiate()
+	root.add_child(world)
+	var walker := Node3D.new()
+	world.player = walker
+	walker.position = Vector3(3000, 0, -3000)
+	world.setup(game)
+	var map: Dictionary = world.map_data()
+	var kids: Array = map.get("children", [])
+	print("world: ", map.get("kind"), " · ", kids.map(func(c: Dictionary) -> String: return str(c.key) + " (" + str(c.boundary) + ")"))
+	if map.get("kind") != "world" or kids.size() != 2 or world.get_meta("vcgs_map_kind") != "world":
+		fail("the world should be a world with the vault and the old quarter inside it, got " + str(map))
+	var vault: Node = load("res://vcgs/generated/levels/sunken_vault.tscn").instantiate()
+	if vault.map_data().get("parent") != "the_drowned_coast" or vault.map_data().get("boundary") != "transition":
+		fail("the vault should be part of the world, reached by a transition")
+	vault.free()
+	# Streamed: not there far away; there in place near the harbour; gone again well away.
+	world._process(0.1)
+	if world.maps.has("old_quarter"):
+		fail("the old quarter should not be loaded 5 km away")
+	walker.position = Vector3(-2000 + 650, 0, 1500)
+	world._process(0.1)
+	var quarter: Node3D = world.maps.get("old_quarter")
+	if quarter == null or quarter.position.distance_to(Vector3(-2000, 0, 1500)) > 0.01 or quarter.level_data().size() != 2 or quarter.nodes.size() != 2:
+		fail("the old quarter should stream in at the harbour as the player nears it")
+	else:
+		print("old quarter streamed in at ", quarter.position, " with ", quarter.nodes.size(), " items, inside the world: ", quarter.get_parent().get_parent() == world)
+	walker.position = Vector3(-2000 + 1200, 0, 1500)
+	world._process(0.1)
+	if world.maps.has("old_quarter"):
+		fail("the old quarter should stream out once the player is well away")
+	# The harbour says what it opens into; the roads are paths.
+	var harbour: Node = world.get_node_or_null("Travel/coast_road")
+	if harbour == null or (harbour as Path3D).curve.point_count != 3:
+		fail("the coast road should be a path of three points")
+	# Locked until the cave mouth is reached: then it leads into the vault.
+	var asked: Array = []
+	world.level_requested.connect(func(k: String) -> void: asked.append(k))
+	var went: Array = []
+	world.travel_requested.connect(func(k: String, m: String, how: String, to: Vector3) -> void: went.append([k, m, how, to]))
+	if world.travel("down_into_the_vault") != "Down into the vault is closed." or world.can_travel("down_into_the_vault"):
+		fail("the way down should be closed until the cave mouth is reached")
+	if world.travel("coast_road", true) != "" or went.size() != 1 or (went[0][3] as Vector3).distance_to(Vector3(-2000, 0, 1500)) > 0.01:
+		fail("the coast road should go back to the harbour, got " + str(went))
+	game.visit("sc_01_the_cave_mouth")
+	if world.travel("down_into_the_vault", true) != "Down into the vault only goes one way.":
+		fail("the way down should go one way")
+	if world.travel("down_into_the_vault") != "" or asked != ["sunken_vault"]:
+		fail("the way down should lead into the vault once open, got " + str(asked))
+	print("travel: ", went.map(func(w: Array) -> String: return str(w[0]) + " → " + (str(w[1]) if str(w[1]) != "" else "here") + " (" + str(w[2]) + ")"))
+	walker.free()
+	world.queue_free()

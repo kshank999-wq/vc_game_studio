@@ -3,6 +3,8 @@ import type { Effect, Rule } from '../rules';
 import type { Project } from '../types';
 import { assetOf, contains, frameOf, meshesFor, paramOf } from '../level/geometry';
 import { levelsOf } from '../level/level';
+import { boundsOf, childOfItem, childrenOf, gridOf, kindOf, statusOf } from '../level/hierarchy';
+import { travelLabel, travelLength, travelOf, travelPoints } from '../level/travel';
 import { exportNameOf, levelExportName } from '../level/naming';
 import type { LevelItem, ParamValue } from '../level/types';
 import { fingerprint } from './engines';
@@ -93,12 +95,77 @@ export interface IrLevelItem {
   motion?: IrMotion;
   /** The darkness zones it is in that need a light (spec §6): while any is in the level and the player's light is off, it can't be used. */
   in_dark?: string[];
+  /** The parts it plays in puzzles (spec V2 §14), as bound: the puzzle's key, the role, and the step's key. */
+  puzzles?: { puzzle: string; role: string; node?: string }[];
+  /** The map it opens into (its key), when it has one. */
+  opens?: string;
   revision: string;
 }
 
 export type IrMotion =
   | { kind: 'patrol'; name: string; speed: number; stops: { guid: string; at: [number, number, number]; wait: number }[] }
   | { kind: 'follow'; speed: number; distance: number };
+
+/**
+ * Where a map sits in the hierarchy (spec V2 §4, §12, §13), and how the game
+ * reaches it. A child that is continuous or streamed and details an item on
+ * its parent has a `placement`: its own 0, 0, 0 in the parent's space.
+ */
+export interface IrMap {
+  kind: string;
+  /** The map it is part of (its key), if any. */
+  parent: string | null;
+  /** The item on the parent it details (its GUID), if any. */
+  anchor: string | null;
+  boundary: string;
+  status: string;
+  /** Its extent [width, depth] in metres, when it has one. */
+  size: [number, number] | null;
+  /** Where its own 0, 0 is from its centre [x, z]. */
+  origin: [number, number];
+  grid: number;
+  environment: string;
+  navigation: string;
+  /** The maps inside it, and for each how it is reached and where it goes. */
+  children: IrChildMap[];
+  /** Where it sits in its parent (as the parent's `children` entry has it), or null. */
+  placement: IrChildMap['placement'];
+}
+
+export interface IrChildMap {
+  key: string;
+  name: string;
+  boundary: string;
+  /** The item it details on this map (its GUID), if any. */
+  anchor: string | null;
+  /** Where the child's 0, 0, 0 is in this map's space, and its turn about y (degrees, counter-clockwise from above). Null when it isn't placed in this map. */
+  placement: { position: [number, number, number]; turn: number } | null;
+  /** For a streamed child: its footprint [width, depth] around the anchor's centre (`centre`, turned by the placement's turn), and how far outside it the player may come before it loads. */
+  size: [number, number] | null;
+  centre: [number, number, number] | null;
+  load_margin: number;
+}
+
+/** A travel link (spec V2 §5, §13): a way along points, its ends' items, where it leads, and its lock. */
+export interface IrTravel {
+  guid: string;
+  key: string;
+  name: string;
+  kind: string;
+  transition: string;
+  floor: string;
+  /** The items its ends are tied to (GUIDs), if any. */
+  from: string | null;
+  to: string | null;
+  /** The map it takes the player to (its key), if any. */
+  to_map: string | null;
+  points: [number, number, number][];
+  length: number;
+  one_way: boolean;
+  locked: boolean;
+  /** A locked link opens while this holds; locked without one, it stays shut. */
+  unlock_when?: IrRule;
+}
 
 export interface IrLevel {
   guid: string;
@@ -112,6 +179,8 @@ export interface IrLevel {
   /** The player's light, from the player start (spec §6): the story item or mechanic that lights it, its fuel in seconds (0 for ever), how far it reaches. */
   light: { source: string; fuel: number; range: number } | null;
   items: IrLevelItem[];
+  map: IrMap;
+  travel: IrTravel[];
   revision: string;
 }
 
@@ -135,6 +204,61 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
     levelKey.set(level.id, k);
   }
   const itemsById = new Map(set.items.map((i) => [i.id, i]));
+  // Travel links' keys: from their names, unique across the project.
+  const travelKey = new Map<string, string>();
+  for (const t of set.travel ?? []) {
+    let k = story.toKey(travelLabel(set, t));
+    for (let n = 2; usedKeys.has(k); n++) k = `${story.toKey(travelLabel(set, t))}_${n}`;
+    usedKeys.add(k);
+    travelKey.set(t.id, k);
+  }
+  // Where a map sits (spec V2 §12): a child placed in its parent's space is centred on the item it details, turned with it.
+  const childEntry = (k: (typeof set.levels)[number], level: (typeof set.levels)[number]): IrChildMap => {
+    const anchor = k.anchorId ? itemsById.get(k.anchorId) : undefined;
+    const kb = boundsOf(set, k);
+    const placed = anchor && anchor.levelId === level.id && (k.boundary ?? 'continuous') !== 'mapOnly' && ((k.boundary ?? 'continuous') === 'continuous' || k.boundary === 'streamed');
+    let placement: IrChildMap['placement'] = null;
+    let centre: IrChildMap['centre'] = null;
+    if (placed) {
+      const f = frameOf(set, anchor);
+      const r = (f.rotation * Math.PI) / 180;
+      const ox = k.origin?.x ?? 0;
+      const oy = k.origin?.y ?? 0;
+      const y = (level.floors.find((fl) => fl.id === anchor.floorId)?.elevation ?? 0) + f.z;
+      placement = { position: [round(f.x + ox * Math.cos(r) - oy * Math.sin(r)), round(y), round(f.y + ox * Math.sin(r) + oy * Math.cos(r))], turn: round(-f.rotation) || 0 };
+      centre = [round(f.x), round(y), round(f.y)];
+    }
+    const size: [number, number] | null = kb ? [round(kb.w), round(kb.d)] : null;
+    return {
+      key: levelKey.get(k.id)!,
+      name: k.name,
+      boundary: k.boundary ?? 'continuous',
+      anchor: anchor && anchor.levelId === level.id ? anchor.id : null,
+      placement,
+      size,
+      centre,
+      load_margin: size ? round(Math.max(25, Math.min(500, Math.max(...size) * 0.1))) : 25,
+    };
+  };
+  const mapOf = (level: (typeof set.levels)[number]): IrMap => {
+    const b = boundsOf(set, level);
+    const kids = childrenOf(set, level.id).filter((k) => !k.hidden);
+    const parent = level.parentId ? set.levels.find((l) => l.id === level.parentId) : undefined;
+    return {
+      kind: kindOf(level),
+      parent: level.parentId ? (levelKey.get(level.parentId) ?? null) : null,
+      anchor: level.anchorId && itemsById.has(level.anchorId) ? level.anchorId : null,
+      boundary: level.boundary ?? 'continuous',
+      status: statusOf(set, level),
+      size: b ? [round(b.w), round(b.d)] : null,
+      origin: [round(level.origin?.x ?? 0), round(level.origin?.y ?? 0)],
+      grid: round(gridOf(set, level.id)),
+      environment: level.environment ?? '',
+      navigation: level.navigation ?? '',
+      children: kids.map((k) => childEntry(k, level)),
+      placement: parent ? childEntry(level, parent).placement : null,
+    };
+  };
   const motionFor = (item: (typeof set.items)[number]): { motion?: IrMotion } => {
     const m = motionOf(set, item);
     if (!m) return {};
@@ -230,6 +354,10 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
           pieces,
           ...motionFor(item),
           ...(inDark(item).length ? { in_dark: inDark(item) } : {}),
+          ...(item.puzzles?.length
+            ? { puzzles: item.puzzles.flatMap((b) => (story.key(b.puzzle) ? [{ puzzle: story.key(b.puzzle)!, role: b.role, ...(b.node && story.key(b.node) ? { node: story.key(b.node)! } : {}) }] : [])) }
+            : {}),
+          ...(childOfItem(set, item.id) ? { opens: levelKey.get(childOfItem(set, item.id)!.id)! } : {}),
         };
         return { ...out, revision: fingerprint(JSON.stringify(out)) };
       });
@@ -244,6 +372,29 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
       start: start ? { position: start.position, turn: start.turn } : null,
       light: start && String(start.params.light ?? '') ? { source: String(start.params.light), fuel: Number(start.params.lightFuel) || 0, range: Number(start.params.lightRange) || 8 } : null,
       items,
+      map: mapOf(level),
+      travel: travelOf(set, level.id).map((t): IrTravel => {
+        const y = t.floorId ? (elevation.get(t.floorId) ?? 0) : 0;
+        const pts = travelPoints(set, t);
+        const exported = (id?: string) => (id && items.some((i) => i.guid === id) ? id : null);
+        const when = story.rule(t.unlockWhen);
+        return {
+          guid: t.id,
+          key: travelKey.get(t.id)!,
+          name: travelLabel(set, t),
+          kind: t.kind,
+          transition: t.transition ?? 'walk',
+          floor: t.floorId ? (floorKey.get(t.floorId) ?? '') : '',
+          from: exported(t.from),
+          to: exported(t.to),
+          to_map: t.toMap ? (levelKey.get(t.toMap) ?? null) : null,
+          points: pts.map((q): [number, number, number] => [round(q.x), round(y), round(q.y)]),
+          length: round(travelLength(pts)),
+          one_way: !!t.oneWay,
+          locked: !!t.locked,
+          ...(t.locked && when ? { unlock_when: when } : {}),
+        };
+      }),
     };
     return { ...out, revision: fingerprint(JSON.stringify(out)) };
   });

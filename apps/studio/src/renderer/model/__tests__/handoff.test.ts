@@ -231,7 +231,7 @@ describe('level export', () => {
   it('says which items are new, changed or removed since the last export', () => {
     let p = sunkenVault();
     const first = planHandoff(p);
-    expect(first.levelChanges.added).toHaveLength(first.levels[0]!.items.length);
+    expect(first.levelChanges.added).toHaveLength(first.levels.flatMap((l) => l.items).length);
     p = recordExport(p, first);
     expect(planHandoff(p).levelChanges).toMatchObject({ added: [], changed: [], removed: [] });
     const items = first.levels[0]!.items;

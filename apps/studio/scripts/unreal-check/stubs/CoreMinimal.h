@@ -26,6 +26,7 @@ public:
     const TCHAR* operator*() const { return data.c_str(); }
     bool IsEmpty() const { return data.empty(); }
     bool operator==(const FString& o) const { return data == o.data; }
+    bool operator!=(const FString& o) const { return data != o.data; }
     friend FString operator/(const FString& a, const FString& b) { return FString((a.data + "/" + b.data).c_str()); }
 private:
     std::string data;

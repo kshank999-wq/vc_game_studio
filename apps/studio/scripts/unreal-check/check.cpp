@@ -125,6 +125,43 @@ static void CheckLevel(const vcgs::Story& story)
     if (level.IsPresent(seam) || level.IsPresent(door)) Fail("once solved, the seam drains and the bronze door gives way");
 }
 
+// The world (spec V2): its maps, a streamed district by the player's distance, travel links and their lock.
+static void CheckWorld(const vcgs::Story& story)
+{
+    std::ifstream in("Content/VCGS/Generated/Levels/the_drowned_coast.json");
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    std::string error;
+    vcgs::GameState game(story);
+    vcgs::LevelLogic world(vcgs::JsonReader::Parse(buffer.str(), &error), game);
+    if (world.Map()["kind"].Str() != "world" || world.ChildMaps().Size() != 2) Fail("the world should be a world with two maps inside");
+    std::set<std::string> loaded;
+    std::vector<std::string> unload;
+    world.HasPlayer = true;
+    world.PlayerX = 3000;
+    world.PlayerZ = -3000;
+    if (!world.StreamChanges(loaded, unload).empty()) Fail("nothing should stream in 5 km away");
+    world.PlayerX = -2000 + 650;
+    world.PlayerZ = 1500;
+    const auto in_ = world.StreamChanges(loaded, unload);
+    if (in_.size() != 1 || in_[0] != "old_quarter") Fail("the old quarter should stream in as the player nears the harbour");
+    loaded.insert("old_quarter");
+    world.PlayerX = -2000 + 1200;
+    world.StreamChanges(loaded, unload);
+    if (unload.size() != 1 || unload[0] != "old_quarter") Fail("the old quarter should stream out once the player is well away");
+    std::vector<std::string> went, asked;
+    world.OnTravel = [&](const std::string& k, const std::string& m, const std::string& how, double x, double, double z) {
+        went.push_back(k + " -> " + (m.empty() ? "here" : m) + " (" + how + ") at " + std::to_string(static_cast<int>(x)) + ", " + std::to_string(static_cast<int>(z)));
+    };
+    world.OnLevel = [&](const std::string& k) { asked.push_back(k); };
+    if (world.Travel("down_into_the_vault") != "Down into the vault is closed." || world.CanTravel("down_into_the_vault")) Fail("the way down should be closed until the cave mouth is reached");
+    if (world.Travel("coast_road", true) != "" || went.size() != 1) Fail("the coast road should lead back to the harbour");
+    game.Visit(VcgsKeys::Scenes::Sc01TheCaveMouth);
+    if (world.Travel("down_into_the_vault", true) != "Down into the vault only goes one way.") Fail("the way down should go one way");
+    if (world.Travel("down_into_the_vault") != "" || asked.size() != 1 || asked[0] != "sunken_vault") Fail("the way down should lead into the vault once open");
+    std::printf("world: %s · streamed old_quarter in and out · travel: %s\n", world.Map()["kind"].Str().c_str(), Join(went, " / ").c_str());
+}
+
 int main()
 {
     std::ifstream in("Content/VCGS/Generated/story.json");
@@ -474,6 +511,7 @@ int main()
     else std::printf("custom code: %s\n", VcgsKeys::CustomCheck);
 
     CheckLevel(story);
+    CheckWorld(story);
 
     std::printf("%s\n", failures == 0 ? "OK" : (std::to_string(failures) + " FAILED").c_str());
     return failures == 0 ? 0 : 1;

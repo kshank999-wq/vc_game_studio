@@ -90,6 +90,8 @@ namespace vcgs
         std::function<void()> OnDied, OnRefresh;
         /** The light went on or off. */
         std::function<void(bool)> OnLightChanged;
+        /** A travel link was taken (spec V2 §13): its key, the map it leads to ("" for this one), how, and where it ends (level space). */
+        std::function<void(const std::string&, const std::string&, const std::string&, double, double, double)> OnTravel;
 
         LevelLogic(Value data, GameState& game) : Data(std::move(data)), Game(game)
         {
@@ -140,6 +142,81 @@ namespace vcgs
         std::string GuidOf(const std::string& exportName) const
         {
             for (const auto& guid : Order) if (Item(guid)["export_name"].Str() == exportName) return guid;
+            return "";
+        }
+
+        // ---------------------------------------------------------------- maps and travel (spec V2)
+
+        /** Where this map is in the hierarchy (spec V2 §4): kind, parent, boundary, extent, placement and the maps inside it. */
+        const Value& Map() const { return Data["map"]; }
+        const Value& ChildMaps() const { return Data["map"]["children"]; }
+
+        /** A travel link by key (None when there is none). */
+        const Value& TravelLink(const std::string& key) const
+        {
+            const Value& list = Data["travel"];
+            for (size_t i = 0; i < list.Size(); i++) if (list[i]["key"].Str() == key) return list[i];
+            return Value::None();
+        }
+
+        /** How far a point (level space) is outside a streamed child's footprint around its anchor; 0 inside. */
+        static double OutsideOf(const Value& child, double x, double z)
+        {
+            const Value& centre = child["centre"];
+            const Value& size = child["size"];
+            if (centre.Size() < 3 || size.Size() < 2) return std::numeric_limits<double>::infinity();
+            const double turn = child["placement"]["turn"].Num(0) * 3.14159265358979323846 / 180;
+            const double dx = x - centre[0].Num(0), dz = z - centre[2].Num(0);
+            // Into the footprint's own frame: undo its turn (counter-clockwise from above).
+            const double lx = dx * std::cos(turn) - dz * std::sin(turn);
+            const double lz = dx * std::sin(turn) + dz * std::cos(turn);
+            const double ox = std::max(0.0, std::fabs(lx) - size[0].Num(0) / 2);
+            const double oz = std::max(0.0, std::fabs(lz) - size[1].Num(0) / 2);
+            return std::sqrt(ox * ox + oz * oz);
+        }
+
+        /** Streamed children to load (the player within their margin) and to unload (beyond twice it), given those loaded now. */
+        std::vector<std::string> StreamChanges(const std::set<std::string>& loaded, std::vector<std::string>& unload) const
+        {
+            std::vector<std::string> load;
+            if (!HasPlayer) return load;
+            const Value& children = ChildMaps();
+            for (size_t i = 0; i < children.Size(); i++)
+            {
+                const Value& child = children[i];
+                if (child["boundary"].Str() != "streamed" || !child["placement"].IsObject()) continue;
+                const std::string key = child["key"].Str();
+                const double away = OutsideOf(child, PlayerX, PlayerZ);
+                const double margin = child["load_margin"].Num(25);
+                if (away <= margin && !loaded.count(key)) load.push_back(key);
+                else if (away > margin * 2 && loaded.count(key)) unload.push_back(key);
+            }
+            return load;
+        }
+
+        /** Whether a travel link can be taken now: unlocked, or locked and its rule holds (locked without one, never). */
+        bool CanTravel(const std::string& key) const
+        {
+            const Value& link = TravelLink(key);
+            if (!link.IsObject()) return false;
+            if (!(link["locked"].type == Value::Type::Bool && link["locked"].boolean)) return true;
+            const Value& when = link["unlock_when"];
+            return when.IsObject() && when["items"].Size() > 0 && Rules::Check(when, Game);
+        }
+
+        /** Take a travel link (backwards with reverse): "" when the player goes (OnTravel says where), else why not. One that leads to another map asks for it too. */
+        std::string Travel(const std::string& key, bool reverse = false)
+        {
+            const Value& link = TravelLink(key);
+            if (!link.IsObject()) return "There is no such way.";
+            const std::string name = link["name"].Str();
+            if (reverse && link["one_way"].type == Value::Type::Bool && link["one_way"].boolean) return name + " only goes one way.";
+            if (!CanTravel(key)) return name + " is closed.";
+            const Value& points = link["points"];
+            const Value& end = points[reverse ? 0 : points.Size() - 1];
+            const std::string toMap = reverse ? "" : link["to_map"].Str();
+            if (OnTravel) OnTravel(key, toMap, link["transition"].Str(), end[0].Num(0), end[1].Num(0), end[2].Num(0));
+            if (!toMap.empty() && OnLevel) OnLevel(toMap);
             return "";
         }
 
@@ -791,6 +868,59 @@ void AVcgsLevelItem::OnConstruction(const FTransform& Transform)
 }
 `,
 
+  'Source/VCGS/Public/VcgsTravelLink.h': `${RUNTIME_HEAD}
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "VcgsTravelLink.generated.h"
+
+class USplineComponent;
+
+/**
+ * A travel link from VC Game Studio (spec V2 §13): a road, trail, river,
+ * route or transition, as a spline through its points. Take it with
+ * AVcgsLevelDirector::Travel(Key); its lock and where it leads are in the level data.
+ */
+UCLASS(ClassGroup = (VCGS))
+class VCGS_API AVcgsTravelLink : public AActor
+{
+    GENERATED_BODY()
+
+public:
+    AVcgsTravelLink();
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Key;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Kind;
+    /** The map it takes the player to, if any. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString ToMap;
+    /** Its points in the world, in centimetres; build_level.py sets them. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") TArray<FVector> Points;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VCGS") USplineComponent* Spline = nullptr;
+
+    virtual void OnConstruction(const FTransform& Transform) override;
+};
+`,
+
+  'Source/VCGS/Private/VcgsTravelLink.cpp': `${RUNTIME_HEAD}
+#include "VcgsTravelLink.h"
+#include "Components/SplineComponent.h"
+
+AVcgsTravelLink::AVcgsTravelLink()
+{
+    Spline = CreateDefaultSubobject<USplineComponent>(TEXT("Spline"));
+    RootComponent = Spline;
+}
+
+void AVcgsTravelLink::OnConstruction(const FTransform& Transform)
+{
+    Super::OnConstruction(Transform);
+    Spline->ClearSplinePoints(false);
+    for (const FVector& Point : Points) Spline->AddSplinePoint(Point, ESplineCoordinateSpace::World, false);
+    Spline->UpdateSpline();
+}
+`,
+
   'Source/VCGS/Public/VcgsLevelDirector.h': `${RUNTIME_HEAD}
 #pragma once
 
@@ -806,6 +936,7 @@ class UPrimitiveComponent;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsLevelKeyEvent, const FString&, Key);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsLightEvent, bool, bOn);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FVcgsLevelSpawnEvent, AVcgsLevelItem*, Spawner, const FString&, ActorKey, int32, Count);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVcgsTravelEvent, const FString&, LinkKey, const FString&, ToMap, const FString&, Transition, FVector, To);
 
 /**
  * Runs a level from VC Game Studio in the world: its items (AVcgsLevelItem,
@@ -823,6 +954,15 @@ public:
 
     /** Under Content/, e.g. VCGS/Generated/Levels/sunken_vault.json. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString LevelFile;
+    /** The map's key (spec V2 §4): a parent's director finds its children's by it. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString MapKey;
+    /** How the game reaches it (spec V2 §13): continuous, streamed, instanced, transition or mapOnly. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Boundary = TEXT("continuous");
+    /** Where this map's 0, 0, 0 is in the world, and its turn: a child map built inside its parent. build_level.py sets them. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FVector MapOrigin = FVector(0, 0, 0);
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") float MapYaw = 0;
+    /** A streamed map is shown only while loaded: its parent's director loads it as the player nears it. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VCGS") bool bMapLoaded = true;
 
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelKeyEvent OnCinematicRequested;
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelKeyEvent OnSceneRequested;
@@ -832,6 +972,14 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelSpawnEvent OnSpawnRequested;
     /** The player's light went on or off: show or hide its lamp. */
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLightEvent OnLightChanged;
+    /** A travel link was taken (spec V2 §13): where it ends (world, cm), how, and the map it leads to ("" for this one). Move the player there. */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsTravelEvent OnTravelRequested;
+
+    /** Take a travel link by key (backwards with bReverse); returns why not, or "" when the player goes. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") FString Travel(const FString& LinkKey, bool bReverse = false);
+    UFUNCTION(BlueprintPure, Category = "VCGS") bool CanTravel(const FString& LinkKey) const;
+    /** Show or hide a streamed map's items (its parent's director does this as the player comes and goes). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") void SetMapLoaded(bool bLoaded);
 
     /** Use an item (by GUID); returns what to tell the player. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") FString Interact(const FString& Guid);
@@ -868,6 +1016,10 @@ private:
 
     void Refresh();
     void MoveActors();
+    void Stream();
+    /** Level space (metres, x east, y up, z south) to the world (cm, X north, Y east, Z up) through MapOrigin and MapYaw, and back. */
+    FVector ToWorld(double X, double Y, double Z) const;
+    void FromWorld(const FVector& At, double& X, double& Y, double& Z) const;
     UFUNCTION() void OnBoxBegin(UPrimitiveComponent* Overlapped, AActor* Other, UPrimitiveComponent* OtherComp, int32 BodyIndex, bool bFromSweep, const FHitResult& Sweep);
     UFUNCTION() void OnBoxEnd(UPrimitiveComponent* Overlapped, AActor* Other, UPrimitiveComponent* OtherComp, int32 BodyIndex);
     bool IsPlayer(const AActor* Other) const;
@@ -924,9 +1076,16 @@ void AVcgsLevelDirector::BeginPlay()
     };
     Logic->OnRefresh = [this]() { Refresh(); };
     Logic->OnLightChanged = [this](bool bOn) { OnLightChanged.Broadcast(bOn); };
+    Logic->OnTravel = [this](const std::string& Key, const std::string& ToMap, const std::string& How, double X, double Y, double Z) {
+        OnTravelRequested.Broadcast(ToF(Key), ToF(ToMap), ToF(How), ToWorld(X, Y, Z));
+    };
+    // A streamed map starts unloaded: its parent's director brings it in.
+    bMapLoaded = Boundary != TEXT("streamed");
     for (TActorIterator<AVcgsLevelItem> It(GetWorld()); It; ++It)
     {
         AVcgsLevelItem* Item = *It;
+        // Other maps' items (a child built inside this one, a parent) are their directors'.
+        if (!Logic->Items.count(ToStd(Item->Guid))) continue;
         ItemsByGuid.Add(Item->Guid, Item);
         if (Item->Box)
         {
@@ -950,14 +1109,66 @@ void AVcgsLevelDirector::Tick(float DeltaSeconds)
     // The player in level space: Unreal's +X is the data's north (-z), +Y its east, Z up, in centimetres.
     if (const APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
     {
-        const FVector At = Pawn->GetActorLocation();
         Logic->HasPlayer = true;
-        Logic->PlayerX = At.Y / 100.0;
-        Logic->PlayerY = At.Z / 100.0;
-        Logic->PlayerZ = -At.X / 100.0;
+        FromWorld(Pawn->GetActorLocation(), Logic->PlayerX, Logic->PlayerY, Logic->PlayerZ);
     }
     Logic->Tick(DeltaSeconds);
     MoveActors();
+    Stream();
+}
+
+FVector AVcgsLevelDirector::ToWorld(double X, double Y, double Z) const
+{
+    // Unreal's +X is the data's north (-z), +Y its east, Z up, in centimetres; then the map's turn and origin.
+    const double LX = -Z * 100.0, LY = X * 100.0;
+    const double Yaw = MapYaw * 3.14159265358979323846 / 180.0;
+    return FVector(MapOrigin.X + LX * std::cos(Yaw) - LY * std::sin(Yaw), MapOrigin.Y + LX * std::sin(Yaw) + LY * std::cos(Yaw), MapOrigin.Z + Y * 100.0);
+}
+
+void AVcgsLevelDirector::FromWorld(const FVector& At, double& X, double& Y, double& Z) const
+{
+    const double Yaw = MapYaw * 3.14159265358979323846 / 180.0;
+    const double DX = At.X - MapOrigin.X, DY = At.Y - MapOrigin.Y;
+    const double LX = DX * std::cos(Yaw) + DY * std::sin(Yaw), LY = -DX * std::sin(Yaw) + DY * std::cos(Yaw);
+    X = LY / 100.0;
+    Y = (At.Z - MapOrigin.Z) / 100.0;
+    Z = -LX / 100.0;
+}
+
+/** Streamed children (spec V2 §13): their directors show their items as the player nears them and hide them when well away. */
+void AVcgsLevelDirector::Stream()
+{
+    if (!Logic || !Logic->HasPlayer || !Logic->ChildMaps().Size()) return;
+    std::map<std::string, AVcgsLevelDirector*> Children;
+    std::set<std::string> Loaded;
+    for (TActorIterator<AVcgsLevelDirector> It(GetWorld()); It; ++It)
+    {
+        AVcgsLevelDirector* Other = *It;
+        if (Other == this) continue;
+        Children[ToStd(Other->MapKey)] = Other;
+        if (Other->bMapLoaded) Loaded.insert(ToStd(Other->MapKey));
+    }
+    std::vector<std::string> Unload;
+    for (const auto& Key : Logic->StreamChanges(Loaded, Unload))
+        if (Children.count(Key)) Children[Key]->SetMapLoaded(true);
+    for (const auto& Key : Unload)
+        if (Children.count(Key)) Children[Key]->SetMapLoaded(false);
+}
+
+void AVcgsLevelDirector::SetMapLoaded(bool bLoaded)
+{
+    bMapLoaded = bLoaded;
+    Refresh();
+}
+
+FString AVcgsLevelDirector::Travel(const FString& LinkKey, bool bReverse)
+{
+    return Logic ? ToF(Logic->Travel(ToStd(LinkKey), bReverse)) : FString();
+}
+
+bool AVcgsLevelDirector::CanTravel(const FString& LinkKey) const
+{
+    return Logic && Logic->CanTravel(ToStd(LinkKey));
 }
 
 /** Put each actor that moves (patrols, companions) where the level logic has it, facing the way it goes. */
@@ -968,8 +1179,8 @@ void AVcgsLevelDirector::MoveActors()
         AVcgsLevelItem* const* Item = ItemsByGuid.Find(ToF(Pose.first));
         if (!Item || !*Item) continue;
         const vcgs::ActorPose& P = Pose.second;
-        (*Item)->SetActorLocation(FVector(-P.Z * 100.0, P.X * 100.0, P.Y * 100.0));
-        if (P.Faces) (*Item)->SetActorRotation(FRotator(0.0, std::atan2(P.FacingX, -P.FacingZ) * 180.0 / 3.14159265358979323846, 0.0));
+        (*Item)->SetActorLocation(ToWorld(P.X, P.Y, P.Z));
+        if (P.Faces) (*Item)->SetActorRotation(FRotator(0.0, MapYaw + std::atan2(P.FacingX, -P.FacingZ) * 180.0 / 3.14159265358979323846, 0.0));
     }
 }
 
@@ -980,7 +1191,7 @@ void AVcgsLevelDirector::Refresh()
     for (auto& Pair : ItemsByGuid)
     {
         const std::string Guid = ToStd(Pair.Key);
-        const bool Here = Logic->IsPresent(Guid);
+        const bool Here = bMapLoaded && Logic->IsPresent(Guid);
         const bool Door = Logic->Role(Guid) == "door";
         const bool Shut = Here && !Logic->IsOpen(Guid);
         AVcgsLevelItem* Item = Pair.Value;
@@ -1120,6 +1331,11 @@ export const buildLevelScript = (root: string): string => String.raw`# Generated
 # want the items in open. It builds the level from its data, or updates what
 # it built last time: items are found by their GUID.
 #
+# A map that is part of another (spec V2 §12): a continuous or streamed child is
+# built into the same world at its place in its parent, and its director shows
+# it while it is loaded; a level reached by a transition is built in its own
+# Unreal level. Set LEVEL to each map in turn.
+#
 # Who owns what: VC Game Studio owns each item's place, name, graybox pieces,
 # lights and data. Anything else attached to an item (its art, anything added
 # by hand) is the team's and is never touched. An item moved in the editor
@@ -1218,21 +1434,36 @@ def place_piece(item, piece, index, with_mesh, report):
     return actor
 
 
+def in_parent(v, placement):
+    """A point of a child map in its parent's space (spec V2 §12): turned by the placement, then moved to it."""
+    if not placement:
+        return v
+    t = math.radians(placement["turn"])
+    p = placement["position"]
+    return [p[0] + v[0] * math.cos(t) + v[2] * math.sin(t), p[1] + v[1], p[2] - v[0] * math.sin(t) + v[2] * math.cos(t)]
+
+
 def build():
     path = level_file()
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     report = []
     world = unreal.EditorLevelLibrary.get_editor_world()
-    existing = {a.get_editor_property("guid"): a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.VcgsLevelItem)}
+    key = data["key"]
+    map_tag = "vcgs_map:" + key
+    # A continuous or streamed child map is built inside its parent, at its placement.
+    placement = data.get("map", {}).get("placement")
+    turn0 = placement["turn"] if placement else 0.0
+    guids = {i["guid"] for i in data["items"]}
+    existing = {a.get_editor_property("guid"): a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.VcgsLevelItem) if a.get_editor_property("guid") in guids or a.actor_has_tag(map_tag)}
     seen = set()
     for item_data in data["items"]:
         guid = item_data["guid"]
         name = item_data["export_name"]
         seen.add(guid)
         item = existing.get(guid)
-        location = to_unreal(item_data["position"])
-        yaw = yaw_of(item_data["turn"])
+        location = to_unreal(in_parent(item_data["position"], placement))
+        yaw = yaw_of(item_data["turn"] + turn0)
         if item is None:
             item = spawn(unreal.VcgsLevelItem, location, unreal.Rotator(0.0, 0.0, yaw), name)
             item.set_editor_property("guid", guid)
@@ -1259,7 +1490,7 @@ def build():
         item.set_editor_property("exported_location", location)
         item.set_editor_property("exported_yaw", yaw)
         item.set_editor_property("exported", True)
-        item.tags = ["vcgs:" + guid]
+        item.tags = ["vcgs:" + guid, map_tag]
 
         # A volume's box notices the player; a freeform one's zone does, and its box stays out of it.
         box = item.get_editor_property("box")
@@ -1330,9 +1561,30 @@ def build():
         if guid not in seen:
             report.append(item.get_actor_label() + " is no longer in the level: left in place for you to delete.")
 
+    # Travel links (spec V2 §13): a spline actor each, rebuilt every time.
+    for old in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.VcgsTravelLink):
+        if old.actor_has_tag(map_tag):
+            old.destroy_actor()
+    for link in data.get("travel", []):
+        actor = spawn(unreal.VcgsTravelLink, to_unreal(in_parent(link["points"][0], placement)), unreal.Rotator(0.0, 0.0, 0.0), data["export_name"] + "_" + link["key"])
+        actor.set_editor_property("key", link["key"])
+        actor.set_editor_property("kind", link["kind"])
+        actor.set_editor_property("to_map", link["to_map"] or "")
+        actor.set_editor_property("points", [to_unreal(in_parent(p, placement)) for p in link["points"]])
+        actor.tags = ["vcgs_travel:" + link["key"], map_tag]
+        actor.rerun_construction_scripts()
+
+    # This map's director: found by its map key (an older one without a key is taken over).
     directors = unreal.GameplayStatics.get_all_actors_of_class(world, unreal.VcgsLevelDirector)
-    director = directors[0] if directors else spawn(unreal.VcgsLevelDirector, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0), data["export_name"] + "_Director")
+    mine = [d for d in directors if d.get_editor_property("map_key") == key] or [d for d in directors if not d.get_editor_property("map_key")]
+    director = mine[0] if mine else spawn(unreal.VcgsLevelDirector, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0), data["export_name"] + "_Director")
     director.set_editor_property("level_file", "${root.replace(/^Content\/?/, '')}/Levels/" + os.path.basename(path))
+    director.set_editor_property("map_key", key)
+    director.set_editor_property("boundary", data.get("map", {}).get("boundary", "continuous"))
+    director.set_editor_property("map_origin", to_unreal(placement["position"]) if placement else unreal.Vector(0.0, 0.0, 0.0))
+    director.set_editor_property("map_yaw", yaw_of(turn0))
+    if placement:
+        report.append(data["export_name"] + " is built inside " + str(data["map"]["parent"]) + (", streamed in as the player nears it." if data["map"]["boundary"] == "streamed" else "."))
     report.append(data["export_name"] + ": " + str(len(seen)) + " items up to date.")
     for line in report:
         unreal.log(line)

@@ -163,6 +163,7 @@ namespace UnityEngine
         }
 
         public Transform Find(string name) => children.Find(c => c.gameObject.name == name);
+        public Matrix4x4 localToWorldMatrix => default;
         public Vector3 InverseTransformPoint(Vector3 p) => p - position;
     }
 
@@ -238,6 +239,15 @@ namespace UnityEngine
         public float range = 10;
         public float spotAngle = 30;
     }
+
+    public static class Gizmos
+    {
+        public static Color color;
+        public static Matrix4x4 matrix;
+        public static void DrawLine(Vector3 from, Vector3 to) { }
+    }
+
+    public struct Matrix4x4 { }
 
     public struct Color
     {
@@ -378,7 +388,16 @@ namespace UnityEngine
 
 namespace UnityEngine.SceneManagement
 {
-    public struct Scene { }
+    public struct Scene
+    {
+        /// <summary>Every GameObject with no parent: the stubs keep one scene.</summary>
+        public GameObject[] GetRootGameObjects() => GameObject.all.FindAll(g => g.transform.parent == null && !g.destroyed).ToArray();
+    }
+
+    public static class SceneManager
+    {
+        public static Scene GetActiveScene() => default;
+    }
 }
 
 namespace UnityEditor

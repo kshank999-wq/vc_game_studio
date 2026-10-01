@@ -88,19 +88,20 @@ describe('the spatial hierarchy (Level Designer spec V2 §4)', () => {
     const vault = levelsOf(project).levels[0]!;
     project = moveMap(project, vault.id, worldId);
     let set = levelsOf(project);
-    const tree = navigatorTree(set);
-    expect(tree.map((n) => [n.name, n.mapKind])).toEqual([['The Drowned Coast', 'world']]);
-    const [vaultNode] = tree[0]!.children;
+    // The sample's own world is there too (with its old quarter); this one now holds the vault.
+    const mine = (s: typeof set) => navigatorTree(s).find((n) => n.id === worldId)!;
+    expect(navigatorTree(set).map((n) => [n.name, n.mapKind])).toEqual([['The Drowned Coast', 'world'], ['The Drowned Coast', 'world']]);
+    const [vaultNode] = mine(set).children;
     expect(vaultNode).toMatchObject({ kind: 'map', name: 'Sunken Vault', mapKind: 'level', status: 'gameplay' });
     expect(vaultNode!.children.map((c) => c.kind)).toContain('room');
     // More than one floor: floors, each with its rooms.
     project = addFloor(project, vault.id).project;
     set = levelsOf(project);
-    const floors = navigatorTree(set)[0]!.children[0]!.children;
+    const floors = mine(set).children[0]!.children;
     expect(floors.map((f) => [f.kind, f.name])).toEqual([['floor', 'Floor 2'], ['floor', 'Ground floor']]);
     expect(floors[1]!.children.length).toBeGreaterThan(0);
     const found = filterTree(navigatorTree(set), 'silt');
-    expect(found[0]!.children[0]!.children[0]!.children.map((r) => r.name)).toEqual(['Silt Camp']);
+    expect(found.find((n) => n.id === worldId)!.children[0]!.children[0]!.children.map((r) => r.name)).toEqual(['Silt Camp']);
     // A map can't go inside one of its own.
     expect(moveMap(project, worldId, vault.id)).toBe(project);
   });

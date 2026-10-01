@@ -124,12 +124,65 @@ export const storySchema = () => ({
           start: { anyOf: [{ type: 'null' }, obj({ position: ref('vec3'), turn: num })] },
           light: { description: 'The player’s light, from the player start: the story key of the item or mechanic that lights it, its fuel in seconds (0 for ever), how far it reaches in metres.', anyOf: [{ type: 'null' }, obj({ source: str, fuel: num, range: num })] },
           items: { type: 'array', items: ref('levelItem') },
+          map: ref('map'),
+          travel: { type: 'array', items: ref('travel') },
           revision: str,
         },
-        ['guid', 'key', 'export_name', 'name', 'floors', 'links', 'start', 'light', 'items', 'revision'],
+        ['guid', 'key', 'export_name', 'name', 'floors', 'links', 'start', 'light', 'items', 'map', 'travel', 'revision'],
       ),
-      description: 'A level. `revision` changes whenever anything in it does.',
+      description: 'A level, or any map: a world, region, district, building or interior. `revision` changes whenever anything in it does.',
     },
+    map: obj(
+      {
+        kind: { enum: ['world', 'region', 'level', 'district', 'building', 'interior'] },
+        parent: { description: 'The map it is part of (its key), or null.', anyOf: [{ type: 'null' }, str] },
+        anchor: { description: 'The item on the parent it details (its guid), or null.', anyOf: [{ type: 'null' }, str] },
+        boundary: { enum: ['continuous', 'streamed', 'instanced', 'transition', 'mapOnly'], description: 'How the game reaches it: always there with its parent, loaded near its anchor, its own instance, through a loading transition, or for planning only (build nothing).' },
+        status: { enum: ['empty', 'grayboxed', 'detailed', 'gameplay', 'final'] },
+        size: { description: 'Its extent [width, depth] in metres, or null.', anyOf: [{ type: 'null' }, ref('corner')] },
+        origin: { ...ref('corner'), description: 'Where its own 0, 0 is, from its centre.' },
+        grid: num,
+        environment: str,
+        navigation: str,
+        children: {
+          type: 'array',
+          items: obj(
+            {
+              key: str,
+              name: str,
+              boundary: str,
+              anchor: { anyOf: [{ type: 'null' }, str] },
+              placement: { description: 'Where the child’s 0, 0, 0 is in this map’s space and its turn: a continuous or streamed child that details an item here. Null otherwise.', anyOf: [{ type: 'null' }, obj({ position: ref('vec3'), turn: num })] },
+              size: { anyOf: [{ type: 'null' }, ref('corner')] },
+              centre: { description: 'The anchor’s centre in this map’s space: the footprint is `size` around it, turned with the placement.', anyOf: [{ type: 'null' }, ref('vec3')] },
+              load_margin: { ...num, description: 'A streamed child loads when the player is within this many metres of its footprint around the anchor, and unloads beyond twice it.' },
+            },
+            ['key', 'name', 'boundary', 'anchor', 'placement', 'size', 'centre', 'load_margin'],
+          ),
+        },
+        placement: { description: 'Where it sits in its parent, as the parent’s `children` entry has it; null when it isn’t placed there.', anyOf: [{ type: 'null' }, obj({ position: ref('vec3'), turn: num })] },
+      },
+      ['kind', 'parent', 'anchor', 'boundary', 'status', 'size', 'origin', 'grid', 'environment', 'navigation', 'children', 'placement'],
+    ),
+    travel: obj(
+      {
+        guid: str,
+        key: str,
+        name: str,
+        kind: { enum: ['road', 'trail', 'river', 'route', 'progression', 'fastTravel', 'door', 'elevator', 'portal', 'cinematic', 'loading'] },
+        transition: { enum: ['walk', 'ride', 'sail', 'fade', 'cinematic', 'loading', 'instant'] },
+        floor: str,
+        from: { anyOf: [{ type: 'null' }, str], description: 'The item (guid) its first point is tied to.' },
+        to: { anyOf: [{ type: 'null' }, str], description: 'The item (guid) its last point is tied to.' },
+        to_map: { anyOf: [{ type: 'null' }, str], description: 'The map (key) it takes the player to.' },
+        points: { type: 'array', items: ref('vec3'), minItems: 2 },
+        length: num,
+        one_way: { type: 'boolean' },
+        locked: { type: 'boolean' },
+        unlock_when: ref('rule'),
+      },
+      ['guid', 'key', 'name', 'kind', 'transition', 'floor', 'from', 'to', 'to_map', 'points', 'length', 'one_way', 'locked'],
+    ),
     levelItem: {
       ...obj(
         {
@@ -163,6 +216,12 @@ export const storySchema = () => ({
             ],
           },
           in_dark: { ...strings, description: 'The darkness zones (by GUID) it is in: while any is in the level and the player’s light is off, it is too dark to use.' },
+          puzzles: {
+            type: 'array',
+            description: 'The parts it plays in puzzles, as bound in the studio. Informational: what they do in play is already in `active_when`, `links` and `rules`.',
+            items: obj({ puzzle: str, role: { enum: ['entry', 'required', 'clue', 'gate', 'output'] }, node: str }, ['puzzle', 'role']),
+          },
+          opens: { ...str, description: 'The map (key) it opens into.' },
           revision: str,
         },
         ['guid', 'export_name', 'name', 'asset', 'kind', 'role', 'category', 'floor', 'position', 'turn', 'size', 'params', 'links', 'scenes', 'rules', 'engine', 'final_asset', 'replacement_locked', 'pieces', 'revision'],
@@ -413,6 +472,28 @@ its walls from corner 0.
    an item's guid, a scene or cinematic key, or a level key).
 5. After every change to the story, run each present item's \`stateChange\` rules
    and look again at what is present.
+
+### Maps and travel
+
+Every map is a level here: a world, region, district, building or interior
+as much as a level (\`map.kind\`). \`map.parent\` is the map it is part of and
+\`map.children\` the maps inside it. A child's \`boundary\` says how the game
+reaches it:
+
+- \`continuous\`: built with its parent, at \`placement\` (its 0, 0, 0 in the
+  parent's space, turned by \`turn\`), when it has one;
+- \`streamed\`: loaded at \`placement\` while the player is within \`load_margin\`
+  metres of its footprint (\`size\`, centred on the anchor), unloaded beyond
+  twice that;
+- \`instanced\` and \`transition\`: a map of its own, gone to by a travel link
+  (\`to_map\`), a portal or a \`goToLevel\` action;
+- \`mapOnly\`: planning only; build nothing.
+
+\`travel\` holds each map's roads, trails, rivers, routes and transitions: its
+\`points\`, the items its ends are tied to, the map it leads to, one way or
+both. A \`locked\` link can be taken only while \`unlock_when\` holds (never,
+without one). An item's \`opens\` is the map it is detailed in; its \`puzzles\`
+the parts it plays in puzzles.
 `;
 
 const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {

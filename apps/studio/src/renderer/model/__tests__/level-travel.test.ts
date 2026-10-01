@@ -41,7 +41,7 @@ describe('travel links (Level Designer spec V2 §5, §13)', () => {
     expect(travelOf(set, worldId)[0]!.points.at(-1)).toEqual({ x: 2000, y: 2000 });
     expect(travelOf(levelsOf(removeTravel(project, [made.id])), worldId)).toEqual([]);
     // Deleting the map takes its links.
-    expect(levelsOf(removeMap(project, worldId)).travel).toEqual([]);
+    expect(levelsOf(removeMap(project, worldId)).travel!.filter((t) => t.levelId === worldId)).toEqual([]);
   });
 
   it('can be locked until a rule holds, one way, and lead to another map', () => {

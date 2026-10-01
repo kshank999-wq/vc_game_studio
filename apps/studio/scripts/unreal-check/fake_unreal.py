@@ -145,6 +145,10 @@ class VcgsLevelDirector(Actor):
     pass
 
 
+class VcgsTravelLink(Actor):
+    pass
+
+
 class StaticMeshActor(Actor):
     pass
 

@@ -1,6 +1,8 @@
 import type { Project } from '../types';
 import { addLevel, linkItem, placeAsset, resizeItem, setOutline, setParam, updateItem, updateLevel } from './level';
 import { bindToPuzzle } from './puzzles';
+import { createWorld, moveMap, openChildMap, updateMap } from './hierarchy';
+import { addTravel, updateTravel } from './travel';
 import type { LevelItem } from './types';
 
 /**
@@ -108,5 +110,37 @@ export const sampleLevel = (
   // The Squeeze is pitch dark: the lantern, or nothing. (Placed last, so the other items keep their export names.)
   const squeezeDark = put('logic.darkness', 'Squeeze dark', 0, -7.5, { w: 12, d: 3, h: 2.2 });
   set(squeezeDark, { dark: 96 });
+  return sampleWorld(p, levelId, refs.caveMouth);
+};
+
+/**
+ * The world the vault is in (spec V2): the Drowned Coast, 10 km across, with
+ * the harbour town (its old quarter a streamed district, detailed in place) and
+ * the vault's entrance down the coast road. The way down is a loading
+ * transition into the Sunken Vault, open once the cave mouth has been reached.
+ */
+const sampleWorld = (project: Project, vaultLevel: string, caveMouth: string): Project => {
+  const world = createWorld(project, { preset: 'small', name: 'The Drowned Coast' });
+  let p = updateMap(world.project, world.id, { environment: 'Overcast coast, sea fog', navigation: 'Roads and trails' });
+  const floorId = p.levels!.levels.find((l) => l.id === world.id)!.floors[0]!.id;
+  const put = (levelId: string, floor: string, assetId: string, name: string, x: number, y: number, size?: { w?: number; d?: number; h?: number }, rotation = 0): string => {
+    const placed = placeAsset(p, levelId, floor, assetId, { x, y }, { name, rotation });
+    p = placed.project;
+    if (size) p = resizeItem(p, placed.ids[0]!, size);
+    return placed.ids[0]!;
+  };
+  const harbour = put(world.id, floorId, 'town.city', 'Greywater Harbour', -2000, 1500, { w: 1200, d: 800 });
+  const entrance = put(world.id, floorId, 'world.entrance', 'Vault entrance', 1800, -1200);
+  // The old quarter: a district of the harbour, streamed in as the player nears it.
+  const quarter = openChildMap(p, harbour);
+  p = updateMap(quarter.project, quarter.id, { name: 'Old Quarter', boundary: 'streamed', environment: 'Fog, lamplight' });
+  const qFloor = p.levels!.levels.find((l) => l.id === quarter.id)!.floors[0]!.id;
+  put(quarter.id, qFloor, 'struct.house', 'Harbour master’s house', -40, 20);
+  put(quarter.id, qFloor, 'town.road', 'Quay', 0, 120, { w: 400, d: 12 });
+  // The vault is a level of its own in the world, reached by a loading transition at the entrance.
+  p = updateMap(moveMap(p, vaultLevel, world.id), vaultLevel, { boundary: 'transition' });
+  const road = addTravel(p, { levelId: world.id, floorId, kind: 'road', points: [{ x: -2000, y: 1500 }, { x: -200, y: 900 }, { x: 1800, y: -1200 }], from: harbour, to: entrance, name: 'Coast road' });
+  const down = addTravel(road.project, { levelId: world.id, floorId, kind: 'loading', points: [{ x: 1800, y: -1200 }, { x: 1830, y: -1200 }], from: entrance, name: 'Down into the vault' });
+  p = updateTravel(down.project, down.id, { toMap: vaultLevel, oneWay: true, locked: true, unlockWhen: { match: 'all', items: [{ kind: 'visited', ref: caveMouth, op: 'visited' }] } });
   return p;
 };
