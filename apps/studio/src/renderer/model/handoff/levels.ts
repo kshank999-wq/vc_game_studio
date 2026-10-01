@@ -176,7 +176,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
           const dz = m.z - f.y;
           return {
             part: m.part,
-            shape: m.shape,
+            shape: m.shape === 'model' ? 'box' : m.shape,
             at: [round(dx * cos - dz * sin), round(m.y - base), round(dx * sin + dz * cos)],
             size: [round(m.sx), round(m.sy), round(m.sz)],
             turn: round(((m.rotY - theta) * 180) / Math.PI),

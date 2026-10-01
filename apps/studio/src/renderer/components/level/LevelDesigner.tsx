@@ -842,6 +842,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           if (item) onCommit(updateItem(project, id, { [what]: item[what] ? undefined : true }, global));
         }}
         onDeleteAsset={deleteAsset}
+        onSay={onSay}
         onPromote={(a) => {
           promoteAsset(a);
           onSay(`${a.name} is in your library now, for every project on this computer.`);
@@ -964,6 +965,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         onOpenChild={openChild}
         onFocusRoom={setFocusRoom}
         focusRoom={focusRoom}
+        onSay={onSay}
       />
       {newWorld && (
         <NewWorldDialog

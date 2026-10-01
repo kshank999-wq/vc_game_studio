@@ -46,6 +46,7 @@ import { Symbol } from '../Symbol';
 import { BoolField, NumberField, RefField, Section, SelectField, TextField } from './fields';
 import { itemsInRoom, anchorOf, boundsOf as mapBounds, BOUNDARIES, childOfItem, childrenOf, descendantsOf, kindLabel, kindOf, MAP_KINDS, moveMap, STATUSES, statusOf, updateMap } from '../../model/level/hierarchy';
 import { formatLength } from './units';
+import { ReferencesSection } from './ReferencesSection';
 import { canTravel, kindLabelOf, TRANSITIONS, TRAVEL_KINDS, travelById, travelLabel, travelLength, travelPoints, updateTravel } from '../../model/level/travel';
 import { emptyState } from '../../model/rules';
 
@@ -70,6 +71,8 @@ interface Props {
   /** Detail a room in place (spec V2 §7), or stop. */
   onFocusRoom?: (roomId: string | null) => void;
   focusRoom?: string | null;
+  /** A line in the status bar. */
+  onSay?: (text: string) => void;
 }
 
 const LINKABLE: ObjectType[] = ['plotPoint', 'scene', 'environment', 'character', 'object', 'inventory', 'puzzle', 'cinematic', 'choice', 'dialogue', 'trigger', 'gate', 'state'];
@@ -192,6 +195,7 @@ export const LevelInspector = (props: Props) => {
           <TextField label="Notes" value={level.notes ?? ''} onCommit={(v) => onCommit(updateLevel(project, level.id, { notes: v }))} />
         </Section>
         <MapSection project={project} levelId={level.id} global={global} open={!closed.has('map')} onToggle={() => toggle('map')} onCommit={onCommit} onOpenMap={props.onOpenMap} />
+        <ReferencesSection project={project} levelId={level.id} floorId={floorId} global={global} open={!closed.has('references')} onToggle={() => toggle('references')} onCommit={onCommit} onSay={props.onSay} />
         <Section title="Floors" open={!closed.has('floors')} onToggle={() => toggle('floors')} count={floors.length}>
           {floors
             .slice()
@@ -342,6 +346,16 @@ export const LevelInspector = (props: Props) => {
             <TextField label="Tags" value={(item.tags ?? []).join(', ')} placeholder="comma, separated" onCommit={(v) => onCommit(updateItem(project, item.id, { tags: v.split(',').map((t) => t.trim()).filter(Boolean) }, global))} />
             <div className="lvl-kv"><span>Type</span><span>{def.name} · {def.category}</span></div>
             <div className="lvl-kv"><span>From</span><span>{def.source === 'starter' ? 'Starter library' : def.source === 'global' ? 'My library' : 'Project library'} · v{def.version}{item.assetVersion !== def.version ? ` (placed from v${item.assetVersion})` : ''}</span></div>
+            {def.model && (
+              <div className="lvl-kv">
+                <span>Model</span>
+                <span title={`Anchored at its ${def.model.pivot === 'origin' ? 'file’s origin' : def.model.pivot}; ${def.model.kept.toLocaleString('en')} triangles kept to draw it`}>
+                  <span className="mono">{def.model.file}</span> · {def.model.format.toUpperCase()} · {def.model.triangles.toLocaleString('en')} tris · made in {def.model.units}
+                  {def.model.upAxis === 'z' ? ', Z up' : ''}
+                  {def.model.scale !== 1 ? ` × ${def.model.scale}` : ''}
+                </span>
+              </div>
+            )}
             <div className="lvl-kv"><span>GUID</span><span className="mono lvl-guid" title="Never changes: references and the engine manifest use it">{item.id}</span></div>
             {def.kind === 'space' && (
               <div className="lvl-btnrow wrap">

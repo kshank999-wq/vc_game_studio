@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Mesh } from '../../model/level/geometry';
+import { decodeMesh } from '../../model/level/models';
 
 /**
  * The graybox's pieces in three.js, shared by the editor's 3D view and Play
@@ -34,8 +35,8 @@ export const UNIT = {
 const EDGES = { box: new THREE.EdgesGeometry(UNIT.box), wedge: new THREE.EdgesGeometry(UNIT.wedge) };
 
 const materials = new Map<string, THREE.Material>();
-export const materialFor = (color: string, opacity: number, emissive = false): THREE.Material => {
-  const key = `${color}:${opacity}:${emissive}`;
+export const materialFor = (color: string, opacity: number, emissive = false, twoSided = false): THREE.Material => {
+  const key = `${color}:${opacity}:${emissive}:${twoSided}`;
   let m = materials.get(key);
   if (!m) {
     m = new THREE.MeshStandardMaterial({
@@ -45,7 +46,8 @@ export const materialFor = (color: string, opacity: number, emissive = false): T
       transparent: opacity < 1,
       opacity,
       depthWrite: opacity >= 0.5,
-      side: opacity < 1 ? THREE.DoubleSide : THREE.FrontSide,
+      // An imported model's faces may wind either way: drawn from both sides.
+      side: opacity < 1 || twoSided ? THREE.DoubleSide : THREE.FrontSide,
       ...(emissive ? { emissive: color, emissiveIntensity: 0.9 } : {}),
     });
     materials.set(key, m);
@@ -62,13 +64,26 @@ export const slabGeometry = (m: Mesh): THREE.BufferGeometry => {
   return new THREE.ExtrudeGeometry(shape, { depth: m.sy, bevelEnabled: false }).rotateX(Math.PI / 2).translate(0, m.sy / 2, 0);
 };
 
+/** An imported model's shape in its unit box, made once per asset version and shared by every item placed from it. */
+const models = new Map<string, THREE.BufferGeometry>();
+export const modelGeometry = (key: string, mesh: string): THREE.BufferGeometry => {
+  let g = models.get(key);
+  if (!g) {
+    g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(decodeMesh(mesh), 3));
+    g.computeVertexNormals();
+    models.set(key, g);
+  }
+  return g;
+};
+
 export const buildPiece = (m: Mesh, selected: boolean): THREE.Object3D => {
   const holder = new THREE.Group();
   holder.position.set(m.x, m.y, m.z);
   holder.rotation.y = m.rotY;
   const slab = m.shape === 'slab' ? slabGeometry(m) : null;
-  const geometry = slab ?? UNIT[m.shape as keyof typeof UNIT];
-  const mesh = new THREE.Mesh(geometry, materialFor(m.color, m.opacity, m.part === 'light'));
+  const geometry = slab ?? (m.shape === 'model' && m.model ? modelGeometry(m.model.key, m.model.mesh) : UNIT[m.shape as keyof typeof UNIT] ?? UNIT.box);
+  const mesh = new THREE.Mesh(geometry, materialFor(m.color, m.opacity, m.part === 'light', m.shape === 'model'));
   if (!slab) mesh.scale.set(m.sx, m.sy, m.sz);
   mesh.castShadow = m.opacity >= 1 && m.part !== 'light';
   mesh.receiveShadow = m.part === 'floor' || m.part === 'wall';

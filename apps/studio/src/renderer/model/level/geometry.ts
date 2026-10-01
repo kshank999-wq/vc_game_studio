@@ -383,7 +383,7 @@ export const spaceAt = (set: LevelSet, levelId: string, floorId: string, p: Poin
 // ---------------------------------------------------------------- 3D meshes
 
 /** A slab is an outline (a freeform floor or ceiling) raised to its height. */
-export type MeshShape = 'box' | 'cylinder' | 'sphere' | 'wedge' | 'cone' | 'slab';
+export type MeshShape = 'box' | 'cylinder' | 'sphere' | 'wedge' | 'cone' | 'slab' | 'model';
 export type MeshPart = 'floor' | 'wall' | 'ceiling' | 'solid' | 'volume' | 'marker' | 'light' | 'door';
 
 /** One piece of the graybox. Coordinates are 3D: x east, y up, z south; a centre, a size, and a turn about y (radians). */
@@ -406,6 +406,8 @@ export interface Mesh {
   /** A slab's corners around its centre, in its own frame (x, z), clockwise seen from above, and its triangles. */
   outline?: { x: number; z: number }[];
   triangles?: number[];
+  /** An imported model's shape (spec V2 §10), fitted to the unit box like the others: its cache key and packed corners. */
+  model?: { key: string; mesh: string };
   /** A light this proxy stands for. */
   light?: { kind: 'point' | 'spot' | 'area'; color: string; intensity: number; range: number; angle?: number };
 }
@@ -449,6 +451,8 @@ export interface MeshOptions {
   skip?: (item: LevelItem) => boolean;
   /** Doors standing open (Play Mode): no leaf, nothing to bump into. */
   open?: (item: LevelItem) => boolean;
+  /** Draw imported models as themselves (the studio's views); a box otherwise (the engines, collision). */
+  models?: boolean;
 }
 
 /** The whole level as graybox pieces. */
@@ -643,8 +647,9 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
       }
       continue;
     }
-    const shape: MeshShape = def.proxy === 'cylinder' ? 'cylinder' : def.proxy === 'sphere' ? 'sphere' : def.proxy === 'wedge' ? 'wedge' : 'box';
-    push({ key: `${item.id}:solid`, collide: solid && def.proxy !== 'plane', part: 'solid', shape, x: f.x, y: y0 + f.h / 2, z: f.y, sx: f.w, sy: Math.max(0.01, f.h), sz: f.d, color, opacity });
+    const model = def.proxy === 'model' && options.models && def.model?.mesh ? { key: `${def.id}@${def.version}`, mesh: def.model.mesh } : undefined;
+    const shape: MeshShape = model ? 'model' : def.proxy === 'cylinder' ? 'cylinder' : def.proxy === 'sphere' ? 'sphere' : def.proxy === 'wedge' ? 'wedge' : 'box';
+    push({ key: `${item.id}:solid`, collide: solid && def.proxy !== 'plane', part: 'solid', shape, x: f.x, y: y0 + f.h / 2, z: f.y, sx: f.w, sy: Math.max(0.01, f.h), sz: f.d, color, opacity, ...(model ? { model } : {}) });
   }
   return out;
 };

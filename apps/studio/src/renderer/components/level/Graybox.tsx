@@ -84,6 +84,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
       meshesFor(set, levelId, {
         ceilings: props.ceilings,
         global,
+        models: true,
         ...(props.allFloors ? {} : { floorId }),
       }).filter((m) => props.logic || m.part !== 'volume'),
     [set, levelId, floorId, props.allFloors, props.ceilings, props.logic, global],

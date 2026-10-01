@@ -34,7 +34,7 @@ export type AssetCategory =
 export type AssetKind = 'space' | 'hosted' | 'solid' | 'light' | 'volume' | 'marker' | 'assembly';
 
 /** The shape the proxy takes in 3D (and its outline in 2D). */
-export type ProxyShape = 'room' | 'box' | 'cylinder' | 'sphere' | 'wedge' | 'plane' | 'stairs' | 'marker' | 'none';
+export type ProxyShape = 'room' | 'box' | 'cylinder' | 'sphere' | 'wedge' | 'plane' | 'stairs' | 'marker' | 'model' | 'none';
 
 /** What the item is for, as gameplay and the exporters see it. */
 export type AssetRole =
@@ -144,8 +144,40 @@ export interface AssetDefinition {
    * from one can be shown what changed since and keep what it had.
    */
   history?: AssetSnapshot[];
+  /** An imported proxy model (spec V2 §10): its shape, where it came from, and how it was scaled. */
+  model?: ModelInfo;
+  tags?: string[];
 }
 
+/** The units a model file was made in (spec V2 §10): converted to metres on import. */
+export type ModelUnits = 'm' | 'cm' | 'mm' | 'in' | 'ft';
+
+/**
+ * A personal proxy model (spec V2 §10). The studio keeps a light copy of its
+ * shape (up to a few thousand triangles, fitted to the asset's box) to draw in
+ * 3D; the engines get the box, and the file name to put the real model in.
+ */
+export interface ModelInfo {
+  file: string;
+  format: 'obj' | 'gltf' | 'glb';
+  units: ModelUnits;
+  /** A further scale on top of the unit conversion. */
+  scale: number;
+  upAxis: 'y' | 'z';
+  /** Where the engine's copy is anchored: its base's centre, its middle, or the file's own origin. */
+  pivot: 'base' | 'centre' | 'origin';
+  /** The file's origin, from the base's centre, in metres (x east, y up, z south). */
+  origin: { x: number; y: number; z: number };
+  vertices: number;
+  triangles: number;
+  /** How many triangles the studio's copy keeps. */
+  kept: number;
+  /** The kept triangles' corners, fitted to a unit box and packed as base64 16-bit integers. */
+  mesh: string;
+  /** Pictures made on import: a three-quarter view, and the plan seen from above. */
+  thumbnail?: string;
+  plan?: string;
+}
 /** A definition's defaults as they were at one version. */
 export interface AssetSnapshot {
   version: number;
@@ -325,8 +357,36 @@ export interface Level {
   /** For the engines (spec V2 §11): an environment profile and navigation settings, as words. */
   environment?: string;
   navigation?: string;
+  /** Images traced over (spec V2 §10): an old map, a floor plan, a heightmap, a photo. */
+  references?: ReferenceImage[];
 }
 
+export type ReferenceKind = 'map' | 'floorPlan' | 'heightmap' | 'photo';
+
+/**
+ * A picture laid under a map to trace (spec V2 §10). It is placed and scaled
+ * in metres like everything else, so what is drawn over it has the right size.
+ * Never exported.
+ */
+export interface ReferenceImage {
+  id: string;
+  name: string;
+  kind: ReferenceKind;
+  /** The picture, as a data URL. */
+  image: string;
+  /** Its size in pixels, for metres per pixel. */
+  pixels: { w: number; h: number };
+  /** Only on this floor; on every floor when absent. */
+  floorId?: string;
+  /** Its centre on the plan, and how wide it is, in metres. */
+  x: number;
+  y: number;
+  width: number;
+  rotation: number;
+  opacity: number;
+  hidden?: boolean;
+  locked?: boolean;
+}
 export interface LevelSettings {
   units: 'm' | 'ft';
   /** Snap step, in metres. */

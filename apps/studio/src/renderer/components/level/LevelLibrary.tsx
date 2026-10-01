@@ -1,5 +1,9 @@
 import { categoryAtScale, SCALE_LABEL, type MapScale } from '../../model/level/hierarchy';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { parseModel, type ParsedModel } from '../../model/level/models';
+import { addGlobalAsset } from './global-library';
+import { asArrayBuffer } from './import-files';
+import { ModelImportDialog } from './ModelImportDialog';
 import { assetOf, CATEGORY_COLOR } from '../../model/level/geometry';
 import { CATEGORIES, STARTER } from '../../model/level/library';
 import { exportNameOf } from '../../model/level/naming';
@@ -97,6 +101,8 @@ interface Props {
   onToggleItem: (id: string, what: 'hidden' | 'locked') => void;
   onDeleteAsset: (asset: AssetDefinition) => void;
   onPromote: (asset: AssetDefinition) => void;
+  /** A line in the status bar. */
+  onSay?: (text: string) => void;
 }
 
 /**
@@ -122,6 +128,40 @@ export const LevelLibrary = (props: Props) => {
 
   const items = props.set.items.filter((i) => i.levelId === props.levelId && i.floorId === props.floorId);
 
+  // Personal assets (spec V2 §10): imported proxy models, kept on this computer for every project.
+  const modelInput = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState<{ file: string; parsed: ParsedModel } | null>(null);
+  const personal = all.filter((a) => !!a.model && (match(a) || (a.tags ?? []).some((t) => t.toLowerCase().includes(q))));
+  const readModel = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (modelInput.current) modelInput.current.value = '';
+    if (!file) return;
+    try {
+      setImporting({ file: file.name, parsed: parseModel(file.name, await asArrayBuffer(file)) });
+    } catch (e) {
+      props.onSay?.(e instanceof Error ? e.message : 'Could not read that model.');
+    }
+  };
+  const assetRow = (a: AssetDefinition) => (
+    <div key={a.id} className={`lvl-asset${props.active === a.id ? ' on' : ''}`} title={a.description}>
+      <button className="lvl-asset-pick" onPointerDown={(e) => props.onPick(a.id, e)} aria-label={`Place ${a.name}`}>
+        {a.model?.thumbnail ? <img src={a.model.thumbnail} alt="" className="lvl-asset-thumb" width={18} height={18} /> : <AssetIcon asset={a} />}
+        <span className="lvl-asset-name">{a.name}</span>
+        {a.source !== 'starter' && <span className={`lvl-asset-src${a.model ? ' size' : ''}`}>{a.model ? `${a.size.w < 1 ? Math.round(a.size.w * 100) + ' cm' : Math.round(a.size.w * 10) / 10 + ' m'}${a.source === 'project' ? ' · project' : ''}` : a.source === 'global' ? 'mine' : 'project'}{a.version > 1 ? ` · v${a.version}` : ''}</span>}
+      </button>
+      {a.source === 'project' && (
+        <button className="icon-btn small" title="Add to my library, for every project" aria-label={`Add ${a.name} to my library`} onClick={() => props.onPromote(a)}>
+          ↑
+        </button>
+      )}
+      {a.source !== 'starter' && (
+        <button className="icon-btn small" title={a.source === 'global' ? 'Remove from my library' : 'Remove from this project’s library'} aria-label={`Remove ${a.name}`} onClick={() => props.onDeleteAsset(a)}>
+          ×
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <aside className="lvl-left" aria-label="Library and outliner">
       {props.navigator}
@@ -143,8 +183,29 @@ export const LevelLibrary = (props: Props) => {
               <input type="checkbox" checked={everything} onChange={(e) => setEverything(e.target.checked)} /> Show everything
             </label>
           </div>
+          <section className="lvl-cat lvl-personal" aria-label="Personal assets">
+            <button className="lvl-cat-head" aria-expanded={!closed.has('personal') || !!q} onClick={() => toggle('personal')}>
+              <span className="lvl-cat-dot" style={{ background: CATEGORY_COLOR.custom }} />
+              Personal assets
+              <span className="lvl-count">{personal.length}</span>
+            </button>
+            {(!closed.has('personal') || !!q) && (
+              <>
+                {personal.length > 0 && <div className="lvl-assets">{personal.map(assetRow)}</div>}
+                {!q && (
+                  <div className="lvl-personal-import">
+                    <button className="tb-btn small" title="Bring in a proxy model: .obj, .gltf or .glb" onClick={() => modelInput.current?.click()}>
+                      Import model…
+                    </button>
+                    {!personal.length && <span className="lvl-hint">Your own proxy models, sized in metres, for every project. Import an OBJ, glTF or GLB.</span>}
+                  </div>
+                )}
+              </>
+            )}
+            <input ref={modelInput} type="file" accept=".obj,.gltf,.glb,model/gltf-binary,model/gltf+json" hidden aria-label="Model file" onChange={(e) => void readModel(e.target.files)} />
+          </section>
           {CATEGORIES.filter((cat) => everything || !!q || categoryAtScale(scale, cat.id)).map((cat) => {
-            const assets = all.filter((a) => (a.source === 'starter' ? a.category === cat.id : cat.id === 'custom') && match(a));
+            const assets = all.filter((a) => !a.model && (a.source === 'starter' ? a.category === cat.id : cat.id === 'custom') && match(a));
             if (!assets.length) return null;
             const open = !closed.has(cat.id) || !!q;
             return (
@@ -156,25 +217,7 @@ export const LevelLibrary = (props: Props) => {
                 </button>
                 {open && (
                   <div className="lvl-assets">
-                    {assets.map((a) => (
-                      <div key={a.id} className={`lvl-asset${props.active === a.id ? ' on' : ''}`} title={a.description}>
-                        <button className="lvl-asset-pick" onPointerDown={(e) => props.onPick(a.id, e)} aria-label={`Place ${a.name}`}>
-                          <AssetIcon asset={a} />
-                          <span className="lvl-asset-name">{a.name}</span>
-                          {a.source !== 'starter' && <span className="lvl-asset-src">{a.source === 'global' ? 'mine' : 'project'}{a.version > 1 ? ` · v${a.version}` : ''}</span>}
-                        </button>
-                        {a.source === 'project' && (
-                          <button className="icon-btn small" title="Add to my library, for every project" aria-label={`Add ${a.name} to my library`} onClick={() => props.onPromote(a)}>
-                            ↑
-                          </button>
-                        )}
-                        {a.source !== 'starter' && (
-                          <button className="icon-btn small" title={a.source === 'global' ? 'Remove from my library' : 'Remove from this project’s library'} aria-label={`Remove ${a.name}`} onClick={() => props.onDeleteAsset(a)}>
-                            ×
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                    {assets.map(assetRow)}
                   </div>
                 )}
               </section>
@@ -216,6 +259,19 @@ export const LevelLibrary = (props: Props) => {
           })}
           {!items.length && <p className="lvl-hint">Nothing on this floor yet. Drag a Room in from the library.</p>}
         </div>
+      )}
+      {importing && (
+        <ModelImportDialog
+          file={importing.file}
+          parsed={importing.parsed}
+          units={props.set.settings.units}
+          onClose={() => setImporting(null)}
+          onAdd={(asset) => {
+            const kept = addGlobalAsset(asset);
+            setImporting(null);
+            props.onSay?.(kept ? `${asset.name} is in your Personal assets: drag it onto the map.` : `${asset.name} is in your Personal assets until this page closes: the browser is out of room to keep it. Place it to keep a copy in this project.`);
+          }}
+        />
       )}
     </aside>
   );

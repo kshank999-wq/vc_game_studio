@@ -8938,3 +8938,57 @@ button.bible-dual-col:hover {
 .equipment-number {
   width: 64px;
 }
+
+/* Personal assets and reference images (Level Designer V2 §10) */
+.lvl-personal-import {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 2px 6px 6px;
+}
+
+.lvl-asset-src.size {
+  text-transform: none;
+}
+
+.lvl-asset-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  object-fit: cover;
+  flex: none;
+}
+
+.lvl-ref {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line, #2a2516);
+}
+
+.lvl-ref.off {
+  opacity: 0.6;
+}
+
+.lvl-ref-thumb {
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  background: #0b0a07;
+  border-radius: 3px;
+}
+
+.lvl-model-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.lvl-model-size {
+  margin: 4px 0 10px;
+  color: var(--text-soft);
+}
+
+.lvl-hint.warn {
+  color: #e8a35c;
+}

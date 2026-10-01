@@ -5,6 +5,7 @@ import { insertCorner, levelsOf, mapGrid, moveCorner, pivotPoint, moveItems, pla
 import type { AssetCategory, AssetDefinition, LevelItem, LevelSet, TravelKind, TravelLink } from '../../model/level/types';
 import { spineSequence } from '../../model/layout';
 import { boundsOf as mapBoundsOf, itemsInRoom } from '../../model/level/hierarchy';
+import { referenceDepth, referencesOf } from '../../model/level/references';
 import { addTravel, moveTravelPoint, travelLabel, travelLength, travelPoints } from '../../model/level/travel';
 import type { Project } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
@@ -176,6 +177,8 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     return b ? { ...b, ox: l!.origin?.x ?? 0, oy: l!.origin?.y ?? 0 } : undefined;
   };
   const extent = extentOf(set);
+  // Pictures to trace over (spec V2 §10), under everything.
+  const references = referencesOf(set, levelId, floorId).filter((r) => !r.hidden);
   const basePx = (e = extent) => PX * (e && Math.max(e.w, e.d) > 200 ? 200 / Math.max(e.w, e.d) : 1);
   const scale = basePx() * view.zoom;
 
@@ -675,6 +678,10 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     const steps = def.proxy === 'stairs' ? Math.min(40, Math.max(2, Math.round(num(paramOf(set, item, 'steps', global), 16)))) : 0;
     return (
       <g key={item.id} {...common}>
+        {def.proxy === 'model' && def.model?.plan && (
+          // An imported model seen from above (spec V2 §10), stretched to its footprint.
+          <image href={def.model.plan} x={f.x - f.w / 2} y={f.y - f.d / 2} width={f.w} height={f.d} preserveAspectRatio="none" transform={`rotate(${f.rotation} ${f.x} ${f.y})`} opacity={0.9} pointerEvents="none" className="lvl-model-plan" />
+        )}
         {round ? (
           <ellipse cx={f.x} cy={f.y} rx={f.w / 2} ry={f.d / 2} transform={`rotate(${f.rotation} ${f.x} ${f.y})`} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={px(1.5)} />
         ) : (
@@ -754,6 +761,29 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
           <rect x={-reach} y={-reach} width={reach * 2} height={reach * 2} fill="url(#lvl-major)" pointerEvents="none" />
           <line x1={-reach} y1={0} x2={reach} y2={0} stroke="#3a3218" strokeWidth={px(1)} pointerEvents="none" />
           <line x1={0} y1={-reach} x2={0} y2={reach} stroke="#3a3218" strokeWidth={px(1)} pointerEvents="none" />
+          {references.length > 0 && (
+            <g className="lvl-references" pointerEvents="none">
+              {references.map((r) => {
+                const d = referenceDepth(r);
+                return (
+                  <image
+                    key={r.id}
+                    href={r.image}
+                    data-id={r.id}
+                    aria-label={r.name}
+                    x={r.x - r.width / 2}
+                    y={r.y - d / 2}
+                    width={r.width}
+                    height={d}
+                    opacity={r.opacity}
+                    preserveAspectRatio="none"
+                    transform={r.rotation ? `rotate(${r.rotation} ${r.x} ${r.y})` : undefined}
+                    className="lvl-reference"
+                  />
+                );
+              })}
+            </g>
+          )}
           {extent && (
             <g className="lvl-bounds" pointerEvents="none">
               <rect x={-extent.w / 2 - extent.ox} y={-extent.d / 2 - extent.oy} width={extent.w} height={extent.d} fill="none" stroke="#8a6f2f" strokeWidth={px(1.5)} strokeDasharray={`${px(10)} ${px(6)}`} />

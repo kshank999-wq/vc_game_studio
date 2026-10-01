@@ -22,14 +22,17 @@ const read = (): AssetDefinition[] => {
   return cache;
 };
 
-const write = (assets: AssetDefinition[]) => {
+/** False when the browser wouldn't keep it (out of room): it is there until the page closes. */
+const write = (assets: AssetDefinition[]): boolean => {
   cache = assets;
+  let kept = true;
   try {
     globalThis.localStorage?.setItem(KEY, JSON.stringify(assets));
   } catch {
-    // Not kept past this session.
+    kept = false;
   }
   for (const l of listeners) l();
+  return kept;
 };
 
 export const globalAssets = (): AssetDefinition[] => read();
@@ -39,7 +42,12 @@ export const promoteAsset = (asset: AssetDefinition): void => {
   write([...read().filter((a) => a.id !== copy.id), copy]);
 };
 
-export const forgetAsset = (id: string): void => write(read().filter((a) => a.id !== id));
+/** Add a personal asset (spec V2 §10), an imported model; false if it couldn't be kept past this session. */
+export const addGlobalAsset = (asset: AssetDefinition): boolean => write([...read().filter((a) => a.id !== asset.id), { ...asset, source: 'global' }]);
+
+export const forgetAsset = (id: string): void => {
+  write(read().filter((a) => a.id !== id));
+};
 
 export const useGlobalAssets = (): AssetDefinition[] =>
   useSyncExternalStore(

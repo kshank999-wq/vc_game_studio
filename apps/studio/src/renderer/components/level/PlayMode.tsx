@@ -118,7 +118,7 @@ export const PlayMode = (props: Props) => {
 
   const scene = useMemo(() => {
     const s = state.current;
-    const all = meshesFor(set, levelId, { ceilings: true, global, skip: (i) => !present(project, s, i), open: (i) => isOpen(project, s, i, global) });
+    const all = meshesFor(set, levelId, { ceilings: true, global, models: true, skip: (i) => !present(project, s, i), open: (i) => isOpen(project, s, i, global) });
     const colliders: Collider[] = collidersFrom(all);
     const byId = new Map(set.items.map((i) => [i.id, i]));
     const visible = all.filter((m) => {

@@ -148,6 +148,10 @@ const dedupe = (params: ParamDef[]): ParamDef[] => {
   return params.filter((p) => (seen.has(p.key) ? false : (seen.add(p.key), true)));
 };
 
+/** An imported model's parameters (spec V2 §10): a solid's, with its collision as chosen on import. */
+export const modelParams = (collision: 'static' | 'dynamic' | 'trigger' | 'none' = 'static'): ParamDef[] =>
+  dedupe([...appearance, ...physics(collision === 'dynamic' ? 'dynamic' : 'static').map((p) => (p.key === 'collision' ? { ...p, default: collision } : p)), ...interaction(), ...engine]);
+
 const ROOM = E('Node3D with CSG walls', 'GameObject with wall meshes + colliders', 'Actor with wall StaticMeshComponents');
 const HOSTED = E('CSGBox3D opening + StaticBody3D', 'Prefab in the wall + collider', 'Actor attached to the wall');
 const SOLID = E('MeshInstance3D + StaticBody3D', 'GameObject + MeshRenderer + Collider', 'StaticMeshActor');
