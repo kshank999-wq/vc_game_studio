@@ -12,6 +12,8 @@ interface Props {
   onOpen: (levelId: string, floorId?: string, itemId?: string) => void;
   /** Show where a map is on the map open now (its item there). */
   onLocate: (itemId: string) => void;
+  /** Detail a room in place (double-click a room). */
+  onFocusRoom?: (roomId: string) => void;
   onNewWorld: () => void;
   onNewChild: (parentId: string) => void;
   onToggle: (levelId: string, what: 'favorite' | 'hidden' | 'locked') => void;
@@ -102,7 +104,7 @@ export const MapNavigator = (props: Props) => {
               }}
             />
           ) : (
-            <button className="lvl-nav-name" aria-label={`${n.name}, ${n.kind === 'map' ? kindLabel(n.mapKind!).toLowerCase() : n.kind}`} onClick={() => click(n)} onDoubleClick={() => n.kind === 'map' && props.onOpen(n.id)} title={n.kind === 'map' ? `${kindLabel(n.mapKind!)} · ${status?.label ?? ''} · double-click to open` : undefined}>
+            <button className="lvl-nav-name" aria-label={`${n.name}, ${n.kind === 'map' ? kindLabel(n.mapKind!).toLowerCase() : n.kind}`} onClick={() => click(n)} onDoubleClick={() => (n.kind === 'map' ? props.onOpen(n.id) : n.kind === 'room' ? props.onFocusRoom?.(n.id) : undefined)} title={n.kind === 'map' ? `${kindLabel(n.mapKind!)} · ${status?.label ?? ''} · double-click to open` : undefined}>
               {n.favorite && <span className="lvl-nav-star">★ </span>}
               {n.name}
             </button>

@@ -37,7 +37,7 @@ import { LevelInspector } from './LevelInspector';
 import { LevelMap, type MapApi, type MapTool } from './LevelMap';
 import type { Axes, Tool3d } from './gizmo';
 import { formatLength } from './units';
-import { opensAsMap, scaleOf, childOfItem, createWorld, duplicateMap, kindLabel, kindOf, mapsOwnedBy, openChildMap, pathTo, removalOfMap, removeMap, updateMap, addChildMap } from '../../model/level/hierarchy';
+import { syncBuildings, opensAsMap, scaleOf, childOfItem, createWorld, duplicateMap, kindLabel, kindOf, mapsOwnedBy, openChildMap, pathTo, removalOfMap, removeMap, updateMap, addChildMap } from '../../model/level/hierarchy';
 import { MapNavigator } from './MapNavigator';
 import { removeTravel, travelById, TRAVEL_KINDS } from '../../model/level/travel';
 import { NewWorldDialog } from './NewWorldDialog';
@@ -103,6 +103,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [routeKind, setRouteKind] = useState<TravelKind>('road');
   const [pick, setPick] = useState<Pick | null>(null);
   const pickRef = useRef<Pick | null>(null);
+  const focusRoomRef = useRef<string | null>(null);
   pickRef.current = pick;
   const [leftTab, setLeftTab] = useState<'library' | 'outliner'>('library');
   const [hidden, setHidden] = useState<ReadonlySet<AssetCategory>>(() => new Set());
@@ -125,6 +126,9 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [playPreset, setPlayPreset] = useState('');
   const [playPerspective, setPlayPerspective] = useState<Perspective | null>(null);
   const [newWorld, setNewWorld] = useState(false);
+  // A room being detailed (spec V2 §2, §7): the map frames it, the rest of the floor dims, the library offers room things.
+  const [focusRoom, setFocusRoomState] = useState<string | null>(null);
+  focusRoomRef.current = focusRoom;
   const map = useRef<MapApi>(null);
   const box = useRef<GrayboxApi>(null);
   const playingRef = useRef(false);
@@ -140,11 +144,12 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   useEffect(() => {
     if (level && !level.floors.some((f) => f.id === floorId)) setFloorId(level.floors[0]!.id);
     if (!set.levels.some((l) => l.id === levelId) && set.levels[0]) setLevelId(set.levels[0].id);
+    if (focusRoom && !set.items.some((i) => i.id === focusRoom && i.levelId === levelId && i.floorId === floorId)) setFocusRoomState(null);
     setSelection((s) => {
       const kept = s.filter((id) => set.items.some((i) => i.id === id) || (set.travel ?? []).some((t) => t.id === id));
       return kept.length === s.length ? s : kept;
     });
-  }, [set, level, floorId, levelId]);
+  }, [set, level, floorId, levelId, focusRoom]);
 
   // Open framed on the focus, or the floor.
   useEffect(() => {
@@ -285,7 +290,20 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         return;
       }
     }
-    onCommit(next);
+    // A building and its mass stay in step (spec V2 §8).
+    onCommit(syncBuildings(latest.current.project, next, global));
+  };
+
+  /** Detail one room (or stop, with null): it is framed, and the library turns to what goes in a room. */
+  const setFocusRoom = (id: string | null) => {
+    setFocusRoomState(id);
+    if (!id) return;
+    const room = levelsOf(latest.current.project).items.find((i) => i.id === id);
+    if (!room) return;
+    if (room.levelId !== latest.current.levelId) setLevelId(room.levelId);
+    setFloorId(room.floorId);
+    setSelection([id]);
+    setTimeout(() => (mode === '3d' ? box.current : map.current)?.frame([id]), 0);
   };
 
   /** Open a map, at a floor, with an item selected (and in view). */
@@ -293,6 +311,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
     const s = levelsOf(within);
     const next = s.levels.find((l) => l.id === lid);
     if (!next) return;
+    setFocusRoomState(null);
     setLevelId(lid);
     setFloorId(fid ?? next.floors[0]?.id ?? '');
     setSelection(itemId ? [itemId] : []);
@@ -318,6 +337,11 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   };
 
   const backToParent = () => {
+    // Out of a room first, then up a map.
+    if (focusRoomRef.current) {
+      setFocusRoomState(null);
+      return;
+    }
     const s = levelsOf(latest.current.project);
     const here = s.levels.find((l) => l.id === latest.current.levelId);
     const parent = here?.parentId ? s.levels.find((l) => l.id === here.parentId) : undefined;
@@ -524,6 +548,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const picked = pick && findAsset(pick.assetId, set.assets, global);
   const crumbs = pathTo(set, level.id);
   const selectedRoom = selected && assetOf(set, selected, global).kind === 'space' ? selected : undefined;
+  const focusedRoom = focusRoom ? set.items.find((i) => i.id === focusRoom) : undefined;
 
   return (
     <div className={`lvl${pick ? ' is-placing' : ''}${playing ? ' playing' : ''}`}>
@@ -554,14 +579,28 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               <span className="muted">{floor.name}</span>
             </span>
           )}
-          {selectedRoom && (
+          {focusedRoom ? (
             <span className="lvl-crumb">
               <span className="lvl-crumb-sep">›</span>
-              <span className="muted">{selectedRoom.name}</span>
+              <span className="lvl-crumb-room">
+                {focusedRoom.name}
+                <button className="icon-btn small" aria-label={`Leave ${focusedRoom.name}`} title="Back to the whole floor (Alt+↑)" onClick={() => setFocusRoomState(null)}>
+                  ×
+                </button>
+              </span>
             </span>
+          ) : (
+            selectedRoom && (
+              <span className="lvl-crumb">
+                <span className="lvl-crumb-sep">›</span>
+                <button onClick={() => setFocusRoom(selectedRoom.id)} title="Detail this room: the rest of the floor dims, the library offers what goes in a room">
+                  {selectedRoom.name}
+                </button>
+              </span>
+            )
           )}
-          {level.parentId && (
-            <button className="icon-btn small lvl-crumb-up" aria-label="Back to the parent map" title="Back to the parent map (Alt+↑)" onClick={backToParent}>
+          {(level.parentId || focusedRoom) && (
+            <button className="icon-btn small lvl-crumb-up" aria-label={focusedRoom ? 'Back to the whole floor' : 'Back to the parent map'} title={`${focusedRoom ? 'Back to the whole floor' : 'Back to the parent map'} (Alt+↑)`} onClick={backToParent}>
               ↑
             </button>
           )}
@@ -752,6 +791,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             floorId={floor.id}
             selection={selection}
             onOpen={openMap}
+            onFocusRoom={setFocusRoom}
             onLocate={(id) => {
               const item = set.items.find((i) => i.id === id);
               if (!item) return;
@@ -778,7 +818,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           />
         }
         set={set}
-        scale={scaleOf(kindOf(level))}
+        scale={focusRoom ? 'room' : scaleOf(kindOf(level))}
         levelId={level.id}
         floorId={floor.id}
         global={global}
@@ -852,6 +892,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             tool={tool}
             drawAsset={drawAsset}
             routeKind={routeKind}
+            focusRoom={focusRoom}
             placing={pick?.sticky ? pick.assetId : null}
             onPlace={putDown}
             onOpen3D={(id) => (id && (childOfItem(set, id) || opensAsMap(set, id, global)) ? openChild(id) : open3D(id))}
@@ -921,6 +962,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         issues={issues}
         onOpenMap={(lid) => openMap(lid)}
         onOpenChild={openChild}
+        onFocusRoom={setFocusRoom}
+        focusRoom={focusRoom}
       />
       {newWorld && (
         <NewWorldDialog

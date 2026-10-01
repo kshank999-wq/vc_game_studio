@@ -1,5 +1,5 @@
 import type { Project } from '../types';
-import { assetOf, frameOf, paramOf } from './geometry';
+import { assetOf, contains, frameOf, paramOf } from './geometry';
 import { guid, levelsOf, withSet } from './level';
 import type { AssetCategory, AssetDefinition, Floor, Level, LevelItem, LevelSet, MapBoundary, MapKind, MapStatus } from './types';
 
@@ -67,17 +67,32 @@ export const kindBelow = (kind: MapKind): MapKind => {
  * masses in a district, rooms and furniture in a building), with the rest a
  * click away. A plain level shows everything but the world's.
  */
-export type MapScale = 'world' | 'city' | 'level' | 'building';
+export type MapScale = 'world' | 'city' | 'level' | 'building' | 'room';
 
 export const scaleOf = (kind: MapKind): MapScale => (kind === 'world' || kind === 'region' ? 'world' : kind === 'district' ? 'city' : kind === 'building' || kind === 'interior' ? 'building' : 'level');
 
-export const SCALE_LABEL: Record<MapScale, string> = { world: 'World and region tools', city: 'Town and city tools', level: 'Level tools', building: 'Building and room tools' };
+export const SCALE_LABEL: Record<MapScale, string> = { world: 'World and region tools', city: 'Town and city tools', level: 'Level tools', building: 'Building and room tools', room: 'Room detail tools' };
 
 const SCALE_CATEGORIES: Record<MapScale, readonly AssetCategory[]> = {
   world: ['world', 'settlement', 'navigation', 'custom'],
   city: ['settlement', 'spaces', 'architecture', 'primitives', 'gameplay', 'actors', 'logic', 'spawning', 'navigation', 'presentation', 'custom'],
   level: ['settlement', 'spaces', 'architecture', 'primitives', 'props', 'lighting', 'gameplay', 'actors', 'logic', 'presentation', 'spawning', 'navigation', 'custom'],
   building: ['spaces', 'architecture', 'primitives', 'props', 'lighting', 'gameplay', 'actors', 'logic', 'presentation', 'spawning', 'navigation', 'custom'],
+  // Inside one room (spec V2 §7, Room / Detail): furniture, lights, props, things to use, puzzles, loot, doors, triggers, NPCs.
+  room: ['props', 'lighting', 'gameplay', 'actors', 'logic', 'architecture', 'presentation', 'custom'],
+};
+
+/**
+ * What is in a room (spec V2 §2: open a room and fill it): the items on its
+ * floor whose centre is inside it, other spaces aside, and what is in its walls.
+ */
+export const itemsInRoom = (set: LevelSet, roomId: string, global?: readonly AssetDefinition[]): LevelItem[] => {
+  const room = set.items.find((i) => i.id === roomId);
+  if (!room) return [];
+  const f = frameOf(set, room, global);
+  return set.items.filter(
+    (i) => i.id !== roomId && i.levelId === room.levelId && i.floorId === room.floorId && (i.host?.id === roomId || (assetOf(set, i, global).kind !== 'space' && contains(f, frameOf(set, i, global)))),
+  );
 };
 
 /** Whether a library category belongs at this scale. */
@@ -231,7 +246,7 @@ export const openChildMap = (project: Project, itemId: string, kind?: MapKind, g
   const k = kind ?? kindFromItem(set, item, parent, global);
   const f = frameOf(set, item, global);
   const id = guid();
-  const floors = k === 'building' || k === 'interior' ? [{ ...groundFloor(Math.min(4, Math.max(2.4, f.h))), name: 'Ground floor' }] : [groundFloor()];
+  const floors = k === 'building' || k === 'interior' ? storeysOf(set, item, f.h, global) : [groundFloor()];
   return {
     project: withSet(
       project,
@@ -264,6 +279,63 @@ const kindFromItem = (set: LevelSet, item: LevelItem, parent: Level, global?: re
   if (MAP_KINDS.some((k) => k.id === hint)) return hint as MapKind;
   if (def.role === 'room' || def.role === 'stairwell' || def.role === 'corridor' || def.role === 'arena') return 'interior';
   return kindBelow(kindOf(parent));
+};
+
+/**
+ * A building's floors from its mass (spec V2 §8): as many as its Floors, each
+ * its Floor height tall (or one floor, the mass's height, up to 4 m).
+ */
+const storeysOf = (set: LevelSet, item: LevelItem, height: number, global?: readonly AssetDefinition[]): Floor[] => {
+  const count = Math.max(1, Math.min(200, Math.round(Number(paramOf(set, item, 'floors', global) ?? 1)) || 1));
+  const each = Number(paramOf(set, item, 'floorHeight', global)) || Math.min(4, Math.max(2.4, height / count));
+  return Array.from({ length: count }, (_, n) => ({ id: guid(), name: n === 0 ? 'Ground floor' : `Floor ${n + 1}`, elevation: Math.round(n * each * 1000) / 1000, height: each }));
+};
+
+/**
+ * Keep a building and its mass in step (spec V2 §8: 2D, 3D, parent and child
+ * agree), after a change. When a building's floors change, its mass on the
+ * parent map gets their count and their height; when the mass's Floors goes
+ * up, the building gets the floors it lacks (floors are never taken away
+ * from under rooms: remove them in the building).
+ */
+export const syncBuildings = (before: Project, after: Project, global?: readonly AssetDefinition[]): Project => {
+  const a = levelsOf(before);
+  let set = levelsOf(after);
+  if (a === set) return after;
+  let changed = false;
+  for (const level of set.levels) {
+    const kind = kindOf(level);
+    if ((kind !== 'building' && kind !== 'interior') || !level.anchorId) continue;
+    const anchor = set.items.find((i) => i.id === level.anchorId && i.levelId === level.parentId);
+    if (!anchor || !assetOf(set, anchor, global).params.some((p) => p.key === 'floors')) continue;
+    const old = a.levels.find((l) => l.id === level.id);
+    const oldAnchor = a.items.find((i) => i.id === anchor.id);
+    const top = Math.max(...level.floors.map((fl) => fl.elevation + fl.height));
+    const floorsChanged = !!old && old.floors !== level.floors;
+    const wanted = Math.round(Number(paramOf(set, anchor, 'floors', global) ?? 1)) || 1;
+    if (floorsChanged) {
+      const count = level.floors.length;
+      if (wanted !== count || Math.abs(frameOf(set, anchor, global).h - top) > 1e-6) {
+        set = {
+          ...set,
+          items: set.items.map((i) => (i.id === anchor.id ? { ...i, params: { ...i.params, floors: count }, size: { ...i.size, h: Math.round(top * 1000) / 1000 } } : i)),
+        };
+        changed = true;
+      }
+    } else if (oldAnchor && oldAnchor.params?.floors !== anchor.params?.floors && wanted > level.floors.length) {
+      const each = Number(paramOf(set, anchor, 'floorHeight', global)) || level.floors[level.floors.length - 1]!.height;
+      const added: Floor[] = Array.from({ length: wanted - level.floors.length }, (_, n) => ({ id: guid(), name: `Floor ${level.floors.length + n + 1}`, elevation: Math.round((top + n * each) * 1000) / 1000, height: each }));
+      const floors = [...level.floors, ...added];
+      const height = Math.max(...floors.map((fl) => fl.elevation + fl.height));
+      set = {
+        ...set,
+        levels: set.levels.map((l) => (l.id === level.id ? { ...l, floors } : l)),
+        items: set.items.map((i) => (i.id === anchor.id ? { ...i, size: { ...i.size, h: Math.round(height * 1000) / 1000 } } : i)),
+      };
+      changed = true;
+    }
+  }
+  return changed ? withSet(after, set) : after;
 };
 
 export const updateMap = (project: Project, id: string, patch: Partial<Omit<Level, 'id' | 'serial' | 'floors'>>): Project => {

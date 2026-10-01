@@ -4,7 +4,7 @@ import { areaOf, assetOf, boundsOf, CATEGORY_COLOR, contains, corners, frameOf, 
 import { insertCorner, levelsOf, mapGrid, moveCorner, pivotPoint, moveItems, placeAsset, placeAt, removeCorner, resizeItem, setOutline, snap, withGroups } from '../../model/level/level';
 import type { AssetCategory, AssetDefinition, LevelItem, LevelSet, TravelKind, TravelLink } from '../../model/level/types';
 import { spineSequence } from '../../model/layout';
-import { boundsOf as mapBoundsOf } from '../../model/level/hierarchy';
+import { boundsOf as mapBoundsOf, itemsInRoom } from '../../model/level/hierarchy';
 import { addTravel, moveTravelPoint, travelLabel, travelLength, travelPoints } from '../../model/level/travel';
 import type { Project } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
@@ -41,6 +41,8 @@ interface Props {
   drawAsset: string;
   /** What the route tool draws (spec V2 §5). */
   routeKind?: TravelKind;
+  /** A room being detailed (spec V2 §7): the rest of the floor dims and stays put. */
+  focusRoom?: string | null;
   /** An asset picked up from the library: the next click puts it down. */
   placing: string | null;
   onPlace: (at: Point) => void;
@@ -517,6 +519,12 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   const units = set.settings.units;
   const grid = mapGrid(set, levelId);
   const minor = grid * scale >= 7 ? grid : grid * Math.ceil(7 / (grid * scale));
+  // Room focus (spec V2 §7): the room and what is in it, the rest dimmed.
+  const roomItem = props.focusRoom ? set.items.find((i) => i.id === props.focusRoom && i.levelId === levelId && i.floorId === floorId) : undefined;
+  const focusFrame = roomItem ? frameOf(set, roomItem, global) : undefined;
+  const inRoom = roomItem ? new Set([roomItem.id, ...itemsInRoom(set, roomItem.id, global).map((i) => i.id)]) : null;
+  const focused = inRoom ? items.filter((i) => inRoom.has(i.id)) : items;
+  const dimmed = inRoom ? items.filter((i) => !inRoom.has(i.id)) : [];
   // Travel links on this map (spec V2 §13), their ends where their places are.
   const routes = (set.travel ?? []).filter((t) => t.levelId === levelId && (!t.floorId || t.floorId === floorId)).map((link) => ({ link, points: travelPoints(set, link, global) })).filter((r) => r.points.length >= 2);
   // Items that open into their own map (spec V2 §5): marked, with the map's name.
@@ -759,7 +767,12 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
               {ghost.map((i) => drawItem(i, true))}
             </g>
           )}
-          {[...items].sort((a, b) => order(a) - order(b)).filter((i) => assetOf(set, i, global).kind === 'space').map((i) => drawItem(i))}
+          {dimmed.length > 0 && (
+            <g opacity={0.22} pointerEvents="none" className="lvl-dimmed">
+              {[...dimmed].sort((a, b) => order(a) - order(b)).map((i) => drawItem(i, true))}
+            </g>
+          )}
+          {[...focused].sort((a, b) => order(a) - order(b)).filter((i) => assetOf(set, i, global).kind === 'space').map((i) => drawItem(i))}
           {walls.map((m) => (
             <rect
               key={m.key}
@@ -772,7 +785,10 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
               pointerEvents="none"
             />
           ))}
-          {[...items].sort((a, b) => order(a) - order(b)).filter((i) => assetOf(set, i, global).kind !== 'space').map((i) => drawItem(i))}
+          {[...focused].sort((a, b) => order(a) - order(b)).filter((i) => assetOf(set, i, global).kind !== 'space').map((i) => drawItem(i))}
+          {props.focusRoom && focusFrame && (
+            <polygon points={pointsAttr(corners(focusFrame))} className="lvl-focus-ring" fill="none" stroke="var(--gold-hi)" strokeWidth={px(2)} strokeDasharray={`${px(8)} ${px(4)}`} pointerEvents="none" />
+          )}
           {routes.map(({ link, points }) => {
             const style = ROUTE_STYLE[link.kind] ?? ROUTE_STYLE.route!;
             const on = selected.has(link.id);

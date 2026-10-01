@@ -6711,6 +6711,16 @@ kbd {
   cursor: default;
 }
 
+.lvl-crumb-room {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 2px 1px 8px;
+  border: 1px solid var(--gold-lo);
+  border-radius: 10px;
+  color: var(--gold-hi);
+}
+
 .lvl-crumb-sep {
   color: var(--muted);
 }
@@ -6764,6 +6774,7 @@ kbd {
 
 .lvl-scale {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 6px;

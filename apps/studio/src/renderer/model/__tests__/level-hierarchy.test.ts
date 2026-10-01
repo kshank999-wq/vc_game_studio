@@ -143,3 +143,59 @@ describe('the preflight at every scale', () => {
     expect(noStart(updateMap(project, city.id, { boundary: 'mapOnly' }), city.id)).toBe(false);
   });
 });
+
+describe('buildings and rooms (spec V2 §8)', () => {
+  it('opens a building mass as a building of its floors, and keeps the two in step', async () => {
+    const { syncBuildings, openChildMap, addChildMap } = await import('../level/hierarchy');
+    const { removeFloor, setParam, updateFloor } = await import('../level/level');
+    const { frameOf } = await import('../level/geometry');
+    let { project } = addChildMap(sunkenVault(), undefined, 'district', 'Old Town');
+    const town = levelsOf(project).levels.at(-1)!;
+    const placed = placeAsset(project, town.id, town.floors[0]!.id, 'struct.tower', { x: 0, y: 0 });
+    project = placed.project;
+    const tower = placed.ids[0]!;
+    const opened = openChildMap(project, tower);
+    project = opened.project;
+    let set = levelsOf(project);
+    let building = set.levels.find((l) => l.id === opened.id)!;
+    expect(building.kind).toBe('building');
+    expect(building.floors.map((f) => [f.name, f.elevation, f.height])).toEqual([
+      ['Ground floor', 0, 4], ['Floor 2', 4, 4], ['Floor 3', 8, 4], ['Floor 4', 12, 4], ['Floor 5', 16, 4], ['Floor 6', 20, 4],
+    ]);
+    // A floor added in the building: the tower gets taller, and counts it.
+    let next = addFloor(project, building.id).project;
+    next = syncBuildings(project, next);
+    set = levelsOf(next);
+    expect(set.items.find((i) => i.id === tower)!.params).toMatchObject({ floors: 7 });
+    expect(frameOf(set, set.items.find((i) => i.id === tower)!).h).toBe(28);
+    // A floor made taller there too.
+    project = next;
+    building = levelsOf(project).levels.find((l) => l.id === opened.id)!;
+    next = syncBuildings(project, updateFloor(project, building.id, building.floors[6]!.id, { height: 6 }));
+    expect(frameOf(levelsOf(next), levelsOf(next).items.find((i) => i.id === tower)!).h).toBe(30);
+    // The tower asked for more floors on the town map: the building gets them.
+    project = next;
+    next = syncBuildings(project, setParam(project, tower, 'floors', 9));
+    set = levelsOf(next);
+    building = set.levels.find((l) => l.id === opened.id)!;
+    expect(building.floors.length).toBe(9);
+    expect(building.floors.at(-1)).toMatchObject({ name: 'Floor 9', elevation: 34 });
+    // Fewer floors asked for on the mass takes none away (rooms may be on them).
+    expect(levelsOf(syncBuildings(next, setParam(next, tower, 'floors', 2))).levels.find((l) => l.id === opened.id)!.floors.length).toBe(9);
+    // Removing a floor in the building counts down on the mass.
+    const removed = syncBuildings(next, removeFloor(next, building.id, building.floors.at(-1)!.id));
+    expect(levelsOf(removed).items.find((i) => i.id === tower)!.params).toMatchObject({ floors: 8 });
+  });
+
+  it('knows what is in a room, to detail it', async () => {
+    const { itemsInRoom } = await import('../level/hierarchy');
+    const p = sunkenVault();
+    const set = levelsOf(p);
+    const chamber = set.items.find((i) => i.name === 'Vault Chamber')!;
+    const inside = itemsInRoom(set, chamber.id).map((i) => i.name);
+    expect(inside.length).toBeGreaterThan(0);
+    expect(inside).not.toContain('Vault Chamber');
+    expect(inside).not.toContain('Silt Camp');
+    for (const i of itemsInRoom(set, chamber.id)) expect(i.floorId).toBe(chamber.floorId);
+  });
+});

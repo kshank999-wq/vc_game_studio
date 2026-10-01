@@ -44,7 +44,7 @@ import type { ObjectType, Project } from '../../model/types';
 import { EffectsEditor, RuleEditor } from '../rules/RuleEditor';
 import { Symbol } from '../Symbol';
 import { BoolField, NumberField, RefField, Section, SelectField, TextField } from './fields';
-import { anchorOf, boundsOf as mapBounds, BOUNDARIES, childOfItem, childrenOf, descendantsOf, kindLabel, kindOf, MAP_KINDS, moveMap, STATUSES, statusOf, updateMap } from '../../model/level/hierarchy';
+import { itemsInRoom, anchorOf, boundsOf as mapBounds, BOUNDARIES, childOfItem, childrenOf, descendantsOf, kindLabel, kindOf, MAP_KINDS, moveMap, STATUSES, statusOf, updateMap } from '../../model/level/hierarchy';
 import { formatLength } from './units';
 import { canTravel, kindLabelOf, TRANSITIONS, TRAVEL_KINDS, travelById, travelLabel, travelLength, travelPoints, updateTravel } from '../../model/level/travel';
 import { emptyState } from '../../model/rules';
@@ -67,6 +67,9 @@ interface Props {
   onOpenMap?: (levelId: string) => void;
   /** Open an item as its own map (spec V2 §5, §8), making it if need be. */
   onOpenChild?: (itemId: string) => void;
+  /** Detail a room in place (spec V2 §7), or stop. */
+  onFocusRoom?: (roomId: string | null) => void;
+  focusRoom?: string | null;
 }
 
 const LINKABLE: ObjectType[] = ['plotPoint', 'scene', 'environment', 'character', 'object', 'inventory', 'puzzle', 'cinematic', 'choice', 'dialogue', 'trigger', 'gate', 'state'];
@@ -340,6 +343,20 @@ export const LevelInspector = (props: Props) => {
             <div className="lvl-kv"><span>Type</span><span>{def.name} · {def.category}</span></div>
             <div className="lvl-kv"><span>From</span><span>{def.source === 'starter' ? 'Starter library' : def.source === 'global' ? 'My library' : 'Project library'} · v{def.version}{item.assetVersion !== def.version ? ` (placed from v${item.assetVersion})` : ''}</span></div>
             <div className="lvl-kv"><span>GUID</span><span className="mono lvl-guid" title="Never changes: references and the engine manifest use it">{item.id}</span></div>
+            {def.kind === 'space' && (
+              <div className="lvl-btnrow wrap">
+                {props.focusRoom === item.id ? (
+                  <button className="tb-btn small" onClick={() => props.onFocusRoom?.(null)}>
+                    Back to the whole floor
+                  </button>
+                ) : (
+                  <button className="tb-btn small" onClick={() => props.onFocusRoom?.(item.id)} title="Detail it here: the rest of the floor dims, the library offers furniture, lights, props, things to use, puzzles, triggers and NPCs">
+                    Detail this room ◎
+                  </button>
+                )}
+                <span className="muted">{itemsInRoom(set, item.id, global).length} things in it</span>
+              </div>
+            )}
             {def.kind !== 'hosted' && <ChildMapRow project={project} itemId={item.id} onOpenChild={props.onOpenChild} />}
           </Section>
         )}

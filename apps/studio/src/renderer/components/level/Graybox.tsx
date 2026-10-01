@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { frameOf, meshesFor, toLocal, type Point } from '../../model/level/geometry';
 import { buildPiece, disposePiece } from './three-pieces';
-import { extrude, levelsOf, moveItems, placeAt, setPivot, snap, withGroups } from '../../model/level/level';
+import { extrude, levelsOf, mapGrid, moveItems, placeAt, setPivot, snap, withGroups } from '../../model/level/level';
+import { boundsOf as mapBounds } from '../../model/level/hierarchy';
 import { navigate } from '../../model/level/nav';
 import { alongLine, buildCollision, buildHandles, buildWalkable, clearGroup, type Axes, type Handle, type Tool3d } from './gizmo';
 import type { AssetDefinition } from '../../model/level/types';
@@ -60,6 +61,9 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     handles: THREE.Group;
     overlay: THREE.Group;
     grid: THREE.GridHelper;
+    sun: THREE.DirectionalLight;
+    /** The map's extent (a building's footprint and height), as an outline. */
+    extent?: THREE.LineSegments;
     render: () => void;
   } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -71,6 +75,9 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
   const set = levelsOf(shown);
   const level = set.levels.find((l) => l.id === levelId);
   const floorElevation = level?.floors.find((f) => f.id === floorId)?.elevation ?? 0;
+  // A world is kilometres across (spec V2 §8): the view's reach, fog and grid grow with the map.
+  const bounds = level ? mapBounds(set, level, global) : undefined;
+  const reach = Math.max(1, (bounds ? Math.max(bounds.w, bounds.d) : 0) / 150);
 
   const meshes = useMemo(
     () =>
@@ -132,7 +139,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     };
     const observer = new ResizeObserver(resize);
     observer.observe(el);
-    three.current = { renderer, scene, camera, controls, content, handles, overlay, grid, render };
+    three.current = { renderer, scene, camera, controls, content, handles, overlay, grid, render, sun };
     resize();
     return () => {
       observer.disconnect();
@@ -142,6 +149,45 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
       three.current = null;
     };
   }, []);
+
+  // The scale of the map: how far the camera sees, where the fog is, how big the grid and the sun's shadows are.
+  useEffect(() => {
+    const t = three.current;
+    if (!t) return;
+    t.camera.far = 1000 * reach;
+    t.camera.updateProjectionMatrix();
+    if (t.scene.fog instanceof THREE.Fog) {
+      t.scene.fog.near = 60 * reach;
+      t.scene.fog.far = 220 * reach;
+    }
+    t.controls.maxDistance = 400 * reach;
+    t.scene.remove(t.grid);
+    t.grid.dispose();
+    const size = 200 * reach;
+    t.grid = new THREE.GridHelper(size, Math.min(400, Math.round(size / Math.max(1, mapGrid(set, levelId)))), '#3a3218', '#1c1910');
+    t.grid.position.y = floorElevation;
+    t.scene.add(t.grid);
+    Object.assign(t.sun.shadow.camera, { left: -60 * reach, right: 60 * reach, top: 60 * reach, bottom: -60 * reach, far: 150 * reach });
+    t.sun.position.set(20 * reach, 40 * reach, 12 * reach);
+    t.sun.shadow.camera.updateProjectionMatrix();
+    if (t.extent) {
+      t.scene.remove(t.extent);
+      t.extent.geometry.dispose();
+      t.extent = undefined;
+    }
+    if (bounds && level) {
+      // The map's edge in 3D (spec V2 §8): a building's footprint, as tall as its floors.
+      const top = Math.max(...level.floors.map((f) => f.elevation + f.height));
+      const ox = level.origin?.x ?? 0;
+      const oz = level.origin?.y ?? 0;
+      const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(bounds.w, top, bounds.d));
+      t.extent = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: '#8a6f2f', transparent: true, opacity: 0.7 }));
+      t.extent.position.set(-ox, top / 2, -oz);
+      t.scene.add(t.extent);
+    }
+    t.render();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reach, levelId, floorElevation, bounds?.w, bounds?.d, level?.floors]);
 
   // ------------------------------------------------------------ content
 
@@ -217,7 +263,12 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     t.content.traverse((o) => {
       if (o instanceof THREE.Mesh && (!wanted || wanted.has(o.userData.itemId as string))) box.expandByObject(o);
     });
-    if (box.isEmpty()) box.set(new THREE.Vector3(-6, floorElevation, -6), new THREE.Vector3(6, floorElevation + 3, 6));
+    if (box.isEmpty()) {
+      // An empty map frames its edge, when it has one.
+      const w = bounds ? bounds.w / 2 : 6;
+      const d = bounds ? bounds.d / 2 : 6;
+      box.set(new THREE.Vector3(-w, floorElevation, -d), new THREE.Vector3(w, floorElevation + 3, d));
+    }
     const centre = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3()).length();
     const distance = Math.max(6, size * 1.1);

@@ -98,5 +98,25 @@ describe('worlds, regions and child maps in the Level Designer (spec V2)', () =>
     fireEvent.click(screen.getByRole('button', { name: 'Delete route' }));
     expect(container.querySelector('.lvl-route')).toBeNull();
   });
+
+  it('details one room of the sample: the rest dims, the library turns to room things, and back', async () => {
+    const { sunkenVault } = await import('../model/sample');
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+    await opened();
+    // Double-click the room in the navigator.
+    fireEvent.doubleClick(screen.getByRole('button', { name: 'Vault Chamber, room' }));
+    expect(screen.getByText('Room detail tools')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Place Room' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Place Table' })).toBeTruthy();
+    expect(container.querySelector('.lvl-dimmed')).toBeTruthy();
+    expect(container.querySelector('.lvl-focus-ring')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Back to the whole floor' })).toHaveLength(2);
+    expect(screen.getByText(/things in it/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave Vault Chamber' }));
+    expect(container.querySelector('.lvl-dimmed')).toBeNull();
+    expect(screen.queryByText('Room detail tools')).toBeNull();
+  });
 });
 
