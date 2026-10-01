@@ -5,7 +5,7 @@ import { BODY, collidersFrom, eyeOf, facing, look, step, type Body, type Collide
 import { assetOf, frameOf, meshesFor, num, paramOf, type Mesh } from '../../model/level/geometry';
 import { levelsOf } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
-import { darknessAt, dismiss, inHand, interactWith, isOpen, lightOf, offerFor, present, startLevelPlay, tick, toggleLight, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
+import { answerScreen, darknessAt, dismiss, inHand, interactWith, isOpen, lightOf, offerFor, present, startLevelPlay, tick, toggleLight, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
 import { equipmentList, equipmentOf, usesLeft } from '../../model/equipment';
 import { recipesOf } from '../../model/crafting';
 import { skillsOf } from '../../model/skills';
@@ -16,6 +16,8 @@ import type { Project } from '../../model/types';
 import { usePreferences } from '../../preferences';
 import { actionOfKey, controlsOf, keyLabel, padLabel, readPad, type Action } from './input';
 import { PlayInspect } from './PlayInspect';
+import { ScreenPlayer } from '../puzzle/ScreenPlayer';
+import { screenOf } from '../../model/puzzle/screens';
 import { buildPiece, disposePiece } from './three-pieces';
 
 /**
@@ -329,6 +331,12 @@ export const PlayMode = (props: Props) => {
     held.current.clear();
   }, [paused]);
 
+  // A screen puzzle wants the mouse.
+  useEffect(() => {
+    if (hud.screen && document.pointerLockElement) document.exitPointerLock?.();
+    held.current.clear();
+  }, [hud.screen]);
+
   // ------------------------------------------------------------ the loop
 
   useEffect(() => {
@@ -370,9 +378,10 @@ export const PlayMode = (props: Props) => {
       let s = state.current;
 
       if (!isPaused && !s.over) {
-        const overlay = !!(s.cinematic || s.scene);
+        const overlay = !!(s.cinematic || s.scene || s.screen);
         if (overlay) {
-          if (once('interact') || once('jump')) s = dismiss(s);
+          // A screen puzzle is answered with the mouse; the rest go with the interact key.
+          if (!s.screen && (once('interact') || once('jump'))) s = dismiss(s);
           s = tick(p.project, s, dt, body.current, p.global);
         } else {
           // Look.
@@ -417,7 +426,7 @@ export const PlayMode = (props: Props) => {
       if (s !== state.current) {
         state.current = s;
         // The HUD follows at 12 frames a second; anything that changes what is there shows at once.
-        if (now - hudAt > 80 || s.world !== hud.world || s.gone !== hud.gone || s.open !== hud.open || s.cinematic !== hud.cinematic || s.scene !== hud.scene || s.over !== hud.over || s.spawned !== hud.spawned || s.enabled !== hud.enabled || s.light?.on !== hud.light?.on) {
+        if (now - hudAt > 80 || s.world !== hud.world || s.gone !== hud.gone || s.open !== hud.open || s.cinematic !== hud.cinematic || s.scene !== hud.scene || s.screen !== hud.screen || s.over !== hud.over || s.spawned !== hud.spawned || s.enabled !== hud.enabled || s.light?.on !== hud.light?.on) {
           hudAt = now;
           setHud(s);
         }
@@ -581,6 +590,20 @@ export const PlayMode = (props: Props) => {
               Skip ({keyLabel(controls.keys.interact[0] ?? 'KeyE')})
             </button>
           </div>
+        </div>
+      )}
+      {hud.screen && screenOf(project.objects[hud.screen.objectId]) && (
+        <div className="play-card play-screen">
+          <ScreenPlayer
+            project={project}
+            screen={screenOf(project.objects[hud.screen.objectId])!}
+            seed={hud.screen.objectId}
+            title={project.objects[hud.screen.objectId]!.name}
+            triesUsed={hud.world.screenFails?.[hud.screen.objectId] ?? 0}
+            onRight={() => commitState(answerScreen(project, state.current, 'right'))}
+            onWrong={() => commitState(answerScreen(project, state.current, 'wrong'))}
+            onLeave={() => commitState(answerScreen(project, state.current, 'leave'))}
+          />
         </div>
       )}
       {hud.scene && (

@@ -3,7 +3,7 @@ import { craftCheck, recipeOf, recipesOf } from '../crafting';
 import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
 import { cuesOf } from '../puzzle/staged';
 import { nodesOf, treeDrives } from '../puzzle/tree';
-import { applyStoryEffects, craftIn, gearIn, learnSkillIn, settleWorld, startWorld, useStoryObject, type Entry, type PlayWorld } from '../play';
+import { applyStoryEffects, craftIn, firstInteraction, gearIn, learnSkillIn, screenWrongIn, settleWorld, startWorld, useInteractionIn, useStoryObject, type Entry, type PlayWorld } from '../play';
 import { learnCheck, skillsOf } from '../skills';
 import { describeEffect, describeRule, evaluate, isEmpty } from '../rules';
 import { cinematicTiming } from '../shots';
@@ -76,6 +76,8 @@ export interface LevelPlayState {
   time: number;
   cinematic?: { id: string; name: string; seconds: number; until: number };
   scene?: { id: string; title: string; text: string };
+  /** A screen puzzle up (puzzle spec §8): the object, the interaction it opens on, the item used. */
+  screen?: { objectId: string; interactionId: string; itemId: string };
   message?: { text: string; until: number };
   /** A portal or rule sent the player to another level. */
   goTo?: string;
@@ -360,6 +362,25 @@ const runPuzzleClock = (project: Project, state: LevelPlayState): LevelPlayState
   return changeWorld(project, state, settled.world, settled.log, undefined, 0);
 };
 
+/**
+ * The screen puzzle up has an answer (puzzle spec §8): right, and its
+ * interaction does what it does and the screen goes; wrong, and it counts
+ * as a wrong move and stays; left, and it goes with nothing done.
+ */
+export const answerScreen = (project: Project, state: LevelPlayState, outcome: 'right' | 'wrong' | 'leave'): LevelPlayState => {
+  const up = state.screen;
+  if (!up) return state;
+  if (outcome === 'leave') return { ...state, screen: undefined };
+  if (outcome === 'wrong') {
+    const r = screenWrongIn(project, state.world, up.objectId);
+    return log(changeWorld(project, state, r.world, r.log, up.itemId, 0), { kind: 'check', itemId: up.itemId, pass: false, text: `${name(project, up.objectId)}: a wrong answer` });
+  }
+  const r = useInteractionIn(project, state.world, up.objectId, up.interactionId);
+  const right = (project.objects[up.objectId]?.data.screen as { feedback?: { correct?: string } } | undefined)?.feedback?.correct;
+  const s = say(log({ ...state, screen: undefined }, { kind: 'check', itemId: up.itemId, pass: true, text: `${name(project, up.objectId)}: solved` }), right || 'Solved.');
+  return changeWorld(project, s, r.world, r.log, up.itemId, 0);
+};
+
 /** Skip or finish what is playing over the level: a cinematic, or a scene's card. */
 export const dismiss = (state: LevelPlayState): LevelPlayState =>
   state.cinematic ? log({ ...state, cinematic: undefined }, { kind: 'info', text: `${state.cinematic.name} ends` }) : state.scene ? { ...state, scene: undefined } : state;
@@ -462,7 +483,11 @@ export const interactWith = (project: Project, state: LevelPlayState, itemId: st
     // An interaction point tied to a story object uses it as free play would, unless its own rules say what happens.
     const story = (item.links ?? []).find((l) => project.objects[l]?.type === 'object');
     const own = (item.rules ?? []).some((r) => r.on === 'interact');
-    if (story && !own) {
+    const first = story && !own ? firstInteraction(project, s.world, story) : undefined;
+    if (story && first?.screen) {
+      // Its screen puzzle comes up; what the interaction does waits for it to be solved.
+      s = log({ ...s, screen: { objectId: story, interactionId: first.id, itemId } }, { kind: 'action', itemId, text: `${first.verb}: ${name(project, story)}’s screen` });
+    } else if (story && !own) {
       const used = useStoryObject(project, s.world, story);
       if (used.needs) s = say(log(s, { kind: 'check', itemId, pass: false, text: `${name(project, story)}: needs ${used.needs}` }), `Needs ${used.needs}`);
       else s = changeWorld(project, s, used.world, used.log, itemId, 0);
@@ -494,8 +519,8 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   let s: LevelPlayState = { ...state, time: state.time + dt };
   if (s.message && s.message.until <= s.time) s = { ...s, message: undefined };
   if (s.cinematic && s.cinematic.until <= s.time) s = dismiss(s);
-  // While a cinematic or a scene card is up, the level waits.
-  if (s.cinematic || s.scene) return s;
+  // While a cinematic, a scene card or a screen puzzle is up, the level waits.
+  if (s.cinematic || s.scene || s.screen) return s;
 
   // The light burns its fuel while it is on, and goes out when that runs out (or its source is gone).
   if (s.light?.on) {

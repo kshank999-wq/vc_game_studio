@@ -45,6 +45,8 @@ export interface PlayWorld extends PlayState {
   clock?: number;
   /** Staged hints already given, by hint (puzzle spec §10). */
   hinted?: Record<string, boolean>;
+  /** Wrong answers given at each object's screen puzzle (puzzle spec §8). */
+  screenFails?: Record<string, number>;
 }
 
 export type { QuestState };
@@ -354,7 +356,9 @@ const giveHints = (d: Doing) => {
     if (o.type !== 'puzzle' || d.world.solved[o.id] || !hintsOf(o).length) continue;
     const entry = o.data.entry as Rule | undefined;
     if (!isEmpty(entry) && !evaluate(entry, d.world)) continue;
-    const due = dueHints(o, d.world.steps?.[o.id]?.fails ?? 0, d.world.hinted ?? {}, (c) => evaluate({ match: 'all', items: [c] }, d.world));
+    // Its wrong moves: at its steps, and at its elements' screens.
+    const screens = ((o.data.elements as string[] | undefined) ?? []).reduce((n, e) => n + (d.world.screenFails?.[e] ?? 0), 0);
+    const due = dueHints(o, (d.world.steps?.[o.id]?.fails ?? 0) + screens, d.world.hinted ?? {}, (c) => evaluate({ match: 'all', items: [c] }, d.world));
     for (const h of due) {
       d.world = { ...d.world, hinted: { ...d.world.hinted, [h.id]: true } };
       d.log.push({ kind: 'hint', text: h.text, detail: o.name });
@@ -1187,12 +1191,47 @@ export const applyStoryEffects = (project: Project, world: PlayWorld, effects: E
 export const useStoryObject = (project: Project, world: PlayWorld, objectId: string): Changed & { verb?: string; needs?: string } => {
   const object = project.objects[objectId];
   if (!object) return { world, log: [] };
-  const all = interactionsOf(object);
+  // One that opens a screen puzzle waits for it to be solved.
+  const all = interactionsOf(object).filter((x) => !x.screen);
   const i = all.find((x) => interactionAllowed(project, world, object, x).ok);
   if (!i) return { world, log: [], needs: all[0] ? interactionAllowed(project, world, object, all[0]).needs : undefined };
   const d: Doing = { project, world, log: [{ kind: 'did', text: `${i.verb} the ${object.name}` }] };
   useInteraction(d, object, i);
   return { world: d.world, log: d.log, verb: i.verb };
+};
+
+/** What the player does with an object now in Play Mode: its screen puzzle when it can be opened (it is the point), else the first it can. */
+export const firstInteraction = (project: Project, world: PlayWorld, objectId: string) => {
+  const object = project.objects[objectId];
+  if (!object) return undefined;
+  const all = interactionsOf(object);
+  return [...all.filter((x) => x.screen), ...all.filter((x) => !x.screen)].find((x) => interactionAllowed(project, world, object, x).ok);
+};
+
+/** Do one interaction (a screen puzzle solved does what its interaction does). */
+export const useInteractionIn = (project: Project, world: PlayWorld, objectId: string, interactionId: string): Changed => {
+  const object = project.objects[objectId];
+  const i = interactionsOf(object).find((x) => x.id === interactionId);
+  if (!object || !i) return { world, log: [] };
+  const d: Doing = { project, world, log: [{ kind: 'did', text: `${i.verb} the ${object.name}` }] };
+  useInteraction(d, object, i);
+  return { world: d.world, log: d.log };
+};
+
+/** A wrong answer at an object's screen puzzle: its effects, and a wrong move counted for the puzzle's staged hints. */
+export const screenWrongIn = (project: Project, world: PlayWorld, objectId: string): Changed => {
+  const object = project.objects[objectId];
+  if (!object) return { world, log: [] };
+  const d: Doing = { project, world: { ...world, screenFails: { ...world.screenFails, [objectId]: (world.screenFails?.[objectId] ?? 0) + 1 } }, log: [{ kind: 'did', text: `A wrong answer at the ${object.name}` }] };
+  doEffects(d, (object.data.screen as { onWrong?: Effect[] } | undefined)?.onWrong);
+  settle(d);
+  return { world: d.world, log: d.log };
+};
+
+/** A wrong answer at a screen puzzle during the play-through. */
+export const screenWrong = (project: Project, play: Play, objectId: string): Play => {
+  const r = screenWrongIn(project, play.world, objectId);
+  return { ...play, world: r.world, log: [...play.log, ...r.log] };
 };
 
 /** Use an object during free play; the free play ends by itself if that makes its rule hold. */

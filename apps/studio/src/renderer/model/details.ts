@@ -189,6 +189,8 @@ export interface Interaction {
   requires?: Rule;
   /** Anything else it does. */
   effects?: Effect[];
+  /** It opens the object's screen puzzle (puzzle spec §8): what it does happens once that is solved. */
+  screen?: boolean;
 }
 
 export const statesOf = (object: StoryObject | undefined): string[] => {

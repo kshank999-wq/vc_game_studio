@@ -17,7 +17,7 @@ written once, here, and level items and other rules point at it.
 ## The screen (spec §14)
 
 - **Left:** the puzzle library (find, and **+ Puzzle** with a name and a scale), and the open puzzle's steps as a tree.
-- **Centre:** **Writing** (the puzzle in words and its definition), **Steps** (the hierarchy, to build), **Graph** (the same steps as a dependency graph), **Elements** (what it is made of) or **Clues** (each clue and what it is for, and the staged hints).
+- **Centre:** **Writing** (the puzzle in words and its definition), **Steps** (the hierarchy, to build), **Graph** (the same steps as a dependency graph), **Elements** (what it is made of), **Clues** (each clue and what it is for, and the staged hints) or **Screen** (the screen-puzzle canvas: design one and play it).
 - **Left, under New puzzle:** **From a template…** (built in, or yours) and **+ From template**.
 - **Right:** what is selected: a step, or (nothing selected) the puzzle: when it is solved, when it can begin, what solving it does, where it is in the levels.
 - **Below:** what stops it being solved, each a click away from its step.
@@ -72,9 +72,20 @@ written once, here, and level items and other rules point at it.
 - **Save as a template** (with nothing selected, the puzzle's inspector) keeps its definition, steps, elements (with their states, interactions and clue fields), hints and cues on this computer, for any project. Anything outside the puzzle (a scene, a character) is left out, and counted.
 - **From a template…** makes a new puzzle with fresh elements in the Bible and fresh steps. Built in: **Safe code** (spec §7: a safe whose code is entered once two clues are found, a painting and a drawer that reveal them, an optional third clue, two staged hints), **Lever and door**, **Plates in order**. Forget one of yours with ×; puzzles made from it stay.
 
+## Screen puzzles (spec §8)
+
+- A puzzle that takes over the screen belongs to an object (the safe's keypad is the safe's). In **Screen**, pick the object and a kind: **keypad**, **combination dial**, **sliding tiles**, **symbol sequence**, **rotating rings**, **circuit routing**, **object assembly**, **matching**, **ordering**, **lever / switch logic** or **custom**.
+- Each has its parts and answer: the keypad's code (its own, or a code element's true code) and keys; the dial's numbers and combination; the board size and how shuffled; the symbols and their order; how many rings and segments, where each starts, linked or not; the circuit's board (each cell's piece and solved turn, the source and the sink); the parts and the slot each goes in; the pairs; the items in order; the switches, which others each flips, how they start and how they must end; or a typed answer.
+- Every kind has what the player is told, **when right** and **when wrong** feedback, a number of **tries** before it jams (0: any), what a wrong answer also does, and the art and audio that replace the proxy later.
+- **Opens on:** one of the object's interactions. Solved, the screen does what that interaction does (the safe becomes Open, its output fires), so the rest of the game sees an ordinary interaction. A wrong answer is a wrong move for the puzzle's staged hints.
+- **Preview:** the screen plays beside its design, as the player will see it, with the same rules as the game. Dials, keypads, symbols, assembly, matching, ordering and custom answers are checked when given; tiles, rings, circuits and switches the moment they are right.
+- **In play:** in the play-through's free play, the interaction opens the screen; in Play Mode, using the item that stands for the object brings it up (the level waits while it is up), and **Leave** closes it with nothing done.
+- **Checks:** a keypad with no code or a code using keys it hasn't got, a combination off the dial, an answer with a symbol not on it, a circuit that doesn't join even solved, switches that can never all be set right, linked rings that can never line up, an assembly slot with no part, a screen with no interaction to open it.
+- The built-in **Safe code** template's safe has its keypad: four digits from the Safe code element, three tries.
+
 ## In the engines
 
-Elements are objects, items, lore, states and triggers, so they go to Godot, Unity and Unreal as they always have: their states, interactions, and (as fields) their kind, properties and clue fields. Staged hints and what solving it plays wait for the puzzle engine phase; the panel below says so for a puzzle that has them.
+Elements are objects, items, lore, states and triggers, so they go to Godot, Unity and Unreal as they always have: their states, interactions, and (as fields) their kind, properties and clue fields. Staged hints, what solving it plays and screen puzzles wait for the puzzle engine phase (until then the interaction a screen opens on works as it is there); the panel below says so for a puzzle that has them.
 
 ## The sample
 
@@ -92,8 +103,8 @@ the door*. It solves as it did before. The Rusted Lever is a lever element and t
 | §4 Definition | Done: id and title, purpose, objective, solution, difficulty, minutes, entry rule, success (its steps or a rule), failure, reset and tries, outputs (When solved). Location: the levels it is bound in (Level Designer V2 §14). |
 | §5 Hierarchy | Done: sub-goals, requirements, interactions, nested, ordered, optional, hidden, grouped, alternate paths (any), and the dependency graph (part of, needs first, drag to link). |
 | §6 Gates | Done in the studio: AND, OR, sequence, state, inventory, knowledge, needs first, timed, optional branches, rewards on done, wrong moves and fail-forward, with progress in the play-through and Play Mode. Engines: an approximation until the engine phase. |
-| §7 Example | Done as the built-in Safe code template; entering the code on its own screen comes with §8. |
-| §8 Screen-level puzzles | Next. |
+| §7 Example | Done as the built-in Safe code template, with its keypad. |
+| §8 Screen-level puzzles | Done: every template type, components, states, input, constraints, validation, feedback, completion (the interaction it opens on), art and audio placeholders, a preview that plays it. |
 | §9 Element library | Done: every kind, icons, properties, logic-only or linked to level items, personal templates. |
 | §10 Clue system | Done: form, content, location, discovery, knowledge, requirements supported, needed or optional, hint strength, used / unused, staged hints. |
 | §11 States and interactions | Done (the Bible's states and interactions, with the named states and verbs offered); what solving it plays. |

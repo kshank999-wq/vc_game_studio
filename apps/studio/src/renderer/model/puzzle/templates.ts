@@ -118,7 +118,7 @@ export const puzzleFromTemplate = (project: Project, template: PuzzleTemplate, n
 
 // ---------------------------------------------------------------- built in
 
-const element = (key: string, kind: ElementKind, name: string, data: Record<string, unknown> = {}, verbs?: { verb: string; when?: string; becomes?: string; requires?: unknown; effects?: unknown[] }[]): TemplateElement => {
+const element = (key: string, kind: ElementKind, name: string, data: Record<string, unknown> = {}, verbs?: { verb: string; when?: string; becomes?: string; requires?: unknown; effects?: unknown[]; screen?: boolean }[]): TemplateElement => {
   const spec = kindSpec(kind);
   const states = (data.states as string[] | undefined) ?? spec.states;
   const list = verbs ?? spec.verbs ?? [];
@@ -172,12 +172,28 @@ export const BUILT_IN_TEMPLATES: readonly PuzzleTemplate[] = [
       ],
     },
     elements: [
-      element('el1', 'container', 'Safe', { states: ['Locked', 'Open', 'Empty'] }, [
-        { verb: 'Inspect' },
-        // Until the safe has its own screen (spec §8), entering the code needs it known.
-        { verb: 'Enter code', when: 'Locked', becomes: 'Open', requires: { match: 'all', items: [{ kind: 'lore', ref: 'el3', op: 'known' }, { kind: 'lore', ref: 'el4', op: 'known' }] } },
-        { verb: 'Take', when: 'Open', becomes: 'Empty' },
-      ]),
+      element(
+        'el1',
+        'container',
+        'Safe',
+        {
+          states: ['Locked', 'Open', 'Empty'],
+          // Its keypad (spec §8): the code is the Safe code's; three tries, then it jams.
+          screen: {
+            kind: 'keypad',
+            prompt: 'A brass keypad, four digits.',
+            codeRef: 'el2',
+            keys: '123456789*0#',
+            feedback: { correct: 'A heavy click. The door gives.', wrong: 'A dull buzz. Wrong code.' },
+            attempts: 3,
+          },
+        },
+        [
+          { verb: 'Inspect' },
+          { verb: 'Enter code', when: 'Locked', becomes: 'Open', screen: true },
+          { verb: 'Take', when: 'Open', becomes: 'Empty' },
+        ],
+      ),
       element('el2', 'code', 'Safe code', { answer: '4271' }),
       element('el3', 'clue', 'First two digits', { clueForm: 'Visual', clueContent: '“42” scratched into the wall', clueLocation: 'Behind the painting', clueDiscovery: 'Inspect', clueKnowledge: 'The code starts 4, 2', clueStrength: 'Moderate', supports: ['t_digits'] }),
       element('el4', 'clue', 'The order', { clueForm: 'Text', clueContent: 'A note: “the year she left, backwards”', clueLocation: 'In the desk drawer', clueDiscovery: 'Read', clueKnowledge: 'How the digits go', clueStrength: 'Subtle', supports: ['t_order'] }),

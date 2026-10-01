@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
-import { statesOf } from '../../model/details';
+import { interactionsOf, statesOf } from '../../model/details';
+import { screenOf } from '../../model/puzzle/screens';
+import { ScreenPlayer } from '../puzzle/ScreenPlayer';
 import { checkAllPaths } from '../../model/paths';
-import { advance, carriedMark, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, craft, endFreePlay, gear, interact, learn, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
+import { advance, carriedMark, choose, codexNotesFrom, codexNotesText, notesMailto, notesPrintHtml, notesSms, NOTE_LABEL, CODEX_SECTION_NAMES, CODEX_SORTS, type CodexSort, codexOf, codexProgress, codexSectionKeys, codexSections, type CodexSection, craft, endFreePlay, gear, interact, learn, screenWrong, playToDecision, promptOf, setWorld, startPlay, type Entry, type Play, type PlayWorld, type Voice } from '../../model/play';
 import type { ObjectType, Project } from '../../model/types';
 import { CraftSection, GearSection, SkillsSection } from './GearPanels';
 import { PathsPanel } from './PathsPanel';
@@ -822,6 +824,8 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
   const play = history[history.length - 1]!;
   const prompt = useMemo(() => promptOf(project, play), [project, play]);
   const push = (next: Play) => next !== play && setHistory((h) => [...h, next]);
+  /** A screen puzzle up in free play (puzzle spec §8): solved, its interaction is used. */
+  const [onScreen, setOnScreen] = useState<{ objectId: string; interactionId: string } | null>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const [codexOpen, setCodexOpen] = useState(false);
   const [savesOpen, setSavesOpen] = useState(false);
@@ -1047,13 +1051,28 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
                       {o.state && <span className="play-note"> · {o.state}</span>}
                     </div>
                     {o.verbs.map((v) => (
-                      <button key={v.id} className="tb-btn small" disabled={!v.available} title={v.available ? v.does : `Needs: ${v.needs}`} onClick={() => push(interact(project, play, o.id, v.id))}>
+                      <button key={v.id} className="tb-btn small" disabled={!v.available} title={v.available ? v.does : `Needs: ${v.needs}`} onClick={() => (interactionsOf(project.objects[o.id]).find((i) => i.id === v.id)?.screen && screenOf(project.objects[o.id]) ? setOnScreen({ objectId: o.id, interactionId: v.id }) : push(interact(project, play, o.id, v.id)))}>
                         {v.verb}
                       </button>
                     ))}
                   </div>
                 ))}
               </div>
+              {onScreen && screenOf(project.objects[onScreen.objectId]) && (
+                <ScreenPlayer
+                  project={project}
+                  screen={screenOf(project.objects[onScreen.objectId])!}
+                  seed={onScreen.objectId}
+                  title={project.objects[onScreen.objectId]!.name}
+                  triesUsed={play.world.screenFails?.[onScreen.objectId] ?? 0}
+                  onRight={() => {
+                    push(interact(project, play, onScreen.objectId, onScreen.interactionId));
+                    setOnScreen(null);
+                  }}
+                  onWrong={() => push(screenWrong(project, play, onScreen.objectId))}
+                  onLeave={() => setOnScreen(null)}
+                />
+              )}
               <button className="tb-btn small" onClick={() => push(endFreePlay(project, play))}>
                 {prompt.endsByRule ? 'Skip ahead' : 'Move on'}
               </button>

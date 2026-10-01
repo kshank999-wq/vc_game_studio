@@ -9774,3 +9774,364 @@ button.bible-dual-col:hover {
   color: #e8c46a;
   font-size: 13px;
 }
+
+/* Screen-level puzzles (puzzle spec §8) */
+.pz-screens {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pz-screen-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 18px;
+  align-items: start;
+}
+
+.pz-screen-design,
+.pz-screen-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pz-circuit-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.pz-circuit-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.pz-circuit-cell select {
+  flex: 1;
+  min-width: 76px;
+}
+
+.pz-circuit-cell.source {
+  border-color: #6cc46c;
+}
+
+.pz-circuit-cell.sink {
+  border-color: #d8a14a;
+}
+
+.lvl-toggle.inline {
+  display: inline-flex;
+  margin-right: 8px;
+}
+
+.scr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--gold-lo);
+  border-radius: 10px;
+  background: #0f0d09;
+  color: var(--text);
+}
+
+.scr.solved {
+  border-color: #6cc46c;
+}
+
+.scr.locked {
+  border-color: #d85a4a;
+}
+
+.scr-head {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.scr-title {
+  color: var(--gold);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.scr-prompt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.scr-display {
+  min-width: 140px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: #050403;
+  color: #9fe29f;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 22px;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.scr-display.small {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+.scr-keys {
+  display: grid;
+  grid-template-columns: repeat(3, 48px);
+  gap: 6px;
+}
+
+.scr-key,
+.scr-tile,
+.scr-cell,
+.scr-part,
+.scr-slot,
+.scr-lever {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1c1912;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.scr-key {
+  height: 44px;
+  font-size: 18px;
+}
+
+.scr-key:hover:not(:disabled),
+.scr-tile:hover:not(:disabled),
+.scr-cell:hover:not(:disabled) {
+  border-color: var(--gold-lo);
+}
+
+.scr-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.scr-go {
+  padding: 6px 14px;
+  border: 1px solid var(--gold-lo);
+  border-radius: 5px;
+  background: #2a2416;
+  color: var(--gold);
+  cursor: pointer;
+}
+
+.scr-go.soft {
+  border-color: var(--border);
+  background: #1c1912;
+  color: var(--text);
+}
+
+.scr-dial-face {
+  fill: #1c1912;
+  stroke: var(--gold-lo);
+  stroke-width: 2;
+}
+
+.scr-tick {
+  stroke: var(--muted);
+}
+
+.scr-dial-num {
+  fill: var(--gold);
+  font-size: 16px;
+}
+
+.scr-pointer {
+  fill: var(--gold);
+}
+
+.scr-tiles,
+.scr-circuit {
+  display: grid;
+  gap: 4px;
+}
+
+.scr-tile {
+  width: 44px;
+  height: 44px;
+  font-size: 17px;
+}
+
+.scr-tile.gap {
+  border-style: dashed;
+  background: transparent;
+}
+
+.scr-cell {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+}
+
+.scr-cell.source {
+  border-color: #6cc46c;
+}
+
+.scr-cell.sink {
+  border-color: #d8a14a;
+}
+
+.scr-wire {
+  stroke: #8a7d5a;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.scr-wire.lit,
+.scr-wire-dot.lit {
+  stroke: #9fe29f;
+  fill: #9fe29f;
+}
+
+.scr-wire-dot {
+  fill: #8a7d5a;
+}
+
+.scr-rings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.scr-ring {
+  fill: none;
+  stroke: #8a7d5a;
+  stroke-width: 5;
+}
+
+.scr-mark {
+  fill: var(--muted);
+}
+
+.scr-mark.lit {
+  fill: #9fe29f;
+}
+
+.scr-guide {
+  stroke: var(--gold);
+  stroke-dasharray: 2 3;
+}
+
+.scr-parts,
+.scr-slots,
+.scr-levers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.scr-part,
+.scr-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 70px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.scr-part.on {
+  border-color: var(--gold);
+}
+
+.scr-part.used {
+  opacity: 0.6;
+}
+
+.scr-slot {
+  border-style: dashed;
+}
+
+.scr-match {
+  display: flex;
+  gap: 18px;
+}
+
+.scr-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scr-order {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.scr-order li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.scr-order li span {
+  min-width: 120px;
+}
+
+.scr-lever {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 46px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.scr-lever-arm {
+  width: 6px;
+  height: 26px;
+  border-radius: 3px;
+  background: #8a7d5a;
+  transform: rotate(-25deg);
+  transition: transform 0.15s;
+}
+
+.scr-lever.on .scr-lever-arm {
+  background: #9fe29f;
+  transform: rotate(25deg);
+}
+
+.scr-message {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 13px;
+}
+
+.scr-message.right {
+  color: #9fe29f;
+}
+
+.scr-message.wrong {
+  color: #e8846a;
+}
+
+.play-screen {
+  max-width: 420px;
+  padding: 0;
+  background: transparent;
+  border: none;
+}

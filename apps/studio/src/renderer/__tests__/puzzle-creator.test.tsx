@@ -182,4 +182,36 @@ describe('the Puzzle Creator (puzzle spec)', () => {
     expect(JSON.parse(localStorage.getItem('vcgs.puzzle-templates.v1')!)[0].name).toBe('Study safe');
     expect(container.querySelector('.pz-bottom')!.textContent).not.toContain('Nothing reveals');
   });
+
+  it('designs a screen puzzle and plays it beside the design: the safe’s keypad, then a new one', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    await opened();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Template' }), { target: { value: 'builtin.safe' } });
+    fireEvent.click(screen.getByRole('button', { name: '+ From template' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Screen' }));
+    expect((screen.getByRole('combobox', { name: 'Screen element' }) as HTMLSelectElement).selectedOptions[0]!.textContent).toBe('Safe · Keypad');
+    expect((screen.getByRole('combobox', { name: 'Code element' }) as HTMLSelectElement).selectedOptions[0]!.textContent).toBe('Safe code (4271)');
+    const pad = screen.getByRole('dialog', { name: 'Safe screen' });
+    const key = (k: string) => fireEvent.click(within(within(pad).getByRole('group', { name: 'Keys' })).getByRole('button', { name: k }));
+    for (const k of '1111') key(k);
+    fireEvent.click(within(pad).getByRole('button', { name: 'Enter' }));
+    expect(within(pad).getByRole('status').textContent).toBe('A dull buzz. Wrong code.');
+    for (const k of '4271') key(k);
+    expect(within(pad).getByLabelText('Display').textContent).toBe('4271');
+    fireEvent.click(within(pad).getByRole('button', { name: 'Enter' }));
+    expect(within(pad).getByRole('status').textContent).toBe('A heavy click. The door gives.');
+    expect(screen.getByText(/Solved, it does what “Enter code” does: Enter code · only when Locked · becomes Open/)).toBeTruthy();
+
+    // The painting gets sliding tiles: its own design, and a preview to play.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Screen element' }), { target: { value: within(screen.getByRole('combobox', { name: 'Screen element' })).getByRole('option', { name: 'Painting' }).getAttribute('value') } });
+    fireEvent.click(screen.getByRole('button', { name: 'Make a sliding tiles' }));
+    expect((screen.getByRole('spinbutton', { name: 'Size' }) as HTMLInputElement).value).toBe('3');
+    expect(within(screen.getByRole('dialog', { name: 'Painting screen' })).getAllByRole('button', { name: /^Tile \d$/ })).toHaveLength(8);
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Size' }), { target: { value: '4' } });
+    expect(within(screen.getByRole('dialog', { name: 'Painting screen' })).getAllByRole('button', { name: /^Tile \d+$/ })).toHaveLength(15);
+    // The painting's Inspect changes nothing, so the tiles get an interaction of their own.
+    expect((screen.getByRole('combobox', { name: 'Opens on' }) as HTMLSelectElement).selectedOptions[0]!.textContent).toBe('Slide the tiles');
+  });
 });

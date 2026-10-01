@@ -164,7 +164,8 @@ describe('puzzle templates (puzzle spec §9, §15)', () => {
     w = useStoryObject(project, w, els[6]!.id).world;
     expect([w.lore[els[2]!.id], w.lore[els[3]!.id]]).toEqual([true, true]);
     const safeObj = project.objects[els[0]!.id]!;
-    expect(interactionsOf(safeObj)[1]!.requires?.items).toHaveLength(2);
+    expect(interactionsOf(safeObj)[1]).toMatchObject({ verb: 'Enter code', screen: true });
+    expect((safeObj.data.screen as { codeRef: string }).codeRef).toBe(els[1]!.id);
     // The engines get the elements as they get any object and lore: kind, states, verbs, the clue's fields.
     const ir = buildIR(project);
     const irLore = (ir.lore as { name: string; fields: Record<string, string> }[]).find((l) => l.name === 'First two digits')!;

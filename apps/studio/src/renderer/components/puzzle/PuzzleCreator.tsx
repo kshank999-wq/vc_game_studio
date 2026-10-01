@@ -41,6 +41,7 @@ import { ConditionEditor, EffectsEditor, RuleEditor } from '../rules/RuleEditor'
 import { badgesOf } from './badges';
 import { CuesEditor, CluesTab, ElementInspector, ElementsTab } from './ElementsPanel';
 import { Field } from './Field';
+import { ScreenTab } from './ScreenPanel';
 import { forgetTemplate, saveTemplate, useTemplates } from './template-library';
 import { elementIssues } from '../../model/puzzle/clues';
 import { puzzleFromTemplate, templateFrom } from '../../model/puzzle/templates';
@@ -83,7 +84,7 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
   const templates = useTemplates();
   const [templateId, setTemplateId] = useState('');
   const [templateName, setTemplateName] = useState('');
-  const [tab, setTab] = useState<'writing' | 'steps' | 'graph' | 'elements' | 'clues'>(() => (focus && nodesOf(project.objects[focus]).length ? 'steps' : 'writing'));
+  const [tab, setTab] = useState<'writing' | 'steps' | 'graph' | 'elements' | 'clues' | 'screen'>(() => (focus && nodesOf(project.objects[focus]).length ? 'steps' : 'writing'));
   const [query, setQuery] = useState('');
   const [newName, setNewName] = useState('');
   const [newScale, setNewScale] = useState<PuzzleScale>('area');
@@ -312,6 +313,9 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
                 <button role="tab" aria-selected={tab === 'clues'} className={tab === 'clues' ? 'on' : ''} onClick={() => setTab('clues')}>
                   Clues
                 </button>
+                <button role="tab" aria-selected={tab === 'screen'} className={tab === 'screen' ? 'on' : ''} onClick={() => setTab('screen')}>
+                  Screen
+                </button>
               </div>
             </header>
             {tab === 'writing' ? (
@@ -389,6 +393,8 @@ export const PuzzleCreator = ({ project, onCommit, onOpenBible, onOpenLevels, on
               </div>
             ) : tab === 'elements' ? (
               <ElementsTab project={project} puzzleId={current.id} onCommit={onCommit} onSay={onSay} selected={element} onSelect={setElement} />
+            ) : tab === 'screen' ? (
+              <ScreenTab project={project} puzzleId={current.id} onCommit={onCommit} selected={element} onSelect={setElement} />
             ) : tab === 'clues' ? (
               <CluesTab project={project} puzzleId={current.id} onCommit={onCommit} onSay={onSay} onSelect={setElement} />
             ) : tab === 'graph' ? (
