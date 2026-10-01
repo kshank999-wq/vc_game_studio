@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron';
 
-/** What the renderer may ask of its host: project files, windows across monitors, and the engine handoff's writes. */
+/** What the renderer may ask of its host: project files, windows across monitors, the engine handoff's writes and the license. */
 contextBridge.exposeInMainWorld('vcgs', {
   platform: process.platform,
   desktop: true,
@@ -25,6 +25,21 @@ contextBridge.exposeInMainWorld('vcgs', {
     const handler = (_e: unknown, message: unknown) => listener(message);
     ipcRenderer.on('vcgs:bus', handler);
     return () => ipcRenderer.removeListener('vcgs:bus', handler);
+  },
+  /** The license (src/main/licensing.ts): what this copy may do, and signing in to activate it. */
+  license: {
+    now: (): unknown => ipcRenderer.sendSync('vcgs:license-now'),
+    onChange: (listener: (access: unknown) => void): (() => void) => {
+      const handler = (_e: unknown, access: unknown) => listener(access);
+      ipcRenderer.on('vcgs:license', handler);
+      return () => ipcRenderer.removeListener('vcgs:license', handler);
+    },
+    requestCode: (email: string): Promise<unknown> => ipcRenderer.invoke('vcgs:license-request-code', email),
+    verifyCode: (email: string, code: string): Promise<unknown> => ipcRenderer.invoke('vcgs:license-verify-code', email, code),
+    activate: (serial?: string): Promise<unknown> => ipcRenderer.invoke('vcgs:license-activate', serial),
+    refresh: (): Promise<unknown> => ipcRenderer.invoke('vcgs:license-refresh'),
+    signOut: (): Promise<unknown> => ipcRenderer.invoke('vcgs:license-sign-out'),
+    open: (page: string): Promise<void> => ipcRenderer.invoke('vcgs:license-open', page),
   },
   onCommand: (listener: (command: string) => void): (() => void) => {
     const handler = (_e: unknown, command: string) => listener(command);

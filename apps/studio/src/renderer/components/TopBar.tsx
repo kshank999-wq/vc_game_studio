@@ -47,6 +47,8 @@ interface Props {
   onIssues: () => void;
   onSearch: () => void;
   onPlay: () => void;
+  /** Desktop without a license: open License and account instead of the store. */
+  onActivate?: () => void;
 }
 
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -134,11 +136,17 @@ export const TopBar = (props: Props) => {
       {props.viewControls}
       {props.saveState === 'off' ? (
         <div className="preview-badge">
-          <span className="preview-tag">PREVIEW</span>
+          <span className="preview-tag">{__LICENSING__ && props.onActivate ? 'NOT ACTIVATED' : 'PREVIEW'}</span>
           <span>Everything works except saving.</span>
-          <a href={PURCHASE_URL} target="_blank" rel="noreferrer">
-            Buy or subscribe
-          </a>
+          {__LICENSING__ && props.onActivate ? (
+            <button className="link-btn" onClick={props.onActivate}>
+              Sign in to activate
+            </button>
+          ) : (
+            <a href={PURCHASE_URL} target="_blank" rel="noreferrer">
+              Buy or subscribe
+            </a>
+          )}
         </div>
       ) : (
         <div className={`save-state save-${props.saveState}`} title={[props.fileName, SAVE_HINT[props.saveState]].filter(Boolean).join(' · ') || undefined}>

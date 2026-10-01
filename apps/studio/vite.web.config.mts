@@ -15,9 +15,10 @@ const edition = process.env['VCGS_EDITION'] === 'preview' ? 'preview' : 'full';
 
 export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
-  base: './',
+  // Relative by default; vc-gamestudio.com serves the preview under /preview/ (apps/web/scripts/build-preview.mjs).
+  base: process.env['VCGS_BASE'] ?? './',
   plugins: [react()],
-  define: { __EDITION__: JSON.stringify(edition), __APP_VERSION__: JSON.stringify((JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string }).version) },
+  define: { __LICENSING__: JSON.stringify(false), __EDITION__: JSON.stringify(edition), __APP_VERSION__: JSON.stringify((JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string }).version) },
   build: {
     outDir: resolve(__dirname, edition === 'preview' ? 'out/preview' : 'out/web'),
     emptyOutDir: true,

@@ -1,3 +1,4 @@
+import { isPreview } from '../edition';
 import type { Project } from './types';
 
 /**
@@ -8,7 +9,7 @@ import type { Project } from './types';
 
 const KEY = 'vcgs.project.v1';
 
-export const canSave = (): boolean => __EDITION__ === 'full';
+export const canSave = (): boolean => !isPreview();
 
 const isProject = (value: unknown): value is Project => {
   if (!value || typeof value !== 'object') return false;

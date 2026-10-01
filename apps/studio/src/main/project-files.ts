@@ -1,6 +1,7 @@
 import { app, dialog, ipcMain, Menu, type BrowserWindow, type MenuItemConstructorOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
 import { extname, isAbsolute } from 'node:path';
+import { licensing } from './licensing-ipc';
 
 /**
  * Project files (.vcgs): open and save through the system dialogs, reopen a
@@ -37,6 +38,8 @@ export const registerProjectFiles = (getWindow: () => BrowserWindow | null): voi
 
   ipcMain.handle('vcgs:save-project', async (_e, path: unknown, content: unknown, suggestedName: unknown) => {
     if (typeof content !== 'string') throw new Error('Nothing to save.');
+    // The renderer already offers no saving without a license; this is the same rule where the file is written.
+    if (!licensing.canSave()) throw new Error('Saving needs an active subscription. Sign in under Help › License.');
     let target = isProjectPath(path) ? path : null;
     if (!target) {
       const window = getWindow();

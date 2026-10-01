@@ -1,4 +1,5 @@
 import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron';
+import { licensing } from './licensing-ipc';
 import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -67,6 +68,7 @@ export const registerHandoff = (getWindow: () => BrowserWindow | null): void => 
   ipcMain.handle('vcgs:write-files', async (_e, folder: unknown, files: unknown) => {
     if (typeof folder !== 'string' || !folder || !existsSync(folder)) throw new Error('That folder is not there any more. Choose it again.');
     if (!Array.isArray(files)) throw new Error('Nothing to write.');
+    if (!licensing.canExport()) throw new Error('Engine export is part of the VC Game Studio plan. Upgrade on your account page.');
     const root = resolve(folder);
     let written = 0;
     for (const file of files as File[]) {

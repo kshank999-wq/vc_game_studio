@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { desktop } from '../../desktop';
-import { isPreview, PURCHASE_URL } from '../../edition';
+import { currentAccess, isPreview, PURCHASE_URL } from '../../edition';
 import { ROLES } from '../../model/collab';
 import { DEFAULT_PREFERENCES, resetPreferences, setPreferences, usePreferences, type Preferences } from '../../preferences';
 import { shortcutLabel } from './MenuBar';
 
-const Modal = ({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) => (
+export const Modal = ({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) => (
   <div className="dialog-backdrop" onPointerDown={onClose}>
     <div className={`dialog${wide ? ' wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} onPointerDown={(e) => e.stopPropagation()}>
       <div className="dialog-head">
@@ -251,17 +251,19 @@ export const ShortcutsDialog = ({ onClose }: { onClose: () => void }) => (
   </Modal>
 );
 
+const EDITION_LABEL = { none: 'Preview edition (no saving)', writer: 'VC Game Writer', studio: 'VC Game Studio' } as const;
+
 export const AboutDialog = ({ onClose }: { onClose: () => void }) => (
   <Modal title="About VC Game Studio" onClose={onClose}>
     <div className="about">
       <div className="about-brand">VC GAME STUDIO</div>
       <p>
-        Version {__APP_VERSION__} · {isPreview() ? 'Preview edition (no saving)' : 'Full edition'} · {desktop() ? 'Desktop' : 'Browser'}
+        Version {__APP_VERSION__} · {__LICENSING__ ? EDITION_LABEL[currentAccess().plan] : isPreview() ? 'Preview edition (no saving)' : 'Full edition'} · {desktop() ? 'Desktop' : 'Browser'}
       </p>
       <p>Plan a game’s story on one spine, write its scenes, and hand it to the engine.</p>
       <p>
         <a href={PURCHASE_URL} target="_blank" rel="noreferrer">
-          {isPreview() ? 'Buy or subscribe to keep your work' : 'vc-writer.com'}
+          {isPreview() ? 'Buy or subscribe to keep your work' : 'vc-gamestudio.com'}
         </a>
       </p>
     </div>

@@ -24,7 +24,8 @@ import type { Target } from './model/collab';
 import { openProjectFile, openRecent, recentFiles, clearRecent, type Opened, type Recent } from './files';
 import { createProject } from './model/project';
 import { REPORTS, type ReportKey } from './model/reports';
-import { isPreview, PURCHASE_URL } from './edition';
+import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './edition';
+import { LicenseDialog } from './components/license/lazy';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
 import { EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShotList } from './views';
@@ -90,7 +91,9 @@ export const App = () => {
   const routeRef = useRef<Route>({ view: 'graph' });
   const [toast, setToast] = useState<string | null>(null);
   const [ask, setAsk] = useState<ConfirmRequest | null>(null);
-  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | null>(null);
+  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | null>(null);
+  // Re-render when the license changes: an activation turns saving on, a lapse turns it off.
+  useAccess();
   const [recent, setRecent] = useState<Recent[]>(() => recentFiles());
   const [renameRequest, setRenameRequest] = useState(0);
   const [searching, setSearching] = useState(false);
@@ -142,11 +145,21 @@ export const App = () => {
   const openEngine = (focus?: string) => setRoute((r) => ({ view: 'engine', focus, back: placeOf(r) }));
   const openNotes = () => setRoute((r) => ({ view: 'notes', back: placeOf(r) }));
 
+  // Desktop, first run or signed out: offer to sign in and activate before anything else.
+  if (__LICENSING__) {
+    // A build-time constant, so the hook is always or never called.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+      if (!studio.isPanel && currentAccess().state === 'signed-out') setDialog('license');
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+  }
+
   // Export on save (desktop): once edits settle, send what changed to the engine project.
   useEffect(() => {
     const bridge = desktop();
     const target = project.handoff?.target;
-    if (!bridge || !target?.exportOnSave || !target.projectFolder || __EDITION__ !== 'full') return;
+    if (!bridge || !target?.exportOnSave || !target.projectFolder || !canExport()) return;
     let live = true;
     const timer = setTimeout(() => {
       void loadHandoff()
@@ -393,7 +406,7 @@ export const App = () => {
       return true;
     }
     if (isPreview()) {
-      setDialog('previewSave');
+      setDialog(__LICENSING__ ? 'license' : 'previewSave');
       return false;
     }
     // A field being typed in saves when it loses focus: let it land first.
@@ -794,7 +807,8 @@ export const App = () => {
         { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setDialog('shortcuts') },
         { label: 'About VC Game Studio', onClick: () => setDialog('about') },
         sep,
-        { label: isPreview() ? 'Buy or subscribe…' : 'vc-writer.com', onClick: () => window.open(PURCHASE_URL, '_blank', 'noreferrer') },
+        ...(__LICENSING__ ? [{ label: 'License and account…', onClick: () => setDialog('license') }] : []),
+        { label: isPreview() ? 'Buy or subscribe…' : 'vc-gamestudio.com', onClick: () => window.open(isPreview() ? PURCHASE_URL : 'https://vc-gamestudio.com', '_blank', 'noreferrer') },
       ],
     },
   ];
@@ -893,6 +907,7 @@ export const App = () => {
           crumbs={crumbs ?? bibleCrumbs}
           viewControls={sceneControls ?? bibleControls}
           onRename={(name) => commit(renameProject(project, name))}
+          onActivate={__LICENSING__ && isPreview() && currentAccess().state !== 'web' ? () => setDialog('license') : undefined}
           canUndo={studio.canUndo}
           canRedo={studio.canRedo}
           onUndo={studio.undo}
@@ -1117,6 +1132,7 @@ export const App = () => {
         {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
         {dialog === 'comments' && <CommentsPanel project={project} onCommit={commit} onGo={goToTarget} onClose={() => setDialog(null)} />}
         {dialog === 'previewSave' && <PreviewSaveDialog onClose={() => setDialog(null)} />}
+        {__LICENSING__ && dialog === 'license' && <LicenseDialog onClose={() => setDialog(null)} />}
         {toast && (
           <div className="toast" role="status">
             {toast}

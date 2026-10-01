@@ -6,7 +6,8 @@
   "workspaces": [
     "packages/core",
     "packages/cli",
-    "apps/studio"
+    "apps/studio",
+    "apps/web"
   ],
   "scripts": {
     "build": "tsc -b packages/core packages/cli",

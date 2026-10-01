@@ -10246,3 +10246,17 @@ button.bible-dual-col:hover {
   font-size: 12px;
   white-space: pre-wrap;
 }
+
+/* License and account (desktop) */
+.license-panel { display: flex; flex-direction: column; gap: 10px; min-width: 360px; }
+.license-plan { font-family: var(--display, inherit); letter-spacing: 0.16em; text-transform: uppercase; font-size: 13px; }
+.license-plan.on { color: var(--gold-hi); }
+.license-plan.off { color: var(--muted); }
+.license-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
+.license-facts dt { color: var(--muted); }
+.license-facts dd { margin: 0; color: var(--text); }
+.license-serial { font-family: var(--mono, monospace); letter-spacing: 0.04em; }
+.license-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.license-form .dialog-text { flex-basis: 100%; margin: 0; }
+.license-form input { flex: 1 1 200px; background: var(--node); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text); padding: 6px 8px; font: inherit; }
+.license-note { margin: 0; padding: 8px 10px; border-left: 2px solid var(--gold); background: var(--node); color: var(--text-soft); font-size: 13px; }

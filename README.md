@@ -23,6 +23,7 @@ handoff that generates engine code for Unity, Unreal, Godot or a custom engine.
 - Note Sorter: [`docs/NOTE-SORTER.md`](docs/NOTE-SORTER.md)
 - Puzzle Creator: [`docs/PUZZLE-CREATOR.md`](docs/PUZZLE-CREATOR.md)
 - Comments, tasks and history: [`docs/COLLABORATION.md`](docs/COLLABORATION.md)
+- Selling it (vc-gamestudio.com, subscriptions, licenses, installers): [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Plan and status: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 ## Packages
@@ -30,6 +31,7 @@ handoff that generates engine code for Unity, Unreal, Godot or a custom engine.
 | Package | What it is |
 | --- | --- |
 | [`apps/studio`](apps/studio) (`@vcgs/studio`) | **The VC Game Studio app** (Electron + React). Build order steps 1–3 are in: shell, palette, the infinite spine track, subplot and character lanes. |
+| [`apps/web`](apps/web) (`@vcgs/web`) | **vc-gamestudio.com** (Next.js): pricing, accounts shared with VC Writer, Stripe subscriptions, licenses, installer downloads, the browser preview. |
 | [`packages/core`](packages/core) (`@vc/core`) | Engine-neutral project model shared by both products: schema, expression language, runtime state, validator, simulator/path explorer, file format, Game Studio handoff contract. |
 | [`packages/cli`](packages/cli) (`vcw`) | Command line for validating, exploring and playing VC Writer projects. |
 

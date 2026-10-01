@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { registerHandoff } from './handoff';
+import { registerLicensing } from './licensing-ipc';
 import { guardClose, registerProjectFiles, setNativeMenu } from './project-files';
 import { createMainWindow, mainWindow, registerWindows } from './windows';
 
@@ -14,7 +15,9 @@ import { createMainWindow, mainWindow, registerWindows } from './windows';
 registerHandoff(mainWindow);
 registerProjectFiles(mainWindow);
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  // Before the first window, so it opens knowing whether it may save.
+  await registerLicensing();
   registerWindows();
   setNativeMenu(mainWindow);
   createMainWindow(guardClose);

@@ -26,6 +26,11 @@ jobs:
           VCGS_EDITION=preview npm run build:web -w @vcgs/studio
       - name: Check the web bundles stay split
         run: node apps/studio/scripts/check-bundle.mjs
+      - name: The website (vc-gamestudio.com)
+        run: |
+          npm run typecheck -w @vcgs/web
+          npm test -w @vcgs/web
+          SKIP_PREVIEW=1 npm run build -w @vcgs/web
       - name: Validate example projects
         run: |
           for f in examples/*.game.json; do

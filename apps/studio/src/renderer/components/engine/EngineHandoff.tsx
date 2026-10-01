@@ -9,7 +9,7 @@ import { zip } from '../../model/handoff/zip';
 import type { Project } from '../../model/types';
 import { desktop } from '../../desktop';
 import { canPickFolder, pickBrowserFolder, type FolderAccess } from '../../folder-access';
-import { isPreview, PURCHASE_URL } from '../../edition';
+import { canExport, isPreview, licenseBridge, PURCHASE_URL } from '../../edition';
 import { useNav } from '../../nav';
 import { Symbol } from '../Symbol';
 
@@ -360,9 +360,25 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
         })}
         {plan.issues.length > 3 && <p className="handoff-note">+ {plan.issues.length - 3} more to look at</p>}
 
-        {isPreview() ? (
-          <a className="send-btn" href={PURCHASE_URL} target="_blank" rel="noreferrer">
-            BUY TO SEND TO {engineName.toUpperCase()}
+        {!canExport() ? (
+          // The preview edition, or the VC Game Writer plan: the handoff is shown, sending is VC Game Studio's.
+          <a
+            className="send-btn"
+            href={PURCHASE_URL}
+            target="_blank"
+            rel="noreferrer"
+            onClick={
+              __LICENSING__
+                ? (e) => {
+                    const bridge = licenseBridge();
+                    if (!bridge) return;
+                    e.preventDefault();
+                    void bridge.open(isPreview() ? 'pricing' : 'account');
+                  }
+                : undefined
+            }
+          >
+            {__LICENSING__ && !isPreview() ? 'UPGRADE TO VC GAME STUDIO' : 'SUBSCRIBE'} TO SEND TO {engineName.toUpperCase()}
           </a>
         ) : (
           <button className="send-btn" disabled={!output || plan.blocking.length > 0 || sending} onClick={() => void send()}>

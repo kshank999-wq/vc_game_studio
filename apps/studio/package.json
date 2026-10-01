@@ -10,7 +10,10 @@
     "dev:web": "vite --config vite.web.config.mts",
     "build:web": "vite build --config vite.web.config.mts",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "package:win": "electron-vite build && node scripts/package.mjs --win",
+    "package:mac": "electron-vite build && node scripts/package.mjs --mac",
+    "icons": "node scripts/icons.mjs"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
@@ -20,6 +23,7 @@
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^4.7.0",
     "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "jsdom": "^25.0.1",
     "react": "^18.3.1",
@@ -27,5 +31,8 @@
     "three": "^0.186.1",
     "typescript": "^5.9.3",
     "vite": "^5.4.21"
-  }
+  },
+  "productName": "VC Game Studio",
+  "author": "VC Game Studio",
+  "homepage": "https://vc-gamestudio.com"
 }
