@@ -113,7 +113,7 @@ git push   # main deploys vc-writer.com
 - **Root Directory:** `apps/web`, with **Include files outside the root
   directory** turned on. The build also builds the browser preview from
   `apps/studio`.
-- **Framework:** Next.js (pinned by `apps/web/vercel.json`).
+- **Framework:** Next.js, and the install command, are pinned by `apps/web/vercel.json`. It installs the whole repository (`cd ../.. && npm ci`), not just `apps/web`, because the build also builds the browser preview from `apps/studio`.
 - **Production branch:** the branch that holds this work.
 - **Domains:** `vc-gamestudio.com` and `www.vc-gamestudio.com`. The domain is
   already registered in Vercel, so attaching it is all that's needed.
