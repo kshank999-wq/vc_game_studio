@@ -93,7 +93,11 @@ export const recordSubscription = async (
   if (!email && !metadataUserId) throw new Error(`Subscription ${subscription.id} has no customer email`);
   const userId = await resolveUser(client, metadataUserId, email);
 
-  const paidThrough = iso(subscription.current_period_end);
+  // Stripe moved the billing period from the subscription to its items in API
+  // version 2025-03-31 (basil); a webhook endpoint set to a newer version than
+  // this SDK's sends it there. Either place is the same period.
+  const itemPeriodEnd = (item as unknown as { current_period_end?: number }).current_period_end;
+  const paidThrough = iso(subscription.current_period_end ?? itemPeriodEnd);
   const { data: row, error: rowError } = await client
     .from('gs_subscriptions')
     .upsert(

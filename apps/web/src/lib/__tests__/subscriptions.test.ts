@@ -83,6 +83,17 @@ describe('recording a subscription', () => {
     expect(await revokeForSubscription(db.client, 'sub_vcwriter_room')).toBe(false);
   });
 
+  it('reads the paid period from the item, as newer Stripe API versions send it', async () => {
+    const db = fakeSupabase({ profiles: [{ id: 'u1', email: 'ken@example.com' }] });
+    const newer = {
+      ...subscription(),
+      current_period_end: undefined,
+      items: { data: [{ price: { id: 'price_sy' }, current_period_end: 1_900_000_000 }] },
+    } as unknown as Stripe.Subscription;
+    await recordSubscription(newer, deps(db.client));
+    expect(db.tables['gs_licenses']?.[0]).toMatchObject({ paid_through: new Date(1_900_000_000_000).toISOString(), status: 'active' });
+  });
+
   it("leaves VC Writer's subscriptions on the shared account alone", async () => {
     const db = fakeSupabase();
     const room = subscription({ metadata: { room_id: 'r1' }, price: 'price_writers_room_seat' });

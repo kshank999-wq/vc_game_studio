@@ -67,14 +67,16 @@ export async function POST(request: Request): Promise<Response> {
     } else {
       // A refund or dispute: follow the money back to its subscription. VC
       // Writer's charges have no subscription of ours and change nothing.
-      const charge =
+      // Read back through the SDK's pinned API version: newer webhook versions
+      // drop `invoice` from the charge, and this is how a refund finds its subscription.
+      const object = event.data.object as Stripe.Charge | Stripe.Dispute;
+      const chargeId =
         event.type === 'charge.refunded'
-          ? (event.data.object as Stripe.Charge)
-          : await stripe().charges.retrieve(
-              typeof (event.data.object as Stripe.Dispute).charge === 'string'
-                ? ((event.data.object as Stripe.Dispute).charge as string)
-                : ((event.data.object as Stripe.Dispute).charge as Stripe.Charge).id,
-            );
+          ? (object as Stripe.Charge).id
+          : typeof (object as Stripe.Dispute).charge === 'string'
+            ? ((object as Stripe.Dispute).charge as string)
+            : ((object as Stripe.Dispute).charge as Stripe.Charge).id;
+      const charge = await stripe().charges.retrieve(chargeId);
       const invoiceId = typeof charge.invoice === 'string' ? charge.invoice : charge.invoice?.id;
       if (invoiceId) {
         const invoice = await stripe().invoices.retrieve(invoiceId);
