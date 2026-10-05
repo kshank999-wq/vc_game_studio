@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { bestLicense, isInterval, isPlan, licenseStatusFor, planForPrice, priceIdFor } from '../plans';
 
-const prices = { writer: { month: 'price_wm', year: 'price_wy' }, studio: { month: 'price_sm', year: 'price_sy' } };
+const prices = { studio: { month: 'price_sm', year: 'price_sy' } };
 
 describe('plans', () => {
-  it('maps the four prices both ways', () => {
+  it('maps the two prices both ways', () => {
     expect(priceIdFor(prices, 'studio', 'year')).toBe('price_sy');
-    expect(planForPrice(prices, 'price_wm')).toEqual({ plan: 'writer', interval: 'month' });
+    expect(planForPrice(prices, 'price_sm')).toEqual({ plan: 'studio', interval: 'month' });
     expect(planForPrice(prices, 'price_vcwriter_desktop')).toBeNull();
     expect(isPlan('studio') && isInterval('year') && !isPlan('lite') && !isInterval('week')).toBe(true);
   });
@@ -26,12 +26,10 @@ describe('plans', () => {
     expect(licenseStatusFor('active', 'expired')).toBe('active');
   });
 
-  it('runs a device on the best active license', () => {
-    const w = { status: 'active' as const, plan: 'writer' as const };
+  it('runs a device on an active license', () => {
     const s = { status: 'active' as const, plan: 'studio' as const };
     const gone = { status: 'expired' as const, plan: 'studio' as const };
-    expect(bestLicense([w, s])).toBe(s);
-    expect(bestLicense([gone, w])).toBe(w);
+    expect(bestLicense([gone, s])).toBe(s);
     expect(bestLicense([gone])).toBeNull();
   });
 });

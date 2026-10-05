@@ -41,8 +41,6 @@ export const SITE_VARIABLES: { key: string; secret: boolean; required: boolean }
   { key: 'SUPABASE_SERVICE_ROLE_KEY', secret: true, required: true },
   { key: 'STRIPE_SECRET_KEY', secret: true, required: true },
   { key: 'STRIPE_WEBHOOK_SECRET', secret: true, required: true },
-  { key: 'STRIPE_PRICE_WRITER_MONTHLY', secret: false, required: true },
-  { key: 'STRIPE_PRICE_WRITER_YEARLY', secret: false, required: true },
   { key: 'STRIPE_PRICE_STUDIO_MONTHLY', secret: false, required: true },
   { key: 'STRIPE_PRICE_STUDIO_YEARLY', secret: false, required: true },
   { key: 'STRIPE_PORTAL_CONFIGURATION', secret: false, required: true },

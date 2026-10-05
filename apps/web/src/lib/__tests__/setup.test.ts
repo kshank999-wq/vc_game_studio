@@ -9,8 +9,8 @@ import { envPayload, setupVercel } from '../setup/vercel-setup';
 describe('the env file', () => {
   it('sets keys in place, appends new ones and leaves the rest', () => {
     const text = '# comment\nSTRIPE_SECRET_KEY=sk_live_1\nOTHER="a b"\n';
-    const next = upsertEnv(text, { STRIPE_SECRET_KEY: 'sk_live_2', STRIPE_PRICE_WRITER_MONTHLY: 'price_1', RESEND_FROM_ADDRESS: 'VC Game Studio <noreply@vc-gamestudio.com>' });
-    expect(next).toBe('# comment\nSTRIPE_SECRET_KEY=sk_live_2\nOTHER="a b"\nSTRIPE_PRICE_WRITER_MONTHLY=price_1\nRESEND_FROM_ADDRESS="VC Game Studio <noreply@vc-gamestudio.com>"\n');
+    const next = upsertEnv(text, { STRIPE_SECRET_KEY: 'sk_live_2', STRIPE_PRICE_STUDIO_MONTHLY: 'price_1', RESEND_FROM_ADDRESS: 'VC Game Studio <noreply@vc-gamestudio.com>' });
+    expect(next).toBe('# comment\nSTRIPE_SECRET_KEY=sk_live_2\nOTHER="a b"\nSTRIPE_PRICE_STUDIO_MONTHLY=price_1\nRESEND_FROM_ADDRESS="VC Game Studio <noreply@vc-gamestudio.com>"\n');
     expect(parseEnv(next)).toMatchObject({ OTHER: 'a b', RESEND_FROM_ADDRESS: 'VC Game Studio <noreply@vc-gamestudio.com>' });
   });
 
@@ -71,29 +71,29 @@ const fakeStripe = () => {
 };
 
 describe('stripe setup', () => {
-  const amounts = parseAmounts(['--writer-monthly=19', '--writer-yearly=190', '--studio-monthly=39.5', '--studio-yearly=390']);
+  const amounts = parseAmounts(['--studio-monthly=24.99', '--studio-yearly=249.99']);
 
   it('reads prices in currency units', () => {
-    expect(amounts).toEqual({ writer: { month: 1900, year: 19000 }, studio: { month: 3950, year: 39000 } });
-    expect(() => parseAmounts(['--writer-monthly=19'])).toThrow(/writer-yearly/);
+    expect(amounts).toEqual({ studio: { month: 2499, year: 24999 } });
+    expect(() => parseAmounts(['--studio-monthly=24.99'])).toThrow(/studio-yearly/);
   });
 
-  it('makes two products, four prices, the webhook and a portal of its own, and nothing twice', async () => {
+  it('makes the product, two prices, the webhook and a portal of its own, and nothing twice', async () => {
     const fake = fakeStripe();
     const first = await setupStripe(fake.stripe, { amounts, currency: 'usd', siteUrl: 'https://vc-gamestudio.com' });
-    expect(fake.products).toHaveLength(2);
-    expect(fake.prices.map((p) => p.lookup_key)).toEqual([lookupKey('writer', 'month'), lookupKey('writer', 'year'), lookupKey('studio', 'month'), lookupKey('studio', 'year')]);
+    expect(fake.products).toHaveLength(1);
+    expect(fake.prices.map((p) => p.lookup_key)).toEqual([lookupKey('studio', 'month'), lookupKey('studio', 'year')]);
     expect(fake.prices.every((p) => p.recurring && p.metadata?.['product'] === 'vc-game-studio')).toBe(true);
     expect(fake.endpoints[0]).toMatchObject({ url: 'https://vc-gamestudio.com/api/stripe/webhook', enabled_events: WEBHOOK_EVENTS });
     expect(fake.portals[0]?.metadata).toEqual({ product: 'vc-game-studio' });
     const switching = (fake.portals[0] as unknown as Stripe.BillingPortal.ConfigurationCreateParams).features.subscription_update;
-    expect((switching?.products as { prices: string[] }[]).flatMap((p) => p.prices)).toHaveLength(4);
+    expect((switching?.products as { prices: string[] }[]).flatMap((p) => p.prices)).toHaveLength(2);
     expect(first.env).toMatchObject({ STRIPE_WEBHOOK_SECRET: 'whsec_test', STRIPE_PORTAL_CONFIGURATION: fake.portals[0]?.id });
-    expect(first.env['STRIPE_PRICE_STUDIO_YEARLY']).toBe(fake.prices[3]?.id);
+    expect(first.env['STRIPE_PRICE_STUDIO_YEARLY']).toBe(fake.prices[1]?.id);
 
     const again = await setupStripe(fake.stripe, { amounts, currency: 'usd', siteUrl: 'https://vc-gamestudio.com' });
-    expect(fake.products).toHaveLength(2);
-    expect(fake.prices).toHaveLength(4);
+    expect(fake.products).toHaveLength(1);
+    expect(fake.prices).toHaveLength(2);
     expect(fake.endpoints).toHaveLength(1);
     expect(fake.portals).toHaveLength(1);
     expect(again.env['STRIPE_PRICE_STUDIO_YEARLY']).toBe(first.env['STRIPE_PRICE_STUDIO_YEARLY']);
@@ -103,9 +103,9 @@ describe('stripe setup', () => {
   it('a new amount is a new price that takes the lookup key over', async () => {
     const fake = fakeStripe();
     await setupStripe(fake.stripe, { amounts, currency: 'usd', siteUrl: 'https://vc-gamestudio.com' });
-    const raised = await setupStripe(fake.stripe, { amounts: { ...amounts, studio: { month: 4900, year: 39000 } }, currency: 'usd', siteUrl: 'https://vc-gamestudio.com' });
-    expect(fake.prices).toHaveLength(5);
-    expect(raised.env['STRIPE_PRICE_STUDIO_MONTHLY']).toBe(fake.prices[4]?.id);
+    const raised = await setupStripe(fake.stripe, { amounts: { ...amounts, studio: { month: 2999, year: 24999 } }, currency: 'usd', siteUrl: 'https://vc-gamestudio.com' });
+    expect(fake.prices).toHaveLength(3);
+    expect(raised.env['STRIPE_PRICE_STUDIO_MONTHLY']).toBe(fake.prices[2]?.id);
   });
 });
 

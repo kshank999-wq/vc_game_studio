@@ -76,9 +76,9 @@ export default function Home() {
       <section>
         <div className="panel grid two" style={{ alignItems: 'center' }}>
           <div>
-            <h2>Two plans, one account</h2>
+            <h2>One package, one account</h2>
             <p className="muted">
-              VC Game Writer is the whole design tool. VC Game Studio adds the engine handoff. Monthly or yearly; each license
+              VC Game Studio is the whole design tool and the engine handoff, monthly or yearly. Each license
               runs on {DEVICES_PER_LICENSE} computers, Mac or Windows. Already a VC Writer customer? Sign in with the same
               account.
             </p>

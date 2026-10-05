@@ -9,7 +9,7 @@ for Mac or Windows. Projects stay on the customer's computer, as files.
 | Website | `apps/web` (Next.js on Vercel) | Home, pricing, sign-in, account (license, computers, billing), downloads, the browser preview at `/preview`, and the API the app calls |
 | Desktop app | `apps/studio` (Electron) | Signs in, activates the computer, and checks its license (`src/main/licensing.ts`) |
 | Accounts and records | Supabase project **VCWriter** (`kpviyoqhmzignjyvixws`), shared with VC Writer | One account for both products. The tables are VC Game Studio's own, named `gs_*` (`supabase/migrations/gs_0001_commerce.sql`, **applied**) |
-| Payments | The Stripe account VC Writer uses | Two plans (VC Game Writer, VC Game Studio), each monthly and yearly |
+| Payments | The Stripe account VC Writer uses | One package, VC Game Studio, monthly and yearly |
 | Email | Resend | The license email |
 
 ## Setting it up: six commands
@@ -32,9 +32,9 @@ your own computer, from the repository root, after `npm install`.
    - `SUPABASE_ACCESS_TOKEN`: supabase.com → Account → Access Tokens.
 2. `npm run setup -w @vcgs/web -- keys` makes the license key pair. It
    prints the public half for GitHub.
-3. `npm run setup -w @vcgs/web -- stripe --writer-monthly=19 --writer-yearly=190 --studio-monthly=39 --studio-yearly=390`
+3. `npm run setup -w @vcgs/web -- stripe --studio-monthly=24.99 --studio-yearly=249.99`
    (your prices) makes:
-   - the two products and four prices;
+   - the product and its two prices;
    - the webhook (its secret goes into the file);
    - **a customer portal of Game Studio's own**.
 
@@ -45,7 +45,7 @@ your own computer, from the repository root, after `npm install`.
 5. `npm run setup -w @vcgs/web -- supabase` adds
    `https://vc-gamestudio.com/auth/callback` to the shared project's
    sign-in redirect list, keeping VC Writer's entries. It also checks
-   whether the sign-in email shows the six-digit code the desktop app needs
+   whether the sign-in email shows the sign-in code the desktop app needs
    (see Supabase below).
 6. `npm run setup -w @vcgs/web -- vercel` does the Vercel side:
    - creates the `vc-game-studio` project, linked to this repository, with
@@ -79,8 +79,7 @@ manual equivalents of each step are described below.
    signed entitlement (Ed25519). The app keeps it, checks in at start and
    every 6 hours, and works offline for 14 days on the last one it got.
    - **No active license:** everything opens and plays, but nothing saves.
-   - **VC Game Writer:** saving works; engine export does not.
-   - **VC Game Studio:** saving and engine export both work.
+   - **VC Game Studio license:** saving and engine export both work.
    - Nothing is ever deleted.
 6. A lost computer: **Free this seat** on the account page, then activate
    the new one.
@@ -133,8 +132,6 @@ project.
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → VCWriter → API Keys → `sb_secret_…` | Same as VC Writer. **Secret**, server only |
 | `STRIPE_SECRET_KEY` | Stripe → Developers → API keys | Same as VC Writer. **Secret** |
 | `STRIPE_WEBHOOK_SECRET` | Stripe → Webhooks → the **vc-gamestudio.com** endpoint → Signing secret | **New**, this endpoint's own. **Secret** |
-| `STRIPE_PRICE_WRITER_MONTHLY` | Stripe price id (`price_…`) | New, see Stripe below |
-| `STRIPE_PRICE_WRITER_YEARLY` | Stripe price id | New |
 | `STRIPE_PRICE_STUDIO_MONTHLY` | Stripe price id | New |
 | `STRIPE_PRICE_STUDIO_YEARLY` | Stripe price id | New |
 | `STRIPE_PORTAL_CONFIGURATION` | `bpc_…`, made by the stripe step | New: Game Studio's own customer portal, so VC Writer's default portal is left as it is |
@@ -170,9 +167,9 @@ with the new public key.
 
 ## Stripe
 
-1. **Products:** create two, *VC Game Writer* and *VC Game Studio*. Give each
-   a recurring **monthly** and a recurring **yearly** price, and put the four
-   price ids in the `STRIPE_PRICE_*` variables. The site reads the amounts
+1. **Product:** create one, *VC Game Studio*. Give it a recurring
+   **monthly** and a recurring **yearly** price, and put the two price ids in
+   `STRIPE_PRICE_STUDIO_MONTHLY` and `STRIPE_PRICE_STUDIO_YEARLY`. The site reads the amounts
    from Stripe, so the price lives in one place.
 2. **Webhook:** add an endpoint at `https://vc-gamestudio.com/api/stripe/webhook`
    for these events:
@@ -184,9 +181,8 @@ with the new public key.
 
    Its signing secret goes in `STRIPE_WEBHOOK_SECRET`.
 3. **Customer portal** (Settings → Billing → Customer portal): allow
-   cancelling, updating the card, and **switching plans between the four
-   prices**. That switch is how a customer upgrades from VC Game Writer to VC
-   Game Studio. Make this a **separate configuration**, not the default (VC
+   cancelling, updating the card, and **switching between the monthly and
+   yearly prices**. Make this a **separate configuration**, not the default (VC
    Writer's Writers Room uses the default), and put its id in
    `STRIPE_PORTAL_CONFIGURATION`. The stripe setup step does all of this.
 4. **Stripe Tax:** set it up under Settings → Tax, then set
@@ -215,7 +211,7 @@ never fails a purchase; the account page always shows the license.
   `https://vc-gamestudio.com/auth/callback`. Keep VC Writer's entries. Leave
   the Site URL as vc-writer.com.
 - **Auth → Email templates → Magic link:** the desktop app signs in with the
-  six-digit code, as VC Writer's app does, so the template must include
+  code, as VC Writer's app does, so the template must include
   `{{ .Token }}`. The sign-in email is shared with VC Writer, so word it for
   both products.
 

@@ -26,20 +26,18 @@ export type Amounts = Record<Plan, Record<Interval, number>>;
 export const lookupKey = (plan: Plan, interval: Interval): string => `vcgs_${plan}_${interval}`;
 
 const ENV_KEY: Record<Plan, Record<Interval, string>> = {
-  writer: { month: 'STRIPE_PRICE_WRITER_MONTHLY', year: 'STRIPE_PRICE_WRITER_YEARLY' },
   studio: { month: 'STRIPE_PRICE_STUDIO_MONTHLY', year: 'STRIPE_PRICE_STUDIO_YEARLY' },
 };
 
-/** `--writer-monthly=19 --writer-yearly=190 --studio-monthly=39 --studio-yearly=390`, in whole or decimal currency units. */
+/** `--studio-monthly=24.99 --studio-yearly=249.99`, in whole or decimal currency units. */
 export const parseAmounts = (args: string[]): Amounts => {
   const read = (name: string): number => {
     const raw = args.find((arg) => arg.startsWith(`--${name}=`))?.split('=')[1];
     const value = raw === undefined ? NaN : Number(raw);
-    if (!Number.isFinite(value) || value <= 0) throw new Error(`Give a price: --${name}=<amount>, e.g. --${name}=19`);
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`Give a price: --${name}=<amount>, e.g. --${name}=24.99`);
     return Math.round(value * 100);
   };
   return {
-    writer: { month: read('writer-monthly'), year: read('writer-yearly') },
     studio: { month: read('studio-monthly'), year: read('studio-yearly') },
   };
 };
@@ -55,8 +53,8 @@ export const setupStripe = async (
 ): Promise<StripeSetupResult> => {
   const env: Record<string, string> = {};
   const notes: string[] = [];
-  const priceIds: Record<Plan, Record<Interval, string>> = { writer: { month: '', year: '' }, studio: { month: '', year: '' } };
-  const productIds: Record<Plan, string> = { writer: '', studio: '' };
+  const priceIds: Record<Plan, Record<Interval, string>> = { studio: { month: '', year: '' } };
+  const productIds: Record<Plan, string> = { studio: '' };
 
   for (const plan of PLAN_ORDER) {
     const found = await stripe.products.search({ query: `metadata['vcgs_plan']:'${plan}'` });

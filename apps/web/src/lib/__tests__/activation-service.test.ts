@@ -21,7 +21,7 @@ const seed = (licenses: Record<string, unknown>[]): Tables => ({ gs_licenses: li
 
 describe('activating computers', () => {
   it('activates on the account without a serial, and the entitlement says which plan', async () => {
-    const db = fakeSupabase(seed([license({ id: 'W', plan: 'writer', serial: 'VCGS-W' }), license()]));
+    const db = fakeSupabase(seed([license({ id: 'X', status: 'expired', serial: 'VCGS-X' }), license()]));
     const result = await activateDevice(caller, device('a'), null, db.client, privateKey);
     expect(result.ok).toBe(true);
     if (!result.ok) return;

@@ -15,10 +15,10 @@ describe('entitlements', () => {
     expect(new Date(entitlement.validUntil).getTime() - now.getTime()).toBe(OFFLINE_GRACE_DAYS * 86_400_000);
   });
 
-  it('refuses a token edited into a better plan', () => {
-    const { token } = issueEntitlement({ ...input, plan: 'writer' }, privateKey);
+  it('refuses a token edited to last longer', () => {
+    const { token, entitlement } = issueEntitlement(input, privateKey);
     const [prefix, payload, signature] = token.split('.');
-    const edited = Buffer.from(Buffer.from(payload ?? '', 'base64url').toString().replace('"writer"', '"studio"')).toString('base64url');
+    const edited = Buffer.from(Buffer.from(payload ?? '', 'base64url').toString().replace(entitlement.validUntil, '2099-01-01T00:00:00.000Z')).toString('base64url');
     expect(readEntitlement(`${prefix}.${edited}.${signature}`, publicKeyPem(privateKey))).toBeNull();
   });
 

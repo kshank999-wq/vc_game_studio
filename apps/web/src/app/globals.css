@@ -88,6 +88,7 @@ section { margin-top: 40px; }
 .feature p { color: var(--text-soft); margin: 0; }
 
 .tiers { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-top: 24px; }
+.tiers.single { grid-template-columns: minmax(0, 560px); }
 .tier { display: flex; flex-direction: column; gap: 12px; }
 .tier.featured { border-color: var(--gold-lo); box-shadow: 0 0 0 1px var(--gold-lo) inset; }
 .tier ul { margin: 0; padding-left: 20px; color: var(--text-soft); flex: 1; }

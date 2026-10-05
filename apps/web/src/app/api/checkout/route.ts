@@ -9,7 +9,7 @@ import { adminClient, currentUser } from '@/lib/supabase';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const bodySchema = z.object({ plan: z.enum(['writer', 'studio']), interval: z.enum(['month', 'year']) });
+const bodySchema = z.object({ plan: z.literal('studio').default('studio'), interval: z.enum(['month', 'year']) });
 
 /**
  * Start a subscription checkout. The client names a plan and an interval; the

@@ -19,7 +19,6 @@ export const formatPrice = (amountCents: number, currency: string): string =>
   }).format(amountCents / 100);
 
 const PRICE_VARS = {
-  writer: { month: 'STRIPE_PRICE_WRITER_MONTHLY', year: 'STRIPE_PRICE_WRITER_YEARLY' },
   studio: { month: 'STRIPE_PRICE_STUDIO_MONTHLY', year: 'STRIPE_PRICE_STUDIO_YEARLY' },
 } as const;
 
@@ -36,7 +35,7 @@ export const fetchDisplayPrices = async (): Promise<DisplayPrices | null> => {
     console.error(`[pricing] ${(err as Error).message}`);
     return null;
   }
-  const out: DisplayPrices = { writer: {}, studio: {} };
+  const out: DisplayPrices = { studio: {} };
   await Promise.all(
     PLAN_ORDER.flatMap((plan) =>
       (['month', 'year'] as const).map(async (interval) => {

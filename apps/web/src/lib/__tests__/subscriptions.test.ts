@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { isOurs, recordSubscription, revokeForSubscription } from '../subscriptions';
 import { fakeSupabase } from './fake-supabase';
 
-const prices = { writer: { month: 'price_wm', year: 'price_wy' }, studio: { month: 'price_sm', year: 'price_sy' } };
+const prices = { studio: { month: 'price_sm', year: 'price_sy' } };
 
 const subscription = (over: Partial<Stripe.Subscription> & { price?: string } = {}): Stripe.Subscription =>
   ({
@@ -57,12 +57,12 @@ describe('recording a subscription', () => {
     expect(record?.userId).toBe(db.authUsers[0]?.id);
   });
 
-  it('follows an upgrade, a cancellation and the end', async () => {
+  it('follows a switch to yearly, a cancellation and the end', async () => {
     const db = fakeSupabase({ profiles: [{ id: 'u1', email: 'ken@example.com' }] });
-    await recordSubscription(subscription({ price: 'price_wm' }), deps(db.client));
-    expect(db.tables['gs_licenses']?.[0]).toMatchObject({ plan: 'writer', status: 'active' });
-
     await recordSubscription(subscription({ price: 'price_sm' }), deps(db.client));
+    expect(db.tables['gs_licenses']?.[0]).toMatchObject({ plan: 'studio', status: 'active' });
+
+    await recordSubscription(subscription({ price: 'price_sy' }), deps(db.client));
     expect(db.tables['gs_licenses']?.[0]).toMatchObject({ plan: 'studio', status: 'active' });
 
     await recordSubscription(subscription({ price: 'price_sm', cancel_at_period_end: true }), deps(db.client));

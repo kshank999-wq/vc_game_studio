@@ -14,9 +14,9 @@ export default async function PricingPage({ searchParams }: { searchParams: { ca
     <>
       <div className="hero">
         <div className="eyebrow">Pricing</div>
-        <h1>Pick a plan</h1>
+        <h1>Monthly or yearly</h1>
         <p className="lede">
-          Both plans are the desktop app for Mac and Windows, on {DEVICES_PER_LICENSE} computers, with every update while you
+          VC Game Studio is the desktop app for Mac and Windows, on {DEVICES_PER_LICENSE} computers, with every update while you
           subscribe. Cancel any time from your account; your projects stay yours.
         </p>
         {searchParams.cancelled ? <p className="notice">Checkout was cancelled; nothing was charged.</p> : null}
@@ -44,8 +44,8 @@ export default async function PricingPage({ searchParams }: { searchParams: { ca
             <p className="muted">Yes. It checks your license when it can, and keeps working for 14 days without a connection.</p>
           </div>
           <div className="panel">
-            <h3>Can I change plan?</h3>
-            <p className="muted">From your account at any time: Game Writer to Game Studio, monthly to yearly, and back.</p>
+            <h3>Can I switch between monthly and yearly?</h3>
+            <p className="muted">Yes, from your account at any time. Cancel there too; your projects stay on your computer.</p>
           </div>
         </div>
       </section>

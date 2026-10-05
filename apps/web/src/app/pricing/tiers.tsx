@@ -52,10 +52,10 @@ export function PricingTiers({ tiers, signedIn }: { tiers: Tier[]; signedIn: boo
           Yearly
         </button>
       </div>
-      <div className="tiers">
+      <div className={`tiers${tiers.length === 1 ? ' single' : ''}`}>
         {tiers.map((tier) => (
-          <div key={tier.plan} className={`panel tier${tier.plan === 'studio' ? ' featured' : ''}`}>
-            <div className="eyebrow">{tier.plan === 'studio' ? 'Everything, plus engines' : 'The design tool'}</div>
+          <div key={tier.plan} className="panel tier featured">
+            <div className="eyebrow">Everything in one package</div>
             <h2>{tier.name}</h2>
             <p className="muted">{tier.tagline}</p>
             <div className="price">
@@ -66,7 +66,7 @@ export function PricingTiers({ tiers, signedIn }: { tiers: Tier[]; signedIn: boo
                 <li key={feature}>{feature}</li>
               ))}
             </ul>
-            <button type="button" className={tier.plan === 'studio' ? 'button' : 'button secondary'} disabled={busy !== null} onClick={() => void subscribe(tier.plan)}>
+            <button type="button" className="button" disabled={busy !== null} onClick={() => void subscribe(tier.plan)}>
               {busy === tier.plan ? 'Opening checkout…' : signedIn ? `Subscribe to ${tier.name}` : `Sign in to subscribe`}
             </button>
           </div>

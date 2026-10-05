@@ -72,7 +72,6 @@ export default async function AccountPage() {
             )}
             <div className="actions">
               <BillingButton />
-              {current.plan === 'writer' ? <span className="muted">Upgrade to VC Game Studio from the billing page.</span> : null}
             </div>
           </div>
           <div className="panel">

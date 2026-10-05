@@ -54,10 +54,9 @@ export const env = {
   get stripeWebhookSecret(): string {
     return required('STRIPE_WEBHOOK_SECRET');
   },
-  /** The four recurring prices: two plans, each monthly and yearly. */
+  /** The two recurring prices: VC Game Studio monthly and yearly. */
   get stripePrices(): PriceIds {
     return {
-      writer: { month: required('STRIPE_PRICE_WRITER_MONTHLY'), year: required('STRIPE_PRICE_WRITER_YEARLY') },
       studio: { month: required('STRIPE_PRICE_STUDIO_MONTHLY'), year: required('STRIPE_PRICE_STUDIO_YEARLY') },
     };
   },
@@ -98,7 +97,7 @@ export const env = {
   },
 } as const;
 
-export type Plan = 'writer' | 'studio';
+export type Plan = 'studio';
 export type Interval = 'month' | 'year';
 export type PriceIds = Record<Plan, Record<Interval, string>>;
 

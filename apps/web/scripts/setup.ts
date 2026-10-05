@@ -4,7 +4,7 @@
  * (git-ignored); docs/DEPLOYMENT.md walks through the order.
  *
  *   npm run setup -w @vcgs/web -- keys
- *   npm run setup -w @vcgs/web -- stripe --writer-monthly=19 --writer-yearly=190 --studio-monthly=39 --studio-yearly=390 [--currency=usd]
+ *   npm run setup -w @vcgs/web -- stripe --studio-monthly=24.99 --studio-yearly=249.99 [--currency=usd]
  *   npm run setup -w @vcgs/web -- resend        (VERCEL_TOKEN in the file adds the DNS records too)
  *   npm run setup -w @vcgs/web -- supabase      (needs SUPABASE_ACCESS_TOKEN, a personal access token)
  *   npm run setup -w @vcgs/web -- vercel        (needs VERCEL_TOKEN)

@@ -1,19 +1,19 @@
 import type { Interval, Plan, PriceIds } from './env';
 
 /**
- * The two plans and what each unlocks, and the rules that turn a Stripe
- * subscription into a license. Pure, so the money path is tested without
- * Stripe or a database.
+ * The plan and what it unlocks, and the rules that turn a Stripe subscription
+ * into a license. Pure, so the money path is tested without Stripe or a
+ * database.
  *
- * The plans are the editions the studio already knows (packages/core
- * editions.ts): VC Game Writer is the whole writing and design tool, VC Game
- * Studio adds the engine handoff to Godot, Unity and Unreal.
+ * One package, VC Game Studio, monthly or yearly: the whole design tool and
+ * the engine handoff to Godot, Unity and Unreal. (It began inside VC Writer;
+ * VC Writer now only links here.)
  */
 
 export const PLANS: Record<Plan, { name: string; tagline: string; features: string[] }> = {
-  writer: {
-    name: 'VC Game Writer',
-    tagline: 'Design the whole game: story, world, levels and puzzles.',
+  studio: {
+    name: 'VC Game Studio',
+    tagline: 'Design the whole game, then send it straight into your engine.',
     features: [
       'Story spine, subplot and character lanes',
       'Game Bible: characters, items, lore, skills, equipment and crafting',
@@ -22,26 +22,18 @@ export const PLANS: Record<Plan, { name: string; tagline: string; features: stri
       'Puzzle Creator with screen puzzles and a solver',
       'Play-through and Play Mode, with saved paths',
       'Note Sorter, comments, tasks and history',
-    ],
-  },
-  studio: {
-    name: 'VC Game Studio',
-    tagline: 'Everything in Game Writer, then straight into your engine.',
-    features: [
-      'Everything in VC Game Writer',
       'Engine handoff to Godot 4, Unity and Unreal Engine 5',
       'Generated runtimes: state, rules, quests, puzzles, levels and saves',
-      'Placeholder scenes and levels to play in the engine',
       'Re-export that keeps the code you wrote in the engine',
     ],
   },
 };
 
-export const PLAN_ORDER: Plan[] = ['writer', 'studio'];
+export const PLAN_ORDER: Plan[] = ['studio'];
 
 export const DEVICES_PER_LICENSE = 2;
 
-export const isPlan = (value: unknown): value is Plan => value === 'writer' || value === 'studio';
+export const isPlan = (value: unknown): value is Plan => value === 'studio';
 export const isInterval = (value: unknown): value is Interval => value === 'month' || value === 'year';
 
 export const priceIdFor = (prices: PriceIds, plan: Plan, interval: Interval): string => prices[plan][interval];
@@ -76,8 +68,8 @@ export const licenseStatusFor = (stripeStatus: string, current: LicenseStatus | 
   return 'expired';
 };
 
-/** Of several licenses, the one a device should run on: an active Studio before an active Writer. */
+/** Of several licenses, the one a device should run on: the first active one. */
 export const bestLicense = <T extends { status: LicenseStatus; plan: Plan }>(licenses: readonly T[]): T | null => {
   const active = licenses.filter((license) => license.status === 'active');
-  return active.find((license) => license.plan === 'studio') ?? active[0] ?? null;
+  return active[0] ?? null;
 };
