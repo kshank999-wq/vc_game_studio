@@ -142,6 +142,7 @@ project.
 | `RESEND_FROM_ADDRESS` | `VC Game Studio <noreply@vc-gamestudio.com>` | Needs vc-gamestudio.com verified in Resend |
 | `LICENSE_SIGNING_PRIVATE_KEY` | The first line printed by `npm run keys:license -w @vcgs/web` | **Secret.** Signs what the app may do |
 | `NEXT_PUBLIC_SITE_URL` | `https://vc-gamestudio.com` | Must include `https://`. A bad value is warned about and ignored |
+| `STRIPE_AUTOMATIC_TAX` | `1` once Stripe Tax is active (Settings → Tax) | Optional. Off by default: a checkout that asks for automatic tax on an account without Stripe Tax set up fails |
 | `RELEASE_BUCKET` | `gs-releases` | Optional; this is the default |
 | `RELEASE_DOWNLOAD_TTL_SECONDS` | `900` | Optional; this is the default |
 | `RATE_LIMIT_SALT` | Any random string | Optional |
@@ -188,8 +189,9 @@ with the new public key.
    Game Studio. Make this a **separate configuration**, not the default (VC
    Writer's Writers Room uses the default), and put its id in
    `STRIPE_PORTAL_CONFIGURATION`. The stripe setup step does all of this.
-4. **Stripe Tax:** checkout already asks for automatic tax, as VC Writer's
-   does.
+4. **Stripe Tax:** set it up under Settings → Tax, then set
+   `STRIPE_AUTOMATIC_TAX=1` in Vercel so checkout calculates tax. Until then
+   checkout runs without tax.
 
 To test locally: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
 Redelivering an event is safe: event ids are claimed in

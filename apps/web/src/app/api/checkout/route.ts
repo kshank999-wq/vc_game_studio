@@ -55,7 +55,8 @@ export async function POST(request: Request): Promise<Response> {
       metadata,
       subscription_data: { metadata },
       allow_promotion_codes: true,
-      automatic_tax: { enabled: true },
+      // Only once Stripe Tax is set up on the account (STRIPE_AUTOMATIC_TAX=1).
+      automatic_tax: { enabled: env.stripeAutomaticTax },
       billing_address_collection: 'auto',
     });
     if (!session.url) return NextResponse.json({ error: 'Stripe did not return a checkout URL' }, { status: 502 });

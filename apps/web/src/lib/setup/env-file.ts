@@ -50,6 +50,7 @@ export const SITE_VARIABLES: { key: string; secret: boolean; required: boolean }
   { key: 'RESEND_FROM_ADDRESS', secret: false, required: true },
   { key: 'LICENSE_SIGNING_PRIVATE_KEY', secret: true, required: true },
   { key: 'NEXT_PUBLIC_SITE_URL', secret: false, required: true },
+  { key: 'STRIPE_AUTOMATIC_TAX', secret: false, required: false },
   { key: 'RELEASE_BUCKET', secret: false, required: false },
   { key: 'RELEASE_DOWNLOAD_TTL_SECONDS', secret: false, required: false },
   { key: 'RATE_LIMIT_SALT', secret: true, required: false },

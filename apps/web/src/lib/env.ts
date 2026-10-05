@@ -69,6 +69,14 @@ export const env = {
   get stripePortalConfiguration(): string | undefined {
     return process.env['STRIPE_PORTAL_CONFIGURATION']?.trim() || undefined;
   },
+  /**
+   * Whether checkout asks Stripe Tax to calculate tax. Off unless set to 1: a
+   * checkout that asks for it on an account without Stripe Tax set up fails,
+   * so it is switched on only once Settings → Tax is active.
+   */
+  get stripeAutomaticTax(): boolean {
+    return ['1', 'true', 'on', 'yes'].includes((process.env['STRIPE_AUTOMATIC_TAX'] ?? '').trim().toLowerCase());
+  },
   get resendApiKey(): string {
     return required('RESEND_API_KEY');
   },
