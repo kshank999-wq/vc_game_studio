@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
-import { sendLicenseEmail } from '@/lib/email';
 import { env } from '@/lib/env';
-import { PLANS } from '@/lib/plans';
 import { stripe } from '@/lib/stripe';
-import { isOurs, recordSubscription, revokeForSubscription } from '@/lib/subscriptions';
+import { issueFromSubscription } from '@/lib/issue-license';
+import { isOurs, revokeForSubscription } from '@/lib/subscriptions';
 import { adminClient } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -52,18 +51,7 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     if (subscriptionEvent) {
-      const record = await recordSubscription(event.data.object as Stripe.Subscription, {
-        client,
-        prices: env.stripePrices,
-        customerEmail: async (customerId) => {
-          const customer = await stripe().customers.retrieve(customerId);
-          return 'deleted' in customer && customer.deleted ? null : customer.email;
-        },
-      });
-      // Only the delivery that issued the license sends the email; retries stay quiet.
-      if (record?.created && record.email) {
-        await sendLicenseEmail({ to: record.email, userId: record.userId, serial: record.serial, planName: PLANS[record.plan].name });
-      }
+      await issueFromSubscription(event.data.object as Stripe.Subscription);
     } else {
       // A refund or dispute: follow the money back to its subscription. VC
       // Writer's charges have no subscription of ours and change nothing.
