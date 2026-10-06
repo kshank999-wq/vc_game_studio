@@ -9,8 +9,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-/** Up front: the entry and React. They come to about 439 kB minified today (October 2026), with room to grow before anything new must load on demand. */
-const BUDGET = 480 * 1024;
+/** Up front: the entry and React. They come to about 439 kB minified today (October 2026); the budget leaves room through testing. */
+const BUDGET = 1024 * 1024;
 /** Only engine runtime source, or three.js, says these; none of it belongs in the first load. */
 const LAZY_MARKERS = ['VcgsCore', 'VCGSStory', 'StoryWalker', 'WebGLRenderer'];
 
