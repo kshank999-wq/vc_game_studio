@@ -6,3 +6,4 @@ dist/
 *.tsbuildinfo
 out/
 __pycache__/
+release/

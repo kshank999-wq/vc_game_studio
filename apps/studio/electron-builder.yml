@@ -9,6 +9,12 @@ directories:
   output: release
   buildResources: build
 
+# Everything the app runs is bundled into out/ by electron-vite and there are
+# no native modules, so there is nothing to install or rebuild. Skipping it
+# also matters: in this npm workspace apps/studio has no node_modules of its
+# own on a fresh CI checkout, and electron-builder's install step fails there.
+npmRebuild: false
+
 # 1024 px PNGs drawn by scripts/icons.mjs; electron-builder derives .ico and .icns.
 icon: build/icon.png
 
