@@ -22,7 +22,7 @@ import { AboutDialog, PreferencesDialog, PreviewSaveDialog, ShortcutsDialog } fr
 import { CommentsPanel } from './components/collab/lazy';
 import type { Target } from './model/collab';
 import { openProjectFile, openRecent, recentFiles, clearRecent, type Opened, type Recent } from './files';
-import { createProject } from './model/project';
+import { createProject, ensurePlayerLane } from './model/project';
 import { REPORTS, type ReportKey } from './model/reports';
 import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './edition';
 import { LicenseDialog } from './components/license/lazy';
@@ -764,6 +764,7 @@ export const App = () => {
         sep,
         { label: 'Add a subplot lane', disabled: !onGraph, onClick: () => onAddLane('subplot') },
         { label: 'Add a character arc lane', disabled: !onGraph, onClick: () => onAddLane('character') },
+        ...(project.lanes.some((l) => l.role === 'player') ? [] : [{ label: 'Add the Player Lane', disabled: !onGraph, onClick: () => commit(ensurePlayerLane(project).project) }]),
         sep,
         {
           label: issues.length ? `Next thing to look at (${issues.length})` : 'Nothing to look at',

@@ -40,7 +40,7 @@ export const makeObject = (type: ObjectType, name: string, now: string, data: St
 const START_X = 0;
 const START_SPACING = 300;
 
-/** A new project: the spine with Beginning, one plot point and Ending (spec §5). */
+/** A new project: the spine with Beginning, one plot point and Ending, and the Player Lane beneath it (spec §5). */
 export const createProject = (name = 'Untitled Game', now = stamp()): Project => {
   const spine: Lane = {
     id: newId('lane'),
@@ -55,13 +55,26 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
   const begin = makeObject('begin', 'Beginning', now);
   const plotPoint = makeObject('plotPoint', 'Plot Point 1', now, { code: 'PP1' });
   const end = makeObject('end', 'Ending', now);
+  // Beneath the spine, from Beginning to Ending: the player's own progression (Writer spec §5).
+  const player: Lane = {
+    id: newId('lane'),
+    kind: 'subplot',
+    role: 'player',
+    name: 'Player Lane',
+    subtitle: 'Player progression',
+    color: COLORS.player,
+    order: 1,
+    visible: true,
+    locked: false,
+    span: { startRef: begin.id, endRef: end.id },
+  };
   return {
     format: 'vcgs',
     version: 1,
     id: newId('proj'),
     name,
     objects: { [begin.id]: begin, [plotPoint.id]: plotPoint, [end.id]: end },
-    lanes: [spine],
+    lanes: [spine, player],
     connections: [],
     placements: {
       [begin.id]: { laneId: spine.id, x: START_X, y: 0 },
@@ -556,7 +569,7 @@ export const addLane = (
   now = stamp(),
 ): { project: Project; laneId: string } => {
   const order = Math.max(0, ...project.lanes.map((l) => l.order)) + 1;
-  const count = project.lanes.filter((l) => l.kind === kind).length + 1;
+  const count = project.lanes.filter((l) => l.kind === kind && l.role !== 'player').length + 1;
   const lane: Lane = {
     id: newId('lane'),
     kind,
@@ -576,7 +589,7 @@ export const addLane = (
     const endRef = sequence[2] ?? sequence[sequence.length - 1];
     if (startRef && endRef && startRef !== endRef) lane.span = { startRef, endRef };
   } else {
-    const used = new Set(project.lanes.map((l) => l.color.toUpperCase()));
+    const used = new Set(project.lanes.filter((l) => l.role !== 'player').map((l) => l.color.toUpperCase()));
     lane.color = CHARACTER_COLORS.find((c) => !used.has(c)) ?? CHARACTER_COLORS[count % CHARACTER_COLORS.length]!;
     // The lane follows a canonical character, which the Bible will list.
     const character = makeObject('character', lane.name, now, { color: lane.color });
@@ -635,3 +648,29 @@ export const removeLane = (project: Project, laneId: string): Project => {
 export const laneNodeCount = (project: Project, laneId: string): number => laneSequence(project, laneId).length;
 
 export { spineLane };
+
+// ---------------------------------------------------------------- the Player Lane
+
+export const PLAYER_LANE_COLOR = COLORS.player;
+
+export const playerLaneOf = (project: Project): Lane | undefined => project.lanes.find((l) => l.role === 'player');
+
+/** The Player Lane: a track from Beginning to Ending for the player's progression beats. Made the first time it's needed. */
+export const ensurePlayerLane = (project: Project): { project: Project; laneId: string } => {
+  const existing = playerLaneOf(project);
+  if (existing) return { project, laneId: existing.id };
+  const sequence = spineSequence(project);
+  const lane: Lane = {
+    id: newId('lane'),
+    kind: 'subplot',
+    role: 'player',
+    name: 'Player Lane',
+    subtitle: 'Player progression',
+    color: PLAYER_LANE_COLOR,
+    order: Math.max(0, ...project.lanes.map((l) => l.order)) + 1,
+    visible: true,
+    locked: false,
+    ...(sequence.length >= 2 ? { span: { startRef: sequence[0]!, endRef: sequence[sequence.length - 1]! } } : {}),
+  };
+  return { project: settle({ ...project, lanes: [...project.lanes, lane] }), laneId: lane.id };
+};

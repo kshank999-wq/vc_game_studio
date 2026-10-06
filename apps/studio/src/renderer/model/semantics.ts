@@ -17,6 +17,7 @@ export const COLORS = {
   puzzle: '#E07BB0',
   logic: '#C8BFAE',
   subplot: '#8FA8C4',
+  player: '#E8E0C8',
   error: '#E5484D',
 } as const;
 

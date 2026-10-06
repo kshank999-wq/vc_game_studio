@@ -158,7 +158,8 @@ describe('the Note Sorter: into the game', () => {
     const spine = spineSequence(q);
     expect(spine[spine.indexOf(key) + 1]).toBe(beat);
     expect(statusOf(q, noteById(q, ids.lore)!)).toBe('placed');
-    // The mechanic as a Player Lane beat: the lane is made the first time.
+    // The mechanic as a Player Lane beat (a project made before the lane was standard gets one the first time).
+    q = { ...q, lanes: q.lanes.filter((l) => l.role !== 'player') };
     expect(playerLaneOf(q)).toBeUndefined();
     q = convertNote(q, ids.lantern, 'playerBeat', 'Learn the lantern')!.project;
     const step = noteById(q, ids.lantern)!.destinations[0]!.objectId;

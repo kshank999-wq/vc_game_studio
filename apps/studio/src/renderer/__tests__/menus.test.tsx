@@ -58,7 +58,8 @@ describe('the menu bar', () => {
     openMenu('Project');
     expect(screen.getByRole('menu', { name: 'Project' })).toBeTruthy();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add a subplot lane' }));
-    expect(container.querySelectorAll('.subplot-band')).toHaveLength(1);
+    // Beside the Player Lane a new project has.
+    expect(container.querySelectorAll('.subplot-band')).toHaveLength(2);
     expect(screen.queryByRole('menu', { name: 'Project' })).toBeNull();
   });
 

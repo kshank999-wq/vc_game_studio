@@ -37,15 +37,16 @@ describe('the story graph', () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText('+ Add subplot lane'));
     fireEvent.click(screen.getByText('+ Add character lane'));
-    // The spine and the character arc run the whole story; the subplot is a band between two spine nodes.
+    // The spine and the character arc run the whole story; the subplot is a
+    // band between two spine nodes, like the Player Lane a new project has.
     expect(container.querySelectorAll('.track')).toHaveLength(2);
-    expect(container.querySelectorAll('.subplot-band')).toHaveLength(1);
-    expect(container.querySelectorAll('.span-handle')).toHaveLength(2);
+    expect(container.querySelectorAll('.subplot-band')).toHaveLength(2);
+    expect(container.querySelectorAll('.span-handle')).toHaveLength(4);
     act(() => {
       fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
     });
     expect(container.querySelectorAll('.track')).toHaveLength(1);
-    expect(container.querySelectorAll('.subplot-band')).toHaveLength(1);
+    expect(container.querySelectorAll('.subplot-band')).toHaveLength(2);
   });
 
   it('hides a lane from its chip and shows it again', () => {
@@ -65,8 +66,8 @@ describe('deleting', () => {
     fireEvent.click(screen.getByText('+ Add subplot lane'));
     fireEvent.click(screen.getByRole('button', { name: 'More for Subplot 1' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete lane' }));
-    // An empty lane goes straight away.
-    expect(container.querySelectorAll('.subplot-band')).toHaveLength(0);
+    // An empty lane goes straight away; the Player Lane stays.
+    expect(container.querySelectorAll('.subplot-band')).toHaveLength(1);
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
@@ -81,7 +82,7 @@ describe('deleting', () => {
     expect(dialog.textContent).toContain('“Subplot 1” will branch off or rejoin at the neighbouring spine node.');
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(container.querySelector('[data-type="plotPoint"]')).toBeNull();
-    expect(container.querySelectorAll('.span-handle')).toHaveLength(2);
+    expect(container.querySelectorAll('.span-handle')).toHaveLength(4);
   });
 });
 

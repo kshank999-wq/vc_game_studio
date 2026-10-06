@@ -106,14 +106,26 @@ describe('moving along the spine', () => {
   });
 });
 
+describe('the Player Lane', () => {
+  it('is there from the start, beneath the spine, from Beginning to Ending', () => {
+    const p = createProject();
+    const lane = p.lanes.find((l) => l.role === 'player')!;
+    const seq = spineSequence(p);
+    expect(lane.name).toBe('Player Lane');
+    expect(lane.span).toEqual({ startRef: seq[0], endRef: seq[seq.length - 1] });
+    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane']);
+  });
+});
+
 describe('subplot lanes', () => {
   it('are added below the spine with a span from the first node after Beginning to Ending', () => {
     const { project: p, laneId } = addLane(createProject(), 'subplot');
     const lane = p.lanes.find((l) => l.id === laneId)!;
     const seq = spineSequence(p);
     expect(lane.span).toEqual({ startRef: seq[1], endRef: seq[2] });
-    expect(laneRows(p).map((r) => r.lane.kind)).toEqual(['spine', 'subplot']);
-    expect(laneRows(p)[1]!.top).toBeGreaterThan(laneRows(p)[0]!.top);
+    // Below the spine and the Player Lane a new project starts with.
+    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane', lane.name]);
+    expect(laneRows(p)[2]!.top).toBeGreaterThan(laneRows(p)[1]!.top);
   });
 
   it('span handles snap to spine nodes and the start stays before the end', () => {
@@ -161,7 +173,7 @@ describe('subplot lanes', () => {
     const added = addLane(createProject(), 'subplot');
     const { project } = place(added.project, 'scene', added.laneId, 400);
     const p = removeLane(project, added.laneId);
-    expect(p.lanes).toHaveLength(1);
+    expect(p.lanes.map((l) => l.name)).toEqual(['Spine', 'Player Lane']);
     expect(Object.values(p.objects).filter((o) => o.type === 'scene')).toHaveLength(0);
   });
 });
@@ -194,7 +206,7 @@ describe('character lanes', () => {
   it('drop out of the layout while hidden', () => {
     const { project, laneId } = addLane(createProject(), 'character');
     const hidden = updateLane(project, laneId, { visible: false });
-    expect(laneRows(hidden).map((r) => r.lane.kind)).toEqual(['spine']);
+    expect(laneRows(hidden).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane']);
     expect(updateLane(hidden, spineId(hidden), { visible: false })).toBe(hidden);
   });
 });

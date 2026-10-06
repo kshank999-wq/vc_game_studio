@@ -1,6 +1,6 @@
 import { laneSequence, nodeSize, SPAN_PAD, spanRange, spineLane, spineSequence } from '../layout';
 import { addLevel } from '../level/level';
-import { canPlace, codeFormatFor, makeObject, newId, nextCode, packLane, settle } from '../project';
+import { canPlace, codeFormatFor, ensurePlayerLane, makeObject, newId, nextCode, packLane, settle } from '../project';
 import { addLine, categoryFor, elementCodeFor, isScene, sceneLines, setSpeakerByName, useInScene } from '../scene';
 import type { Lane, ObjectType, Project } from '../types';
 import { liveDestinations, livePlacements, noteById, notesOf, statusOf } from './sorter';
@@ -150,29 +150,8 @@ export const convertNote = (project: Project, noteId: string, kindKey: string, n
 
 // ---------------------------------------------------------------- the Player Lane
 
-export const PLAYER_LANE_COLOR = '#E8E0C8';
-
-export const playerLaneOf = (project: Project): Lane | undefined => project.lanes.find((l) => l.role === 'player');
-
-/** The Player Lane: a track from Beginning to Ending for the player's progression beats. Made the first time it's needed. */
-export const ensurePlayerLane = (project: Project): { project: Project; laneId: string } => {
-  const existing = playerLaneOf(project);
-  if (existing) return { project, laneId: existing.id };
-  const sequence = spineSequence(project);
-  const lane: Lane = {
-    id: newId('lane'),
-    kind: 'subplot',
-    role: 'player',
-    name: 'Player Lane',
-    subtitle: 'Player progression',
-    color: PLAYER_LANE_COLOR,
-    order: Math.max(0, ...project.lanes.map((l) => l.order)) + 1,
-    visible: true,
-    locked: false,
-    ...(sequence.length >= 2 ? { span: { startRef: sequence[0]!, endRef: sequence[sequence.length - 1]! } } : {}),
-  };
-  return { project: settle({ ...project, lanes: [...project.lanes, lane] }), laneId: lane.id };
-};
+// Kept with the project model (a new project starts with one); re-exported for the Note Sorter.
+export { ensurePlayerLane, PLAYER_LANE_COLOR, playerLaneOf } from '../project';
 
 // ---------------------------------------------------------------- placing
 
