@@ -23,6 +23,8 @@ import { CommentsPanel } from './components/collab/lazy';
 import type { Target } from './model/collab';
 import { openProjectFile, openRecent, recentFiles, clearRecent, type Opened, type Recent } from './files';
 import { createProject, ensurePlayerLane } from './model/project';
+import { createFromSetup, updateSetup } from './model/setup';
+import { SetupWizard } from './components/setup/lazy';
 import { REPORTS, type ReportKey } from './model/reports';
 import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './edition';
 import { LicenseDialog } from './components/license/lazy';
@@ -91,7 +93,7 @@ export const App = () => {
   const routeRef = useRef<Route>({ view: 'graph' });
   const [toast, setToast] = useState<string | null>(null);
   const [ask, setAsk] = useState<ConfirmRequest | null>(null);
-  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | null>(null);
+  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | 'newGame' | 'setup' | null>(null);
   // Re-render when the license changes: an activation turns saving on, a lapse turns it off.
   useAccess();
   const [recent, setRecent] = useState<Recent[]>(() => recentFiles());
@@ -451,8 +453,9 @@ export const App = () => {
     void loadSample()
       .then(({ sunkenVault }) => showProject(sunkenVault(), null))
       .catch(() => say('The sample could not be loaded. Check the connection and try again.'));
+  /** A new project starts with the Game Setup Wizard (which can start blank instead), or from the sample. */
   const newProject = (sample = false) =>
-    studio.isPanel ? toMain(sample ? 'newSample' : 'new') : leaveProject(() => (sample ? openSample() : showProject(createProject(), null)));
+    studio.isPanel ? toMain(sample ? 'newSample' : 'new') : leaveProject(() => (sample ? openSample() : setDialog('newGame')));
   const open = () =>
     studio.isPanel ? toMain('open') : leaveProject(() => {
       openProjectFile()
@@ -761,6 +764,7 @@ export const App = () => {
       label: 'Project',
       items: [
         { label: 'Rename project…', onClick: () => (setRoute({ view: 'graph' }), setRenameRequest((n) => n + 1)) },
+        { label: 'Game setup…', onClick: () => setDialog('setup') },
         sep,
         { label: 'Add a subplot lane', disabled: !onGraph, onClick: () => onAddLane('subplot') },
         { label: 'Add a character arc lane', disabled: !onGraph, onClick: () => onAddLane('character') },
@@ -1136,6 +1140,30 @@ export const App = () => {
         )}
         {searching && (
           <SearchPalette project={project} onGo={goToResult} onBible={(r) => openBible(r.id)} onClose={() => setSearching(false)} />
+        )}
+        {dialog === 'newGame' && (
+          <SetupWizard
+            onDone={(setup, name) => {
+              setDialog(null);
+              showProject(createFromSetup(name, setup), null);
+            }}
+            onBlank={() => {
+              setDialog(null);
+              showProject(createProject(), null);
+            }}
+            onClose={() => setDialog(null)}
+          />
+        )}
+        {dialog === 'setup' && (
+          <SetupWizard
+            editing
+            initial={project.setup}
+            onDone={(setup) => {
+              setDialog(null);
+              commit(updateSetup(project, setup));
+            }}
+            onClose={() => setDialog(null)}
+          />
         )}
         {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
         {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}

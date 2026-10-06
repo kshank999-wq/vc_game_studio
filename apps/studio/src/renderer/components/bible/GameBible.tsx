@@ -1,6 +1,7 @@
 import { applyFilters, regroup, type Filter, type GroupBy } from '../../model/bible-filters';
 import { BibleChips } from './BibleChips';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { setupSummary } from '../../model/setup';
 import { VIEWS, viewCount, viewGroups, voProgress, type Entry, type ViewKey } from '../../model/bible';
 import type { Destination } from '../../model/details';
 import { ENTRY_CODE, makeObject, nextCode } from '../../model/project';
@@ -343,6 +344,19 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
                 </div>
               )}
             </>
+          ) : project.setup ? (
+            <div className="bible-setup" aria-label="Game setup">
+              <h3>The game</h3>
+              <dl className="license-facts">
+                {setupSummary(project.setup).map((row) => (
+                  <Fragment key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </Fragment>
+                ))}
+              </dl>
+              <p className="bible-empty">Pick something from the list. Change these answers under Project › Game setup.</p>
+            </div>
           ) : (
             <p className="bible-empty">Pick something from the list.</p>
           )}

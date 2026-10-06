@@ -73,7 +73,34 @@ describe('the menu bar', () => {
     });
     expect(screen.getByRole('alertdialog').textContent).toContain('Save “The Sunken Vault” first?');
     fireEvent.click(screen.getByRole('button', { name: 'Don’t save' }));
+    // A new project starts with the Game Setup Wizard, which can start blank instead.
+    fireEvent.click(await screen.findByRole('button', { name: 'Start blank instead' }));
     expect(container.querySelectorAll('[data-node]')).toHaveLength(3);
+  });
+
+  it('sets up a new game with the wizard, and changes the answers later', async () => {
+    const { container } = render(<App />);
+    act(() => {
+      fireEvent.keyDown(window, { key: 'n', ctrlKey: true });
+    });
+    const wizard = await screen.findByRole('dialog', { name: 'New game' });
+    fireEvent.change(within(wizard).getByLabelText('Game name'), { target: { value: 'Ash Line' } });
+    fireEvent.click(within(wizard).getByLabelText('First-person shooter'));
+    fireEvent.click(within(wizard).getByRole('button', { name: 'Next' }));
+    fireEvent.change(within(wizard).getByLabelText('Premise'), { target: { value: 'A courier crosses a burning city.' } });
+    fireEvent.click(within(wizard).getByRole('button', { name: /4\. Structure/ }));
+    fireEvent.change(within(wizard).getByLabelText('How many'), { target: { value: '3' } });
+    fireEvent.click(within(wizard).getByRole('button', { name: 'Create game' }));
+    const names = [...container.querySelectorAll('[data-type="plotPoint"]')].map((n) => n.textContent);
+    expect(names.join(' ')).toContain('Mission 1');
+    expect(names.join(' ')).toContain('Mission 3');
+    openMenu('Project');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Game setup…' }));
+    const setup = await screen.findByRole('dialog', { name: 'Game setup' });
+    fireEvent.click(within(setup).getByRole('button', { name: /3\. World and tone/ }));
+    fireEvent.change(within(setup).getByLabelText('Tone'), { target: { value: 'Breathless' } });
+    fireEvent.click(within(setup).getByRole('button', { name: 'Save' }));
+    expect(screen.queryByRole('dialog', { name: 'Game setup' })).toBeNull();
   });
 
   it('toggles the minimap from View, and opens Preferences and the shortcuts', () => {

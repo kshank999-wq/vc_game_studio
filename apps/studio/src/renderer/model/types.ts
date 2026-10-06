@@ -257,6 +257,8 @@ export interface Project {
   paths?: import('./paths').ExpectedPath[];
   /** Comments and tasks on anything in the project (spec §16). */
   comments?: import('./collab').Comment[];
+  /** The Game Setup Wizard's answers (Writer spec §3). Absent for a project started blank. */
+  setup?: import('./setup').GameSetup;
   /** Each element's, connection's, level's and level item's edit history, by target key (spec §16). */
   revisions?: Record<string, import('./collab').Revision[]>;
 }

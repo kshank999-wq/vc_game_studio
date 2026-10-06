@@ -41,6 +41,22 @@ node apps/studio/scripts/check-bundle.mjs   # after the web builds: the first lo
 | `src/renderer/components/BottomBar.tsx` | Add lanes, lane visibility, zoom. |
 | `src/renderer/tokens.css` | Colour and type tokens from HANDOFF. |
 
+## Starting a game
+
+File › New opens the **Game Setup Wizard** (Writer spec §3), four short
+steps: the kind of game and its name; premise, player fantasy, who the
+player is and the core loop; world, tone, themes and endings; how the game
+divides (acts, chapters, levels, missions, quests, regions or your own word)
+and the resources it keeps coming back to. Each kind of game starts with a
+usual structure, and everything but the kind can be left blank.
+
+The answers become the start of the project: the spine divided into the
+chosen containers between Beginning and Ending, the premise written into the
+Beginning, the Player Lane beneath the spine, and each resource as an
+inventory entry in the Bible. They are kept with the project, shown in the
+Bible when nothing is selected, and changed later under Project › Game setup
+(which leaves what was already made alone). "Start blank instead" skips it.
+
 ## Keeping work safe (desktop)
 
 - **Saves are atomic.** A project is written to a temporary file beside it

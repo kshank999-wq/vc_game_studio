@@ -10284,3 +10284,85 @@ button.bible-dual-col:hover {
 .license-form .dialog-text { flex-basis: 100%; margin: 0; }
 .license-form input { flex: 1 1 200px; background: var(--node); border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text); padding: 6px 8px; font: inherit; }
 .license-note { margin: 0; padding: 8px 10px; border-left: 2px solid var(--gold); background: var(--node); color: var(--text-soft); font-size: 13px; }
+
+/* The Game Setup Wizard */
+.setup-wizard {
+  width: min(560px, calc(100% - 32px));
+}
+
+.setup-steps {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex-wrap: wrap;
+}
+
+.setup-step {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.setup-step.on {
+  border-color: var(--gold-lo);
+  color: var(--text);
+}
+
+.setup-step.done {
+  color: var(--text-soft);
+}
+
+.setup-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.setup-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.setup-chip input {
+  margin: 0;
+}
+
+.setup-chip.on {
+  border-color: var(--gold-lo);
+  color: var(--text);
+}
+
+.setup-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.setup-blank {
+  margin-right: auto;
+}
+
+.bible-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bible-setup h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
