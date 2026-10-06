@@ -10457,3 +10457,8 @@ button.bible-dual-col:hover {
   min-width: 28px;
   justify-content: center;
 }
+
+/* Stamina (spec §6): under the health bar, cooler. */
+.play-stamina span {
+  background: linear-gradient(90deg, #3e9bd6, #7fd1b9);
+}

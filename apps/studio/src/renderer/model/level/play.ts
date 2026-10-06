@@ -69,6 +69,8 @@ export interface LevelPlayState {
   done: Record<string, boolean>;
   /** Volumes the player is inside. */
   inside: string[];
+  /** The player's stamina (spec §6), 0–100, when the level tracks it. */
+  stamina?: number;
   /** Actors that can see the player now (line of sight). */
   seen?: Record<string, boolean>;
   /** Rule id → when it last ran (timers). */
@@ -540,6 +542,53 @@ export const interactWith = (project: Project, state: LevelPlayState, itemId: st
 };
 
 // ---------------------------------------------------------------- time passing
+
+// ---------------------------------------------------------------- climbing, swimming, stamina (spec §6)
+
+/** What the player is at: a ladder, and water (its surface's height). Play Mode passes this to the controller. */
+export const traversalAt = (project: Project, state: LevelPlayState, at: Where, global?: readonly AssetDefinition[]): { ladder: boolean; water?: number } => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === state.levelId);
+  const elevation = new Map(level?.floors.map((f) => [f.id, f.elevation]) ?? []);
+  let ladder = false;
+  let water: number | undefined;
+  for (const item of set.items) {
+    if (item.levelId !== state.levelId || !present(project, state, item)) continue;
+    const role = assetOf(set, item, global).role;
+    if (role !== 'ladder' && role !== 'water') continue;
+    const f = frameOf(set, item, global);
+    const bottom = (elevation.get(item.floorId) ?? 0) + f.z;
+    if (role === 'ladder') {
+      // Within reach of its face, between its foot and its top.
+      if (contains({ ...f, w: f.w + 0.4, d: f.d + 0.9 }, at) && at.z >= bottom - 0.2 && at.z <= bottom + f.h) ladder = true;
+    } else if (contains(f, at) && at.z >= bottom - 0.25 && at.z <= bottom + f.h) water = Math.max(water ?? -Infinity, bottom + f.h);
+  }
+  return water === undefined ? { ladder } : { ladder, water };
+};
+
+/** Whether this level tracks stamina (its player start says so). */
+export const tracksStamina = (project: Project, levelId: string, global?: readonly AssetDefinition[]): boolean => {
+  const start = playerStartOf(project, levelId, global);
+  return !!start && bool(paramOf(levelsOf(project), start, 'stamina', global), false);
+};
+
+/** What tires the player: running, swimming, climbing (per second), and how fast resting brings it back. */
+export const STAMINA = { run: 15, swim: 6, climb: 8, rest: 12, drown: 15 } as const;
+
+/**
+ * Spend or win back stamina for dt seconds of effort. Out of it, the player
+ * can't run (Play Mode stops them), and swimming hurts: they start to drown.
+ */
+export const spendStamina = (project: Project, state: LevelPlayState, dt: number, effort: { run?: boolean; swim?: boolean; climb?: boolean }, global?: readonly AssetDefinition[]): LevelPlayState => {
+  if (!tracksStamina(project, state.levelId, global)) return state;
+  const before = state.stamina ?? 100;
+  const cost = (effort.run ? STAMINA.run : 0) + (effort.swim ? STAMINA.swim : 0) + (effort.climb ? STAMINA.climb : 0);
+  const stamina = Math.min(100, Math.max(0, cost > 0 ? before - cost * dt : before + STAMINA.rest * dt));
+  let s: LevelPlayState = { ...state, stamina };
+  if (before > 0 && stamina === 0) s = say(log(s, { kind: 'warn', text: 'Out of stamina' }), 'You’re exhausted.');
+  if (effort.swim && stamina === 0) s = { ...s, health: s.health - STAMINA.drown * dt };
+  return s;
+};
 
 const volumeHolds = (set: LevelSet, item: LevelItem, at: Where, floorElevation: number, global?: readonly AssetDefinition[]): boolean => {
   const f = frameOf(set, item, global);

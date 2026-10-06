@@ -554,6 +554,59 @@ namespace VCGS
             }
         }
 
+        /// <summary>
+        /// What the player is at (as the studio's Play Mode), in level space: a ladder within reach, and
+        /// how deep the water around their feet is (0 for none). Your controller climbs while ladder is
+        /// true (forward goes up) and swims once depth is 1.1 m or more.
+        /// </summary>
+        public (bool ladder, double depth) TraversalAt(double x, double y, double z)
+        {
+            var ladder = false;
+            var depth = 0.0;
+            foreach (var guid in Order)
+            {
+                var role = Role(guid);
+                if ((role != "ladder" && role != "water") || !IsPresent(guid)) continue;
+                var it = Item(guid);
+                var at = D.List(it, "position");
+                var size = D.List(it, "size");
+                if (at.Count < 3 || size.Count < 3) continue;
+                // Into its frame: turned counter-clockwise from above by its turn.
+                var turn = D.Num(it, "turn", 0) * Math.PI / 180;
+                double dx = x - D.Num(at[0], 0), dz = z - D.Num(at[2], 0);
+                var lx = dx * Math.Cos(turn) - dz * Math.Sin(turn);
+                var lz = dx * Math.Sin(turn) + dz * Math.Cos(turn);
+                var ly = y - D.Num(at[1], 0);
+                var reach = role == "ladder" ? 0.2 : 0;
+                if (Math.Abs(lx) > D.Num(size[0], 1) / 2 + reach || Math.Abs(lz) > D.Num(size[2], 1) / 2 + reach * 2.25) continue;
+                if (ly < (role == "ladder" ? -0.2 : -0.25) || ly > D.Num(size[1], 1)) continue;
+                if (role == "ladder") ladder = true;
+                else depth = Math.Max(depth, D.Num(size[1], 1) - ly);
+            }
+            return (ladder, depth);
+        }
+
+        /// <summary>The player's stamina, 0–100, when the level's player start tracks it.</summary>
+        public double Stamina = 100;
+        public event Action Exhausted;
+
+        public bool TracksStamina()
+        {
+            foreach (var guid in Order) if (Role(guid) == "playerStart") return ParamBool(guid, "stamina", false);
+            return false;
+        }
+
+        /// <summary>Spend stamina for dt seconds of running, swimming or climbing, or win it back at rest. Out of it, the player can't run, and swimming hurts.</summary>
+        public void SpendStamina(double dt, bool run, bool swim, bool climb)
+        {
+            if (!TracksStamina()) return;
+            var before = Stamina;
+            var cost = (run ? 15 : 0) + (swim ? 6 : 0) + (climb ? 8 : 0);
+            Stamina = Math.Min(100, Math.Max(0, cost > 0 ? Stamina - cost * dt : Stamina + 12 * dt));
+            if (before > 0 && Stamina == 0) { Exhausted?.Invoke(); Message?.Invoke("You're exhausted."); }
+            if (swim && Stamina == 0) Health -= 15 * dt;
+        }
+
         /// <summary>Line of sight: true when something solid lies between two level-space points. VcgsLevel sets it (a raycast); unset, nothing blocks.</summary>
         public Func<double[], double[], bool> Blocked;
         /// <summary>Actors that see the player now.</summary>

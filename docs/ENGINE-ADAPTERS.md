@@ -447,6 +447,20 @@ number under the faction's key in `flags`, starting at 0: the `reputation`
 condition (`"op": "atLeast" | "below"`) reads it and the `reputation` effect
 adds `amount` to it, in every runtime.
 
+## Ladders, water and stamina
+
+A ladder (role `ladder`) is climbed: within reach of it, forward goes up and
+back goes down, and nothing falls. A water volume (role `water`) is waded
+where shallow and swum where its surface is 1.1 m or more above the feet:
+slower, sinking slowly, jump to swim up and tread water at the surface. When
+the player start's `stamina` is on, running, swimming and climbing spend
+stamina (15, 6 and 8 a second, out of 100) and rest wins it back (12 a
+second); out of it the player can't run, and swimming costs 15 health a
+second. Play Mode and Godot's generated player do all of this. Unity's
+`LevelLogic` and Unreal's `vcgs::LevelLogic` give your controller the same
+rules: `TraversalAt(x, y, z)` (a ladder in reach, the water's depth) and
+`SpendStamina(dt, run, swim, climb)` with `Stamina`.
+
 ## Line of sight
 
 An NPC, enemy or neutral actor can watch for the player: its `sight` (metres,

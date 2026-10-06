@@ -73,6 +73,58 @@ namespace vcgs
         /** Actors that move (patrols, companions) by GUID: where each is now. AVcgsLevelDirector moves their actors to match. */
         std::map<std::string, ActorPose> Poses;
         /** Where the player is, in level space: companions follow it. The director sets it each frame. */
+        /**
+         * What the player is at (as the studio's Play Mode), in level space: a ladder within reach, and
+         * how deep the water around their feet is (0 for none). Your character climbs while Ladder is
+         * true (forward goes up) and swims once Depth is 1.1 m or more.
+         */
+        struct Traversal { bool Ladder = false; double Depth = 0; };
+        Traversal TraversalAt(double x, double y, double z) const
+        {
+            Traversal out;
+            for (const auto& guid : Order)
+            {
+                const std::string role = Role(guid);
+                if ((role != "ladder" && role != "water") || !IsPresent(guid)) continue;
+                const Value& it = Item(guid);
+                const Value& at = it["position"];
+                const Value& size = it["size"];
+                // Into its frame: turned counter-clockwise from above by its turn.
+                const double turn = it["turn"].Num(0) * 3.14159265358979323846 / 180;
+                const double dx = x - at[0].Num(0), dz = z - at[2].Num(0);
+                const double lx = dx * std::cos(turn) - dz * std::sin(turn);
+                const double lz = dx * std::sin(turn) + dz * std::cos(turn);
+                const double ly = y - at[1].Num(0);
+                const double reach = role == "ladder" ? 0.2 : 0;
+                if (std::fabs(lx) > size[0].Num(1) / 2 + reach || std::fabs(lz) > size[2].Num(1) / 2 + reach * 2.25) continue;
+                if (ly < (role == "ladder" ? -0.2 : -0.25) || ly > size[1].Num(1)) continue;
+                if (role == "ladder") out.Ladder = true;
+                else out.Depth = std::max(out.Depth, size[1].Num(1) - ly);
+            }
+            return out;
+        }
+
+        /** The player's stamina, 0–100, when the level's player start tracks it. */
+        double Stamina = 100;
+        std::function<void()> OnExhausted;
+
+        bool TracksStamina() const
+        {
+            for (const auto& guid : Order) if (Role(guid) == "playerStart") return ParamBool(guid, "stamina", false);
+            return false;
+        }
+
+        /** Spend stamina for dt seconds of running, swimming or climbing, or win it back at rest. Out of it, the player can't run, and swimming hurts. */
+        void SpendStamina(double dt, bool run, bool swim, bool climb)
+        {
+            if (!TracksStamina()) return;
+            const double before = Stamina;
+            const double cost = (run ? 15 : 0) + (swim ? 6 : 0) + (climb ? 8 : 0);
+            Stamina = std::min(100.0, std::max(0.0, cost > 0 ? Stamina - cost * dt : Stamina + 12 * dt));
+            if (before > 0 && Stamina == 0) { if (OnExhausted) OnExhausted(); if (OnMessage) OnMessage("You're exhausted."); }
+            if (swim && Stamina == 0) Health -= 15 * dt;
+        }
+
         /** Line of sight: true when something solid lies between two level-space points (x, y, z each); the director sets it (a line trace). Unset, nothing blocks. */
         std::function<bool(double, double, double, double, double, double)> Blocked;
         /** Actors that see the player now; OnActorSpotted / OnActorLostSight say when that changes. */

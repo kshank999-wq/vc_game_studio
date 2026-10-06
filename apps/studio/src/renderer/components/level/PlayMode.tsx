@@ -5,7 +5,7 @@ import { BODY, collidersFrom, eyeOf, facing, look, step, type Body, type Collide
 import { assetOf, frameOf, meshesFor, num, paramOf, type Mesh } from '../../model/level/geometry';
 import { levelsOf } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
-import { answerScreen, darknessAt, dismiss, inHand, interactWith, isOpen, lightOf, offerFor, present, startLevelPlay, tick, toggleLight, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
+import { answerScreen, darknessAt, dismiss, inHand, interactWith, isOpen, lightOf, offerFor, present, spendStamina, startLevelPlay, tick, toggleLight, tracksStamina, traversalAt, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
 import { equipmentList, equipmentOf, usesLeft } from '../../model/equipment';
 import { recipesOf } from '../../model/crafting';
 import { skillsOf } from '../../model/skills';
@@ -396,7 +396,12 @@ export const PlayMode = (props: Props) => {
           const forward = (on('forward') ? 1 : 0) - (on('back') ? 1 : 0) - pad.moveY;
           const strafe = (on('right') ? 1 : 0) - (on('left') ? 1 : 0) + pad.moveX;
           const top = p.perspective === 'top';
-          const next = step(body.current, { forward, strafe: top ? strafe + turnKeys : strafe, jump: on('jump'), run: on('run'), crouch: on('crouch'), worldAxes: top }, dt, collidersRef.current);
+          // Ladders and water change how the body moves; out of stamina, it can't run.
+          const at = traversalAt(p.project, s, body.current, p.global);
+          const running = on('run') && (s.stamina ?? 100) > 0;
+          const next = step(body.current, { forward, strafe: top ? strafe + turnKeys : strafe, jump: on('jump'), run: running, crouch: on('crouch'), worldAxes: top, ladder: at.ladder, water: at.water }, dt, collidersRef.current);
+          const moving = Math.abs(forward) > 0.1 || Math.abs(strafe) > 0.1;
+          s = spendStamina(p.project, s, dt, { run: running && moving && !next.swimming && !next.climbing, swim: !!next.swimming, climb: !!next.climbing && Math.abs(forward) > 0.1 }, p.global);
           if (top && (Math.abs(forward) > 0.1 || Math.abs(strafe + turnKeys) > 0.1)) next.yaw = Math.atan2(strafe + turnKeys, forward);
           body.current = next;
           // Fell out of the world: back to the checkpoint or the start.
@@ -466,6 +471,7 @@ export const PlayMode = (props: Props) => {
   // ------------------------------------------------------------ what the player sees over the level
 
   const items = Object.entries(hud.world.items).filter(([, n]) => n > 0);
+  const staminaShown = tracksStamina(project, levelId, global);
   // Gear, skills and crafting (spec §8): what is in hand, and a way to the gear screen when the story has any.
   const hasGear = equipmentList(project).length > 0 || skillsOf(project).length > 0 || recipesOf(project).length > 0;
   const hand = inHand(hud);
@@ -503,6 +509,11 @@ export const PlayMode = (props: Props) => {
         </div>
         {hud.objective && <div className="play-objective">Objective: {hud.objective}</div>}
         <div className="grow" />
+        {staminaShown && (hud.stamina ?? 100) < 100 && (
+          <div className="play-health play-stamina" aria-label={`Stamina ${Math.round(hud.stamina ?? 100)}`}>
+            <span style={{ width: `${Math.max(0, hud.stamina ?? 100)}%` }} />
+          </div>
+        )}
         {(dangerous || hud.health < 100) && (
           <div className="play-health" aria-label={`Health ${Math.round(hud.health)}`}>
             <span style={{ width: `${Math.max(0, hud.health)}%` }} />

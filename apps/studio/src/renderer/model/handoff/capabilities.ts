@@ -101,6 +101,15 @@ export const CAPABILITIES: readonly Capability[] = [
     engines: { godot: all('auto'), unity: all('auto'), unreal: all('auto'), custom: json },
   },
   {
+    feature: 'Ladders, swimming and stamina',
+    engines: {
+      godot: all('auto', 'The generated player climbs, swims and tires'),
+      unity: all('binding', 'LevelLogic.TraversalAt and SpendStamina for your controller'),
+      unreal: all('binding', 'LevelLogic TraversalAt and SpendStamina for your character'),
+      custom: json,
+    },
+  },
+  {
     feature: 'Codex (people met, places, items, quests)',
     engines: {
       godot: all('auto', 'Press C in placeholder scenes'),

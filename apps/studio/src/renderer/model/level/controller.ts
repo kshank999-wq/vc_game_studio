@@ -38,6 +38,9 @@ export interface Body {
   grounded: boolean;
   /** Crouching (spec §6): lower, slower, and through gaps a standing body can't pass. */
   crouched?: boolean;
+  /** On a ladder, or swimming, this step. */
+  climbing?: boolean;
+  swimming?: boolean;
 }
 
 export interface MoveInput {
@@ -51,7 +54,18 @@ export interface MoveInput {
   worldAxes?: boolean;
   /** Hold to crouch; let go to stand, once there is room to. */
   crouch?: boolean;
+  /** At a ladder (spec §6, cave traversal): forward climbs, back goes down, and nothing falls. */
+  ladder?: boolean;
+  /** In water: its surface's height. Deep enough, the body swims: slower, slowly sinking, jump to rise. */
+  water?: number;
 }
+
+/** Climbing and swimming (spec §6): metres a second up a ladder; in water, how much slower, how fast it sinks and rises. */
+export const CLIMB = 2.2;
+export const SWIM = { pace: 0.55, sink: 1.2, rise: 2.4, depth: 1.1 } as const;
+
+/** Whether a body in water of this surface is deep enough to swim. */
+export const swimming = (body: { z: number }, water: number | undefined): boolean => water !== undefined && water - body.z >= SWIM.depth;
 
 export const BODY = { radius: 0.32, height: 1.75, eye: 1.62, walk: 3.6, run: 6.4, jump: 5.2, gravity: 18, stepUp: 0.42 } as const;
 /** A crouching body: how tall, where its eyes are, and how much slower it moves. */
@@ -191,7 +205,9 @@ export const step = (body: Body, input: MoveInput, dt: number, colliders: readon
   // Crouch while held; stand again once there is room overhead.
   const crouched = input.crouch ? true : body.crouched ? !roomToStand(colliders, body.x, body.y, body.z) : false;
   const height = crouched ? CROUCH.height : BODY.height;
-  const speed = (input.run && !crouched ? BODY.run : BODY.walk) * (crouched ? CROUCH.speed : 1);
+  const swims = swimming(body, input.water);
+  const climbs = !!input.ladder && !swims;
+  const speed = (input.run && !crouched && !swims ? BODY.run : BODY.walk) * (crouched ? CROUCH.speed : 1) * (swims ? SWIM.pace : 1);
   const len = Math.hypot(input.forward, input.strafe);
   const f = len > 1 ? input.forward / len : input.forward;
   const s = len > 1 ? input.strafe / len : input.strafe;
@@ -200,8 +216,10 @@ export const step = (body: Body, input: MoveInput, dt: number, colliders: readon
   const fy = input.worldAxes ? -1 : -Math.cos(body.yaw);
   const rx = input.worldAxes ? 1 : Math.cos(body.yaw);
   const ry = input.worldAxes ? 0 : Math.sin(body.yaw);
-  const vx = (fx * f + rx * s) * speed;
-  const vy = (fy * f + ry * s) * speed;
+  // On a ladder, forward and back climb; only sidesteps move across it.
+  const across = climbs ? 0 : f;
+  const vx = (fx * across + rx * s) * speed * (climbs ? 0.5 : 1);
+  const vy = (fy * across + ry * s) * speed * (climbs ? 0.5 : 1);
 
   let { x, y, z, vz } = body;
   // Small sub-steps, so fast moves can't pass through thin walls.
@@ -220,6 +238,18 @@ export const step = (body: Body, input: MoveInput, dt: number, colliders: readon
   }
 
   let grounded = body.grounded;
+  // Only bodies that climb or swim carry the flags (set to false once they stop).
+  const flags = { ...(climbs || body.climbing ? { climbing: climbs } : {}), ...(swims || body.swimming ? { swimming: swims } : {}) };
+  if (climbs || swims) {
+    // Climbing holds the body where the ladder takes it; swimming sinks slowly and jump swims up, to tread water at the surface.
+    vz = climbs ? f * CLIMB : input.jump ? SWIM.rise : Math.max(vz - BODY.gravity * 0.15 * dt, -SWIM.sink);
+    let nz = z + vz * dt;
+    if (swims && input.jump) nz = Math.min(nz, input.water! - SWIM.depth + 0.05);
+    const ground = groundAt(colliders, x, y, Math.max(z, nz));
+    const landed = nz <= ground;
+    if (landed) nz = ground;
+    return { ...body, x, y, z: nz, vz: landed ? 0 : vz, grounded: landed, ...flags, ...(crouched || body.crouched ? { crouched } : {}) };
+  }
   if (grounded && input.jump && !crouched) {
     vz = BODY.jump;
     grounded = false;
@@ -247,7 +277,7 @@ export const step = (body: Body, input: MoveInput, dt: number, colliders: readon
       }
     }
   }
-  return { ...body, x, y, z: nz, vz, grounded, ...(crouched || body.crouched ? { crouched } : {}) };
+  return { ...body, x, y, z: nz, vz, grounded, ...flags, ...(crouched || body.crouched ? { crouched } : {}) };
 };
 
 /** Turn and look (radians), keeping the look between straight down and straight up. */
