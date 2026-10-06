@@ -467,3 +467,11 @@ describe('effects that start quests and reveal lore, in the engines', () => {
     expect(VCGS_CORE_H).toContain('inline void CompleteQuest(const std::string& quest, GameState& game)');
   });
 });
+
+describe('what each engine gets (spec §14)', () => {
+  it('says, for every engine, whether each part is generated, needs hooking up, or is not generated', async () => {
+    const { CAPABILITIES } = await import('../handoff/capabilities');
+    for (const c of CAPABILITIES) for (const id of ['godot', 'unity', 'unreal', 'custom'] as const) expect(['auto', 'binding', 'none']).toContain(c.engines[id].support);
+    expect(CAPABILITIES.find((c) => c.feature.startsWith('Placeholder scenes'))!.engines.godot.support).toBe('auto');
+  });
+});

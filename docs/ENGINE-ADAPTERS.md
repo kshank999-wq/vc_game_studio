@@ -533,6 +533,15 @@ since, and the handoff asks before replacing them. The checks in
 the sample's level and play its key, door and lever.
 
 
+## What each engine gets
+
+The handoff screen's *What … gets* table (spec §14, the capability matrix)
+says, for the chosen engine, which parts of the project are generated and
+work as exported, which are generated but need hooking up in the engine (a
+component to add, an editor script to run, events to answer with your UI),
+and which are not generated. It lives in `model/handoff/capabilities.ts`;
+keep it in step with the sections above when an adapter changes.
+
 ## Implementation status on the story graph
 
 After the first export, each story node that the export writes something for

@@ -6,6 +6,7 @@ import { ENGINES, hunksOf, lineDiff, planHandoff, recordExport, reviewSend, setT
 import { levelsOf } from '../../model/level/level';
 import type { OutputGroup } from '../../model/handoff/engines';
 import { zip } from '../../model/handoff/zip';
+import { CAPABILITIES, SUPPORT_LABEL } from '../../model/handoff/capabilities';
 import type { Project } from '../../model/types';
 import { desktop } from '../../desktop';
 import { canPickFolder, pickBrowserFolder, type FolderAccess } from '../../folder-access';
@@ -303,6 +304,26 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
             </ol>
           </div>
         )}
+
+        <details className="capabilities">
+          <summary>What {adapter.name} gets</summary>
+          <table aria-label={`What ${adapter.name} gets`}>
+            <tbody>
+              {CAPABILITIES.map((c) => {
+                const here = c.engines[adapter.id];
+                return (
+                  <tr key={c.feature}>
+                    <th scope="row">{c.feature}</th>
+                    <td>
+                      <span className={`cap cap-${here.support}`}>{SUPPORT_LABEL[here.support]}</span>
+                      {here.note ? <span className="cap-note">{here.note}</span> : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </details>
 
         {plan.levels.length > 0 && (
           <div className="kv level-changes" aria-label="Level changes">
