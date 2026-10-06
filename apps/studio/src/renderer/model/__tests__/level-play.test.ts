@@ -19,6 +19,7 @@ import {
 } from '../level/play';
 import { levelIssues } from '../level/validate';
 import { createProject } from '../project';
+import { setField } from '../details';
 import { sunkenVault } from '../sample';
 import type { Project } from '../types';
 
@@ -92,6 +93,22 @@ describe('Play Mode rules', () => {
     s = tick(project, s, 0.1, at(0, 0));
     s = tick(project, s, 0.1, at(10, -13.2));
     expect(s.cinematic).toBeUndefined();
+  });
+
+  it('puts the player back where the cinematic says, once it ends', () => {
+    const { project, levelId, byName, story } = sample();
+    const p = setField(project, story('Door in the dark'), 'returnTo', 'The player start');
+    let s = startLevelPlay(p, levelId);
+    s = tick(p, s, 0.1, at(10, -13.2));
+    const { x, y, z } = startPoint(p, levelId);
+    expect(s.cinematic?.returnTo).toEqual({ x, y, z });
+    s = dismiss(s);
+    expect(s.placePlayer).toEqual({ x, y, z });
+    // Left as it was: nothing moves the player.
+    let left = tick(project, startLevelPlay(project, levelId), 0.1, at(10, -13.2));
+    left = dismiss(left);
+    expect(left.placePlayer).toBeUndefined();
+    void byName;
   });
 
   it('hurts the player in a hazard until they die', () => {

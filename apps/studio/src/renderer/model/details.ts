@@ -73,6 +73,7 @@ export const FIELDS: Partial<Record<ObjectType, readonly FieldSpec[]>> = {
     { key: 'camera', label: 'Camera / framing', multiline: true, placeholder: 'Slow push in on the seam' },
     { key: 'audio', label: 'Audio', placeholder: 'Grind of bronze, water rush' },
     { key: 'transition', label: 'Back to gameplay', placeholder: 'Cut to the explorer, control returns' },
+    { key: 'returnTo', label: 'Then the player is', options: ['Where the player was', 'The player start', 'The last checkpoint'] },
     { key: 'skippable', label: 'Can the player skip it?', options: ['Skippable', 'Not skippable'] },
   ],
   plotPoint: [{ key: 'turn', label: 'What turns here', placeholder: 'The way down is found' }],

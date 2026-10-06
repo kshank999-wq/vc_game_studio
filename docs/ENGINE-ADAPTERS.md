@@ -447,6 +447,16 @@ number under the faction's key in `flags`, starting at 0: the `reputation`
 condition (`"op": "atLeast" | "below"`) reads it and the `reputation` effect
 adds `amount` to it, in every runtime.
 
+## Cinematics: branching, and back to gameplay
+
+A cinematic on the spine can skip ahead, as a choice can: its routes out carry
+conditions, and the first that holds is taken (else on along the spine). The
+graph's `routes` carry this to every engine, whose story walkers already
+follow them. A cinematic's `returnTo` field says where the player is when it
+ends: where they were, the player start, or the last checkpoint. Play Mode
+puts the player there; the engines receive it in the cinematic's fields and
+the game places the player when its cinematic is done.
+
 ## Your own fields
 
 Any element can carry fields the writer adds (a name and a value each, under

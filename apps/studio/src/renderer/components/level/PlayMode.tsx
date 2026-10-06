@@ -414,6 +414,10 @@ export const PlayMode = (props: Props) => {
           if (once('light')) s = toggleLight(p.project, s, p.global);
           if (once('useItem')) s = useInHand(p.project, s);
         }
+        if (s.placePlayer) {
+          body.current = { ...body.current, ...s.placePlayer, vz: 0, grounded: true };
+          s = { ...s, placePlayer: undefined };
+        }
         if (s.goTo) {
           p.onGoToLevel(s.goTo, s.world);
           s = { ...s, goTo: undefined };

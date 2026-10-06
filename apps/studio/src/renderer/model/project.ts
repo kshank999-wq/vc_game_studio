@@ -480,8 +480,9 @@ export const connectionRefusal = (project: Project, sourceId: string, targetId: 
     if (other.type === 'begin' || other.type === 'end') return 'Tie an arc event to a plot point, choice or scene';
   } else {
     if (from === 'character' || to === 'character') return 'Character lanes connect through arc events';
-    if (from === 'spine' && to === 'spine' && source.type !== 'choice') {
-      return 'Spine nodes follow each other in track order; a choice can skip ahead';
+    // A choice skips ahead by the player's answer; a cinematic, by the conditions on its routes (a branching cinematic).
+    if (from === 'spine' && to === 'spine' && source.type !== 'choice' && source.type !== 'cinematic') {
+      return 'Spine nodes follow each other in track order; a choice or a cinematic can skip ahead';
     }
     const sourceLane = project.placements[sourceId]?.laneId;
     if (from === 'subplot' && sourceLane === project.placements[targetId]?.laneId) {

@@ -74,7 +74,9 @@ export interface LevelPlayState {
   checkpoint?: Where;
   health: number;
   time: number;
-  cinematic?: { id: string; name: string; seconds: number; until: number };
+  cinematic?: { id: string; name: string; seconds: number; until: number; returnTo?: Where };
+  /** Where a cinematic that has ended puts the player back (its "Back to gameplay"); the view moves the player there. */
+  placePlayer?: Where;
   scene?: { id: string; title: string; text: string };
   /** A screen puzzle up (puzzle spec §8): the object, the interaction it opens on, the item used. */
   screen?: { objectId: string; interactionId: string; itemId: string };
@@ -341,11 +343,20 @@ const startScene = (project: Project, state: LevelPlayState, sceneId: string, de
   return { ...s, scene: { id: sceneId, title: `${scene.data.code ? `${String(scene.data.code)} ` : ''}${scene.name}`, text: String(scene.data.summary ?? '') } };
 };
 
-export const playCinematic = (project: Project, state: LevelPlayState, cinematicId: string): LevelPlayState => {
+export const playCinematic = (project: Project, state: LevelPlayState, cinematicId: string, global?: readonly AssetDefinition[]): LevelPlayState => {
   const c = project.objects[cinematicId];
   if (!c) return state;
   const seconds = Math.max(2, cinematicTiming(project, cinematicId).seconds || 4);
-  return { ...state, cinematic: { id: cinematicId, name: c.name, seconds, until: state.time + seconds } };
+  const returnTo = returnPointOf(project, state, String(c.data.returnTo ?? ''), global);
+  return { ...state, cinematic: { id: cinematicId, name: c.name, seconds, until: state.time + seconds, ...(returnTo ? { returnTo } : {}) } };
+};
+
+/** Where a cinematic hands control back (its "Back to gameplay" field): the player start, the last checkpoint (else the start), or where the player was (nothing to do). */
+const returnPointOf = (project: Project, state: LevelPlayState, returnTo: string, global?: readonly AssetDefinition[]): Where | undefined => {
+  if (returnTo !== 'The player start' && returnTo !== 'The last checkpoint') return undefined;
+  if (returnTo === 'The last checkpoint' && state.checkpoint) return state.checkpoint;
+  const { x, y, z } = startPoint(project, state.levelId, global);
+  return { x, y, z };
 };
 
 const runPuzzleClock = (project: Project, state: LevelPlayState): LevelPlayState => {
@@ -383,7 +394,9 @@ export const answerScreen = (project: Project, state: LevelPlayState, outcome: '
 
 /** Skip or finish what is playing over the level: a cinematic, or a scene's card. */
 export const dismiss = (state: LevelPlayState): LevelPlayState =>
-  state.cinematic ? log({ ...state, cinematic: undefined }, { kind: 'info', text: `${state.cinematic.name} ends` }) : state.scene ? { ...state, scene: undefined } : state;
+  state.cinematic
+    ? log({ ...state, cinematic: undefined, ...(state.cinematic.returnTo ? { placePlayer: state.cinematic.returnTo } : {}) }, { kind: 'info', text: `${state.cinematic.name} ends${state.cinematic.returnTo ? ', and the player is put back' : ''}` })
+    : state.scene ? { ...state, scene: undefined } : state;
 
 const spawnFrom = (project: Project, state: LevelPlayState, spawner: LevelItem, global?: readonly AssetDefinition[]): LevelPlayState => {
   const set = levelsOf(project);
@@ -591,7 +604,7 @@ const enter = (project: Project, state: LevelPlayState, id: string, global?: rea
   if (once) s = { ...s, done: { ...s.done, [id]: true } };
   const plays = (item.rules ?? []).some((r) => (r.actions ?? []).some((a) => a.kind === 'playCinematic'));
   const cinematic = String(paramOf(set, item, 'cinematic', global) ?? '');
-  if (def.role === 'cinematic' && cinematic && !plays) s = playCinematic(project, log(s, { kind: 'action', itemId: id, text: `Plays ${name(project, cinematic)}` }), cinematic);
+  if (def.role === 'cinematic' && cinematic && !plays) s = playCinematic(project, log(s, { kind: 'action', itemId: id, text: `Plays ${name(project, cinematic)}` }), cinematic, global);
   if (def.role === 'checkpoint') {
     const f = frameOf(set, item, global);
     const floor = set.levels.find((l) => l.id === s.levelId)?.floors.find((fl) => fl.id === item.floorId);
