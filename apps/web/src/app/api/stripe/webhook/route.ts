@@ -45,6 +45,7 @@ export async function POST(request: Request): Promise<Response> {
   const client = adminClient();
   const { error: claimError } = await client.from('gs_stripe_webhook_events').insert({ id: event.id, type: event.type });
   if (claimError) {
+    console.warn(`[webhook] could not claim ${event.id}: ${claimError.message}`);
     const { data: seen } = await client.from('gs_stripe_webhook_events').select('processed_at').eq('id', event.id).maybeSingle();
     if (seen?.processed_at) return NextResponse.json({ received: true, duplicate: true });
   }
@@ -77,6 +78,7 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ received: true });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : 'Handling failed';
+    console.error(`[webhook] ${event.type} ${event.id}: ${message}`);
     // processed_at stays null, so Stripe's retry runs the (idempotent) handling again.
     await client.from('gs_stripe_webhook_events').update({ error: message }).eq('id', event.id);
     return NextResponse.json({ error: message }, { status: 500 });
