@@ -8,6 +8,9 @@ import { Licensing, type Stored } from '../licensing';
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 const publicPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
 const FINGERPRINT = 'f'.repeat(64);
+/** The old VC Game Writer plan: the site no longer sells it, but a copy holding such a token still reads it. */
+const LEGACY_WRITER = 'writer' as unknown as 'studio';
+
 const token = (over: Partial<Parameters<typeof issueEntitlement>[0]> = {}, now = new Date()) =>
   issueEntitlement({ serial: 'VCGS-AAAAA-BBBBB-CCCCC-DDDDD', plan: 'studio', fingerprint: FINGERPRINT, email: 'ken@example.com', paidThrough: '2027-01-01T00:00:00.000Z', ...over }, privateKey, now).token;
 
@@ -79,8 +82,8 @@ describe('signing in is activating', () => {
     expect(h.calls).toEqual(['POST /auth/v1/otp', 'POST /auth/v1/verify', 'POST /api/licenses/activate']);
   });
 
-  it('VC Game Writer saves but does not export', async () => {
-    const h = harness({}, { token: token({ plan: 'writer' }), refreshToken: 'r' });
+  it('a legacy VC Game Writer token saves but does not export', async () => {
+    const h = harness({}, { token: token({ plan: LEGACY_WRITER }), refreshToken: 'r' });
     await h.licensing.start();
     expect(h.licensing.canSave()).toBe(true);
     expect(h.licensing.canExport()).toBe(false);
@@ -108,7 +111,7 @@ describe('checking in', () => {
     const h = harness(
       {
         '/auth/v1/token?grant_type=refresh_token': () => [200, { ...session, refresh_token: 'refresh-3' }],
-        '/api/licenses/status': () => [200, { token: token({ plan: 'writer' }) }],
+        '/api/licenses/status': () => [200, { token: token({ plan: LEGACY_WRITER }) }],
       },
       { token: token(), refreshToken: 'refresh-2', email: 'ken@example.com' },
     );

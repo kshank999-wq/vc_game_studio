@@ -492,11 +492,14 @@ export const App = () => {
   // Commands from the desktop's native menu and its close dialog.
   useEffect(() => {
     const bridge = desktop();
+    if (__LICENSING__ && !isPanel) void bridge?.takeOpenFile?.().then((path) => path && fromPanels.current({ t: 'command', name: 'openRecent', arg: path }));
     return bridge?.onCommand?.((command) => {
       if (command === 'preferences') setDialog('preferences');
       if (command === 'about') setDialog('about');
       if (command === 'save-then-close') void save().then((ok) => ok && bridge.close?.());
       if (command.startsWith('route:')) setRoute(routeFor(parseView(new URLSearchParams(command.slice(6)))));
+      // A .vcgs file opened from the system (double-clicked, or dropped on the app).
+      if (__LICENSING__ && command.startsWith('open:')) fromPanels.current({ t: 'command', name: 'openRecent', arg: command.slice(5) });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -807,7 +810,13 @@ export const App = () => {
         { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setDialog('shortcuts') },
         { label: 'About VC Game Studio', onClick: () => setDialog('about') },
         sep,
-        ...(__LICENSING__ ? [{ label: 'License and account…', onClick: () => setDialog('license') }] : []),
+        ...(__LICENSING__
+          ? [
+              { label: 'License and account…', onClick: () => setDialog('license') },
+              { label: 'Show project backups', onClick: () => void desktop()?.showBackups?.() },
+              { label: 'Show logs (for support)', onClick: () => void desktop()?.showLogs?.() },
+            ]
+          : []),
         { label: isPreview() ? 'Buy or subscribe…' : 'vc-gamestudio.com', onClick: () => window.open(isPreview() ? PURCHASE_URL : 'https://vc-gamestudio.com', '_blank', 'noreferrer') },
       ],
     },

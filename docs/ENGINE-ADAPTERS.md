@@ -1,8 +1,8 @@
 # Engine adapters
 
-VC Game Studio hands a project to a game engine through an **adapter**. Godot 4
-is the first; Unity 6, Unreal Engine 5 and a custom JSON engine are registered
-and shown as "coming later" on the handoff screen.
+VC Game Studio hands a project to a game engine through an **adapter**. There
+are four, all available on the handoff screen: Godot 4, Unity 6, Unreal
+Engine 5 and a custom JSON engine.
 
 Code is generated from the story and is never the source of truth (HANDOFF):
 every export rewrites the generated folder. The one exception is each

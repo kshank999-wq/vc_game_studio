@@ -41,6 +41,29 @@ node apps/studio/scripts/check-bundle.mjs   # after the web builds: the first lo
 | `src/renderer/components/BottomBar.tsx` | Add lanes, lane visibility, zoom. |
 | `src/renderer/tokens.css` | Colour and type tokens from HANDOFF. |
 
+## Keeping work safe (desktop)
+
+- **Saves are atomic.** A project is written to a temporary file beside it
+  and renamed into place, so a crash or power cut mid-save leaves the old
+  file whole (`src/main/safe-write.ts`).
+- **Backups.** Before a save replaces a file, the old version is copied to
+  the backups folder, at most once every ten minutes per project, newest
+  twenty kept. Help › Show project backups opens it.
+- **The working copy.** The open project is also kept in the app's storage
+  as you edit. After a crash it comes back on the next launch, and if it
+  differs from the file it counts as unsaved, so autosave and the close
+  prompt look after it.
+- **File versions.** Projects carry a format version. Older ones are brought
+  up to date on opening (`MIGRATIONS` in `model/storage.ts`); one from a
+  newer app says to update rather than failing.
+- **Crashes.** A broken screen shows a Reload button and a download of the
+  working copy instead of a blank window; a crashed window is offered back;
+  main-process errors go to the log (Help › Show logs).
+- **One copy at a time.** A project double-clicked while the app is open
+  opens in the running copy.
+- **Updates.** Once a day a packaged copy asks vc-gamestudio.com which
+  version is out and offers the download page when there is a newer one.
+
 ## Build order (HANDOFF)
 
 1. ✅ Shell, and the legend as node buttons
@@ -51,4 +74,4 @@ node apps/studio/scripts/check-bundle.mjs   # after the web builds: the first lo
 6. ✅ Element detail on double-click
 7. ✅ The timeline with the linked exploded panel
 8. ✅ The Bible
-9. ✅ Engine handoff with generated code (Godot 4 now; Unity, Unreal and custom JSON set up for later — see docs/ENGINE-ADAPTERS.md)
+9. ✅ Engine handoff with generated code (Godot 4, Unity 6, Unreal Engine 5 and custom JSON — see docs/ENGINE-ADAPTERS.md)

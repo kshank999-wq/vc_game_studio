@@ -15,6 +15,12 @@ export interface DesktopBridge {
   setZoom?: (factor: number) => void;
   /** Commands from the native menu and the close dialog. */
   onCommand?: (listener: (command: string) => void) => () => void;
+  /** A .vcgs file the app was launched to open, once. */
+  takeOpenFile?: () => Promise<string | null>;
+  /** Show the folder of project backups. */
+  showBackups?: () => Promise<void>;
+  /** Show the folder of the app's logs (for support). */
+  showLogs?: () => Promise<void>;
   /** Windows: open a view in its own window, on the monitor to that side of the main one. */
   openWindow?: (query: string, side: 'left' | 'right') => Promise<void>;
   /** Put the main window on the middle monitor and the others beside it. */

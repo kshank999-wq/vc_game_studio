@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { desktop } from './desktop';
-import { canWriteBack, rememberRecent, saveProjectFile, type ProjectFile } from './files';
+import { canWriteBack, parse, rememberRecent, saveProjectFile, serialize, type ProjectFile } from './files';
 import { commit, redo, startHistory, undo, type History } from './model/history';
 import { createProject } from './model/project';
 import { canSave, loadProject, saveProject } from './model/storage';
@@ -80,6 +80,8 @@ const useMainStudio = () => {
   const [busy, setBusy] = useState<'saving' | 'failed' | null>(null);
   const preferences = usePreferences();
   const first = useRef(true);
+  const fileRef = useRef(file);
+  fileRef.current = file;
   const present = history.present;
   const dirty = present !== saved;
 
@@ -90,9 +92,26 @@ const useMainStudio = () => {
       return;
     }
     if (!canSave()) return;
-    const timer = setTimeout(() => saveProject(present), 400);
+    const timer = setTimeout(() => {
+      // Too big for this browser's storage (large imported models, say): a
+      // project with no file has nowhere else to live, so say so.
+      if (!saveProject(present) && !fileRef.current) setBusy('failed');
+    }, 400);
     return () => clearTimeout(timer);
   }, [present]);
+
+  // Reopened after a crash: the working copy may hold edits that never
+  // reached the file. Compare with the file, and if they differ, count them
+  // as unsaved, so autosave and the close prompt look after them.
+  useEffect(() => {
+    if (!file?.path || !desktop()?.readProject) return;
+    void desktop()!.readProject!(file.path).then((onDisk) => {
+      const inFile = onDisk && parse(onDisk.content);
+      if (inFile && serialize(inFile) !== serialize(history.present)) setSaved(inFile);
+    });
+    // Only the project this session started with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     desktop()?.setDirty?.(canSave() && dirty);

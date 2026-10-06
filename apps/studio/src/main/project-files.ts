@@ -1,13 +1,17 @@
-import { app, dialog, ipcMain, Menu, type BrowserWindow, type MenuItemConstructorOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron';
-import { readFile, writeFile } from 'node:fs/promises';
-import { extname, isAbsolute } from 'node:path';
+import { app, dialog, ipcMain, Menu, shell, type BrowserWindow, type MenuItemConstructorOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron';
+import { mkdir, readFile } from 'node:fs/promises';
+import { extname, isAbsolute, join } from 'node:path';
 import { licensing } from './licensing-ipc';
+import { saveSafely } from './safe-write';
 
 /**
  * Project files (.vcgs): open and save through the system dialogs, reopen a
  * recent one, and ask before closing a window with unsaved changes. Only
- * absolute paths to .vcgs files are ever read or written.
+ * absolute paths to .vcgs files are ever read or written. Every save is
+ * atomic and keeps earlier versions in the backups folder (safe-write.ts).
  */
+
+export const backupsRoot = (): string => join(app.getPath('userData'), 'Backups');
 
 const FILTERS = [{ name: 'VC Game Studio project', extensions: ['vcgs'] }];
 const isProjectPath = (path: unknown): path is string => typeof path === 'string' && isAbsolute(path) && extname(path).toLowerCase() === '.vcgs' && !path.includes('\0');
@@ -49,9 +53,14 @@ export const registerProjectFiles = (getWindow: () => BrowserWindow | null): voi
       target = extname(result.filePath) ? result.filePath : `${result.filePath}.vcgs`;
       if (!isProjectPath(target)) throw new Error('Projects are saved as .vcgs files.');
     }
-    await writeFile(target, content, 'utf8');
+    await saveSafely(target, content, backupsRoot());
     app.addRecentDocument(target);
     return target;
+  });
+
+  ipcMain.handle('vcgs:show-backups', async () => {
+    await mkdir(backupsRoot(), { recursive: true });
+    await shell.openPath(backupsRoot());
   });
 
   ipcMain.on('vcgs:set-dirty', (e, value: unknown) => {

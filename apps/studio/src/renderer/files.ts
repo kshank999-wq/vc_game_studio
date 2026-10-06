@@ -1,5 +1,5 @@
 import { desktop } from './desktop';
-import { readProject } from './model/storage';
+import { readProject, readProjectOrWhy } from './model/storage';
 import type { Project } from './model/types';
 
 /**
@@ -51,8 +51,14 @@ const isCancel = (error: unknown) => error instanceof DOMException && error.name
 export type Opened = { project: Project; file: ProjectFile } | { error: string } | null;
 
 const opened = (text: string, file: ProjectFile): Opened => {
-  const project = parse(text);
-  return project ? { project, file } : { error: `“${file.name}” is not a VC Game Studio project.` };
+  let read: ReturnType<typeof readProjectOrWhy> = 'not-a-project';
+  try {
+    read = readProjectOrWhy(JSON.parse(text));
+  } catch {
+    // Not JSON: not a project.
+  }
+  if (read === 'newer') return { error: `“${file.name}” was saved by a newer version of VC Game Studio. Update the app to open it.` };
+  return read === 'not-a-project' ? { error: `“${file.name}” is not a VC Game Studio project.` } : { project: read, file };
 };
 
 /** Ask for a project file and read it. Null when the user cancels. */

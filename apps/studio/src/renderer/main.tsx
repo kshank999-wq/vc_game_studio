@@ -1,6 +1,7 @@
 import { StrictMode, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { Crashed } from './components/Crashed';
 import { getShared, isPanel, subscribeShared } from './windows';
 import './tokens.css';
 import './styles.css';
@@ -20,6 +21,8 @@ const Root = () => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Root />
+    <Crashed>
+      <Root />
+    </Crashed>
   </StrictMode>,
 );

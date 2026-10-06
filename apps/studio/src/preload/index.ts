@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('vcgs', {
     signOut: (): Promise<unknown> => ipcRenderer.invoke('vcgs:license-sign-out'),
     open: (page: string): Promise<void> => ipcRenderer.invoke('vcgs:license-open', page),
   },
+  takeOpenFile: (): Promise<string | null> => ipcRenderer.invoke('vcgs:take-open-file'),
+  showBackups: (): Promise<void> => ipcRenderer.invoke('vcgs:show-backups'),
+  showLogs: (): Promise<void> => ipcRenderer.invoke('vcgs:show-logs'),
   onCommand: (listener: (command: string) => void): (() => void) => {
     const handler = (_e: unknown, command: string) => listener(command);
     ipcRenderer.on('vcgs:command', handler);
