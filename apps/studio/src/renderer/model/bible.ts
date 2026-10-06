@@ -1,3 +1,4 @@
+import { customOf } from './details';
 import { laneSequence, spineSequence } from './layout';
 import { TYPE_LABEL } from './semantics';
 import type { DialogueLine, ObjectType, Project, StoryObject } from './types';
@@ -78,7 +79,7 @@ const matches = (project: Project, entry: Entry, query: string): boolean => {
     return `${speaker} ${entry.line.text} ${entry.line.direction}`.toLowerCase().includes(q);
   }
   const o = entry.object;
-  const fields = Object.values(o.data).filter((v) => typeof v === 'string').join(' ');
+  const fields = [...Object.values(o.data).filter((v) => typeof v === 'string'), ...customOf(o).map((f) => `${f.key} ${f.value}`)].join(' ');
   return `${o.name} ${code(o)} ${o.notes} ${fields} ${TYPE_LABEL[o.type]}`.toLowerCase().includes(q);
 };
 

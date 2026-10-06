@@ -29,6 +29,8 @@ import {
   setSceneUse,
   setStates,
   setVarType,
+  setCustom,
+  customOf,
   setInitialValue,
   setterNames,
   VAR_SCOPES,
@@ -169,6 +171,47 @@ export const StateList = ({ object, onCommit, project, label }: { object: StoryO
         </datalist>
       </div>
     </div>
+  );
+};
+
+/** The writer's own fields on an element (custom properties): a name and a value each, sent to the engines with the rest. */
+const CustomFields = ({ object, project, onCommit }: { object: StoryObject; project: Project; onCommit: (p: Project) => void }) => {
+  const fields = customOf(object);
+  const save = (next: typeof fields) => onCommit(setCustom(project, object.id, next));
+  return (
+    <section className="detail-section">
+      <div className="dfld">
+        <span>Your own fields</span>
+        {fields.map((f, i) => (
+          <div key={`${object.id}:${i}:${f.key}`} className="setup-row custom-field">
+            <input
+              className="inp small"
+              aria-label="Field name"
+              placeholder="Name"
+              defaultValue={f.key}
+              onBlur={(e) => e.currentTarget.value !== f.key && save(fields.map((x, j) => (j === i ? { ...x, key: e.currentTarget.value.trim() } : x)))}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            />
+            <input
+              className="inp"
+              aria-label={`${f.key || 'Field'} value`}
+              placeholder="Value"
+              defaultValue={f.value}
+              onBlur={(e) => e.currentTarget.value !== f.value && save(fields.map((x, j) => (j === i ? { ...x, value: e.currentTarget.value } : x)))}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            />
+            <button className="state-x" aria-label={`Remove ${f.key || 'field'}`} onClick={() => save(fields.filter((_, j) => j !== i))}>
+              ×
+            </button>
+          </div>
+        ))}
+        <div>
+          <button className="chip-add small" onClick={() => save([...fields, { key: '', value: '' }])}>
+            + Field
+          </button>
+        </div>
+      </div>
+    </section>
   );
 };
 
@@ -420,6 +463,8 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
           </div>
         </section>
       )}
+
+      {object.type !== 'begin' && object.type !== 'end' && <CustomFields object={object} project={project} onCommit={onCommit} />}
 
       {object.type === 'cinematic' && nav.openShots && (
         <section className="detail-section">

@@ -447,6 +447,14 @@ number under the faction's key in `flags`, starting at 0: the `reputation`
 condition (`"op": "atLeast" | "below"`) reads it and the `reputation` effect
 adds `amount` to it, in every runtime.
 
+## Your own fields
+
+Any element can carry fields the writer adds (a name and a value each, under
+"Your own fields" in its detail). They travel in the element's `fields` with
+its built-in ones, which win when a name is the same, so they reach every
+engine the same way: Godot's `details` dictionary, Unity's `details` list and
+Unreal's `Details` column.
+
 ## Encounter results as conditions
 
 A trigger, gate or option can wait on a fight: the `encounter` condition

@@ -259,6 +259,23 @@ export const setInitialValue = (project: Project, id: string, value: string): Pr
   return setData(project, id, { initialValue: value });
 };
 
+/**
+ * Fields a writer adds to any element (spec §6, custom properties): a name
+ * and a value each, kept in order. They travel to the engines with the
+ * element's own fields, which win if a name is the same.
+ */
+export interface CustomField {
+  key: string;
+  value: string;
+}
+
+export const customOf = (object: StoryObject | undefined): CustomField[] => {
+  const list = object?.data.custom;
+  return Array.isArray(list) ? (list as CustomField[]).filter((f) => f && typeof f.key === 'string' && typeof f.value === 'string') : [];
+};
+
+export const setCustom = (project: Project, id: string, fields: CustomField[]): Project => setData(project, id, { custom: fields.length ? fields : undefined });
+
 export const interactionsOf = (object: StoryObject | undefined): Interaction[] => (object?.data.interactions as Interaction[] | undefined) ?? [];
 
 export const setStates = (project: Project, id: string, states: string[]): Project => {

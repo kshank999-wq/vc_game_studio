@@ -2,7 +2,7 @@ import { recipeOf } from '../crafting';
 import { equipmentOf } from '../equipment';
 import { costOf, ranksOf, requiresOf } from '../skills';
 import { describeTarget, whoLabel, type Who } from '../collab';
-import { interactionsOf, initialState, statesOf, varTypeOf, type VarType } from '../details';
+import { customOf, interactionsOf, initialState, statesOf, varTypeOf, type VarType } from '../details';
 import { laneSequence, spineSequence } from '../layout';
 import { CATEGORIES, dualWith, elementsIn, sceneLines } from '../scene';
 import { hasInline, plainInline } from '../inline';
@@ -506,12 +506,15 @@ export const DESIGN_LISTS = [
   { list: 'skills', type: 'skill', label: 'Skill', folder: 'Skills', group: 'Logic' },
 ] as const satisfies readonly { list: keyof HandoffIR; type: ObjectType; label: string; folder: string; group: string }[];
 
-const fieldsOf = (o: StoryObject): Record<string, string> =>
-  Object.fromEntries(
+const fieldsOf = (o: StoryObject): Record<string, string> => ({
+  // The writer's own fields first, so the element's own win on a clash.
+  ...Object.fromEntries(customOf(o).filter((f) => f.key.trim()).map((f) => [f.key.trim(), f.value])),
+  ...Object.fromEntries(
     (Object.entries(o.data).filter(([k, v]) => typeof v === 'string' && !['code', 'color', 'initialState', 'setsFlag', 'fromNote'].includes(k)) as [string, string][])
       // A codex entry reads as written, without stray blank lines around it.
       .map(([k, v]) => [k, k === 'codex' ? v.trim() : v]),
-  );
+  ),
+});
 
 /** A timed choice's limit and the option it falls to, for the runtimes. */
 const timedOf = (o: StoryObject | undefined): { timeLimit?: number; onTimeout?: string } =>
