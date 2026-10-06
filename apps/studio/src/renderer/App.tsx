@@ -25,6 +25,7 @@ import { openProjectFile, openRecent, recentFiles, clearRecent, type Opened, typ
 import { createProject, ensurePlayerLane } from './model/project';
 import { createFromSetup, updateSetup } from './model/setup';
 import { SetupWizard } from './components/setup/lazy';
+import { Guide, guideSeen, markGuideSeen } from './components/help/lazy';
 import { REPORTS, type ReportKey } from './model/reports';
 import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './edition';
 import { LicenseDialog } from './components/license/lazy';
@@ -93,7 +94,7 @@ export const App = () => {
   const routeRef = useRef<Route>({ view: 'graph' });
   const [toast, setToast] = useState<string | null>(null);
   const [ask, setAsk] = useState<ConfirmRequest | null>(null);
-  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | 'newGame' | 'setup' | null>(null);
+  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | 'newGame' | 'setup' | 'guide' | null>(null);
   // Re-render when the license changes: an activation turns saving on, a lapse turns it off.
   useAccess();
   const [recent, setRecent] = useState<Recent[]>(() => recentFiles());
@@ -104,6 +105,11 @@ export const App = () => {
 
   routeRef.current = route;
   const say = useCallback((message: string) => setToast(message), []);
+  // The first time the studio opens (in its main window), the Getting started tour does too.
+  useEffect(() => {
+    if (role.kind !== 'panel' && import.meta.env.MODE !== 'test' && !guideSeen()) setDialog((d) => d ?? 'guide');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 2600);
@@ -812,6 +818,7 @@ export const App = () => {
     {
       label: 'Help',
       items: [
+        { label: 'Getting started', onClick: () => setDialog('guide') },
         { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setDialog('shortcuts') },
         { label: 'About VC Game Studio', onClick: () => setDialog('about') },
         sep,
@@ -1167,6 +1174,29 @@ export const App = () => {
         )}
         {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
         {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
+        {dialog === 'guide' && (
+          <Guide
+            onClose={() => {
+              markGuideSeen();
+              setDialog(null);
+            }}
+            onSample={() => {
+              markGuideSeen();
+              setDialog(null);
+              newProject(true);
+            }}
+            onGo={(place) => {
+              markGuideSeen();
+              if (place === 'graph') setRoute({ view: 'graph' });
+              else if (place === 'bible') openBible();
+              else if (place === 'notes') openNotes();
+              else if (place === 'level') openLevels();
+              else if (place === 'puzzles') openPuzzles();
+              else if (place === 'play') openPlay();
+              else openEngine();
+            }}
+          />
+        )}
         {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
         {dialog === 'comments' && <CommentsPanel project={project} onCommit={commit} onGo={goToTarget} onClose={() => setDialog(null)} />}
         {dialog === 'previewSave' && <PreviewSaveDialog onClose={() => setDialog(null)} />}

@@ -41,6 +41,14 @@ node apps/studio/scripts/check-bundle.mjs   # after the web builds: the first lo
 | `src/renderer/components/BottomBar.tsx` | Add lanes, lane visibility, zoom. |
 | `src/renderer/tokens.css` | Colour and type tokens from HANDOFF. |
 
+## Getting started
+
+The first time the studio opens, **Getting started** walks through it in
+eight short pages (the story graph, the Bible, the Note Sorter, rules, levels
+and puzzles, the play-through, and sending to an engine), each with a button
+that opens the part it describes, and an offer to open the sample game. It
+shows once; Help › Getting started brings it back.
+
 ## Starting a game
 
 File › New opens the **Game Setup Wizard** (Writer spec §3), four short
