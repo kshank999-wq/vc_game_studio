@@ -1,5 +1,5 @@
 import { statNames } from '../../model/equipment';
-import { statesOf } from '../../model/details';
+import { statesOf, varTypeOf } from '../../model/details';
 import {
   EFFECTS,
   SUBJECTS,
@@ -29,10 +29,15 @@ export const choiceOptions = (project: Project, choiceId: string): string[] => {
   return [...labels];
 };
 
-const objectsOf = (project: Project, type: ObjectType) =>
+const objectsOf = (project: Project, type: ObjectType, kind?: Condition['kind'] | Effect['kind']) =>
   Object.values(project.objects)
     .filter((o) => o.type === type)
+    // Number conditions and effects are about number states; the rest about states with values or text.
+    .filter((o) => o.type !== 'state' || !kind || (kind === 'number' || kind === 'addNumber' || kind === 'setNumber') === (varTypeOf(o) === 'number'))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+/** A text state takes any value, typed in. */
+const isText = (project: Project, ref: string) => varTypeOf(project.objects[ref]) === 'text';
 
 const valueChoices = (project: Project, ref: string, kind: 'states' | 'options'): string[] =>
   kind === 'states' ? statesOf(project.objects[ref]) : choiceOptions(project, ref);
@@ -41,7 +46,7 @@ const ConditionRow = ({ project, condition, onChange, onRemove }: { project: Pro
   const subject = subjectOf(condition.kind);
   // A stat condition is about a stat's name (Damage, Light), not an element.
   const stats = condition.kind === 'stat' ? [...new Set([...statNames(project), ...(condition.ref ? [condition.ref] : [])])] : [];
-  const targets = condition.kind === 'stat' ? stats.map((n) => ({ id: n, name: n })) : objectsOf(project, subject.type);
+  const targets = condition.kind === 'stat' ? stats.map((n) => ({ id: n, name: n })) : objectsOf(project, subject.type, condition.kind);
   const missing = condition.kind !== 'stat' && condition.ref && !project.objects[condition.ref];
   return (
     <div className={`rule-row${missing ? ' broken' : ''}`}>
@@ -51,7 +56,7 @@ const ConditionRow = ({ project, condition, onChange, onRemove }: { project: Pro
         value={condition.kind}
         onChange={(e) => {
           const kind = e.currentTarget.value as Condition['kind'];
-          onChange(newCondition(kind, kind === 'stat' ? (statNames(project)[0] ?? 'Damage') : (objectsOf(project, subjectOf(kind).type)[0]?.id ?? '')));
+          onChange(newCondition(kind, kind === 'stat' ? (statNames(project)[0] ?? 'Damage') : (objectsOf(project, subjectOf(kind).type, kind)[0]?.id ?? '')));
         }}
       >
         {SUBJECTS.map((s) => (
@@ -76,7 +81,10 @@ const ConditionRow = ({ project, condition, onChange, onRemove }: { project: Pro
           </option>
         ))}
       </select>
-      {(subject.value === 'states' || subject.value === 'options') && 'value' in condition && (
+      {condition.kind === 'flag' && isText(project, condition.ref) && (
+        <input key={condition.value} className="inp" aria-label="Value" placeholder="Text" defaultValue={condition.value} onBlur={(e) => onChange({ ...condition, value: e.currentTarget.value })} />
+      )}
+      {(subject.value === 'states' || subject.value === 'options') && 'value' in condition && !(condition.kind === 'flag' && isText(project, condition.ref)) && (
         <select className="inp" aria-label="Value" value={String(condition.value)} onChange={(e) => onChange({ ...condition, value: e.currentTarget.value } as Condition)}>
           <option value="">{subject.value === 'options' ? 'any option' : 'Choose…'}</option>
           {valueChoices(project, condition.ref, subject.value).map((v) => (
@@ -86,12 +94,12 @@ const ConditionRow = ({ project, condition, onChange, onRemove }: { project: Pro
           ))}
         </select>
       )}
-      {subject.value === 'number' && (condition.kind === 'arc' || condition.kind === 'skill' || condition.kind === 'stat') && (
+      {subject.value === 'number' && (condition.kind === 'arc' || condition.kind === 'skill' || condition.kind === 'stat' || condition.kind === 'number') && (
         <input
           key={condition.value}
           className="inp num"
           type="number"
-          aria-label={condition.kind === 'arc' ? 'Arc value' : condition.kind === 'skill' ? 'Rank' : 'Stat value'}
+          aria-label={condition.kind === 'arc' ? 'Arc value' : condition.kind === 'skill' ? 'Rank' : condition.kind === 'number' ? 'Number' : 'Stat value'}
           defaultValue={condition.value}
           onBlur={(e) => onChange({ ...condition, value: Number(e.currentTarget.value) || 0 })}
         />
@@ -208,7 +216,7 @@ export const EffectsEditor = ({ project, effects, onChange, label }: {
       </div>
       {list.map((effect, i) => {
         const kind = effectKindOf(effect.kind);
-        const targets = objectsOf(project, kind.type);
+        const targets = objectsOf(project, kind.type, effect.kind);
         const change = (e: Effect) => set(list.map((x, j) => (j === i ? e : x)));
         return (
           <div key={i} className={`rule-row${effect.ref && !project.objects[effect.ref] ? ' broken' : ''}`}>
@@ -216,7 +224,10 @@ export const EffectsEditor = ({ project, effects, onChange, label }: {
               className="inp"
               aria-label="Effect"
               value={effect.kind}
-              onChange={(e) => change(newEffect(e.currentTarget.value as Effect['kind'], objectsOf(project, effectKindOf(e.currentTarget.value as Effect['kind']).type)[0]?.id ?? ''))}
+              onChange={(e) => {
+                const next = e.currentTarget.value as Effect['kind'];
+                change(newEffect(next, objectsOf(project, effectKindOf(next).type, next)[0]?.id ?? ''));
+              }}
             >
               {EFFECTS.map((k) => (
                 <option key={k.kind} value={k.kind}>
@@ -233,7 +244,10 @@ export const EffectsEditor = ({ project, effects, onChange, label }: {
                 </option>
               ))}
             </select>
-            {kind.value === 'states' && 'value' in effect && (
+            {effect.kind === 'setFlag' && isText(project, effect.ref) && (
+              <input key={effect.value} className="inp" aria-label="To" placeholder="Text" defaultValue={effect.value} onBlur={(e) => change({ ...effect, value: e.currentTarget.value })} />
+            )}
+            {kind.value === 'states' && 'value' in effect && !(effect.kind === 'setFlag' && isText(project, effect.ref)) && (
               <select className="inp" aria-label="To" value={effect.value} onChange={(e) => change({ ...effect, value: e.currentTarget.value } as Effect)}>
                 <option value="">Choose…</option>
                 {statesOf(project.objects[effect.ref]).map((v) => (
@@ -243,8 +257,8 @@ export const EffectsEditor = ({ project, effects, onChange, label }: {
                 ))}
               </select>
             )}
-            {kind.value === 'number' && effect.kind === 'arc' && (
-              <input key={effect.amount} className="inp num" type="number" aria-label="By" defaultValue={effect.amount} onBlur={(e) => change({ ...effect, amount: Number(e.currentTarget.value) || 0 })} />
+            {kind.value === 'number' && (effect.kind === 'arc' || effect.kind === 'addNumber' || effect.kind === 'setNumber') && (
+              <input key={effect.amount} className="inp num" type="number" aria-label={effect.kind === 'setNumber' ? 'To' : 'By'} defaultValue={effect.amount} onBlur={(e) => change({ ...effect, amount: Number(e.currentTarget.value) || 0 })} />
             )}
             <button className="icon-btn small" aria-label="Remove effect" onClick={() => set(list.filter((_, j) => j !== i))}>
               ×

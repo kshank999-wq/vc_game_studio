@@ -2,12 +2,12 @@ import { recipeOf } from '../crafting';
 import { equipmentOf } from '../equipment';
 import { costOf, ranksOf, requiresOf } from '../skills';
 import { describeTarget, whoLabel, type Who } from '../collab';
-import { interactionsOf, initialState, statesOf } from '../details';
+import { interactionsOf, initialState, statesOf, varTypeOf, type VarType } from '../details';
 import { laneSequence, spineSequence } from '../layout';
 import { CATEGORIES, dualWith, elementsIn, sceneLines } from '../scene';
 import { hasInline, plainInline } from '../inline';
 import { eventTitle, loseOf, sceneTimeline } from '../timeline';
-import { describeRule, isEmpty, isRule, type Condition, type Effect, type Rule } from '../rules';
+import { describeRule, isEmpty, isRule, setsState, type Condition, type Effect, type Rule } from '../rules';
 import { nodesOf, treeDrives, usesProgress } from '../puzzle/tree';
 import { cuesOf, hintsOf } from '../puzzle/staged';
 import { codeFor, screenOf } from '../puzzle/screens';
@@ -322,6 +322,10 @@ export interface IrFlag {
   values: string[];
   initial: string;
   setBy: string[];
+  /** What it holds: one of its values, a number, or text (always carried as text). */
+  type: VarType;
+  /** Where it lives, as the writer noted it; every runtime keeps it for the whole game. */
+  scope?: string;
 }
 
 export interface IrTrigger {
@@ -792,11 +796,11 @@ export const buildIR = (project: Project): HandoffIR => {
     }),
     flags: of('state').map((o) => {
       const values = statesOf(o);
-      const sets = (list: unknown) => ((list as Effect[] | undefined) ?? []).some((e) => e.kind === 'setFlag' && e.ref === o.id);
+      const sets = (list: unknown) => ((list as Effect[] | undefined) ?? []).some((e) => setsState(e, o.id));
       const setBy = all
         .filter((x) => interactionsOf(x).some((i) => i.setsFlag === o.id || sets(i.effects)) || (x.type === 'trigger' && x.data.setsFlag === o.id) || sets(x.data.effects))
         .map((x) => key(x.id)!);
-      return { id: o.id, ident: ids.get(o.id)!, name: o.name, values, initial: initialState(o) ?? values[0] ?? '', setBy };
+      return { id: o.id, ident: ids.get(o.id)!, name: o.name, values, initial: initialState(o) ?? values[0] ?? '', setBy, type: varTypeOf(o), ...(o.data.scope ? { scope: String(o.data.scope) } : {}) };
     }),
     triggers: of('trigger', 'gate').map((o) => ({
       id: o.id,

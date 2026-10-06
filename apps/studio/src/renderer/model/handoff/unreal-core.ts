@@ -13,6 +13,7 @@ export const VCGS_CORE_H = String.raw`// VCGS Runtime for Unreal: the story's lo
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -1098,6 +1099,28 @@ ${UNREAL_PUZZLES}
 
     namespace Rules
     {
+        /** A number state's value: states are kept as text, so "3" is 3, and anything else is 0. */
+        inline double ToNumber(const std::string& value)
+        {
+            if (value.empty()) return 0;
+            char* end = nullptr;
+            const double n = std::strtod(value.c_str(), &end);
+            return end && *end == '\0' && std::isfinite(n) ? n : 0;
+        }
+
+        /** A number as a state keeps it: "3", "2.5", the same text every engine writes. */
+        inline std::string FromNumber(double n)
+        {
+            const double r = std::round(n * 1e6) / 1e6;
+            if (r == std::floor(r) && std::fabs(r) < 1e15) return std::to_string(static_cast<long long>(r));
+            char buf[64];
+            std::snprintf(buf, sizeof buf, "%.6f", r);
+            std::string out = buf;
+            while (!out.empty() && out.back() == '0') out.pop_back();
+            if (!out.empty() && out.back() == '.') out.pop_back();
+            return out;
+        }
+
         inline bool Holds(const Value& c, const GameState& game)
         {
             const std::string ref = c["ref"].Str();
@@ -1144,6 +1167,12 @@ ${UNREAL_PUZZLES}
                 int at = static_cast<int>(c["value"].Num(1));
                 return op == "atLeast" ? rank >= at : rank < at;
             }
+            if (kind == "number")
+            {
+                const double n = ToNumber(game.GetFlag(ref));
+                const double v = c["value"].Num(0);
+                return op == "atLeast" ? n >= v : op == "below" ? n < v : std::fabs(n - v) < 1e-9;
+            }
             return false;
         }
 
@@ -1170,6 +1199,8 @@ ${UNREAL_PUZZLES}
                 const std::string kind = e["kind"].Str();
                 const std::string ref = e["ref"].Str();
                 if (kind == "setFlag") game.SetFlag(ref, e["value"].Str());
+                else if (kind == "addNumber") game.SetFlag(ref, FromNumber(ToNumber(game.GetFlag(ref)) + e["amount"].Num(1)));
+                else if (kind == "setNumber") game.SetFlag(ref, FromNumber(e["amount"].Num(0)));
                 else if (kind == "setObject") game.SetObjectState(ref, e["value"].Str());
                 else if (kind == "give") game.GiveItem(ref);
                 else if (kind == "take") game.TakeItem(ref);

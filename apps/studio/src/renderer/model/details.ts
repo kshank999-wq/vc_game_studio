@@ -2,7 +2,7 @@ import { laneSequence, spineSequence } from './layout';
 import { newId } from './project';
 import { inScene } from './scene';
 import type { Connection, ObjectType, Project, StoryObject } from './types';
-import { effectsSetting, type Effect, type Rule } from './rules';
+import { effectsSetting, setsState, type Effect, type Rule } from './rules';
 
 /**
  * What an element holds beyond its name (step 6: element detail). Every
@@ -216,15 +216,46 @@ export interface Interaction {
   screen?: boolean;
 }
 
+/**
+ * What a state holds (spec §7, runtime state): one of a list of values (the
+ * default: "no"/"yes", or "sealed"/"open"), a number (health, trust, coins)
+ * or free text (a name the player typed). All three travel to the engines as
+ * text, so a number is "3" there and saves stay one format everywhere.
+ */
+export type VarType = 'states' | 'number' | 'text';
+export const varTypeOf = (object: StoryObject | undefined): VarType => {
+  const t = object?.data.varType;
+  return t === 'number' || t === 'text' ? t : 'states';
+};
+
+/** Where a state lives (spec §7): informational for now; every runtime keeps it for the whole game. */
+export const VAR_SCOPES = ['Whole game', 'Level', 'Scene', 'Quest', 'Character'] as const;
+
 export const statesOf = (object: StoryObject | undefined): string[] => {
   if (!object) return [];
+  if (object.type === 'state' && varTypeOf(object) !== 'states') return [];
   const states = object.data.states as string[] | undefined;
   if (states) return states;
   return object.type === 'state' ? ['no', 'yes'] : [];
 };
 
-export const initialState = (object: StoryObject | undefined): string | undefined =>
-  (object?.data.initialState as string | undefined) ?? statesOf(object)[0];
+export const initialState = (object: StoryObject | undefined): string | undefined => {
+  if (object?.type === 'state' && varTypeOf(object) !== 'states') {
+    const v = object.data.initialValue;
+    return varTypeOf(object) === 'number' ? String(Number(v) || 0) : String(v ?? '');
+  }
+  return (object?.data.initialState as string | undefined) ?? statesOf(object)[0];
+};
+
+/** Make a state a list of values, a number or text; a number starts at 0 and text empty unless set. */
+export const setVarType = (project: Project, id: string, varType: VarType): Project =>
+  setData(project, id, { varType: varType === 'states' ? undefined : varType, initialValue: undefined });
+
+export const setInitialValue = (project: Project, id: string, value: string): Project => {
+  const object = project.objects[id];
+  if (varTypeOf(object) === 'number') return setData(project, id, { initialValue: Number(value) || 0 });
+  return setData(project, id, { initialValue: value });
+};
 
 export const interactionsOf = (object: StoryObject | undefined): Interaction[] => (object?.data.interactions as Interaction[] | undefined) ?? [];
 
@@ -283,9 +314,9 @@ export const describeInteraction = (project: Project, i: Interaction): string =>
 export const settersOf = (project: Project, stateId: string): StoryObject[] =>
   Object.values(project.objects).filter(
     (o) =>
-      interactionsOf(o).some((i) => i.setsFlag === stateId || (i.effects ?? []).some((e) => e.kind === 'setFlag' && e.ref === stateId)) ||
+      interactionsOf(o).some((i) => i.setsFlag === stateId || (i.effects ?? []).some((e) => setsState(e, stateId))) ||
       (o.type === 'trigger' && o.data.setsFlag === stateId) ||
-      ((o.data.effects as Effect[] | undefined) ?? []).some((e) => e.kind === 'setFlag' && e.ref === stateId),
+      ((o.data.effects as Effect[] | undefined) ?? []).some((e) => setsState(e, stateId)),
   );
 
 /** Everywhere this state is set: elements, and also options and timeline events. */

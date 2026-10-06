@@ -77,7 +77,7 @@ export const storySchema = () => ({
     },
     skills: { type: 'array', items: ref('skill'), description: 'Skills, abilities and upgrades (their kind, tree and use in `fields`), learned in ranks: see the README.' },
     cinematics: { type: 'array', items: ref('thing') },
-    flags: { type: 'array', items: obj({ id: str, ident, name: str, values: strings, initial: str, setBy: strings }) },
+    flags: { type: 'array', items: obj({ id: str, ident, name: str, values: strings, initial: str, setBy: strings, type: { enum: ['states', 'number', 'text'] }, scope: str }) },
     triggers: { type: 'array', items: ref('trigger') },
     choices: { type: 'array', items: ref('choice') },
     scenes: { type: 'array', items: ref('scene') },
@@ -258,7 +258,7 @@ export const storySchema = () => ({
       type: 'object',
       required: ['kind', 'ref', 'op'],
       properties: {
-        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill', 'equipped', 'stat'] },
+        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill', 'equipped', 'stat', 'number'] },
         ref: { description: 'The key of the flag, item, object, choice, character, puzzle or scene it is about (for a stat condition, the stat\'s name).', ...str },
         op: { enum: ['is', 'isNot', 'has', 'hasNot', 'chose', 'didNotChoose', 'atLeast', 'atMost', 'solved', 'unsolved', 'visited', 'notVisited', 'done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable', 'below', 'equipped', 'notEquipped'] },
         value: { type: ['string', 'number'] },
@@ -273,7 +273,7 @@ export const storySchema = () => ({
     effect: {
       type: 'object',
       required: ['kind', 'ref'],
-      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire', 'startQuest', 'revealLore', 'completeQuest', 'enableMechanic', 'learnSkill', 'equip', 'unequip'] }, ref: str, value: str, amount: num },
+      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire', 'startQuest', 'revealLore', 'completeQuest', 'enableMechanic', 'learnSkill', 'equip', 'unequip', 'addNumber', 'setNumber'] }, ref: str, value: str, amount: num },
     },
     effects: { type: 'array', items: ref('effect') },
     storyNode: obj({ key: str, kind: str, name: str }),
@@ -595,7 +595,7 @@ const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
   for (const t of ir.items) row({ id: t.id, label: t.name, symbol: 'inventory', group: 'World', generates: 'items[]' }, t);
   for (const t of ir.locations) row({ id: t.id, label: t.name, symbol: 'environment', group: 'World', generates: 'locations[]' }, t);
   for (const d of DESIGN_LISTS) for (const t of ir[d.list]) row({ id: t.id, label: `${t.code} ${t.name}`.trim(), symbol: d.type, group: d.group, generates: `${d.list}[]` }, t);
-  for (const f of ir.flags) row({ id: f.id, label: f.name, symbol: 'state', group: 'Logic', generates: `flags[] · ${f.values.join(' / ')}` }, f);
+  for (const f of ir.flags) row({ id: f.id, label: f.name, symbol: 'state', group: 'Logic', generates: `flags[] · ${f.type === 'states' ? f.values.join(' / ') : f.type}` }, f);
   for (const t of ir.triggers) row({ id: t.id, label: t.name, symbol: t.kind, group: 'Logic', generates: t.rule ? 'triggers[] · by rule' : 'triggers[]' }, t);
   for (const l of ir.levels) row({ id: l.guid, label: l.name, symbol: 'environment', group: 'World', generates: `levels[] · ${l.items.length} items (${l.export_name})` }, l);
   elements.push({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'notes[] · TASKS.md', files: [storyPath, `${root}/TASKS.md`], fingerprint: fingerprint(`${VERSION}:${JSON.stringify(ir.notes)}`) });

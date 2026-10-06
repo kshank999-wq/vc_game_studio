@@ -41,7 +41,7 @@ export const asksFor = (rule: Rule | undefined, puzzle: string, op: 'solved' | '
 
 /** What sets a story element: the effects and interactions that change it. */
 const setsIt = (o: StoryObject, ref: string): boolean =>
-  effectsOf(o).some((e) => 'ref' in e && e.ref === ref && (e.kind === 'setFlag' || e.kind === 'setObject' || e.kind === 'give' || e.kind === 'fire' || e.kind === 'solve')) ||
+  effectsOf(o).some((e) => 'ref' in e && e.ref === ref && (e.kind === 'setFlag' || e.kind === 'addNumber' || e.kind === 'setNumber' || e.kind === 'setObject' || e.kind === 'give' || e.kind === 'fire' || e.kind === 'solve')) ||
   interactionsOf(o).some((i) => i.setsFlag === ref || i.fires === ref);
 
 export interface PuzzleStep {

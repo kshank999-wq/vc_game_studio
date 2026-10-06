@@ -28,7 +28,12 @@ import {
   setNotes,
   setSceneUse,
   setStates,
+  setVarType,
+  setInitialValue,
   setterNames,
+  VAR_SCOPES,
+  varTypeOf,
+  type VarType,
   statesOf,
   toggleTag,
   updateInteraction,
@@ -166,6 +171,38 @@ export const StateList = ({ object, onCommit, project, label }: { object: StoryO
     </div>
   );
 };
+
+const VAR_TYPES: { value: VarType; label: string }[] = [
+  { value: 'states', label: 'One of a list of values' },
+  { value: 'number', label: 'A number (health, trust, coins)' },
+  { value: 'text', label: 'Text (a name the player typed)' },
+];
+
+/** What a state holds and where it lives (spec §7, runtime state). */
+const VariableKind = ({ object, project, onCommit }: { object: StoryObject; project: Project; onCommit: (p: Project) => void }) => (
+  <div className="setup-row">
+    <label className="dfld">
+      <span>Holds</span>
+      <select className="pref-select" aria-label="Holds" value={varTypeOf(object)} onChange={(e) => onCommit(setVarType(project, object.id, e.target.value as VarType))}>
+        {VAR_TYPES.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label}
+          </option>
+        ))}
+      </select>
+    </label>
+    <label className="dfld">
+      <span>Scope</span>
+      <select className="pref-select" aria-label="Scope" value={String(object.data.scope ?? 'Whole game')} onChange={(e) => onCommit(setField(project, object.id, 'scope', e.target.value === 'Whole game' ? '' : e.target.value))}>
+        {VAR_SCOPES.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
+    </label>
+  </div>
+);
 
 export const Interactions = ({ object, project, onCommit }: { object: StoryObject; project: Project; onCommit: (p: Project) => void }) => {
   const states = statesOf(object);
@@ -345,7 +382,24 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
 
       {object.type === 'state' && (
         <section className="detail-section">
-          <StateList object={object} project={project} onCommit={onCommit} label="Values" />
+          <VariableKind object={object} project={project} onCommit={onCommit} />
+          {varTypeOf(object) === 'states' ? (
+            <StateList object={object} project={project} onCommit={onCommit} label="Values" />
+          ) : (
+            <label className="dfld">
+              <span>Starts at</span>
+              <input
+                key={`${object.id}:${varTypeOf(object)}`}
+                className="inp"
+                type={varTypeOf(object) === 'number' ? 'number' : 'text'}
+                aria-label="Starts at"
+                placeholder={varTypeOf(object) === 'number' ? '0' : 'empty'}
+                defaultValue={initialState(object) ?? ''}
+                onBlur={(e) => e.currentTarget.value !== (initialState(object) ?? '') && onCommit(setInitialValue(project, id, e.currentTarget.value))}
+                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              />
+            </label>
+          )}
           <div className="dfld">
             <span>Set by</span>
             {setters.length ? (

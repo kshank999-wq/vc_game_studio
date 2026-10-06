@@ -23,7 +23,9 @@ export type Condition =
   /** An item of equipment, in its slot or not. */
   | { kind: 'equipped'; ref: string; op: 'equipped' | 'notEquipped' }
   /** What the equipped items add up to for a stat (ref is the stat's name, such as Damage): at least n, or below n. */
-  | { kind: 'stat'; ref: string; op: 'atLeast' | 'below'; value: number };
+  | { kind: 'stat'; ref: string; op: 'atLeast' | 'below'; value: number }
+  /** A number state (spec §7: health, trust, coins): at least n, below n, or exactly n. */
+  | { kind: 'number'; ref: string; op: 'atLeast' | 'below' | 'equals'; value: number };
 
 export interface Rule {
   match: 'all' | 'any';
@@ -46,7 +48,10 @@ export type Effect =
   | { kind: 'learnSkill'; ref: string }
   /** Put an item of equipment in its slot (if it is carried), or take it out. */
   | { kind: 'equip'; ref: string }
-  | { kind: 'unequip'; ref: string };
+  | { kind: 'unequip'; ref: string }
+  /** A number state, raised (or lowered, with a negative amount) or set outright. */
+  | { kind: 'addNumber'; ref: string; amount: number }
+  | { kind: 'setNumber'; ref: string; amount: number };
 
 export const isRule = (x: Condition | Rule): x is Rule => 'match' in x;
 
@@ -89,6 +94,7 @@ export const SUBJECTS: readonly Subject[] = [
   { kind: 'lore', label: 'Lore', type: 'lore', ops: [{ op: 'known', label: 'is known' }, { op: 'unknown', label: 'is not known' }], value: 'none' },
   { kind: 'mechanic', label: 'Mechanic', type: 'mechanic', ops: [{ op: 'available', label: 'is available' }, { op: 'unavailable', label: 'is not available' }], value: 'none' },
   { kind: 'skill', label: 'Skill', type: 'skill', ops: [{ op: 'atLeast', label: 'is at rank at least' }, { op: 'below', label: 'is below rank' }], value: 'number' },
+  { kind: 'number', label: 'Number', type: 'state', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'below', label: 'is below' }, { op: 'equals', label: 'is exactly' }], value: 'number' },
   { kind: 'stat', label: 'Stat', type: 'inventory', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'below', label: 'is below' }], value: 'number' },
   { kind: 'equipped', label: 'Equipment', type: 'inventory', ops: [{ op: 'equipped', label: 'is equipped' }, { op: 'notEquipped', label: 'is not equipped' }], value: 'none' },
   { kind: 'visited', label: 'Scene', type: 'scene', ops: [{ op: 'visited', label: 'was visited' }, { op: 'notVisited', label: 'was not visited' }], value: 'none' },
@@ -116,6 +122,8 @@ export const EFFECTS: readonly EffectKind[] = [
   { kind: 'learnSkill', label: 'Give a skill rank', type: 'skill', value: 'none' },
   { kind: 'equip', label: 'Equip item', type: 'inventory', value: 'none' },
   { kind: 'unequip', label: 'Put item away', type: 'inventory', value: 'none' },
+  { kind: 'addNumber', label: 'Add to number', type: 'state', value: 'number' },
+  { kind: 'setNumber', label: 'Set number', type: 'state', value: 'number' },
 ];
 
 export const subjectOf = (kind: Condition['kind']): Subject => SUBJECTS.find((s) => s.kind === kind)!;
@@ -149,6 +157,8 @@ export const newCondition = (kind: Condition['kind'], ref = '', value = ''): Con
       return { kind, ref, op: 'equipped' };
     case 'stat':
       return { kind, ref, op: 'atLeast', value: Number(value) || 1 };
+    case 'number':
+      return { kind, ref, op: 'atLeast', value: Number(value) || 0 };
   }
 };
 
@@ -158,7 +168,10 @@ export const newEffect = (kind: Effect['kind'], ref = '', value = ''): Effect =>
     case 'setObject':
       return { kind, ref, value };
     case 'arc':
+    case 'addNumber':
       return { kind, ref, amount: Number(value) || 1 };
+    case 'setNumber':
+      return { kind, ref, amount: Number(value) || 0 };
     default:
       return { kind, ref };
   }
@@ -194,6 +207,8 @@ export const describeCondition = (project: Project, c: Condition): string => {
       return `${who} is ${c.op === 'equipped' ? '' : 'not '}equipped`;
     case 'stat':
       return `${c.ref || '…'} is ${c.op === 'atLeast' ? 'at least' : 'below'} ${c.value}`;
+    case 'number':
+      return `${who} ${c.op === 'atLeast' ? '≥' : c.op === 'below' ? '<' : '='} ${c.value}`;
     case 'skill':
       return c.value <= 1 ? `${who} is ${c.op === 'atLeast' ? '' : 'not '}learned` : `${who} ${c.op === 'atLeast' ? 'at rank' : 'below rank'} ${c.value}${c.op === 'atLeast' ? '+' : ''}`;
   }
@@ -236,6 +251,10 @@ export const describeEffect = (project: Project, e: Effect): string => {
       return `equip ${who}`;
     case 'unequip':
       return `put away ${who}`;
+    case 'addNumber':
+      return `${who} ${e.amount >= 0 ? '+' : '−'}${Math.abs(e.amount)}`;
+    case 'setNumber':
+      return `${who} = ${e.amount}`;
   }
 };
 
@@ -308,8 +327,21 @@ export const holds = (c: Condition, s: PlayState): boolean => {
     }
     case 'skill':
       return c.op === 'atLeast' ? (s.skills?.[c.ref] ?? 0) >= c.value : (s.skills?.[c.ref] ?? 0) < c.value;
+    case 'number': {
+      const n = toNumber(s.flags[c.ref]);
+      return c.op === 'atLeast' ? n >= c.value : c.op === 'below' ? n < c.value : Math.abs(n - c.value) < 1e-9;
+    }
   }
 };
+
+/** A number state's value (kept as text, as every state is): 0 when it isn't one. */
+export const toNumber = (value: string | undefined): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** A number as a state keeps it: "3", "2.5", never "0.30000000000000004". */
+export const fromNumber = (n: number): string => String(Math.round(n * 1e6) / 1e6);
 
 /** Nothing left of an item: it comes out of its slot, and a new one starts unworn. */
 export const dropEquipped = (s: PlayState, item: string) => {
@@ -343,6 +375,8 @@ export const apply = (effects: Effect[] | undefined, s: PlayState): PlayState =>
     if (e.kind === 'completeQuest') next.quests[e.ref] = 'done';
     if (e.kind === 'enableMechanic') next.mechanics[e.ref] = true;
     if (e.kind === 'learnSkill') next.skills[e.ref] = (next.skills[e.ref] ?? 0) + 1;
+    if (e.kind === 'addNumber') next.flags[e.ref] = fromNumber(toNumber(next.flags[e.ref]) + e.amount);
+    if (e.kind === 'setNumber') next.flags[e.ref] = fromNumber(e.amount);
   }
   return next;
 };
@@ -380,7 +414,10 @@ export const brokenReferences = (project: Project): { owner: string; where: stri
     .map(({ owner, where }) => ({ owner, where }));
 
 /** Every effect that sets this state, wherever it is. */
+/** Whether an effect changes this state: sets its value, or adds to or sets its number. */
+export const setsState = (e: Effect, stateId: string): boolean => (e.kind === 'setFlag' || e.kind === 'addNumber' || e.kind === 'setNumber') && e.ref === stateId;
+
 export const effectsSetting = (project: Project, stateId: string): string[] =>
   everyRule(project)
-    .filter(({ effects }) => (effects ?? []).some((e) => e.kind === 'setFlag' && e.ref === stateId))
+    .filter(({ effects }) => (effects ?? []).some((e) => setsState(e, stateId)))
     .map(({ where }) => where);

@@ -988,9 +988,20 @@ namespace VCGS
                     var rank = game.SkillRank(reference);
                     var at = (int)D.Num(c, "value", 1);
                     return op == "atLeast" ? rank >= at : rank < at;
+                case "number":
+                    var held = ToNumber(game.GetFlag(reference));
+                    var want = D.Num(c, "value", 0);
+                    return op == "atLeast" ? held >= want : op == "below" ? held < want : System.Math.Abs(held - want) < 1e-9;
                 default: return false;
             }
         }
+
+        /// <summary>A number state's value: states are kept as text, so "3" is 3, and anything else is 0.</summary>
+        public static double ToNumber(string value) =>
+            double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n) && !double.IsNaN(n) && !double.IsInfinity(n) ? n : 0;
+
+        /// <summary>A number as a state keeps it: "3", "2.5", the same text every engine writes.</summary>
+        public static string FromNumber(double n) => (System.Math.Round(n * 1e6) / 1e6).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         public static void Apply(object effects, GameState game)
         {
@@ -1001,6 +1012,8 @@ namespace VCGS
                 switch (D.Str(e, "kind"))
                 {
                     case "setFlag": game.SetFlag(reference, D.Str(e, "value")); break;
+                    case "addNumber": game.SetFlag(reference, FromNumber(ToNumber(game.GetFlag(reference)) + D.Num(e, "amount", 1))); break;
+                    case "setNumber": game.SetFlag(reference, FromNumber(D.Num(e, "amount", 0))); break;
                     case "setObject": game.SetObjectState(reference, D.Str(e, "value")); break;
                     case "give": game.GiveItem(reference); break;
                     case "take": game.TakeItem(reference); break;
