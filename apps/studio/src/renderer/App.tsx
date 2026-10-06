@@ -26,6 +26,7 @@ import { createProject, ensurePlayerLane } from './model/project';
 import { createFromSetup, updateSetup } from './model/setup';
 import { SetupWizard } from './components/setup/lazy';
 import { Guide, guideSeen, markGuideSeen } from './components/help/lazy';
+import { KindsDialog } from './components/kinds/lazy';
 import { REPORTS, type ReportKey } from './model/reports';
 import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './edition';
 import { LicenseDialog } from './components/license/lazy';
@@ -94,7 +95,7 @@ export const App = () => {
   const routeRef = useRef<Route>({ view: 'graph' });
   const [toast, setToast] = useState<string | null>(null);
   const [ask, setAsk] = useState<ConfirmRequest | null>(null);
-  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | 'newGame' | 'setup' | 'guide' | null>(null);
+  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | 'newGame' | 'setup' | 'guide' | 'kinds' | null>(null);
   // Re-render when the license changes: an activation turns saving on, a lapse turns it off.
   useAccess();
   const [recent, setRecent] = useState<Recent[]>(() => recentFiles());
@@ -771,6 +772,7 @@ export const App = () => {
       items: [
         { label: 'Rename project…', onClick: () => (setRoute({ view: 'graph' }), setRenameRequest((n) => n + 1)) },
         { label: 'Game setup…', onClick: () => setDialog('setup') },
+        { label: 'Your own kinds of element…', onClick: () => setDialog('kinds') },
         sep,
         { label: 'Add a subplot lane', disabled: !onGraph, onClick: () => onAddLane('subplot') },
         { label: 'Add a character arc lane', disabled: !onGraph, onClick: () => onAddLane('character') },
@@ -1174,6 +1176,7 @@ export const App = () => {
         )}
         {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
         {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
+        {dialog === 'kinds' && <KindsDialog project={project} onCommit={commit} onClose={() => setDialog(null)} />}
         {dialog === 'guide' && (
           <Guide
             onClose={() => {

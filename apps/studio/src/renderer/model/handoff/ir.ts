@@ -15,6 +15,7 @@ import { cinematicTiming, shotsOf } from '../shots';
 import type { ObjectType, Project, StoryObject } from '../types';
 import { buildLevels, type IrLevel } from './levels';
 import { timeLimitOf, timeoutLabelOf } from '../timed';
+import { customTypeOf } from '../custom-types';
 import { paramOf } from '../level/geometry';
 import { placeOf, placeToOf } from '../level/places';
 
@@ -506,11 +507,13 @@ export const DESIGN_LISTS = [
   { list: 'skills', type: 'skill', label: 'Skill', folder: 'Skills', group: 'Logic' },
 ] as const satisfies readonly { list: keyof HandoffIR; type: ObjectType; label: string; folder: string; group: string }[];
 
-const fieldsOf = (o: StoryObject): Record<string, string> => ({
+const fieldsOf = (o: StoryObject, project?: Project): Record<string, string> => ({
   // The writer's own fields first, so the element's own win on a clash.
   ...Object.fromEntries(customOf(o).filter((f) => f.key.trim()).map((f) => [f.key.trim(), f.value])),
+  // Its kind, by name (custom node types).
+  ...(project && customTypeOf(project, o) ? { customType: customTypeOf(project, o)!.name } : {}),
   ...Object.fromEntries(
-    (Object.entries(o.data).filter(([k, v]) => typeof v === 'string' && !['code', 'color', 'initialState', 'setsFlag', 'fromNote'].includes(k)) as [string, string][])
+    (Object.entries(o.data).filter(([k, v]) => typeof v === 'string' && !['code', 'color', 'initialState', 'setsFlag', 'fromNote', 'customType'].includes(k)) as [string, string][])
       // A codex entry reads as written, without stray blank lines around it.
       .map(([k, v]) => [k, k === 'codex' ? v.trim() : v]),
   ),
@@ -525,7 +528,7 @@ export const buildIR = (project: Project): HandoffIR => {
   const key = (id: string | undefined | null): string | null => (id && ids.get(id)?.key) || null;
   const all = Object.values(project.objects).sort((a, b) => (a.data.code ?? a.name).localeCompare(b.data.code ?? b.name, undefined, { numeric: true }));
   const of = (...types: ObjectType[]) => all.filter((o) => types.includes(o.type));
-  const thing = (o: StoryObject): IrThing => ({ id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, type: o.type, notes: o.notes, fields: fieldsOf(o) });
+  const thing = (o: StoryObject): IrThing => ({ id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, type: o.type, notes: o.notes, fields: fieldsOf(o, project) });
   const node = (id: string): IrStoryNode => ({ key: key(id)!, kind: project.objects[id]!.type, name: project.objects[id]!.name });
   const lineId = (sceneCode: string, order: number) => `${toKey(sceneCode || 'scene')}_line_${String(order).padStart(2, '0')}`;
   const rule = (r: Rule | undefined): IrRule | undefined => {
@@ -723,7 +726,7 @@ export const buildIR = (project: Project): HandoffIR => {
         ...(i.screen && screenOf(o) ? { screen: true as const } : {}),
       })),
       notes: o.notes,
-      fields: fieldsOf(o),
+      fields: fieldsOf(o, project),
       ...(o.type === 'puzzle' && nodesOf(o).length ? { design: design(o) } : {}),
       ...(o.type === 'object' && screenOf(o) ? { screen: screen(o) } : {}),
       ...(o.type === 'puzzle' && rule(o.data.rule as Rule | undefined) ? { solvedWhen: rule(o.data.rule as Rule | undefined) } : {}),
@@ -805,7 +808,7 @@ export const buildIR = (project: Project): HandoffIR => {
         name: o.name,
         type: o.type,
         notes: o.notes,
-        fields: { ...fieldsOf(o), ...(timing ? { seconds: String(timing.seconds), shots: String(timing.shots) } : {}) },
+        fields: { ...fieldsOf(o, project), ...(timing ? { seconds: String(timing.seconds), shots: String(timing.shots) } : {}) },
         ...(shots.length ? { shots } : {}),
       };
     }),

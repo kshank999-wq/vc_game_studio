@@ -498,6 +498,16 @@ its built-in ones, which win when a name is the same, so they reach every
 engine the same way: Godot's `details` dictionary, Unity's `details` list and
 Unreal's `Details` column.
 
+## Your own kinds of element
+
+Project › Your own kinds of element defines kinds of element of the
+writer's own (custom node types): a name, the built-in type it is a kind of
+(a Vehicle is an Interactive Object, a Spell a Skill), and the fields every one
+has. An element given a kind gains those fields, empty to fill in, and the
+Bible groups it under its kind. In the export its `fields` carry
+`customType` (the kind's name) beside its own fields, so every engine
+receives it the same way.
+
 ## Encounter results as conditions
 
 A trigger, gate or option can wait on a fight: the `encounter` condition

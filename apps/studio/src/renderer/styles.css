@@ -10462,3 +10462,21 @@ button.bible-dual-col:hover {
 .play-stamina span {
   background: linear-gradient(90deg, #3e9bd6, #7fd1b9);
 }
+
+/* Your own kinds of element. */
+.kinds-list {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.kinds-row {
+  display: grid;
+  grid-template-columns: 140px 150px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.kinds-new {
+  margin-top: 8px;
+}

@@ -44,6 +44,7 @@ import {
   type FieldSpec,
 } from '../../model/details';
 import { renameObject } from '../../model/project';
+import { customTypeOf, customTypesFor, setCustomType } from '../../model/custom-types';
 import { inScene } from '../../model/scene';
 import { TYPE_LABEL } from '../../model/semantics';
 import type { ObjectType, Project, StoryObject } from '../../model/types';
@@ -461,6 +462,22 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
               <Text key={f.key} spec={f} value={String(object.data[f.key] ?? '')} onSave={(v) => onCommit(setField(project, id, f.key, v))} />
             ))}
           </div>
+        </section>
+      )}
+
+      {customTypesFor(project, object.type).length > 0 && (
+        <section className="detail-section">
+          <label className="dfld">
+            <span>Kind</span>
+            <select className="pref-select" aria-label="Kind" value={customTypeOf(project, object)?.id ?? ''} onChange={(e) => onCommit(setCustomType(project, id, e.target.value || null))}>
+              <option value="">Just a {TYPE_LABEL[object.type].toLowerCase()}</option>
+              {customTypesFor(project, object.type).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </section>
       )}
 

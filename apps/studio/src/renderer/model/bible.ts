@@ -1,4 +1,5 @@
 import { customOf } from './details';
+import { customTypeOf } from './custom-types';
 import { laneSequence, spineSequence } from './layout';
 import { TYPE_LABEL } from './semantics';
 import type { DialogueLine, ObjectType, Project, StoryObject } from './types';
@@ -80,7 +81,7 @@ const matches = (project: Project, entry: Entry, query: string): boolean => {
   }
   const o = entry.object;
   const fields = [...Object.values(o.data).filter((v) => typeof v === 'string'), ...customOf(o).map((f) => `${f.key} ${f.value}`)].join(' ');
-  return `${o.name} ${code(o)} ${o.notes} ${fields} ${TYPE_LABEL[o.type]}`.toLowerCase().includes(q);
+  return `${o.name} ${code(o)} ${o.notes} ${fields} ${TYPE_LABEL[o.type]} ${customTypeOf(project, o)?.name ?? ''}`.toLowerCase().includes(q);
 };
 
 /** Lines to record, per the VO status on each dialogue line. */
@@ -103,6 +104,14 @@ export const viewGroups = (project: Project, key: ViewKey, query = ''): Group[] 
   const view = VIEWS.find((v) => v.key === key)!;
   const objects = Object.values(project.objects);
   const wrap = (list: StoryObject[]): Entry[] => list.sort(byName).map((object) => ({ kind: 'object' as const, id: object.id, object }));
+  /** A type's group, with each of your own kinds of it as a group of its own after it. */
+  const byKind = (label: string, list: StoryObject[]): Group[] => {
+    const kinds = [...new Map(list.map((o) => customTypeOf(project, o)).filter((k) => !!k).map((k) => [k!.id, k!])).values()];
+    return [
+      { label, entries: wrap(list.filter((o) => !customTypeOf(project, o))) },
+      ...kinds.map((k) => ({ label: `${label} · ${k.name}`, entries: wrap(list.filter((o) => customTypeOf(project, o)?.id === k.id)) })),
+    ];
+  };
   const keep = (groups: Group[]) =>
     groups
       .map((g) => ({ ...g, entries: g.entries.filter((e) => matches(project, e, query)) }))
@@ -111,7 +120,7 @@ export const viewGroups = (project: Project, key: ViewKey, query = ''): Group[] 
   switch (key) {
     case 'all': {
       const order: ObjectType[] = ['begin', 'plotPoint', 'end', 'scene', 'cinematic', 'choice', 'character', 'environment', 'object', 'inventory', 'puzzle', 'trigger', 'gate', 'state', 'arcEvent', 'dialogue', 'lore', 'quest', 'mechanic', 'encounter', 'skill', 'faction', 'theme'];
-      return keep(order.map((type) => ({ label: TYPE_LABEL[type], entries: wrap(objects.filter((o) => o.type === type)) })));
+      return keep(order.flatMap((type) => byKind(TYPE_LABEL[type], objects.filter((o) => o.type === type))));
     }
     case 'characters': {
       const role = (o: StoryObject) => (o.data.role as string | undefined) ?? 'Unassigned';
@@ -182,7 +191,7 @@ export const viewGroups = (project: Project, key: ViewKey, query = ''): Group[] 
         return keep(labels.map((label) => ({ label, entries: wrap(list.filter((o) => placeLabel(project, o.id) === label)) })));
       }
       const types = [...new Set(list.map((o) => o.type))];
-      return keep(types.map((type) => ({ label: TYPE_LABEL[type], entries: wrap(list.filter((o) => o.type === type)) })));
+      return keep(types.flatMap((type) => byKind(TYPE_LABEL[type], list.filter((o) => o.type === type))));
     }
   }
 };

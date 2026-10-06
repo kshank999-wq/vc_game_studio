@@ -263,6 +263,8 @@ export interface Project {
   comments?: import('./collab').Comment[];
   /** The Game Setup Wizard's answers (Writer spec §3). Absent for a project started blank. */
   setup?: import('./setup').GameSetup;
+  /** Your own kinds of element and their fields (spec §6, custom node types). */
+  customTypes?: import('./custom-types').CustomType[];
   /** Each element's, connection's, level's and level item's edit history, by target key (spec §16). */
   revisions?: Record<string, import('./collab').Revision[]>;
 }
