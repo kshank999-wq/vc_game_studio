@@ -82,6 +82,9 @@ const light: ParamDef[] = [
 const patrol = (): ParamDef[] => [
   { key: 'patrol', label: 'Patrol', group: 'gameplay', type: 'text', default: '' },
   { key: 'speed', label: 'Speed (m/s)', group: 'gameplay', type: 'number', default: 1.4, min: 0.1, max: 12, step: 0.1 },
+  // Line of sight: how far it sees and how wide; its "Sees the player" rules run when the player comes into view.
+  { key: 'sight', label: 'Sees (m, 0 for not at all)', group: 'gameplay', type: 'number', unit: 'length', default: 0, min: 0, max: 200, step: 0.5 },
+  { key: 'fov', label: 'Field of view (°)', group: 'gameplay', type: 'number', default: 90, min: 1, max: 360, step: 5 },
 ];
 /** A companion keeping up with the player (spec §11). */
 const follow = (): ParamDef[] => [

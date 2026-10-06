@@ -205,7 +205,7 @@ export type NamingClass =
   | 'logic';
 
 /** When a level item's rule runs (spec §8.2). */
-export type LevelEvent = 'enter' | 'exit' | 'interact' | 'pickup' | 'use' | 'destroy' | 'timer' | 'stateChange' | 'custom';
+export type LevelEvent = 'enter' | 'exit' | 'interact' | 'pickup' | 'use' | 'destroy' | 'timer' | 'stateChange' | 'custom' | 'spotted' | 'lost';
 
 /** What a rule does to the level itself; story state changes are the shared effects. */
 export type LevelAction =

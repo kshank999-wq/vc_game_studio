@@ -1,4 +1,5 @@
-import { startPoses, stepActors, type ActorPose } from './actors';
+import { canSee, sightOf, startPoses, stepActors, type ActorPose, type Blocker } from './actors';
+import { collidersFrom } from './controller';
 import { craftCheck, recipeOf, recipesOf } from '../crafting';
 import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
 import { cuesOf } from '../puzzle/staged';
@@ -8,7 +9,7 @@ import { learnCheck, skillsOf } from '../skills';
 import { describeEffect, describeRule, evaluate, isEmpty } from '../rules';
 import { cinematicTiming } from '../shots';
 import type { Project } from '../types';
-import { assetOf, bool, contains, frameOf, num, paramOf, type Point } from './geometry';
+import { assetOf, bool, contains, frameOf, meshesFor, num, paramOf, type Point } from './geometry';
 import { guid, levelsOf } from './level';
 import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelSet, PlayNote, PlayPreset } from './types';
 
@@ -68,6 +69,8 @@ export interface LevelPlayState {
   done: Record<string, boolean>;
   /** Volumes the player is inside. */
   inside: string[];
+  /** Actors that can see the player now (line of sight). */
+  seen?: Record<string, boolean>;
   /** Rule id → when it last ran (timers). */
   timers: Record<string, number>;
   objective?: string;
@@ -343,6 +346,32 @@ const startScene = (project: Project, state: LevelPlayState, sceneId: string, de
   return { ...s, scene: { id: sceneId, title: `${scene.data.code ? `${String(scene.data.code)} ` : ''}${scene.name}`, text: String(scene.data.summary ?? '') } };
 };
 
+/** What blocks sight in a level: its solid parts, worked out once per level as edited. */
+const blockersCache = new WeakMap<LevelSet, Map<string, Blocker[]>>();
+const blockersOf = (set: LevelSet, levelId: string, global?: readonly AssetDefinition[]): Blocker[] => {
+  const byLevel = blockersCache.get(set) ?? blockersCache.set(set, new Map()).get(set)!;
+  const known = byLevel.get(levelId);
+  if (known) return known;
+  const list = collidersFrom(meshesFor(set, levelId, { global })).filter((c) => c.part !== 'floor' && c.part !== 'ceiling');
+  byLevel.set(levelId, list);
+  return list;
+};
+
+const watch = (project: Project, state: LevelPlayState, at: Where, global?: readonly AssetDefinition[]): LevelPlayState => {
+  const set = levelsOf(project);
+  const watchers = set.items.filter((i) => i.levelId === state.levelId && state.actors?.[i.id] && sightOf(set, i, global).range > 0 && present(project, state, i));
+  if (!watchers.length && !Object.keys(state.seen ?? {}).length) return state;
+  // An open door doesn't block the view.
+  const blockers = blockersOf(set, state.levelId, global).filter((b) => !(b.part === 'door' && state.open[b.itemId]));
+  let s = state;
+  const seen: Record<string, boolean> = {};
+  for (const item of watchers) if (canSee(s.actors[item.id]!, at, sightOf(set, item, global), blockers)) seen[item.id] = true;
+  const before = s.seen ?? {};
+  for (const id of Object.keys(seen).filter((id) => !before[id])) s = runRules(project, log(s, { kind: 'event', itemId: id, text: `${name(project, id)} sees the player` }), id, 'spotted', undefined, 0, global);
+  for (const id of Object.keys(before).filter((id) => !seen[id])) s = runRules(project, log(s, { kind: 'event', itemId: id, text: `${name(project, id)} loses sight of the player` }), id, 'lost', undefined, 0, global);
+  return { ...s, seen };
+};
+
 export const playCinematic = (project: Project, state: LevelPlayState, cinematicId: string, global?: readonly AssetDefinition[]): LevelPlayState => {
   const c = project.objects[cinematicId];
   if (!c) return state;
@@ -550,6 +579,9 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   // Patrols walk on, companions keep up.
   const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => present(project, s, i), global);
   if (actors !== s.actors) s = { ...s, actors };
+
+  // Who sees the player: an actor's "sees the player" rules run as the player comes into view, "loses sight" as they go.
+  s = watch(project, s, at, global);
 
   const items = set.items.filter((i) => i.levelId === s.levelId && present(project, s, i));
   const volumes = items.filter((i) => assetOf(set, i, global).kind === 'volume');

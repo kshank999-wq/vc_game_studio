@@ -73,6 +73,46 @@ namespace vcgs
         /** Actors that move (patrols, companions) by GUID: where each is now. AVcgsLevelDirector moves their actors to match. */
         std::map<std::string, ActorPose> Poses;
         /** Where the player is, in level space: companions follow it. The director sets it each frame. */
+        /** Line of sight: true when something solid lies between two level-space points (x, y, z each); the director sets it (a line trace). Unset, nothing blocks. */
+        std::function<bool(double, double, double, double, double, double)> Blocked;
+        /** Actors that see the player now; OnActorSpotted / OnActorLostSight say when that changes. */
+        std::set<std::string> Seen;
+        std::function<void(const std::string&)> OnActorSpotted, OnActorLostSight;
+
+        /**
+         * Line of sight (the same rules as the studio's Play Mode): an actor whose sight is over 0
+         * sees the player within that range and its field of view (fov, degrees, about the way it
+         * faces), with nothing solid in the way. Its "spotted" rules run as the player comes into
+         * view, its "lost" rules as they go.
+         */
+        void Watch()
+        {
+            if (!HasPlayer) return;
+            for (const auto& guid : Order)
+            {
+                const double reach = Param(guid, "sight").Num(0);
+                auto it = Poses.find(guid);
+                const bool sees = reach > 0 && IsPresent(guid) && it != Poses.end() && Sees(it->second, reach, Param(guid, "fov").Num(90));
+                if (sees && Seen.insert(guid).second) { if (OnActorSpotted) OnActorSpotted(guid); RunRules(guid, "spotted"); }
+                else if (!sees && Seen.erase(guid)) { if (OnActorLostSight) OnActorLostSight(guid); RunRules(guid, "lost"); }
+            }
+        }
+
+        bool Sees(const ActorPose& p, double reach, double fov) const
+        {
+            const double dx = PlayerX - p.X, dz = PlayerZ - p.Z;
+            const double d = std::sqrt(dx * dx + dz * dz);
+            if (d > reach || std::fabs(PlayerY - p.Y) > 3) return false;
+            if (d > 1e-6 && fov < 360 && p.Faces)
+            {
+                const double f = std::sqrt(p.FacingX * p.FacingX + p.FacingZ * p.FacingZ);
+                if (f > 1e-9 && (p.FacingX * dx + p.FacingZ * dz) / (f * d) < std::cos(fov / 2 * 3.14159265358979323846 / 180) - 1e-9) return false;
+            }
+            if (!Blocked) return true;
+            const double eye = (p.Y + PlayerY) / 2 + 1.6;
+            return !Blocked(p.X, eye, p.Z, PlayerX, eye, PlayerZ);
+        }
+
         bool HasPlayer = false;
         double PlayerX = 0, PlayerY = 0, PlayerZ = 0;
         /** How far behind a companion may fall before it catches up at once. */
@@ -112,12 +152,22 @@ namespace vcgs
             }
             for (const auto& guid : Order)
             {
-                if (!Item(guid)["motion"].IsObject()) continue;
+                // Actors that move, and those that watch (a pose says where they look).
+                const bool watches = Param(guid, "sight").Num(0) > 0;
+                if (!Item(guid)["motion"].IsObject() && !watches) continue;
                 const Value& at = Item(guid)["position"];
                 ActorPose pose;
                 pose.X = at[0].Num(0);
                 pose.Y = at[1].Num(0);
                 pose.Z = at[2].Num(0);
+                if (watches)
+                {
+                    // Turned counter-clockwise from north (−z) by its turn.
+                    const double turn = Item(guid)["turn"].Num(0) * 3.14159265358979323846 / 180;
+                    pose.FacingX = -std::sin(turn);
+                    pose.FacingZ = -std::cos(turn);
+                    pose.Faces = true;
+                }
                 Poses[guid] = pose;
             }
             subscription = Game.Subscribe([this]() { Changed(); });
@@ -367,6 +417,7 @@ namespace vcgs
                 if (motion["kind"].Str() == "patrol") StepPatrol(pair.second, motion, dt, Time);
                 else if (HasPlayer) StepFollow(pair.second, motion, dt, PlayerX, PlayerY, PlayerZ);
             }
+            Watch();
             for (const auto& guid : std::vector<std::string>(Inside.begin(), Inside.end()))
             {
                 std::string role = Role(guid);
@@ -976,6 +1027,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLightEvent OnLightChanged;
     /** A travel link was taken (spec V2 §13): where it ends (world, cm), how, and the map it leads to ("" for this one). Move the player there. */
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsTravelEvent OnTravelRequested;
+    /** An actor with a sight saw the player, or lost sight of them (its GUID); its "spotted" / "lost" rules run too. */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelKeyEvent OnActorSpotted;
+    UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelKeyEvent OnActorLostSight;
 
     /** Take a travel link by key (backwards with bReverse); returns why not, or "" when the player goes. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") FString Travel(const FString& LinkKey, bool bReverse = false);
@@ -1080,6 +1134,19 @@ void AVcgsLevelDirector::BeginPlay()
     Logic->OnLightChanged = [this](bool bOn) { OnLightChanged.Broadcast(bOn); };
     Logic->OnTravel = [this](const std::string& Key, const std::string& ToMap, const std::string& How, double X, double Y, double Z) {
         OnTravelRequested.Broadcast(ToF(Key), ToF(ToMap), ToF(How), ToWorld(X, Y, Z));
+    };
+    Logic->OnActorSpotted = [this](const std::string& Guid) { OnActorSpotted.Broadcast(ToF(Guid)); };
+    Logic->OnActorLostSight = [this](const std::string& Guid) { OnActorLostSight.Broadcast(ToF(Guid)); };
+    // Sight is blocked by anything solid but the player and the actors themselves (a visibility trace).
+    Logic->Blocked = [this](double AX, double AY, double AZ, double BX, double BY, double BZ) {
+        UWorld* World = GetWorld();
+        if (!World) return false;
+        FCollisionQueryParams Params(FName(TEXT("VcgsSight")), false);
+        if (const APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0)) Params.AddIgnoredActor(Pawn);
+        for (const auto& Pose : Logic->Poses)
+            if (AVcgsLevelItem* const* Item = ItemsByGuid.Find(ToF(Pose.first))) Params.AddIgnoredActor(*Item);
+        FHitResult Hit;
+        return World->LineTraceSingleByChannel(Hit, ToWorld(AX, AY, AZ), ToWorld(BX, BY, BZ), ECC_Visibility, Params);
     };
     // A streamed map starts unloaded: its parent's director brings it in.
     bMapLoaded = Boundary != TEXT("streamed");

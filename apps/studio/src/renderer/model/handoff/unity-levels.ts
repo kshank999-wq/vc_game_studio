@@ -144,9 +144,18 @@ namespace VCGS
             game.Changed += OnChanged;
             foreach (var guid in Order)
             {
-                if (D.Map(Item(guid), "motion").Count == 0) continue;
+                // Actors that move, and those that watch (a pose says where they look).
+                var watches = ParamNum(guid, "sight", 0) > 0;
+                if (D.Map(Item(guid), "motion").Count == 0 && !watches) continue;
                 var at = D.List(Item(guid), "position");
-                Poses[guid] = new ActorPose { X = D.Num(at.Count > 2 ? at[0] : null, 0), Y = D.Num(at.Count > 2 ? at[1] : null, 0), Z = D.Num(at.Count > 2 ? at[2] : null, 0) };
+                var pose = new ActorPose { X = D.Num(at.Count > 2 ? at[0] : null, 0), Y = D.Num(at.Count > 2 ? at[1] : null, 0), Z = D.Num(at.Count > 2 ? at[2] : null, 0) };
+                if (watches)
+                {
+                    // Turned counter-clockwise from north (−z) by its turn.
+                    var turn = D.Num(Item(guid), "turn", 0) * Math.PI / 180;
+                    pose.FacingX = -Math.Sin(turn); pose.FacingZ = -Math.Cos(turn); pose.Faces = true;
+                }
+                Poses[guid] = pose;
             }
             foreach (var guid in Order)
                 if (Role(guid) == "spawn" && D.Str(Item(guid), "kind") == "marker" && ParamNum(guid, "delay", 0) <= 0 && IsPresent(guid)) Spawn(guid);
@@ -363,6 +372,7 @@ namespace VCGS
         {
             Time += dt;
             MoveActors(dt);
+            Watch();
             BurnLight(dt);
             foreach (var guid in new List<string>(Inside))
             {
@@ -535,6 +545,46 @@ namespace VCGS
             }
         }
 
+        /// <summary>Line of sight: true when something solid lies between two level-space points. VcgsLevel sets it (a raycast); unset, nothing blocks.</summary>
+        public Func<double[], double[], bool> Blocked;
+        /// <summary>Actors that see the player now.</summary>
+        public readonly HashSet<string> Seen = new HashSet<string>();
+        public event Action<string> ActorSpotted;
+        public event Action<string> ActorLostSight;
+
+        /// <summary>
+        /// Line of sight (the same rules as the studio's Play Mode): an actor whose sight is over 0
+        /// sees the Player within that range and its field of view (fov, degrees, about the way it
+        /// faces), with nothing solid in the way. Its "spotted" rules run as the Player comes into
+        /// view, its "lost" rules as they go.
+        /// </summary>
+        void Watch()
+        {
+            if (Player == null || Player.Length < 3) return;
+            foreach (var guid in Order)
+            {
+                var reach = ParamNum(guid, "sight", 0);
+                var sees = reach > 0 && IsPresent(guid) && Poses.TryGetValue(guid, out var pose) && Sees(pose, reach, ParamNum(guid, "fov", 90));
+                if (sees && Seen.Add(guid)) { ActorSpotted?.Invoke(guid); RunRules(guid, "spotted"); }
+                else if (!sees && Seen.Remove(guid)) { ActorLostSight?.Invoke(guid); RunRules(guid, "lost"); }
+            }
+        }
+
+        bool Sees(ActorPose p, double reach, double fov)
+        {
+            double dx = Player[0] - p.X, dz = Player[2] - p.Z;
+            var d = Math.Sqrt(dx * dx + dz * dz);
+            if (d > reach || Math.Abs(Player[1] - p.Y) > 3) return false;
+            if (d > 1e-6 && fov < 360 && p.Faces)
+            {
+                var f = Math.Sqrt(p.FacingX * p.FacingX + p.FacingZ * p.FacingZ);
+                if (f > 1e-9 && (p.FacingX * dx + p.FacingZ * dz) / (f * d) < Math.Cos(fov / 2 * Math.PI / 180) - 1e-9) return false;
+            }
+            if (Blocked == null) return true;
+            var eye = (p.Y + Player[1]) / 2 + 1.6;
+            return !Blocked(new[] { p.X, eye, p.Z }, new[] { Player[0], eye, Player[2] });
+        }
+
         /// <summary>Walk a pose toward (x, y, z) at most by metres; true when it gets there.</summary>
         static bool Walk(ActorPose p, double x, double y, double z, double by)
         {
@@ -700,6 +750,20 @@ namespace VCGS
                 item.Level = this;
             }
             Logic.Refreshed += Refresh;
+            // Sight is blocked by anything solid but the player and the actors themselves.
+            Logic.Blocked = (a, b) =>
+            {
+                var from = transform.TransformPoint(new Vector3((float)a[0], (float)a[1], (float)-a[2]));
+                var to = transform.TransformPoint(new Vector3((float)b[0], (float)b[1], (float)-b[2]));
+                foreach (var hit in Physics.RaycastAll(from, to - from, Vector3.Distance(from, to)))
+                {
+                    if (player != null && hit.transform.IsChildOf(player)) continue;
+                    var item = hit.transform.GetComponentInParent<VcgsLevelItem>();
+                    if (item != null && Logic.Poses.ContainsKey(item.guid)) continue;
+                    return true;
+                }
+                return false;
+            };
             Refresh();
         }
 

@@ -44,6 +44,7 @@ namespace UnityEngine
         public float magnitude => (float)Math.Sqrt(sqrMagnitude);
         public Vector3 normalized => magnitude > 1e-6f ? this * (1 / magnitude) : zero;
         public static float Dot(Vector3 a, Vector3 b) => a.x * b.x + a.y * b.y + a.z * b.z;
+        public static float Distance(Vector3 a, Vector3 b) => (a - b).magnitude;
         public static Vector3 Cross(Vector3 a, Vector3 b) => new Vector3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
         public static Vector3 operator +(Vector3 a, Vector3 b) => new Vector3(a.x + b.x, a.y + b.y, a.z + b.z);
         public static Vector3 operator -(Vector3 a, Vector3 b) => new Vector3(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -165,6 +166,29 @@ namespace UnityEngine
         public Transform Find(string name) => children.Find(c => c.gameObject.name == name);
         public Matrix4x4 localToWorldMatrix => default;
         public Vector3 InverseTransformPoint(Vector3 p) => p - position;
+        public Vector3 TransformPoint(Vector3 p) => p + position;
+        public bool IsChildOf(Transform t)
+        {
+            for (var at = this; at != null; at = at.parent) if (at == t) return true;
+            return false;
+        }
+        public T GetComponentInParent<T>() where T : class
+        {
+            for (var at = this; at != null; at = at.parent) { var c = at.gameObject.GetComponent<T>(); if (c != null) return c; }
+            return null;
+        }
+    }
+
+    public struct RaycastHit
+    {
+        public Transform transform;
+        public float distance;
+    }
+
+    /// <summary>No physics in the check: nothing is ever hit.</summary>
+    public static class Physics
+    {
+        public static RaycastHit[] RaycastAll(Vector3 origin, Vector3 direction, float maxDistance) => new RaycastHit[0];
     }
 
     public class Behaviour : Component { }

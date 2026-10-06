@@ -78,7 +78,8 @@ export const motionOf = (set: LevelSet, item: LevelItem, global?: readonly Asset
 export const startPoses = (set: LevelSet, levelId: string, global?: readonly AssetDefinition[]): Record<string, ActorPose> => {
   const poses: Record<string, ActorPose> = {};
   for (const item of set.items) {
-    if (item.levelId !== levelId || item.hidden || !motionOf(set, item, global)) continue;
+    // Actors that move, and those that watch (a pose says where they look).
+    if (item.levelId !== levelId || item.hidden || (!motionOf(set, item, global) && sightOf(set, item, global).range <= 0)) continue;
     const f = frameOf(set, item, global);
     poses[item.id] = { x: f.x, y: f.y, z: elevationOf(set, item) + item.z, yaw: (item.rotation * Math.PI) / 180, stop: 0, until: 0, moving: false };
   }
@@ -145,4 +146,76 @@ export const stepActors = (
     if (moved !== pose) (next ??= { ...poses })[id] = moved;
   }
   return next ?? (poses as Record<string, ActorPose>);
+};
+
+// ---------------------------------------------------------------- line of sight (spec §11: sight triggers)
+
+/** How far an actor sees and how wide (degrees); 0 range is blind. */
+export const sightOf = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): { range: number; fov: number } => ({
+  range: Math.max(0, num(paramOf(set, item, 'sight', global), 0)),
+  fov: Math.min(360, Math.max(1, num(paramOf(set, item, 'fov', global), 90))),
+});
+
+/** What blocks sight: a box on the plan between two heights (the controller's colliders fit). */
+export interface Blocker {
+  itemId: string;
+  x: number;
+  y: number;
+  hw: number;
+  hd: number;
+  rot: number;
+  bottom: number;
+  top: number;
+  part?: string;
+}
+
+/** Whether the segment from a to b on the plan passes through the box (in its own frame, Liang–Barsky). */
+const crosses = (a: { x: number; y: number }, b: { x: number; y: number }, box: Blocker): boolean => {
+  const c = Math.cos(-box.rot);
+  const s = Math.sin(-box.rot);
+  const local = (p: { x: number; y: number }) => ({ x: (p.x - box.x) * c - (p.y - box.y) * s, y: (p.x - box.x) * s + (p.y - box.y) * c });
+  const p = local(a);
+  const q = local(b);
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  let t0 = 0;
+  let t1 = 1;
+  for (const [num, den] of [
+    [p.x + box.hw, -dx],
+    [box.hw - p.x, dx],
+    [p.y + box.hd, -dy],
+    [box.hd - p.y, dy],
+  ] as const) {
+    if (den === 0) {
+      if (num < 0) return false;
+      continue;
+    }
+    const t = num / den;
+    if (den < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  // Touching only at the very ends (the actor or player standing against it) doesn't block.
+  return t1 - t0 > 1e-6 && t0 < 1 - 1e-6 && t1 > 1e-6;
+};
+
+const EYE = 1.6;
+
+/**
+ * Whether an actor standing at its pose sees a point: near enough, inside its
+ * field of view (facing its yaw), and nothing solid in the way at eye height.
+ */
+export const canSee = (pose: ActorPose, at: { x: number; y: number; z: number }, sight: { range: number; fov: number }, blockers: readonly Blocker[]): boolean => {
+  if (sight.range <= 0) return false;
+  const dx = at.x - pose.x;
+  const dy = at.y - pose.y;
+  const d = Math.hypot(dx, dy);
+  if (d > sight.range || Math.abs(at.z - pose.z) > 3) return false;
+  if (d > 1e-6 && sight.fov < 360) {
+    // Yaw 0 faces north (−y), turning clockwise.
+    const facing = { x: Math.sin(pose.yaw), y: -Math.cos(pose.yaw) };
+    if ((facing.x * dx + facing.y * dy) / d < Math.cos(((sight.fov / 2) * Math.PI) / 180) - 1e-9) return false;
+  }
+  const eye = (pose.z + at.z) / 2 + EYE;
+  return !blockers.some((b) => b.bottom < eye && b.top > eye && crosses(pose, at, b));
 };

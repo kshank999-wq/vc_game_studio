@@ -97,7 +97,7 @@ export const CAPABILITIES: readonly Capability[] = [
     engines: { godot: all('auto'), unity: all('auto'), unreal: all('auto'), custom: json },
   },
   {
-    feature: 'NPC patrols and companions; darkness, light and fuel',
+    feature: 'NPC patrols, companions and line of sight; darkness, light and fuel',
     engines: { godot: all('auto'), unity: all('auto'), unreal: all('auto'), custom: json },
   },
   {

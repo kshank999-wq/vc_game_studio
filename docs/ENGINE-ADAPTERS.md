@@ -447,6 +447,19 @@ number under the faction's key in `flags`, starting at 0: the `reputation`
 condition (`"op": "atLeast" | "below"`) reads it and the `reputation` effect
 adds `amount` to it, in every runtime.
 
+## Line of sight
+
+An NPC, enemy or neutral actor can watch for the player: its `sight` (metres,
+0 for not at all) and `fov` (degrees about the way it faces) are in its
+params. It sees the player within that range and field of view with nothing
+solid in the way at eye height; its rules `on: "spotted"` run as the player
+comes into view and `on: "lost"` as they go. Play Mode does this against the
+level's walls, solids and shut doors; Godot casts a physics ray
+(`actor_spotted` / `actor_lost_sight` signals), Unity a raycast through
+`LevelLogic.Blocked` (`ActorSpotted` / `ActorLostSight`), and Unreal a
+visibility trace (`OnActorSpotted` / `OnActorLostSight`), each ignoring the
+player and the actors themselves.
+
 ## Cinematics: branching, and back to gameplay
 
 A cinematic on the spine can skip ahead, as a choice can: its routes out carry

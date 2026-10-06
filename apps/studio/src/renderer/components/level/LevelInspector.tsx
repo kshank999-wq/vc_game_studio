@@ -90,6 +90,8 @@ const EVENTS: { value: LevelEvent; label: string }[] = [
   { value: 'timer', label: 'On a timer' },
   { value: 'stateChange', label: 'When the story changes' },
   { value: 'custom', label: 'On a game event' },
+  { value: 'spotted', label: 'When it sees the player' },
+  { value: 'lost', label: 'When it loses sight of the player' },
 ];
 
 const ACTIONS: { value: LevelAction['kind']; label: string; target: 'item' | 'scene' | 'cinematic' | 'level' }[] = [
