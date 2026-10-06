@@ -1,6 +1,5 @@
 import { laneSequence, spineSequence } from './layout';
 import { initialState } from './details';
-import { recipeOf } from './crafting';
 import { conditionsIn, everyRule, type Effect } from './rules';
 import type { Project } from './types';
 
@@ -80,7 +79,8 @@ const unobtainable = (project: Project, effects: Effect[]): DeepIssue[] => {
     for (const c of conditionsIn(rule)) {
       if (c.kind !== 'item' || c.op !== 'has' || reported.has(c.ref)) continue;
       const item = project.objects[c.ref];
-      if (!item || given.has(c.ref) || recipeOf(item) || pickedUp.has(c.ref) || inLevels.includes(`"${c.ref}"`)) continue;
+      // A recipe (crafting.ts) is enough: the item can be made.
+      if (!item || given.has(c.ref) || item.data.recipe || pickedUp.has(c.ref) || inLevels.includes(`"${c.ref}"`)) continue;
       reported.add(c.ref);
       issues.push({ id: c.ref, message: `The story needs “${item.name}”, but the player can never get it: nothing gives it, it has no recipe, and no level places it.` });
     }
