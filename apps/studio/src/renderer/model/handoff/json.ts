@@ -258,9 +258,9 @@ export const storySchema = () => ({
       type: 'object',
       required: ['kind', 'ref', 'op'],
       properties: {
-        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill', 'equipped', 'stat', 'number', 'reputation'] },
+        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill', 'equipped', 'stat', 'number', 'reputation', 'encounter'] },
         ref: { description: 'The key of the flag, item, object, choice, character, puzzle or scene it is about (for a stat condition, the stat\'s name).', ...str },
-        op: { enum: ['is', 'isNot', 'has', 'hasNot', 'chose', 'didNotChoose', 'atLeast', 'atMost', 'solved', 'unsolved', 'visited', 'notVisited', 'done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable', 'below', 'equipped', 'notEquipped'] },
+        op: { enum: ['is', 'isNot', 'has', 'hasNot', 'chose', 'didNotChoose', 'atLeast', 'atMost', 'solved', 'unsolved', 'visited', 'notVisited', 'done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable', 'below', 'equipped', 'notEquipped', 'equals', 'won', 'notWon', 'met', 'notMet'] },
         value: { type: ['string', 'number'] },
       },
     },

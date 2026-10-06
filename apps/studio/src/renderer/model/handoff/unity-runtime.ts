@@ -988,6 +988,10 @@ namespace VCGS
                     var rank = game.SkillRank(reference);
                     var at = (int)D.Num(c, "value", 1);
                     return op == "atLeast" ? rank >= at : rank < at;
+                case "encounter":
+                    var won = game.WasWon(reference);
+                    var fought = won || game.HasMet(reference);
+                    return op == "won" ? won : op == "notWon" ? !won : op == "met" ? fought : !fought;
                 case "number":
                 case "reputation":
                     var held = ToNumber(game.GetFlag(reference));

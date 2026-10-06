@@ -27,7 +27,9 @@ export type Condition =
   /** A number state (spec §7: health, trust, coins): at least n, below n, or exactly n. */
   | { kind: 'number'; ref: string; op: 'atLeast' | 'below' | 'equals'; value: number }
   /** A faction's standing with the player (spec §7: reputation tracks), 0 to begin with. */
-  | { kind: 'reputation'; ref: string; op: 'atLeast' | 'below'; value: number };
+  | { kind: 'reputation'; ref: string; op: 'atLeast' | 'below'; value: number }
+  /** A fight's result (spec §7, combat events): won, or come to at all. */
+  | { kind: 'encounter'; ref: string; op: 'won' | 'notWon' | 'met' | 'notMet' };
 
 export interface Rule {
   match: 'all' | 'any';
@@ -101,6 +103,18 @@ export const SUBJECTS: readonly Subject[] = [
   { kind: 'number', label: 'Number', type: 'state', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'below', label: 'is below' }, { op: 'equals', label: 'is exactly' }], value: 'number' },
   { kind: 'reputation', label: 'Reputation', type: 'faction', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'below', label: 'is below' }], value: 'number' },
   { kind: 'stat', label: 'Stat', type: 'inventory', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'below', label: 'is below' }], value: 'number' },
+  {
+    kind: 'encounter',
+    label: 'Encounter',
+    type: 'encounter',
+    ops: [
+      { op: 'won', label: 'was won' },
+      { op: 'notWon', label: 'was not won' },
+      { op: 'met', label: 'was fought' },
+      { op: 'notMet', label: 'was not fought' },
+    ],
+    value: 'none',
+  },
   { kind: 'equipped', label: 'Equipment', type: 'inventory', ops: [{ op: 'equipped', label: 'is equipped' }, { op: 'notEquipped', label: 'is not equipped' }], value: 'none' },
   { kind: 'visited', label: 'Scene', type: 'scene', ops: [{ op: 'visited', label: 'was visited' }, { op: 'notVisited', label: 'was not visited' }], value: 'none' },
 ];
@@ -167,6 +181,8 @@ export const newCondition = (kind: Condition['kind'], ref = '', value = ''): Con
       return { kind, ref, op: 'atLeast', value: Number(value) || 0 };
     case 'reputation':
       return { kind, ref, op: 'atLeast', value: Number(value) || 1 };
+    case 'encounter':
+      return { kind, ref, op: 'won' };
   }
 };
 
@@ -220,6 +236,8 @@ export const describeCondition = (project: Project, c: Condition): string => {
       return `${who} ${c.op === 'atLeast' ? '≥' : c.op === 'below' ? '<' : '='} ${c.value}`;
     case 'reputation':
       return `standing with ${who} ${c.op === 'atLeast' ? '≥' : '<'} ${c.value}`;
+    case 'encounter':
+      return `${who} ${{ won: 'was won', notWon: 'was not won', met: 'was fought', notMet: 'was not fought' }[c.op]}`;
     case 'skill':
       return c.value <= 1 ? `${who} is ${c.op === 'atLeast' ? '' : 'not '}learned` : `${who} ${c.op === 'atLeast' ? 'at rank' : 'below rank'} ${c.value}${c.op === 'atLeast' ? '+' : ''}`;
   }
@@ -299,6 +317,9 @@ export interface PlayState {
   wear: Record<string, number>;
   /** What the equipped items add up to, by stat name in lower case (kept up to date by the play-through). */
   stats?: Record<string, number>;
+  /** Encounters won, and come to (the play-through keeps these; a won one counts as come to). */
+  won?: Record<string, boolean>;
+  met?: Record<string, boolean>;
 }
 
 export type QuestState = 'active' | 'done';
@@ -343,6 +364,11 @@ export const holds = (c: Condition, s: PlayState): boolean => {
     case 'number': {
       const n = toNumber(s.flags[c.ref]);
       return c.op === 'atLeast' ? n >= c.value : c.op === 'below' ? n < c.value : Math.abs(n - c.value) < 1e-9;
+    }
+    case 'encounter': {
+      const won = !!s.won?.[c.ref];
+      const met = won || !!s.met?.[c.ref];
+      return c.op === 'won' ? won : c.op === 'notWon' ? !won : c.op === 'met' ? met : !met;
     }
     case 'reputation': {
       // Kept with the states, under the faction's own key, as a number.

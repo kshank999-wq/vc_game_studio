@@ -1167,6 +1167,12 @@ ${UNREAL_PUZZLES}
                 int at = static_cast<int>(c["value"].Num(1));
                 return op == "atLeast" ? rank >= at : rank < at;
             }
+            if (kind == "encounter")
+            {
+                const bool won = game.WasWon(ref);
+                const bool fought = won || game.HasMet(ref);
+                return op == "won" ? won : op == "notWon" ? !won : op == "met" ? fought : !fought;
+            }
             if (kind == "number" || kind == "reputation")
             {
                 const double n = ToNumber(game.GetFlag(ref));

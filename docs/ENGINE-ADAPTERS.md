@@ -447,6 +447,14 @@ number under the faction's key in `flags`, starting at 0: the `reputation`
 condition (`"op": "atLeast" | "below"`) reads it and the `reputation` effect
 adds `amount` to it, in every runtime.
 
+## Encounter results as conditions
+
+A trigger, gate or option can wait on a fight: the `encounter` condition
+(`"op": "won" | "notWon" | "met" | "notMet"`) reads what every runtime already
+keeps for its saves, the encounters won and the ones come to (a won one counts
+as come to). Godot reads `was_won` / `has_met`, Unity `WasWon` / `HasMet`, and
+Unreal the same on its game state.
+
 ## Timed choices
 
 A choice can give the player a number of seconds to answer (`timeLimit` on the
