@@ -539,7 +539,16 @@ namespace VCGS
             foreach (var pair in Poses)
             {
                 if (!IsPresent(pair.Key)) continue;
+                // While it sees the Player, an actor does what its onSight says: chase, watch, or carry on.
+                var reaction = Seen.Contains(pair.Key) ? ParamStr(pair.Key, "onSight") : "";
+                if (reaction == "chase" || reaction == "watch")
+                {
+                    if (Player != null && Player.Length > 2) StepReaction(pair.Value, reaction, ParamNum(pair.Key, "chaseSpeed", 3.5), dt, Player[0], Player[1], Player[2]);
+                    continue;
+                }
                 var motion = D.Map(Item(pair.Key), "motion");
+                // An actor that only watches stands where it is.
+                if (motion.Count == 0) continue;
                 if (D.Str(motion, "kind") == "patrol") StepPatrol(pair.Value, motion, dt, Time);
                 else if (Player != null && Player.Length > 2) StepFollow(pair.Value, motion, dt, Player[0], Player[1], Player[2]);
             }
@@ -586,6 +595,16 @@ namespace VCGS
         }
 
         /// <summary>Walk a pose toward (x, y, z) at most by metres; true when it gets there.</summary>
+        /// <summary>While an actor sees the Player: face them, and for a chase close in to arm's reach (1 m) at its chase speed.</summary>
+        public static void StepReaction(ActorPose p, string reaction, double speed, double dt, double x, double y, double z)
+        {
+            double dx = x - p.X, dz = z - p.Z;
+            var d = Math.Sqrt(dx * dx + dz * dz);
+            if (d > 1e-6) { p.FacingX = dx; p.FacingZ = dz; p.Faces = true; }
+            if (reaction != "chase" || d <= 1) { p.Moving = false; return; }
+            Walk(p, p.X + dx * (d - 1) / d, y, p.Z + dz * (d - 1) / d, Math.Max(0.1, speed) * dt);
+        }
+
         static bool Walk(ActorPose p, double x, double y, double z, double by)
         {
             var dx = x - p.X;

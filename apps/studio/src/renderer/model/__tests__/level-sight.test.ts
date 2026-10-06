@@ -53,3 +53,44 @@ describe('line of sight', () => {
     expect(s.log.some((l) => l.text.endsWith('loses sight of the player'))).toBe(true);
   });
 });
+
+describe('what an actor does when it sees the player', () => {
+  const guardWith = (onSight: string, fov = 90) => {
+    let p: Project = addLevel(createProject('Test'), 'Yard').project;
+    const levelId = p.levels!.levels[0]!.id;
+    const floorId = p.levels!.levels[0]!.floors[0]!.id;
+    const guard = placeAsset(p, levelId, floorId, 'actor.enemy', { x: 0, y: 0 });
+    const id = guard.ids[0]!;
+    p = setParam(setParam(setParam(setParam(guard.project, id, 'sight', 20), id, 'onSight', onSight), id, 'chaseSpeed', 2), id, 'fov', fov);
+    return { p, levelId, id };
+  };
+
+  it('chases: closes in at its chase speed, to arm’s reach', () => {
+    const { p, levelId, id } = guardWith('chase');
+    let s = startLevelPlay(p, levelId);
+    const player = { x: 0, y: -6, z: 0 };
+    s = tick(p, s, 0.1, player); // sees them
+    for (let i = 0; i < 10; i++) s = tick(p, s, 0.1, player);
+    // A second at 2 m/s: two metres closer.
+    expect(s.actors[id]!.y).toBeCloseTo(-2, 1);
+    for (let i = 0; i < 40; i++) s = tick(p, s, 0.1, player);
+    expect(s.actors[id]!.y).toBeCloseTo(-5, 5);
+  });
+
+  it('watches: stays put and turns to face the player', () => {
+    const { p, levelId, id } = guardWith('watch', 360);
+    let s = startLevelPlay(p, levelId);
+    s = tick(p, s, 0.1, { x: 5, y: 0, z: 0 });
+    s = tick(p, s, 0.1, { x: 5, y: 0, z: 0 });
+    expect(s.actors[id]).toMatchObject({ x: 0, y: 0 });
+    expect(s.actors[id]!.yaw).toBeCloseTo(Math.PI / 2, 5);
+  });
+
+  it('carries on by default', () => {
+    const { p, levelId, id } = guardWith('carry on');
+    let s = startLevelPlay(p, levelId);
+    for (let i = 0; i < 5; i++) s = tick(p, s, 0.1, { x: 0, y: -6, z: 0 });
+    expect(s.seen?.[id]).toBe(true);
+    expect(s.actors[id]).toMatchObject({ x: 0, y: 0 });
+  });
+});

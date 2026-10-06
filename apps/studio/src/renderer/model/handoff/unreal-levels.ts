@@ -413,7 +413,16 @@ namespace vcgs
             for (auto& pair : Poses)
             {
                 if (!IsPresent(pair.first)) continue;
+                // While it sees the player, an actor does what its onSight says: chase, watch, or carry on.
+                const std::string reaction = Seen.count(pair.first) ? Param(pair.first, "onSight").Str() : std::string();
+                if (reaction == "chase" || reaction == "watch")
+                {
+                    if (HasPlayer) StepReaction(pair.second, reaction, Param(pair.first, "chaseSpeed").Num(3.5), dt, PlayerX, PlayerY, PlayerZ);
+                    continue;
+                }
                 const Value& motion = Item(pair.first)["motion"];
+                // An actor that only watches stands where it is.
+                if (!motion.IsObject()) continue;
                 if (motion["kind"].Str() == "patrol") StepPatrol(pair.second, motion, dt, Time);
                 else if (HasPlayer) StepFollow(pair.second, motion, dt, PlayerX, PlayerY, PlayerZ);
             }
@@ -573,6 +582,16 @@ namespace vcgs
         }
 
         /** Walk a pose toward (x, y, z) at most by metres; true when it gets there. */
+        /** While an actor sees the player: face them, and for a chase close in to arm's reach (1 m) at its chase speed. */
+        static void StepReaction(ActorPose& p, const std::string& reaction, double speed, double dt, double x, double y, double z)
+        {
+            const double dx = x - p.X, dz = z - p.Z;
+            const double d = std::sqrt(dx * dx + dz * dz);
+            if (d > 1e-6) { p.FacingX = dx; p.FacingZ = dz; p.Faces = true; }
+            if (reaction != "chase" || d <= 1) { p.Moving = false; return; }
+            Walk(p, p.X + dx * (d - 1) / d, y, p.Z + dz * (d - 1) / d, std::max(0.1, speed) * dt);
+        }
+
         static bool Walk(ActorPose& p, double x, double y, double z, double by)
         {
             const double dx = x - p.X, dz = z - p.Z;

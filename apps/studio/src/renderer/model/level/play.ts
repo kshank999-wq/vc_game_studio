@@ -577,7 +577,7 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   s = runPuzzleClock(project, s);
 
   // Patrols walk on, companions keep up.
-  const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => present(project, s, i), global);
+  const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => present(project, s, i), global, s.seen);
   if (actors !== s.actors) s = { ...s, actors };
 
   // Who sees the player: an actor's "sees the player" rules run as the player comes into view, "loses sight" as they go.

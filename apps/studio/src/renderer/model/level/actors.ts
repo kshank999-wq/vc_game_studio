@@ -123,6 +123,29 @@ export const stepFollow = (p: ActorPose, m: Extract<Motion, { kind: 'follow' }>,
   return walk(p, p.x + dx * k, p.y + dy * k, player.z, speed * dt).pose;
 };
 
+/** What an actor does while it sees the player (spec §11, AI behaviours): chase them, or stop and watch; null carries on. */
+export type Reaction = { kind: 'chase'; speed: number; reach: number } | { kind: 'watch' };
+
+export const REACTIONS = ['carry on', 'chase', 'watch'] as const;
+
+export const reactionOf = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): Reaction | null => {
+  const r = String(paramOf(set, item, 'onSight', global) ?? 'carry on');
+  if (r === 'chase') return { kind: 'chase', speed: Math.max(0.1, num(paramOf(set, item, 'chaseSpeed', global), 3.5)), reach: 1 };
+  if (r === 'watch') return { kind: 'watch' };
+  return null;
+};
+
+/** One step of a reaction: face the player, and for a chase close in on them (to arm's reach, on their ground). */
+export const stepReaction = (p: ActorPose, r: Reaction, dt: number, player: { x: number; y: number; z: number }): ActorPose => {
+  const dx = player.x - p.x;
+  const dy = player.y - p.y;
+  const d = Math.hypot(dx, dy);
+  const yaw = d > 1e-6 ? yawOf(dx, dy) : p.yaw;
+  if (r.kind === 'watch' || d <= r.reach) return p.moving || p.yaw !== yaw ? { ...p, moving: false, yaw } : p;
+  const k = (d - r.reach) / d;
+  return walk(p, p.x + dx * k, p.y + dy * k, player.z, r.speed * dt).pose;
+};
+
 /**
  * Move every actor that moves by dt seconds (the play time is `time`, after
  * the step): patrols on along their stops, companions after the player.
@@ -136,13 +159,17 @@ export const stepActors = (
   player: { x: number; y: number; z: number },
   here: (item: LevelItem) => boolean,
   global?: readonly AssetDefinition[],
+  /** Actors that see the player now: they do what their "When it sees the player" says instead. */
+  seen?: Readonly<Record<string, boolean>>,
 ): Record<string, ActorPose> => {
   let next: Record<string, ActorPose> | null = null;
   for (const [id, pose] of Object.entries(poses)) {
     const item = set.items.find((i) => i.id === id);
-    const m = item && here(item) ? motionOf(set, item, global) : null;
-    if (!m) continue;
-    const moved = m.kind === 'patrol' ? stepPatrol(pose, m, dt, time) : stepFollow(pose, m, dt, player);
+    if (!item || !here(item)) continue;
+    const reaction = seen?.[id] ? reactionOf(set, item, global) : null;
+    const m = reaction ? null : motionOf(set, item, global);
+    if (!reaction && !m) continue;
+    const moved = reaction ? stepReaction(pose, reaction, dt, player) : m!.kind === 'patrol' ? stepPatrol(pose, m!, dt, time) : stepFollow(pose, m!, dt, player);
     if (moved !== pose) (next ??= { ...poses })[id] = moved;
   }
   return next ?? (poses as Record<string, ActorPose>);

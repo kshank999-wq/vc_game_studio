@@ -460,6 +460,12 @@ level's walls, solids and shut doors; Godot casts a physics ray
 visibility trace (`OnActorSpotted` / `OnActorLostSight`), each ignoring the
 player and the actors themselves.
 
+While it sees the player an actor does what its `onSight` says: `carry on`
+(the default), `chase` (close in to arm's reach, 1 m, at `chaseSpeed`), or
+`watch` (stop and turn to face them). Once it loses sight it goes back to its
+patrol, or stands where it is. Every runtime does the same: Godot's
+`step_reaction`, Unity's and Unreal's `StepReaction`.
+
 ## Cinematics: branching, and back to gameplay
 
 A cinematic on the spine can skip ahead, as a choice can: its routes out carry
