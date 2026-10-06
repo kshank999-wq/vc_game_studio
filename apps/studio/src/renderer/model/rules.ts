@@ -25,7 +25,9 @@ export type Condition =
   /** What the equipped items add up to for a stat (ref is the stat's name, such as Damage): at least n, or below n. */
   | { kind: 'stat'; ref: string; op: 'atLeast' | 'below'; value: number }
   /** A number state (spec §7: health, trust, coins): at least n, below n, or exactly n. */
-  | { kind: 'number'; ref: string; op: 'atLeast' | 'below' | 'equals'; value: number };
+  | { kind: 'number'; ref: string; op: 'atLeast' | 'below' | 'equals'; value: number }
+  /** A faction's standing with the player (spec §7: reputation tracks), 0 to begin with. */
+  | { kind: 'reputation'; ref: string; op: 'atLeast' | 'below'; value: number };
 
 export interface Rule {
   match: 'all' | 'any';
@@ -51,7 +53,9 @@ export type Effect =
   | { kind: 'unequip'; ref: string }
   /** A number state, raised (or lowered, with a negative amount) or set outright. */
   | { kind: 'addNumber'; ref: string; amount: number }
-  | { kind: 'setNumber'; ref: string; amount: number };
+  | { kind: 'setNumber'; ref: string; amount: number }
+  /** A faction's standing, raised or (with a negative amount) lowered. */
+  | { kind: 'reputation'; ref: string; amount: number };
 
 export const isRule = (x: Condition | Rule): x is Rule => 'match' in x;
 
@@ -95,6 +99,7 @@ export const SUBJECTS: readonly Subject[] = [
   { kind: 'mechanic', label: 'Mechanic', type: 'mechanic', ops: [{ op: 'available', label: 'is available' }, { op: 'unavailable', label: 'is not available' }], value: 'none' },
   { kind: 'skill', label: 'Skill', type: 'skill', ops: [{ op: 'atLeast', label: 'is at rank at least' }, { op: 'below', label: 'is below rank' }], value: 'number' },
   { kind: 'number', label: 'Number', type: 'state', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'below', label: 'is below' }, { op: 'equals', label: 'is exactly' }], value: 'number' },
+  { kind: 'reputation', label: 'Reputation', type: 'faction', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'below', label: 'is below' }], value: 'number' },
   { kind: 'stat', label: 'Stat', type: 'inventory', ops: [{ op: 'atLeast', label: 'is at least' }, { op: 'below', label: 'is below' }], value: 'number' },
   { kind: 'equipped', label: 'Equipment', type: 'inventory', ops: [{ op: 'equipped', label: 'is equipped' }, { op: 'notEquipped', label: 'is not equipped' }], value: 'none' },
   { kind: 'visited', label: 'Scene', type: 'scene', ops: [{ op: 'visited', label: 'was visited' }, { op: 'notVisited', label: 'was not visited' }], value: 'none' },
@@ -124,6 +129,7 @@ export const EFFECTS: readonly EffectKind[] = [
   { kind: 'unequip', label: 'Put item away', type: 'inventory', value: 'none' },
   { kind: 'addNumber', label: 'Add to number', type: 'state', value: 'number' },
   { kind: 'setNumber', label: 'Set number', type: 'state', value: 'number' },
+  { kind: 'reputation', label: 'Change reputation', type: 'faction', value: 'number' },
 ];
 
 export const subjectOf = (kind: Condition['kind']): Subject => SUBJECTS.find((s) => s.kind === kind)!;
@@ -159,6 +165,8 @@ export const newCondition = (kind: Condition['kind'], ref = '', value = ''): Con
       return { kind, ref, op: 'atLeast', value: Number(value) || 1 };
     case 'number':
       return { kind, ref, op: 'atLeast', value: Number(value) || 0 };
+    case 'reputation':
+      return { kind, ref, op: 'atLeast', value: Number(value) || 1 };
   }
 };
 
@@ -169,6 +177,7 @@ export const newEffect = (kind: Effect['kind'], ref = '', value = ''): Effect =>
       return { kind, ref, value };
     case 'arc':
     case 'addNumber':
+    case 'reputation':
       return { kind, ref, amount: Number(value) || 1 };
     case 'setNumber':
       return { kind, ref, amount: Number(value) || 0 };
@@ -209,6 +218,8 @@ export const describeCondition = (project: Project, c: Condition): string => {
       return `${c.ref || '…'} is ${c.op === 'atLeast' ? 'at least' : 'below'} ${c.value}`;
     case 'number':
       return `${who} ${c.op === 'atLeast' ? '≥' : c.op === 'below' ? '<' : '='} ${c.value}`;
+    case 'reputation':
+      return `standing with ${who} ${c.op === 'atLeast' ? '≥' : '<'} ${c.value}`;
     case 'skill':
       return c.value <= 1 ? `${who} is ${c.op === 'atLeast' ? '' : 'not '}learned` : `${who} ${c.op === 'atLeast' ? 'at rank' : 'below rank'} ${c.value}${c.op === 'atLeast' ? '+' : ''}`;
   }
@@ -255,6 +266,8 @@ export const describeEffect = (project: Project, e: Effect): string => {
       return `${who} ${e.amount >= 0 ? '+' : '−'}${Math.abs(e.amount)}`;
     case 'setNumber':
       return `${who} = ${e.amount}`;
+    case 'reputation':
+      return `standing with ${who} ${e.amount >= 0 ? '+' : '−'}${Math.abs(e.amount)}`;
   }
 };
 
@@ -331,6 +344,11 @@ export const holds = (c: Condition, s: PlayState): boolean => {
       const n = toNumber(s.flags[c.ref]);
       return c.op === 'atLeast' ? n >= c.value : c.op === 'below' ? n < c.value : Math.abs(n - c.value) < 1e-9;
     }
+    case 'reputation': {
+      // Kept with the states, under the faction's own key, as a number.
+      const n = toNumber(s.flags[c.ref]);
+      return c.op === 'atLeast' ? n >= c.value : n < c.value;
+    }
   }
 };
 
@@ -375,7 +393,7 @@ export const apply = (effects: Effect[] | undefined, s: PlayState): PlayState =>
     if (e.kind === 'completeQuest') next.quests[e.ref] = 'done';
     if (e.kind === 'enableMechanic') next.mechanics[e.ref] = true;
     if (e.kind === 'learnSkill') next.skills[e.ref] = (next.skills[e.ref] ?? 0) + 1;
-    if (e.kind === 'addNumber') next.flags[e.ref] = fromNumber(toNumber(next.flags[e.ref]) + e.amount);
+    if (e.kind === 'addNumber' || e.kind === 'reputation') next.flags[e.ref] = fromNumber(toNumber(next.flags[e.ref]) + e.amount);
     if (e.kind === 'setNumber') next.flags[e.ref] = fromNumber(e.amount);
   }
   return next;

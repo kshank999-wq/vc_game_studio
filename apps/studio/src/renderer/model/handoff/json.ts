@@ -258,7 +258,7 @@ export const storySchema = () => ({
       type: 'object',
       required: ['kind', 'ref', 'op'],
       properties: {
-        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill', 'equipped', 'stat', 'number'] },
+        kind: { enum: ['flag', 'item', 'object', 'choice', 'arc', 'puzzle', 'visited', 'quest', 'lore', 'mechanic', 'skill', 'equipped', 'stat', 'number', 'reputation'] },
         ref: { description: 'The key of the flag, item, object, choice, character, puzzle or scene it is about (for a stat condition, the stat\'s name).', ...str },
         op: { enum: ['is', 'isNot', 'has', 'hasNot', 'chose', 'didNotChoose', 'atLeast', 'atMost', 'solved', 'unsolved', 'visited', 'notVisited', 'done', 'notDone', 'active', 'notStarted', 'known', 'unknown', 'available', 'unavailable', 'below', 'equipped', 'notEquipped'] },
         value: { type: ['string', 'number'] },
@@ -273,7 +273,7 @@ export const storySchema = () => ({
     effect: {
       type: 'object',
       required: ['kind', 'ref'],
-      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire', 'startQuest', 'revealLore', 'completeQuest', 'enableMechanic', 'learnSkill', 'equip', 'unequip', 'addNumber', 'setNumber'] }, ref: str, value: str, amount: num },
+      properties: { kind: { enum: ['setFlag', 'give', 'take', 'setObject', 'arc', 'solve', 'fire', 'startQuest', 'revealLore', 'completeQuest', 'enableMechanic', 'learnSkill', 'equip', 'unequip', 'addNumber', 'setNumber', 'reputation'] }, ref: str, value: str, amount: num },
     },
     effects: { type: 'array', items: ref('effect') },
     storyNode: obj({ key: str, kind: str, name: str }),

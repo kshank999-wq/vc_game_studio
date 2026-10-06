@@ -1167,7 +1167,7 @@ ${UNREAL_PUZZLES}
                 int at = static_cast<int>(c["value"].Num(1));
                 return op == "atLeast" ? rank >= at : rank < at;
             }
-            if (kind == "number")
+            if (kind == "number" || kind == "reputation")
             {
                 const double n = ToNumber(game.GetFlag(ref));
                 const double v = c["value"].Num(0);
@@ -1199,7 +1199,7 @@ ${UNREAL_PUZZLES}
                 const std::string kind = e["kind"].Str();
                 const std::string ref = e["ref"].Str();
                 if (kind == "setFlag") game.SetFlag(ref, e["value"].Str());
-                else if (kind == "addNumber") game.SetFlag(ref, FromNumber(ToNumber(game.GetFlag(ref)) + e["amount"].Num(1)));
+                else if (kind == "addNumber" || kind == "reputation") game.SetFlag(ref, FromNumber(ToNumber(game.GetFlag(ref)) + e["amount"].Num(1)));
                 else if (kind == "setNumber") game.SetFlag(ref, FromNumber(e["amount"].Num(0)));
                 else if (kind == "setObject") game.SetObjectState(ref, e["value"].Str());
                 else if (kind == "give") game.GiveItem(ref);

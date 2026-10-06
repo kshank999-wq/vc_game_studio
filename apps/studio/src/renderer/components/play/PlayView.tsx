@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Destination } from '../../model/details';
-import { interactionsOf, statesOf } from '../../model/details';
+import { interactionsOf, statesOf, varTypeOf } from '../../model/details';
+import { fromNumber, toNumber } from '../../model/rules';
 import { screenOf } from '../../model/puzzle/screens';
 import { ScreenPlayer } from '../puzzle/ScreenPlayer';
 import { checkAllPaths } from '../../model/paths';
@@ -652,6 +653,7 @@ const WorldPanel = ({ project, world, onChange, onLearn, onGear, onCraft }: { pr
       .filter((o) => o.type === type)
       .sort((a, b) => a.name.localeCompare(b.name));
   const states = of('state');
+  const factions = of('faction');
   const items = of('inventory');
   const objects = of('object').filter((o) => statesOf(o).length);
   const characters = of('character');
@@ -700,11 +702,45 @@ const WorldPanel = ({ project, world, onChange, onLearn, onGear, onCraft }: { pr
           {states.map((o) => (
             <label key={o.id} className="play-row">
               <span>{o.name}</span>
-              <select className="inp" value={world.flags[o.id] ?? ''} onChange={(e) => onChange((w) => ({ ...w, flags: { ...w.flags, [o.id]: e.currentTarget.value } }))}>
-                {statesOf(o).map((v) => (
-                  <option key={v}>{v}</option>
-                ))}
-              </select>
+              {varTypeOf(o) === 'states' ? (
+                <select className="inp" value={world.flags[o.id] ?? ''} onChange={(e) => onChange((w) => ({ ...w, flags: { ...w.flags, [o.id]: e.currentTarget.value } }))}>
+                  {statesOf(o).map((v) => (
+                    <option key={v}>{v}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  key={world.flags[o.id] ?? ''}
+                  className="inp"
+                  type={varTypeOf(o) === 'number' ? 'number' : 'text'}
+                  defaultValue={world.flags[o.id] ?? ''}
+                  onBlur={(e) => {
+                    const v = varTypeOf(o) === 'number' ? fromNumber(toNumber(e.currentTarget.value)) : e.currentTarget.value;
+                    onChange((w) => ({ ...w, flags: { ...w.flags, [o.id]: v } }));
+                  }}
+                />
+              )}
+            </label>
+          ))}
+        </section>
+      )}
+      {factions.length > 0 && (
+        <section>
+          <h3>Standing</h3>
+          {factions.map((o) => (
+            <label key={o.id} className="play-row">
+              <span>{o.name}</span>
+              <input
+                key={world.flags[o.id] ?? '0'}
+                className="inp"
+                type="number"
+                aria-label={`Standing with ${o.name}`}
+                defaultValue={world.flags[o.id] ?? '0'}
+                onBlur={(e) => {
+                  const v = fromNumber(toNumber(e.currentTarget.value));
+                  onChange((w) => ({ ...w, flags: { ...w.flags, [o.id]: v } }));
+                }}
+              />
             </label>
           ))}
         </section>

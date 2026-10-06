@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createProject, placeNew } from '../project';
+import { createProject, makeObject, placeNew } from '../project';
 import { spineLane } from '../layout';
 import { addElement } from '../scene';
 import { initialState, setInitialValue, setterNames, setValue, setVarType, statesOf, varTypeOf } from '../details';
@@ -79,5 +79,19 @@ describe('typed variables', () => {
     expect(t).toMatchObject({ type: 'number', initial: '0', values: [], scope: 'Quest' });
     expect(t.setBy.length).toBe(1);
     expect(flags.find((f) => f.id === nick)).toMatchObject({ type: 'text', initial: '' });
+  });
+
+  it('a faction’s standing rises and falls, and conditions read it', () => {
+    const faction = makeObject('faction', 'Tide Wardens', '2026-01-01T00:00:00Z');
+    const p = { ...createProject(), objects: { ...createProject().objects, [faction.id]: faction } };
+    const wardens = faction.id;
+    let s = apply([newEffect('reputation', wardens, '2'), newEffect('reputation', wardens, '-1')], emptyState());
+    expect(s.flags[wardens]).toBe('1');
+    const trusted = { match: 'all' as const, items: [newCondition('reputation', wardens, '2')] };
+    expect(evaluate(trusted, s)).toBe(false);
+    s = apply([newEffect('reputation', wardens, '1')], s);
+    expect(evaluate(trusted, s)).toBe(true);
+    expect(describeRule(p, trusted)).toBe('standing with Tide Wardens ≥ 2');
+    expect(describeEffects(p, [newEffect('reputation', wardens, '-3')])).toBe('standing with Tide Wardens −3');
   });
 });

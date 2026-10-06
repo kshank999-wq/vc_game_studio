@@ -94,12 +94,12 @@ const ConditionRow = ({ project, condition, onChange, onRemove }: { project: Pro
           ))}
         </select>
       )}
-      {subject.value === 'number' && (condition.kind === 'arc' || condition.kind === 'skill' || condition.kind === 'stat' || condition.kind === 'number') && (
+      {subject.value === 'number' && (condition.kind === 'arc' || condition.kind === 'skill' || condition.kind === 'stat' || condition.kind === 'number' || condition.kind === 'reputation') && (
         <input
           key={condition.value}
           className="inp num"
           type="number"
-          aria-label={condition.kind === 'arc' ? 'Arc value' : condition.kind === 'skill' ? 'Rank' : condition.kind === 'number' ? 'Number' : 'Stat value'}
+          aria-label={condition.kind === 'arc' ? 'Arc value' : condition.kind === 'skill' ? 'Rank' : condition.kind === 'number' ? 'Number' : condition.kind === 'reputation' ? 'Standing' : 'Stat value'}
           defaultValue={condition.value}
           onBlur={(e) => onChange({ ...condition, value: Number(e.currentTarget.value) || 0 })}
         />
@@ -257,7 +257,7 @@ export const EffectsEditor = ({ project, effects, onChange, label }: {
                 ))}
               </select>
             )}
-            {kind.value === 'number' && (effect.kind === 'arc' || effect.kind === 'addNumber' || effect.kind === 'setNumber') && (
+            {kind.value === 'number' && (effect.kind === 'arc' || effect.kind === 'addNumber' || effect.kind === 'setNumber' || effect.kind === 'reputation') && (
               <input key={effect.amount} className="inp num" type="number" aria-label={effect.kind === 'setNumber' ? 'To' : 'By'} defaultValue={effect.amount} onBlur={(e) => change({ ...effect, amount: Number(e.currentTarget.value) || 0 })} />
             )}
             <button className="icon-btn small" aria-label="Remove effect" onClick={() => set(list.filter((_, j) => j !== i))}>

@@ -989,6 +989,7 @@ namespace VCGS
                     var at = (int)D.Num(c, "value", 1);
                     return op == "atLeast" ? rank >= at : rank < at;
                 case "number":
+                case "reputation":
                     var held = ToNumber(game.GetFlag(reference));
                     var want = D.Num(c, "value", 0);
                     return op == "atLeast" ? held >= want : op == "below" ? held < want : System.Math.Abs(held - want) < 1e-9;
@@ -1012,7 +1013,8 @@ namespace VCGS
                 switch (D.Str(e, "kind"))
                 {
                     case "setFlag": game.SetFlag(reference, D.Str(e, "value")); break;
-                    case "addNumber": game.SetFlag(reference, FromNumber(ToNumber(game.GetFlag(reference)) + D.Num(e, "amount", 1))); break;
+                    case "addNumber":
+                    case "reputation": game.SetFlag(reference, FromNumber(ToNumber(game.GetFlag(reference)) + D.Num(e, "amount", 1))); break;
                     case "setNumber": game.SetFlag(reference, FromNumber(D.Num(e, "amount", 0))); break;
                     case "setObject": game.SetObjectState(reference, D.Str(e, "value")); break;
                     case "give": game.GiveItem(reference); break;

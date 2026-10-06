@@ -426,7 +426,7 @@ Each engine's check equips the sample's knife and flare pistol, burns the
 flare, wears the knife out, equips a new one by an effect, and saves and
 loads the slots and wear.
 
-## Number and text states
+## Number and text states, and reputation
 
 A state holds one of a list of values (the default), a number (health, trust,
 coins) or text (a name the player typed). Every flag in `story.json` says which
@@ -441,6 +441,11 @@ sets it to `amount`; a text state uses the ordinary `flag` condition and
 `setFlag` effect. Godot has `VCGSRules.to_number` / `from_number`, Unity
 `Rules.ToNumber` / `FromNumber` and Unreal `vcgs::Rules::ToNumber` /
 `FromNumber`, which all write the same text for the same number.
+
+A faction's standing with the player (reputation) is kept the same way, as a
+number under the faction's key in `flags`, starting at 0: the `reputation`
+condition (`"op": "atLeast" | "below"`) reads it and the `reputation` effect
+adds `amount` to it, in every runtime.
 
 ## Crafting
 
