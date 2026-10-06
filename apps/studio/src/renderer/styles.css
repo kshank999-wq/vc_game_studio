@@ -10421,3 +10421,26 @@ button.bible-dual-col:hover {
 .cap-note {
   color: var(--muted);
 }
+
+/* A timed choice's clock (spec §7). */
+.play-countdown {
+  position: relative;
+  height: 18px;
+  margin: 2px 0 6px;
+  border-radius: 4px;
+  background: var(--node-raised);
+  overflow: hidden;
+  font-size: 11px;
+}
+.play-countdown-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--gold);
+  opacity: 0.35;
+  transition: width 0.1s linear;
+}
+.play-countdown span {
+  position: relative;
+  padding: 0 6px;
+  line-height: 18px;
+}

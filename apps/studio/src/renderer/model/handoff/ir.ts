@@ -14,6 +14,7 @@ import { codeFor, screenOf } from '../puzzle/screens';
 import { cinematicTiming, shotsOf } from '../shots';
 import type { ObjectType, Project, StoryObject } from '../types';
 import { buildLevels, type IrLevel } from './levels';
+import { timeLimitOf, timeoutLabelOf } from '../timed';
 import { paramOf } from '../level/geometry';
 import { placeOf, placeToOf } from '../level/places';
 
@@ -373,6 +374,9 @@ export interface IrEvent {
   dual?: string;
   /** A choice's option that carries on along the main track. */
   mainLabel?: string;
+  /** A timed choice: seconds to answer, and the words of the option taken when time runs out ('' for the first on offer). */
+  timeLimit?: number;
+  onTimeout?: string;
   /** What that option does once picked: disappears ('gone') or locks. */
   mainAfter?: 'gone' | 'locked';
   /** Plays only when this holds (a dialogue line's own condition included). */
@@ -416,6 +420,9 @@ export interface IrChoice {
   options: { key: string; label: string; to: string | null; when?: IrRule; effects?: IrEffect[]; after?: 'gone' | 'locked'; hide?: boolean }[];
   /** The choice is offered at all only when this holds. */
   available?: IrRule;
+  /** A timed choice: seconds to answer, and the option taken when time runs out ('' for the first on offer). */
+  timeLimit?: number;
+  onTimeout?: string;
 }
 
 export interface IrStoryNode {
@@ -505,6 +512,10 @@ const fieldsOf = (o: StoryObject): Record<string, string> =>
       // A codex entry reads as written, without stray blank lines around it.
       .map(([k, v]) => [k, k === 'codex' ? v.trim() : v]),
   );
+
+/** A timed choice's limit and the option it falls to, for the runtimes. */
+const timedOf = (o: StoryObject | undefined): { timeLimit?: number; onTimeout?: string } =>
+  timeLimitOf(o) > 0 ? { timeLimit: timeLimitOf(o), onTimeout: timeoutLabelOf(o) } : {};
 
 export const buildIR = (project: Project): HandoffIR => {
   const ids = identifiers(project);
@@ -602,6 +613,7 @@ export const buildIR = (project: Project): HandoffIR => {
         ...(e.endsWhen ? { endsWhen: e.endsWhen } : {}),
         ...(e.condition ? { condition: e.condition } : {}),
         ...(e.kind === 'choice' ? { mainLabel: e.mainLabel ?? '' } : {}),
+        ...(e.kind === 'choice' && e.refId ? timedOf(project.objects[e.refId]) : {}),
         ...(e.kind === 'choice' && e.mainAfter ? { mainAfter: e.mainAfter } : {}),
         ...ruled(rule(both(both(e.when, line?.conditions), e.kind === 'choice' && e.refId ? (project.objects[e.refId]?.data.rule as Rule | undefined) : undefined)), effects(e.effects)),
         ...(rule(e.ends) ? { ends: rule(e.ends) } : {}),
@@ -838,7 +850,7 @@ export const buildIR = (project: Project): HandoffIR => {
         used.add(k);
         return { key: k, ...opt };
       });
-      return { id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, prompt: String(o.data.prompt ?? ''), scene: key(scene), options, ...(rule(o.data.rule as Rule | undefined) ? { available: rule(o.data.rule as Rule | undefined) } : {}) };
+      return { id: o.id, ident: ids.get(o.id)!, code: o.data.code ?? '', name: o.name, prompt: String(o.data.prompt ?? ''), scene: key(scene), options, ...(rule(o.data.rule as Rule | undefined) ? { available: rule(o.data.rule as Rule | undefined) } : {}), ...timedOf(o) };
     }),
     scenes,
     lines: project.lines

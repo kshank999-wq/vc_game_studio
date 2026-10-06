@@ -447,6 +447,19 @@ number under the faction's key in `flags`, starting at 0: the `reputation`
 condition (`"op": "atLeast" | "below"`) reads it and the `reputation` effect
 adds `amount` to it, in every runtime.
 
+## Timed choices
+
+A choice can give the player a number of seconds to answer (`timeLimit` on the
+choice, and on its event in a scene) and name the option taken when time runs
+out (`onTimeout`, the option's words; blank, or naming one not on offer, takes
+the first on offer). In Godot the scene flow runs the clock itself:
+`choice_timer_started(seconds)` tells your UI how long to show, picking
+earlier stops it, and `choice_timed_out(option)` says what time took. In Unity
+`ScenePlayer.TimeLimit` is the seconds for the choice on offer (0 for none);
+count it down and call `TimedOut()`. In Unreal the scene flow component has
+`GetChoiceTimeLimit` and `ChoiceTimedOut`. The play-through in the studio
+shows the clock and takes the option the same way.
+
 ## Crafting
 
 The IR's `recipes` list the items that can be crafted (spec §8), by item key:

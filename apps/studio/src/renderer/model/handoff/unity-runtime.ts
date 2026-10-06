@@ -1384,6 +1384,12 @@ namespace VCGS
         public event Action<string> GameOver;
         public event Action<string> SceneFinished;
 
+        /// <summary>
+        /// A timed choice on offer now: seconds to answer (0 for none). Count it
+        /// down in your UI and call TimedOut() when it runs out.
+        /// </summary>
+        public double TimeLimit { get; private set; }
+
         /// <summary>Every option in the list now: label, whether it can be picked, and why not.</summary>
         public readonly List<(string label, bool available, string why)> OptionsDetail = new List<(string, bool, string)>();
 
@@ -1394,6 +1400,8 @@ namespace VCGS
         int index = -1;
         int branch = -1;
         readonly List<int> offered = new List<int>();
+        List<string> offeredLabels = new List<string>();
+        string onTimeout = "";
         object waiting;
         bool listening;
 
@@ -1478,7 +1486,12 @@ namespace VCGS
                     FreePlayStarted?.Invoke(D.Str(ev, "endsWhen"));
                     if (ev.ContainsKey("ends")) AwaitEnd(D.Get(ev, "ends"));
                     break;
-                case "choice": ChoiceRequested?.Invoke(D.Str(ev, "ref"), OptionsAt(index)); break;
+                case "choice":
+                    offeredLabels = OptionsAt(index);
+                    TimeLimit = offeredLabels.Count > 0 ? D.Num(ev, "timeLimit", 0) : 0;
+                    onTimeout = D.Str(ev, "onTimeout");
+                    ChoiceRequested?.Invoke(D.Str(ev, "ref"), offeredLabels);
+                    break;
                 case "encounter": if (D.Str(ev, "ref") != "") game.MeetEncounter(D.Str(ev, "ref")); EncounterRequested?.Invoke(D.Str(ev, "ref"), Rules.CanWin(D.Str(ev, "ref"), game)); break;
                 case "trigger":
                     // A trigger on the timeline fires as it is reached, and the scene moves on.
@@ -1503,6 +1516,7 @@ namespace VCGS
         /// <summary>Call with the option the player picked, as offered: 0 is the first.</summary>
         public void Choose(int option)
         {
+            TimeLimit = 0;
             var ev = index >= 0 && index < track.Count ? D.Map(track[index]) : new Dictionary<string, object>();
             var picked = option >= 0 && option < offered.Count ? offered[option] : -1;
             var choice = D.Str(ev, "ref");
@@ -1522,6 +1536,17 @@ namespace VCGS
             track = D.List(b, "events");
             index = -1;
             Advance();
+        }
+
+        /// <summary>Time ran out on the timed choice on offer: it takes the option it names, else the first on offer.</summary>
+        public void TimedOut()
+        {
+            if (TimeLimit <= 0 || offeredLabels.Count == 0) return;
+            var pick = 0;
+            var want = onTimeout.Trim().ToLowerInvariant();
+            for (var i = 0; i < offeredLabels.Count; i++)
+                if (want != "" && offeredLabels[i].Trim().ToLowerInvariant() == want) { pick = i; break; }
+            Choose(pick);
         }
 
         /// <summary>The player won the encounter on now. False (and nothing happens) when a win doesn't count yet.</summary>

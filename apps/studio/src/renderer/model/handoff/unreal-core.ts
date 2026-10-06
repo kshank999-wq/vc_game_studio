@@ -2173,7 +2173,13 @@ ${UNREAL_PUZZLES}
                 if (OnFreePlay) OnFreePlay(ev["endsWhen"].Str());
                 if (ev.Has("ends")) AwaitEnd(ev["ends"]);
             }
-            else if (kind == "choice") { std::vector<std::string> options = OptionsAt(index); if (OnChoice) OnChoice(ev["ref"].Str(), options); }
+            else if (kind == "choice")
+            {
+                offeredLabels = OptionsAt(index);
+                TimeLimit = offeredLabels.empty() ? 0 : ev["timeLimit"].Num(0);
+                onTimeout = ev["onTimeout"].Str();
+                if (OnChoice) OnChoice(ev["ref"].Str(), offeredLabels);
+            }
             else if (kind == "encounter") { if (!ev["ref"].Str().empty()) game.MeetEncounter(ev["ref"].Str()); if (OnEncounter) OnEncounter(ev["ref"].Str(), Rules::CanWin(ev["ref"].Str(), game)); }
             else if (kind == "trigger")
             {
@@ -2195,8 +2201,30 @@ ${UNREAL_PUZZLES}
         }
 
         /** Call with the option the player picked, as offered: 0 is the first. */
+        /** A timed choice on offer now: seconds to answer (0 for none). Count it down and call TimedOut() when it runs out. */
+        double TimeLimit = 0;
+
+        /** Time ran out on the timed choice on offer: it takes the option it names, else the first on offer. */
+        void TimedOut()
+        {
+            if (TimeLimit <= 0 || offeredLabels.empty()) return;
+            auto lower = [](std::string t)
+            {
+                t.erase(0, t.find_first_not_of(" \t"));
+                t.erase(t.find_last_not_of(" \t") + 1);
+                for (auto& ch : t) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                return t;
+            };
+            const std::string want = lower(onTimeout);
+            int pick = 0;
+            for (size_t i = 0; i < offeredLabels.size(); i++)
+                if (!want.empty() && lower(offeredLabels[i]) == want) { pick = static_cast<int>(i); break; }
+            Choose(pick);
+        }
+
         void Choose(int option)
         {
+            TimeLimit = 0;
             const Value& ev = (*track)[static_cast<size_t>(index)];
             int picked = option >= 0 && option < static_cast<int>(offered.size()) ? offered[static_cast<size_t>(option)] : -1;
             const std::string choice = ev["ref"].Str();
@@ -2259,6 +2287,8 @@ ${UNREAL_PUZZLES}
         int index = -1;
         int branch = -1;
         std::vector<int> offered;
+        std::vector<std::string> offeredLabels;
+        std::string onTimeout;
         const Value* waiting = nullptr;
         int subscription = 0;
 

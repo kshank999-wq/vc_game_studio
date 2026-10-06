@@ -363,7 +363,7 @@ export const storySchema = () => ({
     ),
     trigger: obj({ id: str, ident, name: str, kind: { enum: ['trigger', 'gate'] }, condition: str, effect: str, sets: obj({ flag: str, value: str }), rule: ref('rule'), effects: ref('effects') }, ['id', 'ident', 'name', 'kind', 'condition', 'effect']),
     option: obj({ key: str, label: str, to: { type: ['string', 'null'] }, when: ref('rule'), effects: ref('effects'), after: { enum: ['gone', 'locked'] }, hide: { type: 'boolean' } }, ['key', 'label', 'to']),
-    choice: obj({ id: str, ident, code: str, name: str, prompt: str, scene: { type: ['string', 'null'] }, options: { type: 'array', items: ref('option') }, available: ref('rule') }, ['id', 'ident', 'code', 'name', 'prompt', 'scene', 'options']),
+    choice: obj({ id: str, ident, code: str, name: str, prompt: str, scene: { type: ['string', 'null'] }, options: { type: 'array', items: ref('option') }, available: ref('rule'), timeLimit: num, onTimeout: str }, ['id', 'ident', 'code', 'name', 'prompt', 'scene', 'options']),
     event: {
       ...obj(
         {
@@ -377,6 +377,8 @@ export const storySchema = () => ({
           endsWhen: str,
           condition: str,
           mainLabel: str,
+          timeLimit: { description: 'A timed choice: seconds to answer. When time runs out, the option whose label is onTimeout is taken (the first on offer when blank or not on offer).', ...num },
+          onTimeout: str,
           mainAfter: { enum: ['gone', 'locked'] },
           when: ref('rule'),
           ends: ref('rule'),

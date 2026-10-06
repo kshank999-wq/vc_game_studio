@@ -66,6 +66,8 @@ export const FIELDS: Partial<Record<ObjectType, readonly FieldSpec[]>> = {
   choice: [
     { key: 'prompt', label: 'Player-facing prompt', placeholder: 'Turn the key?' },
     { key: 'consequences', label: 'Consequences', multiline: true },
+    { key: 'timeLimit', label: 'Seconds to answer', placeholder: 'Blank: no time limit' },
+    { key: 'onTimeout', label: 'If time runs out, it takes', placeholder: 'An option’s words (blank: the first on offer)' },
   ],
   cinematic: [
     { key: 'camera', label: 'Camera / framing', multiline: true, placeholder: 'Slow push in on the seam' },

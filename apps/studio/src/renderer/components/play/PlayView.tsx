@@ -850,6 +850,33 @@ const WorldPanel = ({ project, world, onChange, onLearn, onGear, onCraft }: { pr
   );
 };
 
+/** A timed choice's clock: it runs down, then takes the option time running out picks. */
+const Countdown = ({ seconds, label, onDone }: { seconds: number; label: string; onDone: () => void }) => {
+  const [left, setLeft] = useState(seconds);
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(() => {
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      const remaining = Math.max(0, seconds - (Date.now() - started) / 1000);
+      setLeft(remaining);
+      if (remaining <= 0) {
+        window.clearInterval(timer);
+        done.current();
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [seconds]);
+  return (
+    <div className="play-countdown" role="timer" aria-label={`${Math.ceil(left)} seconds to answer`}>
+      <div className="play-countdown-bar" style={{ width: `${(left / seconds) * 100}%` }} />
+      <span>
+        {Math.ceil(left)}s{label ? ` · then “${label}”` : ''}
+      </span>
+    </div>
+  );
+};
+
 /**
  * Play the story through, as the engine will: lines and actions in order,
  * choices with their options (those not on offer say what they need), free
@@ -1064,6 +1091,9 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
               <div className="play-choice-title">
                 <Symbol type={prompt.symbol ?? 'choice'} size={12} /> {prompt.prompt || prompt.title}
               </div>
+              {prompt.timeLimit !== undefined && prompt.onTimeout !== undefined && (
+                <Countdown key={`${play.log.length}:${prompt.title}`} seconds={prompt.timeLimit} onDone={() => push(choose(project, play, prompt.onTimeout!))} label={prompt.options[prompt.onTimeout]?.label ?? ''} />
+              )}
               {prompt.options.map((o, i) => (
                 <button key={i} className="play-option" disabled={!o.available} title={o.needs ? `Needs: ${o.needs}` : undefined} onClick={() => push(choose(project, play, i))}>
                   <kbd>{i + 1}</kbd>

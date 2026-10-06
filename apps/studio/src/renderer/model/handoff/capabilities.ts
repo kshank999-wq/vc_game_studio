@@ -49,6 +49,15 @@ export const CAPABILITIES: readonly Capability[] = [
     },
   },
   {
+    feature: 'Timed choices',
+    engines: {
+      godot: all('auto', 'The flow runs the clock and takes the option when time runs out'),
+      unity: all('binding', 'Count down TimeLimit in your UI, then call TimedOut'),
+      unreal: all('binding', 'Count down GetChoiceTimeLimit, then call ChoiceTimedOut'),
+      custom: json,
+    },
+  },
+  {
     feature: 'Characters, items, locations and cinematics as engine data',
     engines: {
       godot: all('auto', 'A .tres resource each'),

@@ -5,6 +5,7 @@ import { cuesOf, describeCue, dueHints, hintsOf } from './puzzle/staged';
 import { equipCheck, equipmentOf, isEquipped, statsOf, useCheck } from './equipment';
 import { craftCheck, recipeOf } from './crafting';
 import { initialState, interactionsOf, statesOf } from './details';
+import { timeLimitOf, timeoutLabelOf, timeoutPick } from './timed';
 import { spineSequence } from './layout';
 import { apply, dropEquipped, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
 import { dualWith, elementsIn, spokenTogether } from './scene';
@@ -144,7 +145,16 @@ export interface PlayVerb {
 export type Prompt =
   | { kind: 'continue' }
   /** A choice, or an encounter (`symbol` says which): its options are Win and Lose. */
-  | { kind: 'choice'; title: string; prompt: string; options: PlayOption[]; symbol?: ObjectType }
+  | {
+      kind: 'choice';
+      title: string;
+      prompt: string;
+      options: PlayOption[];
+      symbol?: ObjectType;
+      /** A timed choice: seconds to answer, and the option taken when time runs out. */
+      timeLimit?: number;
+      onTimeout?: number;
+    }
   | { kind: 'freePlay'; title: string; ends: string; endsByRule: boolean; objects: { id: string; name: string; state?: string; verbs: PlayVerb[] }[] }
   | { kind: 'end'; outcome: Outcome; text: string };
 
@@ -1363,6 +1373,13 @@ export const setWorld = (project: Project, play: Play, change: (world: PlayWorld
 };
 
 /** What the player is asked now, worked out from where the story is and what the world holds. */
+/** A timed choice's limit and the option time running out takes (none when nothing is on offer). */
+const timed = (o: StoryObject | undefined, options: PlayOption[]): { timeLimit?: number; onTimeout?: number } => {
+  const limit = timeLimitOf(o);
+  const pick = timeoutPick(options, timeoutLabelOf(o));
+  return limit > 0 && pick >= 0 ? { timeLimit: limit, onTimeout: pick } : {};
+};
+
 export const promptOf = (project: Project, play: Play): Prompt => {
   const c = play.cursor;
   switch (c.at) {
@@ -1372,12 +1389,14 @@ export const promptOf = (project: Project, play: Play): Prompt => {
       return { kind: 'end', outcome: c.outcome, text: c.text };
     case 'graphChoice': {
       const o = project.objects[c.id]!;
-      return { kind: 'choice', title: `${o.data.code ? `${o.data.code} ` : ''}${o.name}`, prompt: String(o.data.prompt ?? ''), options: graphOptions(project, play.world, c.id).map(({ label, available, needs }) => ({ label, available, needs })) };
+      const options = graphOptions(project, play.world, c.id).map(({ label, available, needs }) => ({ label, available, needs }));
+      return { kind: 'choice', title: `${o.data.code ? `${o.data.code} ` : ''}${o.name}`, prompt: String(o.data.prompt ?? ''), options, ...timed(o, options) };
     }
     case 'sceneChoice': {
       const event = eventAt(project, c)!;
       const o = event.refId ? project.objects[event.refId] : undefined;
-      return { kind: 'choice', title: o?.name ?? eventTitle(project, event), prompt: String(o?.data.prompt ?? ''), options: sceneOptions(project, play.world, c.sceneId, event).map(({ label, available, needs }) => ({ label, available, needs })) };
+      const options = sceneOptions(project, play.world, c.sceneId, event).map(({ label, available, needs }) => ({ label, available, needs }));
+      return { kind: 'choice', title: o?.name ?? eventTitle(project, event), prompt: String(o?.data.prompt ?? ''), options, ...timed(o, options) };
     }
     case 'encounter': {
       const event = eventAt(project, c)!;

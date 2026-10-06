@@ -1138,6 +1138,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VCGS") void StartScene();
     UFUNCTION(BlueprintCallable, Category = "VCGS") void Advance();
     UFUNCTION(BlueprintCallable, Category = "VCGS") void Choose(int32 Option);
+    /** A timed choice on offer now: seconds to answer (0 for none). Count it down and call ChoiceTimedOut when it runs out. */
+    UFUNCTION(BlueprintPure, Category = "VCGS") float GetChoiceTimeLimit() const;
+    /** Time ran out on the timed choice on offer: it takes the option it names, else the first on offer. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") void ChoiceTimedOut();
     /** The player won the encounter on now; false (and nothing happens) when a win doesn't count yet. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") bool Win();
     /** The player lost the encounter on now: it plays again, the game is over, or the scene goes on. */
@@ -1234,6 +1238,16 @@ void UVcgsSceneFlowComponent::Advance()
 void UVcgsSceneFlowComponent::Choose(int32 Option)
 {
     if (Player) Player->Choose(Option);
+}
+
+float UVcgsSceneFlowComponent::GetChoiceTimeLimit() const
+{
+    return Player ? static_cast<float>(Player->TimeLimit) : 0.f;
+}
+
+void UVcgsSceneFlowComponent::ChoiceTimedOut()
+{
+    if (Player) Player->TimedOut();
 }
 
 bool UVcgsSceneFlowComponent::Win()
