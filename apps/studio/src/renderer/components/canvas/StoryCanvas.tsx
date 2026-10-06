@@ -30,6 +30,7 @@ import { usePreferences } from '../../preferences';
 import { useNav } from '../../nav';
 import { scenePreview } from '../../model/scene-preview';
 import { NodeView, type PortState } from './NodeView';
+import { implementationStatuses } from '../../model/implementation';
 import { SubplotBand, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
 
 /** A node being dragged in from the palette (or placed with a click). */
@@ -226,6 +227,8 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
   useWheelPanZoom(rootRef, props.setView);
 
   const shown = preview ?? dropPreview?.project ?? project;
+  // Where each node is in the engine, once the project has been exported (spec §3).
+  const implementation = useMemo(() => implementationStatuses(project), [project]);
   const ghostId = !preview && dropPreview ? dropPreview.id : null;
   const rows = laneRows(shown);
 
@@ -493,6 +496,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
               ghost={id === ghostId}
               editing={editing === id}
               issue={props.issues.get(id)}
+              implementation={implementation.get(id)}
               target={portState(id)}
               onPointerDown={(e) => onNodeDown(e, id)}
               onPortDown={(e) => onPortDown(e, id)}

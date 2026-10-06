@@ -1348,6 +1348,30 @@ a:hover {
   z-index: 2;
 }
 
+.impl-badge {
+  position: absolute;
+  left: 6px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg, #0b0a07);
+  pointer-events: auto;
+}
+
+.impl-unbound {
+  background: transparent;
+  border-color: var(--muted);
+}
+
+.impl-implemented {
+  background: var(--c-environment, #6fae5e);
+}
+
+.impl-needsUpdate {
+  background: var(--c-choice, #f2c230);
+}
+
 .node.choice .issue-badge {
   right: -6px;
 }

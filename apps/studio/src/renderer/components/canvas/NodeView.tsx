@@ -1,3 +1,4 @@
+import { IMPLEMENTATION_LABEL, type ImplementationStatus } from '../../model/implementation';
 import type { Lane, ObjectType, StoryObject } from '../../model/types';
 
 const KICKER: Partial<Record<ObjectType, string>> = {
@@ -21,6 +22,8 @@ export interface NodeProps {
   ghost: boolean;
   editing: boolean;
   issue?: string;
+  /** How far it is in the engine, once the project has been exported. */
+  implementation?: ImplementationStatus;
   /** A line about what the node holds, in place of its default subtitle. */
   detail?: string;
   /** Lit while a connector is dragged over the node. */
@@ -69,12 +72,16 @@ const Port = ({ onPortDown, color }: { onPortDown: NodeProps['onPortDown']; colo
   />
 );
 
-const Badge = ({ issue }: { issue?: string }) =>
-  issue ? (
-    <span className="issue-badge" title={issue} aria-label={issue}>
-      !
-    </span>
-  ) : null;
+const Badge = ({ issue, implementation }: { issue?: string; implementation?: ImplementationStatus }) => (
+  <>
+    {issue ? (
+      <span className="issue-badge" title={issue} aria-label={issue}>
+        !
+      </span>
+    ) : null}
+    {implementation ? <span className={`impl-badge impl-${implementation}`} title={IMPLEMENTATION_LABEL[implementation]} aria-label={IMPLEMENTATION_LABEL[implementation]} /> : null}
+  </>
+);
 
 export const NodeView = (props: NodeProps) => {
   const { object, box, place } = props;
@@ -108,7 +115,7 @@ export const NodeView = (props: NodeProps) => {
         {/* Where other plot points show their code. */}
         <span className="card-sub">{begin ? 'Beginning' : 'Ending'}</span>
         {begin && <Port onPortDown={props.onPortDown} />}
-        <Badge issue={props.issue} />
+        <Badge issue={props.issue} implementation={props.implementation} />
       </div>
     );
   }
@@ -120,7 +127,7 @@ export const NodeView = (props: NodeProps) => {
         {props.editing && <NameField {...props} className="choice-name" />}
         {!props.editing && object.name !== 'Choice' && <span className="choice-name">{object.name}</span>}
         <Port onPortDown={props.onPortDown} />
-        <Badge issue={props.issue} />
+        <Badge issue={props.issue} implementation={props.implementation} />
       </div>
     );
   }
@@ -137,7 +144,7 @@ export const NodeView = (props: NodeProps) => {
         <span className="arc-mark">{polarity === 'turn' ? <i /> : POLARITY_MARK[polarity]}</span>
         <NameField {...props} className="arc-name" />
         <Port onPortDown={props.onPortDown} color={props.laneColor} />
-        <Badge issue={props.issue} />
+        <Badge issue={props.issue} implementation={props.implementation} />
       </div>
     );
   }
@@ -171,7 +178,7 @@ export const NodeView = (props: NodeProps) => {
       <NameField {...props} className="card-name" />
       {!subplot && sub ? <span className={`card-sub${sub === 'Name it…' ? ' placeholder' : ''}`}>{sub}</span> : null}
       {!outcome && <Port onPortDown={props.onPortDown} />}
-      <Badge issue={props.issue} />
+      <Badge issue={props.issue} implementation={props.implementation} />
     </div>
   );
 };

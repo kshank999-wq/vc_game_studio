@@ -532,3 +532,19 @@ since, and the handoff asks before replacing them. The checks in
 `scripts/godot-check`, `scripts/unity-check` and `scripts/unreal-check` build
 the sample's level and play its key, door and lever.
 
+
+## Implementation status on the story graph
+
+After the first export, each story node that the export writes something for
+carries a small dot at its lower left (spec §3):
+
+| Dot | Meaning |
+|---|---|
+| Hollow | Not in the engine yet: it was added after the last export. |
+| Green | In the engine, as it is here. |
+| Yellow | Changed since the last export: export again to update the engine. |
+
+It is read from the last export's record and the edit history
+(`model/implementation.ts`), so the graph shows it without generating any
+engine code. Before the first export there are no dots. A file edited in the
+engine itself is caught by the handoff's review step, not by these dots.
