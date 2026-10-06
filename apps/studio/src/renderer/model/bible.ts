@@ -25,6 +25,8 @@ export type ViewKey =
   | 'mechanics'
   | 'encounters'
   | 'skills'
+  | 'factions'
+  | 'themes'
   | 'production';
 
 export interface BibleView {
@@ -52,6 +54,8 @@ export const VIEWS: readonly BibleView[] = [
   { key: 'mechanics', label: 'Mechanics', symbol: 'mechanic', types: ['mechanic'] },
   { key: 'encounters', label: 'Encounters / Enemies', symbol: 'encounter', types: ['encounter'] },
   { key: 'skills', label: 'Skills / Upgrades', symbol: 'skill', types: ['skill'] },
+  { key: 'factions', label: 'Factions', symbol: 'faction', types: ['faction'] },
+  { key: 'themes', label: 'Themes / Motifs / Setups', symbol: 'theme', types: ['theme'] },
   { key: 'production', label: 'Production Requirements', symbol: 'object' },
 ];
 
@@ -105,7 +109,7 @@ export const viewGroups = (project: Project, key: ViewKey, query = ''): Group[] 
 
   switch (key) {
     case 'all': {
-      const order: ObjectType[] = ['begin', 'plotPoint', 'end', 'scene', 'cinematic', 'choice', 'character', 'environment', 'object', 'inventory', 'puzzle', 'trigger', 'gate', 'state', 'arcEvent', 'dialogue', 'lore', 'quest', 'mechanic', 'encounter', 'skill'];
+      const order: ObjectType[] = ['begin', 'plotPoint', 'end', 'scene', 'cinematic', 'choice', 'character', 'environment', 'object', 'inventory', 'puzzle', 'trigger', 'gate', 'state', 'arcEvent', 'dialogue', 'lore', 'quest', 'mechanic', 'encounter', 'skill', 'faction', 'theme'];
       return keep(order.map((type) => ({ label: TYPE_LABEL[type], entries: wrap(objects.filter((o) => o.type === type)) })));
     }
     case 'characters': {
@@ -157,6 +161,13 @@ export const viewGroups = (project: Project, key: ViewKey, query = ''): Group[] 
       const tree = (o: StoryObject) => String(o.data.tree ?? '').trim() || 'No tree';
       const trees = [...new Set(skills.map(tree))].sort((a, b) => (a === 'No tree' ? 1 : b === 'No tree' ? -1 : a.localeCompare(b)));
       return keep(trees.map((t) => ({ label: t, entries: wrap(skills.filter((o) => tree(o) === t)) })));
+    }
+    case 'themes': {
+      // Grouped by what they are: themes, motifs, and setups waiting for their payoff.
+      const themes = objects.filter((o) => o.type === 'theme');
+      const kinds = ['Theme', 'Motif', 'Setup / payoff'];
+      const kind = (o: StoryObject) => (kinds.includes(String(o.data.kind)) ? String(o.data.kind) : 'Theme');
+      return keep(kinds.map((k) => ({ label: k === 'Setup / payoff' ? 'Setups and payoffs' : `${k}s`, entries: wrap(themes.filter((o) => kind(o) === k)) })));
     }
     case 'production': {
       const tagged = objects.filter((o) => ((o.data.production as string[] | undefined) ?? []).length > 0);

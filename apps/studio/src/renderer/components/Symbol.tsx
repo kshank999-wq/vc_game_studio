@@ -24,6 +24,8 @@ const FILL: Partial<Record<ObjectType, string>> = {
   mechanic: 'var(--c-mechanic)',
   encounter: 'var(--c-encounter)',
   skill: 'var(--c-skill)',
+  faction: 'var(--c-faction)',
+  theme: 'var(--c-theme)',
   begin: 'var(--gold)',
   end: 'var(--gold)',
 };
@@ -36,6 +38,12 @@ export const Symbol = ({ type, size = 14, color }: { type: ObjectType; size?: nu
     </svg>
   );
   switch (type) {
+    case 'faction':
+      // A banner.
+      return svg(<path d="M3 1.5h10v9L8 14.5 3 10.5z" fill={fill} />);
+    case 'theme':
+      // A ring: what keeps coming back.
+      return svg(<circle cx="8" cy="8" r="5" fill="none" stroke={fill} strokeWidth="2.6" />);
     case 'plotPoint':
       return svg(<rect x="6.5" y="1.5" width="3" height="13" rx="1" fill={fill} />);
     case 'scene':

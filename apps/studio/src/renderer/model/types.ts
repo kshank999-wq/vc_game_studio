@@ -31,7 +31,11 @@ export type ObjectType =
   | 'mechanic'
   | 'encounter'
   // Progression (spec §8): skills, abilities and upgrades, learned in trees.
-  | 'skill';
+  | 'skill'
+  // The Bible's world and meaning (Writer spec §4): factions, and themes,
+  // motifs and setups with their payoffs.
+  | 'faction'
+  | 'theme';
 
 export interface StoryObject {
   id: string;

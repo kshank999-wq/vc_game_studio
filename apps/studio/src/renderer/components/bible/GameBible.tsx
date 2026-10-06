@@ -81,6 +81,8 @@ const VIEW_GROUP: Record<ViewKey, string> = {
   mechanics: 'Type',
   encounters: 'Type',
   skills: 'Tree',
+  factions: 'Type',
+  themes: 'Kind',
   production: 'Production tag',
 };
 
@@ -96,6 +98,8 @@ const CREATES: Partial<Record<ViewKey, ObjectType>> = {
   mechanics: 'mechanic',
   encounters: 'encounter',
   skills: 'skill',
+  factions: 'faction',
+  themes: 'theme',
 };
 
 const CREATE_CODE = ENTRY_CODE;

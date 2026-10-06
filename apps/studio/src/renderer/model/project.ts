@@ -100,6 +100,8 @@ const CODE_FORMAT: Partial<Record<ObjectType, { prefix: string; pad: number }>> 
   mechanic: { prefix: 'MEC-', pad: 2 },
   encounter: { prefix: 'ENC-', pad: 2 },
   skill: { prefix: 'SK-', pad: 2 },
+  faction: { prefix: 'FAC-', pad: 2 },
+  theme: { prefix: 'THM-', pad: 2 },
 };
 const SUBPLOT_POINT = { prefix: 'SP', pad: 0 };
 
