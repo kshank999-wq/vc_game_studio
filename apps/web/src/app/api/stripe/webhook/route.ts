@@ -10,7 +10,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Stripe webhook: the only place a license is issued or changed.
+ * Stripe webhook: where licenses follow their subscriptions (the checkout
+ * return page also issues one, as a backup for a late webhook).
  *
  * VC Writer's order of operations: verify the signature; claim the event id
  * (in gs_stripe_webhook_events, this endpoint's own table, since VC Writer's
@@ -44,10 +45,13 @@ export async function POST(request: Request): Promise<Response> {
 
   const client = adminClient();
   const { error: claimError } = await client.from('gs_stripe_webhook_events').insert({ id: event.id, type: event.type });
+  // A delivery we have seen before: a refund or dispute is acted on once. A
+  // subscription event is applied again, since it reads the subscription's
+  // current state from Stripe (so a resend or retry brings the license up to
+  // date) and only the delivery that issued the license sends its email.
   if (claimError) {
-    console.warn(`[webhook] could not claim ${event.id}: ${claimError.message}`);
     const { data: seen } = await client.from('gs_stripe_webhook_events').select('processed_at').eq('id', event.id).maybeSingle();
-    if (seen?.processed_at) return NextResponse.json({ received: true, duplicate: true });
+    if (seen?.processed_at && !subscriptionEvent) return NextResponse.json({ received: true, duplicate: true });
   }
 
   try {
