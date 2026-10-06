@@ -52,7 +52,11 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     if (subscriptionEvent) {
-      await issueFromSubscription(event.data.object as Stripe.Subscription);
+      // Act on the subscription as it is now, not the event's snapshot: a
+      // created event says `incomplete` while the first payment settles, and
+      // a resent or out-of-order event can be older than what Stripe knows.
+      const current = await stripe().subscriptions.retrieve((event.data.object as Stripe.Subscription).id);
+      await issueFromSubscription(current);
     } else {
       // A refund or dispute: follow the money back to its subscription. VC
       // Writer's charges have no subscription of ours and change nothing.
