@@ -462,6 +462,17 @@ number under the faction's key in `flags`, starting at 0: the `reputation`
 condition (`"op": "atLeast" | "below"`) reads it and the `reputation` effect
 adds `amount` to it, in every runtime.
 
+## Doors, people and scaffolding in play
+
+As in the studio's Play Mode, a closed door opens as the player walks up to
+it (or says what it needs, once each approach), unless its `autoOpen` is off;
+the player and the characters placed in a level (npc, enemy, companion,
+neutral) show as simple stand-in figures until final art replaces them; and
+the designer's markers (player start, patrol stops, spawns…) and anything set
+not visible are hidden while playing, though they still show in the editor.
+Godot does all of this in its level runtime (`VCGSFigure` builds the figure;
+the player's own is on render layer 2, which its camera leaves out).
+
 ## Ladders, water and stamina
 
 A ladder (role `ladder`) is climbed: within reach of it, forward goes up and

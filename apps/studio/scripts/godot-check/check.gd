@@ -703,6 +703,31 @@ func check_level(game: Node) -> void:
 	var trigger: String = level.guid_of("TRG_VaultChamber_DoorInTheDarkTrigger_002")
 	if level.offer(door).get("blocked", "") != "Locked. Needs Vault Key.":
 		fail("the bronze door should be locked until the key is held, got " + str(level.offer(door)))
+	# Walking up to it says so, once, and leaves it shut (doors open as the player comes up, as in Play Mode).
+	var door_walker := Node3D.new()
+	level.add_child(door_walker)
+	level.player = door_walker
+	var door_said: Array = []
+	level.message_shown.connect(func(t: String) -> void: door_said.append(t))
+	door_walker.position = (level.nodes[door] as Node3D).position + Vector3(0, 0, 0.8)
+	level._approach_doors()
+	level._approach_doors()
+	if level.is_open(door) or door_said != ["Locked. Needs Vault Key."]:
+		fail("walking up to the locked door should say what it needs, once, got " + str(door_said))
+	door_walker.position += Vector3(40, 0, 40)
+	level._approach_doors()
+	if not level.at_doors.is_empty():
+		fail("walking away should leave no door being approached")
+	level.player = null
+	door_walker.queue_free()
+	# Characters show as stand-in figures, not their marker.
+	var figure: Node = level.nodes[mara].get_node_or_null("Figure") if mara != "" else null
+	var proxy: Node3D = level.nodes[mara].get_node_or_null("Proxy") if mara != "" else null
+	if figure == null or figure.get_child_count() != 9 or (proxy != null and proxy.visible):
+		fail("Mara should be a stand-in figure of 9 parts, her marker hidden")
+	var start_proxy: Node3D = level.get_node("PLR_CaveMouth_ExplorerStart_001").get_node_or_null("Proxy")
+	if start_proxy != null and start_proxy.visible:
+		fail("the player start's marker should be out of sight in play")
 	level.interact(key)
 	if not game.has_item("vault_key") or level.nodes[key].visible:
 		fail("taking the key should give the story's key and take it out of the level")
@@ -731,6 +756,12 @@ func check_level(game: Node) -> void:
 	var player: Node = play.get_node("Player")
 	if not (player.get_node(player.level_path) is VCGSLevel):
 		fail("play_sunken_vault.tscn should have a player wired to the level")
+	# The tree isn't running here, so the player hasn't readied itself: do it as the game would.
+	if player.camera == null:
+		player._ready()
+	var body: Node = player.get_node_or_null("Figure")
+	if body == null or body.get_child_count() != 9 or ((body.get_child(0) as VisualInstance3D).layers & 2) == 0:
+		fail("the player should have its stand-in figure, on the layer its own camera leaves out")
 	play.queue_free()
 	# The dark and the lantern: no light until the lantern is taken; the Squeeze is dark; the oil burns, and Mara tops it up.
 	var guid_named := func(n: String) -> String:
