@@ -10,6 +10,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tester:
+        description: 'Tester build: licensing switched off, for trying the app ourselves (never published)'
+        type: boolean
+        default: false
 
 jobs:
   package:
@@ -27,10 +32,11 @@ jobs:
             script: package:mac
     env:
       # Built into the app: where it checks its license, and the key that checks the answer.
+      # A tester build leaves them out, which switches licensing off.
       MAIN_VITE_SITE_URL: ${{ vars.MAIN_VITE_SITE_URL || 'https://vc-gamestudio.com' }}
-      MAIN_VITE_SUPABASE_URL: ${{ vars.MAIN_VITE_SUPABASE_URL }}
-      MAIN_VITE_SUPABASE_ANON_KEY: ${{ vars.MAIN_VITE_SUPABASE_ANON_KEY }}
-      MAIN_VITE_LICENSE_PUBLIC_KEY: ${{ vars.MAIN_VITE_LICENSE_PUBLIC_KEY }}
+      MAIN_VITE_SUPABASE_URL: ${{ !inputs.tester && vars.MAIN_VITE_SUPABASE_URL || '' }}
+      MAIN_VITE_SUPABASE_ANON_KEY: ${{ !inputs.tester && vars.MAIN_VITE_SUPABASE_ANON_KEY || '' }}
+      MAIN_VITE_LICENSE_PUBLIC_KEY: ${{ !inputs.tester && vars.MAIN_VITE_LICENSE_PUBLIC_KEY || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +51,7 @@ jobs:
       # A build without these is a developer build with licensing switched off
       # (everything unlocked). It must never reach a customer.
       - name: Require the licensing configuration
+        if: ${{ !inputs.tester }}
         shell: bash
         run: |
           missing=""
@@ -144,7 +151,13 @@ jobs:
             export CSC_IDENTITY_AUTO_DISCOVERY=false
             echo "::warning::No macOS signing identity: building unsigned."
           fi
-          npm run ${{ matrix.script }} -w @vcgs/studio -- ${{ steps.notarize.outputs.flag }} $windows_flags
+          # A tester build's installer says so in its name, so it is never mistaken for a release.
+          tester_flags=""
+          if [ "${{ inputs.tester }}" = "true" ]; then
+            tester_flags='-c.artifactName=VC-Game-Studio-Tester-${version}-${os}.${ext}'
+            echo "::warning::Tester build: licensing is switched off. For our own testing only; never publish it."
+          fi
+          npm run ${{ matrix.script }} -w @vcgs/studio -- ${{ steps.notarize.outputs.flag }} $windows_flags $tester_flags
 
       - name: Checksum the installers
         shell: bash
@@ -160,7 +173,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: vcgs-${{ matrix.platform }}
+          name: vcgs-${{ inputs.tester && 'tester-' || '' }}${{ matrix.platform }}
           path: |
             apps/studio/release/*.exe
             apps/studio/release/*.dmg
