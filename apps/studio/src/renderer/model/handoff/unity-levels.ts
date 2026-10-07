@@ -373,6 +373,7 @@ namespace VCGS
             Time += dt;
             MoveActors(dt);
             Watch();
+            ApproachDoors();
             BurnLight(dt);
             foreach (var guid in new List<string>(Inside))
             {
@@ -607,6 +608,34 @@ namespace VCGS
             if (swim && Stamina == 0) Health -= 15 * dt;
         }
 
+        /// <summary>Doors the Player is standing at now: each opens (or says why not) once as they come up.</summary>
+        public readonly HashSet<string> AtDoors = new HashSet<string>();
+
+        /// <summary>
+        /// Walking up to a closed door opens it, as Interact would, or says what it needs: once each
+        /// approach (as the studio's Play Mode). A door whose autoOpen is off waits for Interact.
+        /// </summary>
+        void ApproachDoors()
+        {
+            if (Player == null || Player.Length < 3) return;
+            var near = new HashSet<string>();
+            foreach (var guid in Order)
+            {
+                if (Role(guid) != "door" || !IsPresent(guid)) continue;
+                var at = D.List(Item(guid), "position");
+                if (at.Count < 3) continue;
+                var size = D.List(Item(guid), "size");
+                var width = size.Count > 0 ? D.Num(size[0], 1.2) : 1.2;
+                double dx = Player[0] - D.Num(at[0], 0), dz = Player[2] - D.Num(at[2], 0);
+                if (Math.Abs(Player[1] - D.Num(at[1], 0)) > 1 || Math.Sqrt(dx * dx + dz * dz) > Math.Max(1.1, width / 2 + 0.4)) continue;
+                near.Add(guid);
+                if (AtDoors.Contains(guid) || IsOpen(guid) || !ParamBool(guid, "autoOpen", true)) continue;
+                Interact(guid);
+            }
+            AtDoors.Clear();
+            AtDoors.UnionWith(near);
+        }
+
         /// <summary>Line of sight: true when something solid lies between two level-space points. VcgsLevel sets it (a raycast); unset, nothing blocks.</summary>
         public Func<double[], double[], bool> Blocked;
         /// <summary>Actors that see the player now.</summary>
@@ -786,6 +815,43 @@ namespace VCGS
     /// Runs LevelLogic on the story's GameState and shows what is there: items
     /// come and go with their conditions, doors open and shut.
     /// </summary>
+    /// <summary>A plain stand-in person (legs, hips, torso, arms, head, nose), feet at 0, facing +Z (the data's north): the same figure as the studio's Play Mode.</summary>
+    public static class VcgsFigure
+    {
+        public static Transform Build(Transform parent, Color color, float height = 1.75f)
+        {
+            var k = height / 1.75f;
+            var figure = new GameObject("Figure").transform;
+            figure.SetParent(parent, false);
+            var dark = new Color(color.r * 0.55f, color.g * 0.55f, color.b * 0.55f);
+            var skin = new Color(0.85f, 0.71f, 0.56f);
+            void Part(PrimitiveType type, Vector3 at, Vector3 size, Color tint)
+            {
+                var part = GameObject.CreatePrimitive(type);
+                part.name = type.ToString();
+                // Only something to see: the player and the walls do the colliding.
+                var collider = part.GetComponent<Collider>();
+                if (collider != null) Object.Destroy(collider);
+                part.transform.SetParent(figure, false);
+                part.transform.localPosition = at * k;
+                part.transform.localScale = size * k;
+                var renderer = part.GetComponent<Renderer>();
+                if (renderer != null && renderer.sharedMaterial != null) renderer.sharedMaterial = new Material(renderer.sharedMaterial) { color = tint };
+            }
+            // A capsule is 2 tall and 1 across at scale 1.
+            Part(PrimitiveType.Capsule, new Vector3(-0.1f, 0.44f, 0), new Vector3(0.15f, 0.42f, 0.15f), dark);
+            Part(PrimitiveType.Capsule, new Vector3(0.1f, 0.44f, 0), new Vector3(0.15f, 0.42f, 0.15f), dark);
+            Part(PrimitiveType.Cube, new Vector3(0, 0.88f, 0), new Vector3(0.34f, 0.16f, 0.2f), dark);
+            Part(PrimitiveType.Cube, new Vector3(0, 1.2f, 0), new Vector3(0.38f, 0.5f, 0.22f), color);
+            Part(PrimitiveType.Capsule, new Vector3(-0.25f, 1.12f, 0), new Vector3(0.12f, 0.31f, 0.12f), color);
+            Part(PrimitiveType.Capsule, new Vector3(0.25f, 1.12f, 0), new Vector3(0.12f, 0.31f, 0.12f), color);
+            Part(PrimitiveType.Cylinder, new Vector3(0, 1.49f, 0), new Vector3(0.1f, 0.04f, 0.1f), skin);
+            Part(PrimitiveType.Sphere, new Vector3(0, 1.62f, 0), new Vector3(0.24f, 0.24f, 0.24f), skin);
+            Part(PrimitiveType.Cube, new Vector3(0, 1.61f, 0.14f), new Vector3(0.04f, 0.04f, 0.07f), skin);
+            return figure;
+        }
+    }
+
     public sealed class VcgsLevel : MonoBehaviour
     {
         [Tooltip("The generated level data (Assets/VCGS/Generated/Levels/<level>.json).")]
@@ -822,6 +888,7 @@ namespace VCGS
                 item.Level = this;
             }
             Logic.Refreshed += Refresh;
+            Dress();
             // Sight is blocked by anything solid but the player and the actors themselves.
             Logic.Blocked = (a, b) =>
             {
@@ -884,6 +951,41 @@ namespace VCGS
 
         /// <summary>Take a travel link (spec V2 §13); "" when the player goes, else why not. Answer Logic.TravelRequested to move them.</summary>
         public string Travel(string link, bool reverse = false) => Logic != null ? Logic.TakeTravel(link, reverse) : "";
+
+        [Tooltip("Give the Player a stand-in figure when it has nothing of its own to show.")]
+        public bool dressPlayer = true;
+
+        static readonly Dictionary<string, Color> People = new Dictionary<string, Color>
+        {
+            ["npc"] = new Color(0.85f, 0.38f, 0.48f),
+            ["enemy"] = new Color(0.9f, 0.28f, 0.3f),
+            ["companion"] = new Color(0.37f, 0.66f, 0.83f),
+            ["neutral"] = new Color(0.6f, 0.56f, 0.48f),
+        };
+
+        /// <summary>
+        /// In play, as in the studio's Play Mode: characters show as stand-in figures, and the
+        /// designer's markers (player start, patrol stops, spawns) and anything set not visible are
+        /// hidden. They still show in the editor. Final art (an Art child) is left alone.
+        /// </summary>
+        void Dress()
+        {
+            foreach (var pair in items)
+            {
+                var item = pair.Value;
+                if (item.transform.Find("Art") != null) continue;
+                var role = Logic.Role(pair.Key);
+                var kind = Logic.Item(pair.Key).TryGetValue("kind", out var k) ? k as string : "";
+                var proxy = item.transform.Find("Proxy");
+                var person = People.TryGetValue(role, out var color);
+                var hidden = Logic.Param(pair.Key, "visible") is bool shown && !shown;
+                if (proxy != null && (person || (kind == "marker") || (kind != "space" && hidden))) proxy.gameObject.SetActive(false);
+                if (person && item.transform.Find("Figure") == null) VcgsFigure.Build(item.transform, color);
+            }
+            if (player == null) player = GameObject.FindWithTag("Player")?.transform;
+            if (dressPlayer && player != null && player.GetComponentInChildren<Renderer>() == null && player.Find("Figure") == null)
+                VcgsFigure.Build(player, new Color(0.79f, 0.64f, 0.29f));
+        }
 
         /// <summary>Put each actor that moves (patrols, companions) where LevelLogic has it, facing the way it goes.</summary>
         public void MoveActors()

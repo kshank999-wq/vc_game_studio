@@ -109,6 +109,25 @@ static void CheckLevel(const vcgs::Story& story)
     const std::string seam = level.GuidOf("TRG_VaultChamber_FloodedSeam_001");
     const std::string trigger = level.GuidOf("TRG_VaultChamber_DoorInTheDarkTrigger_002");
     if (level.Offer(door).Blocked != "Locked. Needs Vault Key.") Fail("the bronze door should be locked until the key is held, got " + level.Offer(door).Blocked);
+    {
+        // Walking up to it says so, once, and leaves it shut (doors open as the player comes up, as in Play Mode).
+        std::vector<std::string> doorSaid;
+        level.OnMessage = [&doorSaid](const std::string& t) { doorSaid.push_back(t); };
+        const auto& at = level.Item(door)["position"];
+        level.HasPlayer = true;
+        level.PlayerX = at[0].Num(0);
+        level.PlayerY = at[1].Num(0);
+        level.PlayerZ = at[2].Num(0) + 0.8;
+        level.Tick(0.1);
+        level.Tick(0.1);
+        if (level.IsOpen(door) || doorSaid.size() != 1 || doorSaid[0] != "Locked. Needs Vault Key.") Fail("walking up to the locked door should say what it needs, once");
+        level.PlayerX = 60;
+        level.PlayerZ = 60;
+        level.Tick(0.1);
+        if (!level.AtDoors.empty()) Fail("walking away should leave no door being approached");
+        level.HasPlayer = false;
+        level.OnMessage = nullptr;
+    }
     level.Interact(key);
     if (!game.HasItem(VcgsKeys::Items::VaultKey) || level.IsPresent(key)) Fail("taking the key should give the story's key and take it out of the level");
     level.Interact(door);

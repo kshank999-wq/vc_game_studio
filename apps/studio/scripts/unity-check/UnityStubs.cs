@@ -137,6 +137,11 @@ namespace UnityEngine
             Walk(transform);
             return found.ToArray();
         }
+        public T GetComponentInChildren<T>() where T : class
+        {
+            var all = GetComponentsInChildren<T>(false);
+            return all.Length > 0 ? all[0] : null;
+        }
     }
 
     public class Transform : Component
@@ -251,6 +256,7 @@ namespace UnityEngine
     {
         public Color color = Color.white;
         public Material(Shader shader) { }
+        public Material(Material source) { color = source.color; }
     }
 
     public enum LightType { Spot, Directional, Point }

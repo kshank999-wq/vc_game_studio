@@ -123,6 +123,11 @@ struct FRotator
 };
 
 struct FHitResult {};
+struct FName
+{
+    FName() {}
+    FName(const TCHAR*) {}
+};
 
 struct FVector2D
 {

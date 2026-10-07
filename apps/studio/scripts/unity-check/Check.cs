@@ -342,6 +342,18 @@ static class Check
         var seam = level.GuidOf("TRG_VaultChamber_FloodedSeam_001");
         var trigger = level.GuidOf("TRG_VaultChamber_DoorInTheDarkTrigger_002");
         if (level.Offer(door)?.Blocked != "Locked. Needs Vault Key.") Fail("the bronze door should be locked until the key is held, got " + level.Offer(door)?.Blocked);
+        // Walking up to it says so, once, and leaves it shut (doors open as the player comes up, as in Play Mode).
+        var doorSaid = new List<string>();
+        level.Message += m => doorSaid.Add(m);
+        var doorAt = D.List(level.Item(door), "position");
+        level.Player = new double[] { D.Num(doorAt[0], 0), D.Num(doorAt[1], 0), D.Num(doorAt[2], 0) + 0.8 };
+        level.Tick(0.1);
+        level.Tick(0.1);
+        if (level.IsOpen(door) || doorSaid.Count != 1 || doorSaid[0] != "Locked. Needs Vault Key.") Fail("walking up to the locked door should say what it needs, once, got " + string.Join(" | ", doorSaid));
+        level.Player = new double[] { 60, 0, 60 };
+        level.Tick(0.1);
+        if (level.AtDoors.Count != 0) Fail("walking away should leave no door being approached");
+        level.Player = null;
         level.Interact(key);
         if (!game.HasItem(Items.VaultKey) || level.IsPresent(key)) Fail("taking the key should give the story's key and take it out of the level");
         level.Interact(door);
@@ -490,6 +502,12 @@ static class Check
         levelComponent.Setup(fresh);
         levelComponent.Interact(levelComponent.Logic.GuidOf("INT_VaultChamber_RustedLever_005"));
         if (root.transform.Find("TRG_VaultChamber_FloodedSeam_001").gameObject.activeSelf) Fail("VcgsLevel should switch the drained seam off");
+        // Characters show as stand-in figures, and the designer's markers are hidden in play.
+        var maraItem = root.transform.Find("NPC_CaveMouth_Mara_001");
+        var maraFigure = maraItem?.Find("Figure");
+        if (maraFigure == null || maraFigure.childCount != 9 || (maraItem.Find("Proxy") != null && maraItem.Find("Proxy").gameObject.activeSelf)) Fail("Mara should be a stand-in figure of 9 parts, her marker hidden");
+        var startProxy = root.transform.Find("PLR_CaveMouth_ExplorerStart_001")?.Find("Proxy");
+        if (startProxy != null && startProxy.gameObject.activeSelf) Fail("the player start's marker should be out of sight in play");
     }
 
     // The world (spec V2): the old quarter built inside it at the harbour, streamed with the player; the coast's travel links and their lock.

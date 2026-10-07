@@ -13,6 +13,7 @@ public:
     virtual void Tick(float DeltaSeconds) { (void)DeltaSeconds; }
     UWorld* GetWorld() const { return nullptr; }
     void SetActorHiddenInGame(bool) {}
+    bool ActorHasTag(FName) const { return false; }
     void SetActorEnableCollision(bool) {}
     void GetAttachedActors(TArray<AActor*>&) const {}
     FVector GetActorLocation() const { return FVector(); }

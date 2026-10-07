@@ -3,11 +3,6 @@
 class UGameInstance;
 class AActor;
 enum ECollisionChannel { ECC_Visibility, ECC_Camera };
-struct FName
-{
-    FName() {}
-    FName(const TCHAR*) {}
-};
 struct FCollisionQueryParams
 {
     FCollisionQueryParams() {}

@@ -47,6 +47,14 @@ chamber = placed["RM_SunkenVault_VaultChamber_004"]
 if len(chamber.get_attached_actors()) < 5:
     fail("the chamber should have its floor and walls attached")
 # A freeform space's floor and ceiling go to the item as slabs, built on construction.
+# Characters are stand-in figures, not their marker; the player start's marker is scaffolding, hidden in play.
+mara = placed["NPC_CaveMouth_Mara_001"]
+figure = [a for a in mara.get_attached_actors() if a.actor_has_tag("vcgs_figure")]
+if len(figure) != 9 or any(a.actor_has_tag("vcgs_marker") for a in mara.get_attached_actors()):
+    fail("Mara should be a stand-in figure of 9 pieces, without her marker, got %d" % len(figure))
+start = placed["PLR_CaveMouth_ExplorerStart_001"]
+if not any(a.actor_has_tag("vcgs_scaffold") for a in start.get_attached_actors()):
+    fail("the player start's marker should be tagged as scaffolding")
 cave = placed["RM_SunkenVault_CaveMouth_001"]
 cave_data = next(i for i in data["items"] if i["export_name"] == "RM_SunkenVault_CaveMouth_001")
 slabs = chamber.get_editor_property("slabs")

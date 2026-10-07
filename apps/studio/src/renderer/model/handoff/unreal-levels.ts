@@ -165,6 +165,32 @@ namespace vcgs
             return !Blocked(p.X, eye, p.Z, PlayerX, eye, PlayerZ);
         }
 
+        /** Doors the player is standing at now: each opens (or says why not) once as they come up. */
+        std::set<std::string> AtDoors;
+
+        /**
+         * Walking up to a closed door opens it, as Interact would, or says what it needs: once each
+         * approach (as the studio's Play Mode). A door whose autoOpen is off waits for Interact.
+         */
+        void ApproachDoors()
+        {
+            if (!HasPlayer) return;
+            std::set<std::string> near;
+            for (const auto& guid : Order)
+            {
+                if (Role(guid) != "door" || !IsPresent(guid)) continue;
+                const Value& at = Item(guid)["position"];
+                const Value& size = Item(guid)["size"];
+                const double width = size[0].Num(1.2);
+                const double dx = PlayerX - at[0].Num(0), dz = PlayerZ - at[2].Num(0);
+                if (std::fabs(PlayerY - at[1].Num(0)) > 1 || std::sqrt(dx * dx + dz * dz) > std::max(1.1, width / 2 + 0.4)) continue;
+                near.insert(guid);
+                if (AtDoors.count(guid) || IsOpen(guid) || !ParamBool(guid, "autoOpen", true)) continue;
+                Interact(guid);
+            }
+            AtDoors = near;
+        }
+
         bool HasPlayer = false;
         double PlayerX = 0, PlayerY = 0, PlayerZ = 0;
         /** How far behind a companion may fall before it catches up at once. */
@@ -479,6 +505,7 @@ namespace vcgs
                 else if (HasPlayer) StepFollow(pair.second, motion, dt, PlayerX, PlayerY, PlayerZ);
             }
             Watch();
+            ApproachDoors();
             for (const auto& guid : std::vector<std::string>(Inside.begin(), Inside.end()))
             {
                 std::string role = Role(guid);
@@ -1341,7 +1368,8 @@ void AVcgsLevelDirector::Refresh()
         Item->GetAttachedActors(Pieces);
         for (AActor* Piece : Pieces)
         {
-            const bool Show = Door ? Shut : Here;
+            // The designer's markers (player start, patrol stops, spawns) are the editor's: never shown in play.
+            const bool Show = Piece->ActorHasTag(FName(TEXT("vcgs_scaffold"))) ? false : Door ? Shut : Here;
             Piece->SetActorHiddenInGame(!Show);
             Piece->SetActorEnableCollision(Show);
         }
@@ -1545,6 +1573,27 @@ def slab_of(piece, with_mesh):
     return slab
 
 
+PEOPLE = ("npc", "enemy", "companion", "neutral")
+
+
+def _figure_part(shape, at, size):
+    return {"part": "figure", "shape": shape, "at": at, "size": size, "turn": 0.0, "collide": False}
+
+
+# A plain stand-in person (legs, hips, torso, arms, head, nose), feet at 0, facing north: the studio's Play Mode figure.
+FIGURE = [
+    _figure_part("cylinder", [-0.1, 0.44, 0.0], [0.15, 0.83, 0.15]),
+    _figure_part("cylinder", [0.1, 0.44, 0.0], [0.15, 0.83, 0.15]),
+    _figure_part("box", [0.0, 0.88, 0.0], [0.34, 0.16, 0.2]),
+    _figure_part("box", [0.0, 1.2, 0.0], [0.38, 0.5, 0.22]),
+    _figure_part("cylinder", [-0.25, 1.12, 0.0], [0.12, 0.62, 0.12]),
+    _figure_part("cylinder", [0.25, 1.12, 0.0], [0.12, 0.62, 0.12]),
+    _figure_part("cylinder", [0.0, 1.49, 0.0], [0.1, 0.08, 0.1]),
+    _figure_part("sphere", [0.0, 1.62, 0.0], [0.24, 0.24, 0.24]),
+    _figure_part("box", [0.0, 1.61, -0.14], [0.04, 0.04, 0.07]),
+]
+
+
 def place_piece(item, piece, index, with_mesh, report):
     shape = piece["shape"]
     at = to_unreal(piece["at"])
@@ -1652,7 +1701,11 @@ def build():
         with_mesh = not item_data["final_asset"] and not item_data["replacement_locked"]
         index = 0
         slabs = []
-        for piece in item_data["pieces"]:
+        # Characters show as stand-in figures instead of their marker (as in the studio's Play Mode);
+        # other markers are the designer's scaffolding, hidden in play.
+        person = item_data["role"] in PEOPLE
+        pieces = [p for p in item_data["pieces"] if not (person and p["part"] == "marker")] + (FIGURE if person and with_mesh else [])
+        for piece in pieces:
             if piece["shape"] == "cone":
                 continue
             if piece["part"] == "volume":
@@ -1669,7 +1722,9 @@ def build():
             if piece["shape"] == "slab":
                 slabs.append(slab_of(piece, with_mesh))
                 continue
-            place_piece(item, piece, index, with_mesh, report)
+            actor = place_piece(item, piece, index, with_mesh, report)
+            if piece["part"] == "marker" and not person:
+                actor.tags = actor.tags + ["vcgs_scaffold"]
             index += 1
             if piece.get("light"):
                 light = piece["light"]

@@ -471,7 +471,14 @@ neutral) show as simple stand-in figures until final art replaces them; and
 the designer's markers (player start, patrol stops, spawns…) and anything set
 not visible are hidden while playing, though they still show in the editor.
 Godot does all of this in its level runtime (`VCGSFigure` builds the figure;
-the player's own is on render layer 2, which its camera leaves out).
+the player's own is on render layer 2, which its camera leaves out). Unity's
+`LevelLogic` opens doors on approach (`AtDoors`), and `VcgsLevel` dresses the
+characters with `VcgsFigure` (coloured by role), hides the markers in play, and
+gives the GameObject tagged Player a figure when it has nothing of its own to
+show (`dressPlayer`). Unreal's level logic opens doors on approach the same
+way; `build_level.py` places the characters' figures from Unreal's basic shapes
+(in its default grey) and tags the markers `vcgs_scaffold`, which the level
+director hides in play. Unreal's player is your pawn.
 
 ## Ladders, water and stamina
 
