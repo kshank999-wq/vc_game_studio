@@ -109,6 +109,12 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
       const o = openingOf(set, item, global);
       if (o && !o.fits) add({ id: item.id, levelId: item.levelId, severity: 'error', message: `${item.name} doesn’t fit its wall.`, export: 'The opening would run past the wall’s end.' });
     }
+    // A door too narrow for the player's body (too low is the navigation check's: it knows about crouching).
+    if (def.role === 'door' && !item.invalid) {
+      const f = frameOf(set, item, global);
+      const clear = BODY.radius * 2 + 0.2;
+      if (f.w < clear) add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} is too narrow for the player (${f.w.toFixed(2)} m; they need ${clear.toFixed(2)} m).`, export: 'Make it at least 1 m wide; 1.2 m is comfortable.' });
+    }
 
     // References to the story, the library and other items.
     const refKeys = def.params.filter((p) => p.type === 'ref').map((p) => p.key);

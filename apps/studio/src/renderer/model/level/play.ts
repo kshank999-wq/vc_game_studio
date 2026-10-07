@@ -71,6 +71,8 @@ export interface LevelPlayState {
   inside: string[];
   /** The player's stamina (spec §6), 0–100, when the level tracks it. */
   stamina?: number;
+  /** Doors the player is standing at, already tried this approach (they open as the player walks up). */
+  atDoors?: Record<string, boolean>;
   /** Actors that can see the player now (line of sight). */
   seen?: Record<string, boolean>;
   /** Rule id → when it last ran (timers). */
@@ -346,6 +348,27 @@ const startScene = (project: Project, state: LevelPlayState, sceneId: string, de
   const settled = settleWorld(project, world);
   const s = changeWorld(project, state, settled.world, settled.log, undefined, depth);
   return { ...s, scene: { id: sceneId, title: `${scene.data.code ? `${String(scene.data.code)} ` : ''}${scene.name}`, text: String(scene.data.summary ?? '') } };
+};
+
+/** How near a door's middle the player must come for it to open by itself. */
+export const DOOR_REACH = 1.1;
+
+const approachDoors = (project: Project, state: LevelPlayState, at: Where, global?: readonly AssetDefinition[]): LevelPlayState => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === state.levelId);
+  const near: Record<string, boolean> = {};
+  let s = state;
+  for (const item of set.items) {
+    if (item.levelId !== state.levelId || assetOf(set, item, global).role !== 'door' || !present(project, s, item)) continue;
+    const f = frameOf(set, item, global);
+    const bottom = (level?.floors.find((fl) => fl.id === item.floorId)?.elevation ?? 0) + f.z;
+    if (Math.abs(at.z - bottom) > 1 || Math.hypot(at.x - f.x, at.y - f.y) > Math.max(DOOR_REACH, f.w / 2 + 0.4)) continue;
+    near[item.id] = true;
+    if (s.atDoors?.[item.id] || isOpen(project, s, item, global) || !bool(paramOf(set, item, 'autoOpen', global), true)) continue;
+    s = interactWith(project, s, item.id, global);
+  }
+  const before = Object.keys(s.atDoors ?? {});
+  return before.length === Object.keys(near).length && before.every((id) => near[id]) ? s : { ...s, atDoors: near };
 };
 
 /** What blocks sight in a level: its solid parts, worked out once per level as edited. */
@@ -628,6 +651,9 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   // Patrols walk on, companions keep up.
   const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => present(project, s, i), global, s.seen);
   if (actors !== s.actors) s = { ...s, actors };
+
+  // Walking up to a closed door opens it, as Interact would, or says why it won't: once each approach.
+  s = approachDoors(project, s, at, global);
 
   // Who sees the player: an actor's "sees the player" rules run as the player comes into view, "loses sight" as they go.
   s = watch(project, s, at, global);

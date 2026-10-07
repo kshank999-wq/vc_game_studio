@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { startPoses } from '../../model/level/actors';
+import { mannequin } from './mannequin';
 import { BODY, collidersFrom, eyeOf, facing, look, step, type Body, type Collider } from '../../model/level/controller';
 import { assetOf, frameOf, meshesFor, num, paramOf, type Mesh } from '../../model/level/geometry';
 import { levelsOf } from '../../model/level/level';
@@ -65,7 +66,7 @@ const shownInPlay = (set: ReturnType<typeof levelsOf>, item: LevelItem, m: Mesh,
   return true;
 };
 
-const actorColor: Record<string, string> = { enemy: '#e5484d', npc: '#d9607a', item: '#6cc4d6' };
+const actorColor: Record<string, string> = { enemy: '#e5484d', npc: '#d9607a', companion: '#5fa8d3', neutral: '#9a8f7a', item: '#6cc4d6' };
 
 export const PlayMode = (props: Props) => {
   const { project, levelId, global } = props;
@@ -173,12 +174,7 @@ export const PlayMode = (props: Props) => {
     s.add(content, actors);
     // The player, seen in third person and from above.
     const avatar = new THREE.Group();
-    const bodyMesh = new THREE.Mesh(new THREE.CapsuleGeometry(BODY.radius, BODY.height - BODY.radius * 2, 6, 14), new THREE.MeshStandardMaterial({ color: '#e8c872', roughness: 0.6 }));
-    bodyMesh.position.y = BODY.height / 2;
-    bodyMesh.castShadow = true;
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#8a6f2f' }));
-    nose.position.set(0, 1.45, -BODY.radius - 0.1);
-    avatar.add(bodyMesh, nose);
+    avatar.add(mannequin('#c9a24a', BODY.height));
     s.add(avatar);
     // The player's light, carried at the head.
     const lamp = new THREE.PointLight('#ffd89a', 26, lightOf(project, levelId, global).range, 1.4);
@@ -221,6 +217,16 @@ export const PlayMode = (props: Props) => {
     }
     movers.current.clear();
     const origins = startPoses(set, levelId, global);
+    // Characters placed in the level show as stand-in figures, not markers.
+    const PEOPLE = new Set(['npc', 'enemy', 'companion', 'neutral']);
+    const piece = (m: (typeof scene.visible)[number]) => {
+      const item = m.part === 'marker' ? set.items.find((i) => i.id === m.itemId) : undefined;
+      if (!item || !PEOPLE.has(assetOf(set, item, global).role)) return buildPiece(m, false);
+      const figure = mannequin(actorColor[assetOf(set, item, global).role] ?? '#8fb07a');
+      figure.position.set(m.x, m.y - m.sy / 2, m.z);
+      figure.rotation.y = (-item.rotation * Math.PI) / 180;
+      return figure;
+    };
     for (const m of scene.visible) {
       const origin = origins[m.itemId];
       if (origin && state.current.actors?.[m.itemId]) {
@@ -234,10 +240,10 @@ export const PlayMode = (props: Props) => {
           movers.current.set(m.itemId, outer);
           t.actors.add(outer);
         }
-        (outer.userData.inner as THREE.Group).add(buildPiece(m, false));
+        (outer.userData.inner as THREE.Group).add(piece(m));
         continue;
       }
-      t.content.add(buildPiece(m, false));
+      t.content.add(piece(m));
       if (m.light && lights < 12) {
         lights++;
         const light = m.light.kind === 'spot'
@@ -250,10 +256,12 @@ export const PlayMode = (props: Props) => {
     for (const child of [...t.actors.children]) if (![...movers.current.values()].includes(child as THREE.Group)) t.actors.remove(child);
     const elevation = new Map(level?.floors.map((f) => [f.id, f.elevation]) ?? []);
     for (const a of state.current.spawned) {
-      const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.1, 4, 10), new THREE.MeshStandardMaterial({ color: actorColor[a.role] }));
-      mesh.position.set(a.x, (elevation.get(a.floorId) ?? 0) + 0.85, a.y);
-      mesh.castShadow = true;
-      t.actors.add(mesh);
+      // People appear as stand-in figures; a spawned item as a small crate.
+      const color = actorColor[a.role] ?? '#9aa0a6';
+      const figure = a.role === 'item' ? new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color })) : mannequin(color);
+      figure.position.set(a.x, (elevation.get(a.floorId) ?? 0) + (a.role === 'item' ? 0.2 : 0), a.y);
+      figure.castShadow = true;
+      t.actors.add(figure);
     }
   }, [scene, level]);
 

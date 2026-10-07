@@ -240,10 +240,11 @@ export const STARTER: readonly AssetDefinition[] = [
     { id: 'arch.floor', name: 'Floor slab', kind: 'solid', role: 'floor', naming: 'architecture', size: [4, 4, 0.2], proxy: 'box', engine: SOLID, description: 'A piece of floor.' },
     { id: 'arch.ceiling', name: 'Ceiling slab', kind: 'solid', role: 'ceiling', naming: 'architecture', size: [4, 4, 0.2], proxy: 'box', engine: SOLID, description: 'A piece of ceiling. Raise it with its height above the floor.' },
     {
-      id: 'arch.door', name: 'Door', kind: 'hosted', role: 'door', naming: 'interactive', size: [1, 0.2, 2.1], proxy: 'box', engine: HOSTED, description: 'An opening in a wall, with a door that can be locked.',
+      id: 'arch.door', name: 'Door', kind: 'hosted', role: 'door', naming: 'interactive', size: [1.2, 0.2, 2.2], proxy: 'box', engine: HOSTED, description: 'An opening in a wall, with a door that can be locked. Wide and tall enough for the player by default.',
       params: [
         { key: 'swing', label: 'Opens', group: 'dimensions', type: 'select', default: 'in', options: ['in', 'out', 'sliding', 'open archway'] },
         { key: 'startsOpen', label: 'Starts open', group: 'interaction', type: 'boolean', default: false },
+        { key: 'autoOpen', label: 'Opens as the player walks up', group: 'interaction', type: 'boolean', default: true, hint: 'Off: the player opens it with Interact (E). A locked door still says what it needs.' },
         { key: 'keyItem', label: 'Needs', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'], hint: 'An inventory item that unlocks it.' },
         ...interaction(true, 'Open'),
       ],
