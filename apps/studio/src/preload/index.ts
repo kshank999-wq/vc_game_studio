@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('vcgs', {
   writeFiles: (folder: string, files: { path: string; content: string }[]): Promise<{ written: number }> =>
     ipcRenderer.invoke('vcgs:write-files', folder, files),
   readFiles: (folder: string, paths: string[]): Promise<Record<string, string | null>> => ipcRenderer.invoke('vcgs:read-files', folder, paths),
+  savePackage: (suggestedName: string, bytes: Uint8Array): Promise<string | null> => ipcRenderer.invoke('vcgs:save-package', suggestedName, bytes),
   openProject: (): Promise<{ path: string; content: string } | null> => ipcRenderer.invoke('vcgs:open-project'),
   readProject: (path: string): Promise<{ path: string; content: string } | null> => ipcRenderer.invoke('vcgs:read-project', path),
   saveProject: (path: string | null, content: string, suggestedName: string): Promise<string | null> =>

@@ -10480,3 +10480,24 @@ button.bible-dual-col:hover {
 .kinds-new {
   margin-top: 8px;
 }
+
+/* Saving the export as one file to import. */
+.handoff-file {
+  width: 100%;
+  margin-top: 8px;
+  justify-content: center;
+}
+.handoff-saved {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--node);
+  font-size: 12px;
+}
+.handoff-saved ol {
+  margin: 6px 0 8px;
+  padding-left: 18px;
+  color: var(--text);
+  line-height: 1.5;
+}

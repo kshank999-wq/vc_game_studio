@@ -50,6 +50,21 @@ test this in each engine: `check-godot.sh`, `check-unity.sh` and
 Godot, a key in a partial class in Unity, a constant in Unreal), export
 again over it, and use that code.
 
+## Bringing an export into the engine
+
+Engine handoff sends an export straight into an engine project folder
+(desktop app), or saves it as one file for the engine's own import:
+
+| Engine | File | Import |
+| --- | --- | --- |
+| Godot 4 | `<game>-godot.zip` | AssetLib tab › Import…, "Ignore asset root" ticked, Install; then Project Settings › Plugins › turn on **VCGS Runtime** (adds the GameState autoload) and run `vcgs/generated/play_story.tscn` |
+| Unity 6 | `<game>-unity.unitypackage` | Assets › Import Package › Custom Package… |
+| Unreal Engine 5 | `<game>-unreal.zip` | Unreal has no import for code plugins: close the editor, unzip beside the `.uproject`, reopen and let it build VCGS |
+| Any (JSON) | `<game>-json.zip` | Unzip where the engine reads its data |
+
+The `.unitypackage` carries every file's own `.meta`, so its GUIDs match a
+folder export and a later import updates the same assets.
+
 ## How it fits together
 
 ```

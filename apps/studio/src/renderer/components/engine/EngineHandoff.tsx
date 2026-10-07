@@ -5,7 +5,7 @@ import type { Destination } from '../../model/details';
 import { ENGINES, hunksOf, lineDiff, planHandoff, recordExport, reviewSend, setTarget, type Row, type SendFile, type SendReview } from '../../model/handoff';
 import { levelsOf } from '../../model/level/level';
 import type { OutputGroup } from '../../model/handoff/engines';
-import { zip } from '../../model/handoff/zip';
+import { packageFor, type EnginePackage } from '../../model/handoff/package';
 import { CAPABILITIES, SUPPORT_LABEL } from '../../model/handoff/capabilities';
 import type { Project } from '../../model/types';
 import { desktop } from '../../desktop';
@@ -62,12 +62,21 @@ const DiffView = ({ file }: { file: SendFile }) => {
   );
 };
 
-const saveZip = (name: string, files: { path: string; content: string }[]) => {
-  const blob = new Blob([zip(files)], { type: 'application/zip' });
+/** Shown inside another page (an embed or preview frame), where the browser won't save files or pick folders. */
+const framed = (): boolean => {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+};
+
+const download = (pkg: EnginePackage) => {
+  const blob = new Blob([pkg.bytes], { type: pkg.fileName.endsWith('.zip') ? 'application/zip' : 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${name}.zip`;
+  a.download = pkg.fileName;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -92,6 +101,8 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
   const [review, setReview] = useState<{ dest: SendTarget; review: SendReview; open: string | null } | null>(null);
   // A folder the browser may write to, once picked (for this visit).
   const [browserFolder, setBrowserFolder] = useState<FolderAccess | null>(null);
+  // What to do in the engine with the file just saved.
+  const [saved, setSaved] = useState<{ where: string; steps: string[] } | null>(null);
   const nav = useNav();
   const { adapter, target, output } = plan;
 
@@ -166,12 +177,42 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
       } else if (browserFolder) {
         await sendTo({ label: browserFolder.name, read: browserFolder.read, write: browserFolder.write, sameAsLast: true });
       } else {
-        saveZip(`${plan.adapter.id}-${project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, output.files);
-        onReplace(recordExport(project, plan));
-        onSay(`Downloaded ${output.files.length} files. Unzip them into your ${engineName} project folder.`);
+        await savePackage();
       }
     } catch (error) {
       onSay(error instanceof Error ? error.message : 'Sending failed.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  /** The export as one file for the engine's own import: saved where the person chooses (desktop), or downloaded. */
+  const savePackage = async () => {
+    if (!output) return;
+    if (!bridge && framed()) {
+      onSay('This page is shown inside another page, which isn’t allowed to save files. Open the studio in its own tab, or use the desktop app.');
+      return;
+    }
+    const pkg = await packageFor(adapter.id, project.name, output.files);
+    if (bridge?.savePackage) {
+      const path = await bridge.savePackage(pkg.fileName, pkg.bytes);
+      if (!path) return;
+      onReplace(recordExport(project, plan));
+      setSaved({ where: path, steps: pkg.steps });
+      return;
+    }
+    download(pkg);
+    onReplace(recordExport(project, plan));
+    setSaved({ where: `${pkg.fileName} in your Downloads`, steps: pkg.steps });
+  };
+
+  const saveFile = async () => {
+    if (!output || plan.blocking.length || sending) return;
+    setSending(true);
+    try {
+      await savePackage();
+    } catch (error) {
+      onSay(error instanceof Error ? error.message : 'Saving failed.');
     } finally {
       setSending(false);
     }
@@ -243,7 +284,13 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
               <span className="mono folder" title={browserFolder ? browserFolder.name : 'Downloads as a .zip, or choose a folder to send to'}>
                 {browserFolder ? `${browserFolder.name}/` : 'A .zip download'}
               </span>
-              <button className="tb-btn small" onClick={() => void pickBrowserFolder().then((f) => f && setBrowserFolder(f))}>
+              <button className="tb-btn small" onClick={() =>
+                  framed()
+                    ? onSay('This page is shown inside another page, which isn’t allowed to choose folders. Open the studio in its own tab, or use the desktop app.')
+                    : void pickBrowserFolder()
+                        .then((f) => f && setBrowserFolder(f))
+                        .catch(() => onSay('The browser didn’t allow choosing a folder. Download the file to import instead.'))
+                }>
                 Choose…
               </button>
             </span>
@@ -405,6 +452,26 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
           <button className="send-btn" disabled={!output || plan.blocking.length > 0 || sending} onClick={() => void send()}>
             {sending ? 'SENDING…' : bridge || browserFolder ? `SEND TO ${engineName.toUpperCase()}` : `DOWNLOAD FOR ${engineName.toUpperCase()}`}
           </button>
+        )}
+        {canExport() && (bridge || browserFolder) && (
+          <button className="tb-btn handoff-file" disabled={!output || plan.blocking.length > 0 || sending} onClick={() => void saveFile()} title={`One file to bring in with ${engineName}’s own import`}>
+            {adapter.id === 'unity' ? 'Save as a .unitypackage…' : 'Save as a .zip to import…'}
+          </button>
+        )}
+        {saved && (
+          <div className="handoff-saved" role="status">
+            <p className="handoff-note">
+              Saved to <span className="mono">{saved.where}</span>. In {engineName}:
+            </p>
+            <ol>
+              {saved.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            <button className="tb-btn small" onClick={() => setSaved(null)}>
+              Got it
+            </button>
+          </div>
         )}
         <p className="handoff-note center">
           {output

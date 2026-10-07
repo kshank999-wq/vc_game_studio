@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron';
+import { BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions, type SaveDialogOptions } from 'electron';
 import { licensing } from './licensing-ipc';
 import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
@@ -30,6 +30,24 @@ export const registerHandoff = (getWindow: () => BrowserWindow | null): void => 
     const options: OpenDialogOptions = { title: 'Choose your engine project folder', properties: ['openDirectory', 'createDirectory'] };
     const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
     return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
+  // The export as one file to bring in through the engine's own import (.zip or .unitypackage), saved where the person says.
+  ipcMain.handle('vcgs:save-package', async (e, suggestedName: unknown, bytes: unknown) => {
+    if (!licensing.canExport()) throw new Error('Engine export is part of the VC Game Studio plan. Upgrade on your account page.');
+    if (typeof suggestedName !== 'string' || !(bytes instanceof Uint8Array)) throw new Error('Nothing to save.');
+    const window = BrowserWindow.fromWebContents(e.sender) ?? getWindow();
+    const ext = suggestedName.split('.').pop() ?? 'zip';
+    const options: SaveDialogOptions = {
+      title: 'Save the export to import',
+      defaultPath: suggestedName,
+      filters: [{ name: ext === 'unitypackage' ? 'Unity package' : 'Zip archive', extensions: [ext] }],
+    };
+    const result = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return null;
+    await writeFile(result.filePath, bytes);
+    shell.showItemInFolder(result.filePath);
+    return result.filePath;
   });
 
   ipcMain.handle('vcgs:check-folder', (_e, folder: unknown) => {

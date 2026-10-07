@@ -7,6 +7,8 @@ export interface DesktopBridge {
   writeFiles: (folder: string, files: { path: string; content: string }[]) => Promise<{ written: number }>;
   /** What is on disk now at these paths inside the folder (null for nothing), to notice edits made in the engine. */
   readFiles?: (folder: string, paths: string[]) => Promise<Record<string, string | null>>;
+  /** Save the export as one file to import (a .zip or .unitypackage), where the person chooses; its path, or null if they cancel. */
+  savePackage?: (suggestedName: string, bytes: Uint8Array) => Promise<string | null>;
   openProject?: () => Promise<{ path: string; content: string } | null>;
   readProject?: (path: string) => Promise<{ path: string; content: string } | null>;
   saveProject?: (path: string | null, content: string, suggestedName: string) => Promise<string | null>;
