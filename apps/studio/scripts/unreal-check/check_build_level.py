@@ -52,6 +52,15 @@ mara = placed["NPC_CaveMouth_Mara_001"]
 figure = [a for a in mara.get_attached_actors() if a.actor_has_tag("vcgs_figure")]
 if len(figure) != 9 or any(a.actor_has_tag("vcgs_marker") for a in mara.get_attached_actors()):
     fail("Mara should be a stand-in figure of 9 pieces, without her marker, got %d" % len(figure))
+# ...coloured like the studio's: an NPC's torso its pink, its legs darker, its head skin.
+def color_of_piece(actor):
+    material = actor.static_mesh_component.calls.get("set_material", (None, None))[1]
+    return None if material is None else material.vectors.get("Color")
+torso, leg, head = color_of_piece(figure[3]), color_of_piece(figure[0]), color_of_piece(figure[7])
+if torso is None or leg is None or head is None or abs(torso.r - 0.85) > 1e-6 or abs(torso.g - 0.38) > 1e-6 or abs(leg.r - 0.85 * 0.55) > 1e-6 or abs(head.g - 0.71) > 1e-6:
+    fail("Mara's figure should be coloured: torso (0.85, 0.38), legs a shade darker, head skin")
+if figure[3].static_mesh_component.calls["set_material"][1].path != "/Game/VCGS/Generated/Materials/MI_VCGS_Figure_npc_body":
+    fail("figure colours should be kept in the project's Materials folder, got " + figure[3].static_mesh_component.calls["set_material"][1].path)
 start = placed["PLR_CaveMouth_ExplorerStart_001"]
 if not any(a.actor_has_tag("vcgs_scaffold") for a in start.get_attached_actors()):
     fail("the player start's marker should be tagged as scaffolding")

@@ -477,8 +477,10 @@ characters with `VcgsFigure` (coloured by role), hides the markers in play, and
 gives the GameObject tagged Player a figure when it has nothing of its own to
 show (`dressPlayer`). Unreal's level logic opens doors on approach the same
 way; `build_level.py` places the characters' figures from Unreal's basic shapes
-(in its default grey) and tags the markers `vcgs_scaffold`, which the level
-director hides in play. Unreal's player is your pawn.
+coloured by role like the others (material instances of the basic shape
+material, made once in the generated `Materials` folder as
+`MI_VCGS_Figure_<role>_<part>`) and tags the markers `vcgs_scaffold`, which
+the level director hides in play. Unreal's player is your pawn.
 
 ## Ladders, water and stamina
 

@@ -183,10 +183,61 @@ class EditorLevelLibrary:
         return "world"
 
 
+_assets = {}
+
+
+class MaterialInstanceConstant:
+    def __init__(self, path):
+        self.path = path
+        self.parent = None
+        self.vectors = {}
+
+
+class MaterialInstanceConstantFactoryNew:
+    pass
+
+
+class _AssetTools:
+    def create_asset(self, name, folder, cls, factory):
+        asset = cls(folder + "/" + name)
+        _assets[asset.path] = asset
+        return asset
+
+
+class AssetToolsHelpers:
+    @staticmethod
+    def get_asset_tools():
+        return _AssetTools()
+
+
+class MaterialEditingLibrary:
+    @staticmethod
+    def set_material_instance_parent(instance, parent):
+        instance.parent = parent
+
+    @staticmethod
+    def set_material_instance_vector_parameter_value(instance, name, value):
+        instance.vectors[name] = value
+
+    @staticmethod
+    def update_material_instance(instance):
+        pass
+
+
 class EditorAssetLibrary:
     @staticmethod
     def load_asset(path):
+        if path in _assets:
+            return _assets[path]
         return path if path.startswith("/Engine/") else None
+
+    @staticmethod
+    def does_asset_exist(path):
+        return path in _assets
+
+    @staticmethod
+    def save_loaded_asset(asset):
+        return True
 
 
 class GameplayStatics:

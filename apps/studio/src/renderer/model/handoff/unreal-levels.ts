@@ -1576,25 +1576,62 @@ def slab_of(piece, with_mesh):
 PEOPLE = ("npc", "enemy", "companion", "neutral")
 
 
-def _figure_part(shape, at, size):
-    return {"part": "figure", "shape": shape, "at": at, "size": size, "turn": 0.0, "collide": False}
+def _figure_part(shape, at, size, tint):
+    return {"part": "figure", "shape": shape, "at": at, "size": size, "turn": 0.0, "collide": False, "tint": tint}
+
+
+# Each role's colour, as in the studio's Play Mode: legs and hips a shade darker, the head skin.
+PEOPLE_COLORS = {"npc": (0.85, 0.38, 0.48), "enemy": (0.9, 0.28, 0.3), "companion": (0.37, 0.66, 0.83), "neutral": (0.6, 0.56, 0.48)}
+SKIN = (0.85, 0.71, 0.56)
+MATERIALS = "${'/' + ['Game', root.replace(/^Content\/?/, '')].filter(Boolean).join('/')}/Materials"
+_materials = {}
+
+
+def tint_of(role, tint):
+    if tint == "skin":
+        return SKIN
+    r, g, b = PEOPLE_COLORS[role]
+    return (r * 0.55, g * 0.55, b * 0.55) if tint == "dark" else (r, g, b)
+
+
+def figure_material(role, tint):
+    """A colour of Unreal's basic shape material, made once and kept in the project's Materials folder."""
+    name = "MI_VCGS_Figure_" + (tint if tint == "skin" else role + "_" + tint)
+    if name in _materials:
+        return _materials[name]
+    path = MATERIALS + "/" + name
+    material = None
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        material = unreal.EditorAssetLibrary.load_asset(path)
+    else:
+        parent = unreal.EditorAssetLibrary.load_asset("/Engine/BasicShapes/BasicShapeMaterial")
+        if parent is not None:
+            material = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, MATERIALS, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+            if material is not None:
+                r, g, b = tint_of(role, tint)
+                unreal.MaterialEditingLibrary.set_material_instance_parent(material, parent)
+                unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(material, "Color", unreal.LinearColor(r, g, b, 1.0))
+                unreal.MaterialEditingLibrary.update_material_instance(material)
+                unreal.EditorAssetLibrary.save_loaded_asset(material)
+    _materials[name] = material
+    return material
 
 
 # A plain stand-in person (legs, hips, torso, arms, head, nose), feet at 0, facing north: the studio's Play Mode figure.
 FIGURE = [
-    _figure_part("cylinder", [-0.1, 0.44, 0.0], [0.15, 0.83, 0.15]),
-    _figure_part("cylinder", [0.1, 0.44, 0.0], [0.15, 0.83, 0.15]),
-    _figure_part("box", [0.0, 0.88, 0.0], [0.34, 0.16, 0.2]),
-    _figure_part("box", [0.0, 1.2, 0.0], [0.38, 0.5, 0.22]),
-    _figure_part("cylinder", [-0.25, 1.12, 0.0], [0.12, 0.62, 0.12]),
-    _figure_part("cylinder", [0.25, 1.12, 0.0], [0.12, 0.62, 0.12]),
-    _figure_part("cylinder", [0.0, 1.49, 0.0], [0.1, 0.08, 0.1]),
-    _figure_part("sphere", [0.0, 1.62, 0.0], [0.24, 0.24, 0.24]),
-    _figure_part("box", [0.0, 1.61, -0.14], [0.04, 0.04, 0.07]),
+    _figure_part("cylinder", [-0.1, 0.44, 0.0], [0.15, 0.83, 0.15], "dark"),
+    _figure_part("cylinder", [0.1, 0.44, 0.0], [0.15, 0.83, 0.15], "dark"),
+    _figure_part("box", [0.0, 0.88, 0.0], [0.34, 0.16, 0.2], "dark"),
+    _figure_part("box", [0.0, 1.2, 0.0], [0.38, 0.5, 0.22], "body"),
+    _figure_part("cylinder", [-0.25, 1.12, 0.0], [0.12, 0.62, 0.12], "body"),
+    _figure_part("cylinder", [0.25, 1.12, 0.0], [0.12, 0.62, 0.12], "body"),
+    _figure_part("cylinder", [0.0, 1.49, 0.0], [0.1, 0.08, 0.1], "skin"),
+    _figure_part("sphere", [0.0, 1.62, 0.0], [0.24, 0.24, 0.24], "skin"),
+    _figure_part("box", [0.0, 1.61, -0.14], [0.04, 0.04, 0.07], "skin"),
 ]
 
 
-def place_piece(item, piece, index, with_mesh, report):
+def place_piece(item, piece, index, with_mesh, report, role=""):
     shape = piece["shape"]
     at = to_unreal(piece["at"])
     size = piece["size"]
@@ -1620,6 +1657,10 @@ def place_piece(item, piece, index, with_mesh, report):
     component.set_static_mesh(unreal.EditorAssetLibrary.load_asset(SHAPES[shape]))
     component.set_visibility(with_mesh)
     component.set_collision_profile_name("BlockAll" if piece["collide"] else "NoCollision")
+    if piece.get("tint") and role in PEOPLE_COLORS:
+        material = figure_material(role, piece["tint"])
+        if material is not None:
+            component.set_material(0, material)
     return actor
 
 
@@ -1722,7 +1763,7 @@ def build():
             if piece["shape"] == "slab":
                 slabs.append(slab_of(piece, with_mesh))
                 continue
-            actor = place_piece(item, piece, index, with_mesh, report)
+            actor = place_piece(item, piece, index, with_mesh, report, item_data["role"])
             if piece["part"] == "marker" and not person:
                 actor.tags = actor.tags + ["vcgs_scaffold"]
             index += 1
