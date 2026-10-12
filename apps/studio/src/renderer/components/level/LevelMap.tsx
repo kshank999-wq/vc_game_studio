@@ -564,6 +564,43 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       .map(({ item, scene }) => ({ at: frameOf(set, item, global), code: String(shown.objects[scene]!.data.code ?? ''), name: shown.objects[scene]!.name, id: `${item.id}:${scene}` }));
   }, [props.overlays.story, items, shown, set, global]);
 
+  // Names that would land on another are left off (rooms first, then markers, zones and objects), and show on hover.
+  const hiddenLabels = useMemo(() => {
+    type Box = { x0: number; y0: number; x1: number; y1: number };
+    const placed: Box[] = [];
+    const hidden = new Set<string>();
+    const text = (chars: number, size: number) => px(chars * size * 0.56);
+    const hits = (b: Box) => placed.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
+    const centred = (x: number, y: number, w: number, h: number): Box => ({ x0: x - w / 2, y0: y - h / 2, x1: x + w / 2, y1: y + h / 2 });
+    const rank: Record<string, number> = { space: 0, marker: 1, volume: 2 };
+    const candidates = items
+      .map((item) => ({ item, def: assetOf(set, item, global), f: frameOf(set, item, global) }))
+      .sort((a, b) => (selected.has(b.item.id) ? 1 : 0) - (selected.has(a.item.id) ? 1 : 0) || (rank[a.def.kind] ?? 3) - (rank[b.def.kind] ?? 3));
+    for (const { item, def, f } of candidates) {
+      if (def.kind !== 'space') continue;
+      const at = labelPoint(f);
+      placed.push(centred(at.x, at.y, Math.max(text(item.name.length, 12), px(70)), px(30)));
+    }
+    for (const s of storyPath) placed.push({ x0: s.at.x - px(24), y0: s.at.y - px(30), x1: s.at.x + px(24), y1: s.at.y - px(14) });
+    for (const { item, def, f } of candidates) {
+      let box: Box | null = null;
+      if (def.kind === 'marker' && NAMED_MARKERS.has(def.role)) {
+        const r = Math.max(px(7), Math.min(f.w, f.d) / 2);
+        box = { x0: f.x + r + px(5), y0: f.y - px(7), x1: f.x + r + px(5) + text(item.name.length + 8, 11), y1: f.y + px(7) };
+      } else if (def.kind === 'volume') {
+        const c = corners(f)[0]!;
+        box = { x0: c.x + px(6), y0: c.y + px(4), x1: c.x + px(6) + text(item.name.length, 10), y1: c.y + px(16) };
+      } else if (def.kind !== 'space' && def.kind !== 'hosted' && def.kind !== 'light' && def.kind !== 'marker' && f.w * scale > 60) {
+        box = centred(f.x, f.y, text(item.name.length, 10), px(13));
+      }
+      if (!box) continue;
+      if (hits(box) && !selected.has(item.id)) hidden.add(item.id);
+      else placed.push(box);
+    }
+    return hidden;
+    // px depends on scale.
+  }, [items, set, global, scale, storyPath, selection]);
+
   const drawItem = (item: LevelItem, faint = false) => {
     const def = assetOf(set, item, global);
     const f = frameOf(set, item, global);
@@ -583,6 +620,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     if (def.kind === 'space') {
       return (
         <g key={item.id} {...common}>
+          {!faint && <title>{item.name}</title>}
           <polygon points={poly} className="lvl-space" fill={def.role === 'zone' ? 'rgba(111,174,94,0.07)' : 'rgba(201,164,92,0.05)'} stroke={color} strokeOpacity={0.35} strokeWidth={px(1)} strokeDasharray={def.role === 'zone' ? `${px(6)} ${px(4)}` : undefined} />
           {!faint && label(item.name, { x: labelPoint(f).x, y: labelPoint(f).y - px(7) }, 12, 'var(--text)')}
           {!faint &&
@@ -607,6 +645,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       const sweep = (into.x - hinge.x) * (tip.y - hinge.y) - (into.y - hinge.y) * (tip.x - hinge.x) > 0 ? 1 : 0;
       return (
         <g key={item.id} {...common}>
+          {!faint && <title>{item.name}</title>}
           <polygon points={poly} fill="var(--ground)" stroke="none" />
           {def.role === 'window' ? (
             <polyline points={pointsAttr([toPlan(f, -f.w / 2, 0), toPlan(f, f.w / 2, 0)])} stroke="#9fc6d8" strokeWidth={px(3)} />
@@ -630,11 +669,12 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       const radius = def.role === 'spawn' ? num(paramOf(set, item, 'radius', global), 0) : 0;
       return (
         <g key={item.id} {...common}>
+          {!faint && <title>{item.name}</title>}
           {radius > 0 && <circle cx={f.x} cy={f.y} r={radius} fill={color} fillOpacity={0.08} stroke={color} strokeOpacity={0.5} strokeWidth={px(1)} strokeDasharray={`${px(4)} ${px(3)}`} />}
           <polygon points={pointsAttr([nose, left, right])} fill={color} />
           <circle cx={f.x} cy={f.y} r={r} fill="var(--node)" stroke={color} strokeWidth={px(2)} />
           {label(ROLE_GLYPH[def.role] ?? def.name[0]!, f, 10, color)}
-          {!faint && NAMED_MARKERS.has(def.role) && (
+          {!faint && NAMED_MARKERS.has(def.role) && !hiddenLabels.has(item.id) && (
             <text x={f.x + r + px(5)} y={f.y} fontSize={px(11)} fill="var(--text)" dominantBaseline="middle" className="lvl-label">
               {item.name}
               {(() => {
@@ -653,6 +693,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       const lightColor = String(paramOf(set, item, 'color', global) ?? '#ffd9a0');
       return (
         <g key={item.id} {...common}>
+          {!faint && <title>{item.name}</title>}
           {selected.has(item.id) && range > 0 && <circle cx={f.x} cy={f.y} r={range} fill={lightColor} fillOpacity={0.04} stroke={lightColor} strokeOpacity={0.35} strokeWidth={px(1)} strokeDasharray={`${px(4)} ${px(4)}`} />}
           {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => {
             const c = Math.cos((a * Math.PI) / 180);
@@ -666,10 +707,11 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     if (def.kind === 'volume') {
       return (
         <g key={item.id} {...common}>
+          {!faint && <title>{item.name}</title>}
           {/* Picked by its edge, so a zone over a whole room doesn't take the room's clicks. */}
           <polygon points={poly} fill={color} fillOpacity={0.08} stroke={color} strokeWidth={px(1.5)} strokeDasharray={`${px(6)} ${px(4)}`} pointerEvents="none" />
           <polygon points={poly} fill="none" stroke="transparent" strokeWidth={px(10)} pointerEvents="stroke" />
-          {!faint && (
+          {!faint && !hiddenLabels.has(item.id) && (
             <text x={corners(f)[0]!.x + px(6)} y={corners(f)[0]!.y + px(11)} fontSize={px(10)} fill={color} className="lvl-label" transform={`rotate(${f.rotation} ${corners(f)[0]!.x} ${corners(f)[0]!.y})`}>
               {item.name}
             </text>
@@ -683,6 +725,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     const steps = def.proxy === 'stairs' ? Math.min(40, Math.max(2, Math.round(num(paramOf(set, item, 'steps', global), 16)))) : 0;
     return (
       <g key={item.id} {...common}>
+          {!faint && <title>{item.name}</title>}
         {def.proxy === 'model' && def.model?.plan && (
           // An imported model seen from above (spec V2 §10), stretched to its footprint.
           <image href={def.model.plan} x={f.x - f.w / 2} y={f.y - f.d / 2} width={f.w} height={f.d} preserveAspectRatio="none" transform={`rotate(${f.rotation} ${f.x} ${f.y})`} opacity={0.9} pointerEvents="none" className="lvl-model-plan" />
@@ -699,7 +742,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
         {arrow && (
           <polyline points={pointsAttr([toPlan(f, 0, f.d * 0.35), toPlan(f, 0, -f.d * 0.35), toPlan(f, -f.w * 0.2, -f.d * 0.2), toPlan(f, 0, -f.d * 0.35), toPlan(f, f.w * 0.2, -f.d * 0.2)])} fill="none" stroke={color} strokeWidth={px(1.5)} />
         )}
-        {!faint && f.w * scale > 60 && label(item.name, f, 10, 'var(--text-soft)')}
+        {!faint && f.w * scale > 60 && !hiddenLabels.has(item.id) && label(item.name, f, 10, 'var(--text-soft)')}
       </g>
     );
   };

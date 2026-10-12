@@ -781,8 +781,8 @@ const MapSection = ({ project, levelId, global, open, onToggle, onCommit, onOpen
           </button>
         </p>
       )}
-      <NumberField label="Width" unit="length" units={units} value={bounds?.w ?? 0} min={0} step={level.grid ?? 1} hint={level.width ? undefined : anchor ? `from ${anchor.name}` : 'no edge: set one to draw it'} onCommit={(v) => set1({ width: v > 0 ? v : undefined, ...(v > 0 && !level.depth ? { depth: bounds?.d || v } : {}) })} />
-      <NumberField label="Depth" unit="length" units={units} value={bounds?.d ?? 0} min={0} step={level.grid ?? 1} onCommit={(v) => set1({ depth: v > 0 ? v : undefined, ...(v > 0 && !level.width ? { width: bounds?.w || v } : {}) })} />
+      <NumberField label="Width" unit="length" units={units} value={bounds?.w ?? 0} min={0} step={level.grid ?? 1} unset="no edge" hint={level.width ? undefined : anchor ? `from ${anchor.name}` : 'no edge: set one to draw it'} onCommit={(v) => set1({ width: v > 0 ? v : undefined, ...(v > 0 && !level.depth ? { depth: bounds?.d || v } : {}) })} />
+      <NumberField label="Depth" unit="length" units={units} value={bounds?.d ?? 0} min={0} step={level.grid ?? 1} unset="no edge" onCommit={(v) => set1({ depth: v > 0 ? v : undefined, ...(v > 0 && !level.width ? { width: bounds?.w || v } : {}) })} />
       {bounds && <p className="lvl-hint">{formatLength(bounds.w, units)} × {formatLength(bounds.d, units)}</p>}
       <NumberField label="Map grid" unit="length" units={units} value={level.grid ?? set.settings.grid} min={0.01} step={level.grid ?? 0.25} hint={level.grid ? undefined : 'the project’s'} onCommit={(v) => set1({ grid: v > 0 ? v : undefined })} />
       <NumberField label="Origin east" unit="length" units={units} value={level.origin?.x ?? 0} step={level.grid ?? 1} hint="where its 0, 0 is, from its centre" onCommit={(v) => set1({ origin: { x: v, y: level.origin?.y ?? 0 } })} />

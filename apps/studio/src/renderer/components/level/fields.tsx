@@ -41,23 +41,39 @@ export const NumberField = ({
   step,
   min,
   max,
+  unset,
   ...base
-}: Base & { value: number; onCommit: (v: number) => void; unit?: string; units?: LevelSettings['units']; step?: number; min?: number; max?: number }) => {
+}: Base & {
+  value: number;
+  onCommit: (v: number) => void;
+  unit?: string;
+  units?: LevelSettings['units'];
+  step?: number;
+  min?: number;
+  max?: number;
+  /** When 0 means "not set": the box shows empty with this word in it, and clearing it sets 0. */
+  unset?: string;
+}) => {
   const length = unit === 'length' && units;
   const shown = length ? toDisplay(value, units) : Math.round(value * 1000) / 1000;
-  const [draft, setDraft] = useState(String(shown));
-  useEffect(() => setDraft(String(shown)), [shown]);
+  const text = unset && value === 0 ? '' : String(shown);
+  const [draft, setDraft] = useState(text);
+  useEffect(() => setDraft(text), [text]);
   const commit = () => {
+    if (unset && draft.trim() === '') {
+      if (value !== 0) onCommit(0);
+      return;
+    }
     const n = Number(draft.replace(',', '.'));
     if (!Number.isFinite(n) || draft.trim() === '') {
-      setDraft(String(shown));
+      setDraft(text);
       return;
     }
     let v = length ? fromDisplay(n, units) : n;
     if (min !== undefined) v = Math.max(min, v);
     if (max !== undefined) v = Math.min(max, v);
     if (v !== value) onCommit(v);
-    else setDraft(String(shown));
+    else setDraft(text);
   };
   const suffix = length ? unitLabel(units) : unit === 'deg' ? '°' : unit === 's' ? 's' : unit === 'percent' ? '%' : '';
   return (
@@ -69,6 +85,7 @@ export const NumberField = ({
           inputMode="decimal"
           aria-label={base.label}
           value={draft}
+          placeholder={unset}
           step={step}
           disabled={base.disabled}
           onChange={(e) => setDraft(e.target.value)}
@@ -76,7 +93,7 @@ export const NumberField = ({
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
             if (e.key === 'Escape') {
-              setDraft(String(shown));
+              setDraft(text);
               e.currentTarget.blur();
             }
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {

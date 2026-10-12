@@ -868,12 +868,12 @@ export const App = () => {
             Close timeline
           </button>
         ) : route.mode === 'open' ? (
-          <button className="tb-btn" title="Explode the scene into a full mind map" onClick={() => openScene(route.sceneId, 'exploded')}>
+          <button className="tb-btn" aria-label="Expand all" title="Expand all: explode the scene into a full mind map" onClick={() => openScene(route.sceneId, 'exploded')}>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
               <circle cx="8" cy="8" r="2.2" />
               <path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" />
             </svg>
-            Expand all
+            <span className="tb-label">Expand all</span>
           </button>
         ) : (
           <button className="tb-btn" title="Collapse back to the writing box" onClick={() => openScene(route.sceneId, 'open')}>
@@ -907,11 +907,11 @@ export const App = () => {
             : undefined;
   const bibleControls =
     isAside(route) ? (
-      <button className="tb-btn back-btn" onClick={() => setRoute(route.back)}>
+      <button className="tb-btn back-btn" aria-label={`Back to ${backLabel(route.back)}`} title={`Back to ${backLabel(route.back)}`} onClick={() => setRoute(route.back)}>
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
           <path d="M10 3L5 8l5 5" />
         </svg>
-        Back to {backLabel(route.back)}
+        Back<span className="back-to"> to {backLabel(route.back)}</span>
       </button>
     ) : null;
 

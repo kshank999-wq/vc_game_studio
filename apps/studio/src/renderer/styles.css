@@ -5111,6 +5111,16 @@ kbd {
   .topbar.has-crumbs .brand {
     display: none;
   }
+
+  /* The breadcrumbs already say where Back goes, and the dot says whether it is saved (its words on hover). */
+  .topbar.has-crumbs .back-btn .back-to,
+  .topbar.has-crumbs .save-label {
+    display: none;
+  }
+
+  .topbar .view-toggle button {
+    padding: 0 9px;
+  }
 }
 
 /* ---------------------------------------------------------------- search */

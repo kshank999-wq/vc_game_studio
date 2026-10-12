@@ -512,8 +512,8 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
                         setCodeHidden(false);
                       }}>
                         <Symbol type={r.symbol} size={12} />
-                        <span className="h-name">{r.label}</span>
-                        <span className="h-gen">{r.generates}</span>
+                        <span className="h-name" title={r.label}>{r.label}</span>
+                        <span className="h-gen" title={r.generates}>{r.generates}</span>
                         <span className={`st ${r.status === 'ready' ? 'ok' : r.status === 'changed' ? 'chg' : 'err'}`} title={r.issue}>
                           {r.status === 'issue' && r.symbol === 'state' ? 'No setter' : STATUS_LABEL[r.status]}
                         </span>

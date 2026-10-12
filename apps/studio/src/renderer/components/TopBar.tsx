@@ -151,7 +151,7 @@ export const TopBar = (props: Props) => {
       ) : (
         <div className={`save-state save-${props.saveState}`} title={[props.fileName, SAVE_HINT[props.saveState]].filter(Boolean).join(' · ') || undefined}>
           <span className="save-dot" />
-          {SAVE_LABEL[props.saveState]}
+          <span className="save-label">{SAVE_LABEL[props.saveState]}</span>
         </div>
       )}
       {props.issueCount > 0 && (
