@@ -76,6 +76,11 @@ const WINDOW_LABEL: Record<PanelView['view'], string> = { graph: 'Graph window',
 const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
+
+/** How long a game with work in it can go without a file before the app suggests saving, and how long "Later" waits. */
+const SAVE_REMIND_AFTER_MS = 2 * 60 * 1000;
+const SAVE_SNOOZE_MS = 15 * 60 * 1000;
+
 export const App = () => {
   const studio = useStudio();
   const { project, commit } = studio;
@@ -429,6 +434,19 @@ export const App = () => {
   };
   const latest = useRef(studio);
   latest.current = studio;
+
+  // A game with work in it but no file yet: after a couple of minutes, say so, with a way to save.
+  const draft = studio.saveState === 'draft' && studio.unsaved && !studio.isPanel && !isPreview();
+  const [remind, setRemind] = useState(false);
+  const [snoozed, setSnoozed] = useState(0);
+  useEffect(() => {
+    if (!draft) {
+      setRemind(false);
+      return;
+    }
+    const timer = setTimeout(() => setRemind(true), Math.max(SAVE_REMIND_AFTER_MS, snoozed - Date.now()));
+    return () => clearTimeout(timer);
+  }, [draft, snoozed]);
 
   /** Before leaving this project: offer to save what isn't in a file yet. */
   const leaveProject = (then: () => void) => {
@@ -1204,6 +1222,25 @@ export const App = () => {
         {dialog === 'comments' && <CommentsPanel project={project} onCommit={commit} onGo={goToTarget} onClose={() => setDialog(null)} />}
         {dialog === 'previewSave' && <PreviewSaveDialog onClose={() => setDialog(null)} />}
         {__LICENSING__ && dialog === 'license' && <LicenseDialog onClose={() => setDialog(null)} />}
+        {remind && draft && (
+          <div className="save-remind" role="alert">
+            <span>
+              <b>{project.name || 'This game'}</b> isn’t saved to a file yet. Save it now so none of this work is lost; after that it saves itself as you go.
+            </span>
+            <button className="tb-btn primary" onClick={() => void save()}>
+              Save…
+            </button>
+            <button
+              className="tb-btn"
+              onClick={() => {
+                setRemind(false);
+                setSnoozed(Date.now() + SAVE_SNOOZE_MS);
+              }}
+            >
+              Later
+            </button>
+          </div>
+        )}
         {toast && (
           <div className="toast" role="status">
             {toast}

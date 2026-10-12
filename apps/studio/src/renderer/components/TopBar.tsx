@@ -63,7 +63,7 @@ const SAVE_LABEL: Record<SaveState, string> = {
 const SAVE_HINT: Partial<Record<SaveState, string>> = {
   edited: 'Changes since the last save. File › Save (Ctrl+S)',
   failed: 'The last save did not work. Try File › Save As.',
-  draft: 'Kept in this browser only. File › Save to keep it in a project file.',
+  draft: 'Not in a file yet: only this window has it. File › Save (Ctrl+S) to keep it; then it saves itself as you go.',
 };
 
 export const TopBar = (props: Props) => {
