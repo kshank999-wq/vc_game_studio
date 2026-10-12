@@ -12,7 +12,8 @@ interface Props {
 
 /** The lane menu under the canvas (HANDOFF iteration 2). */
 export const BottomBar = ({ lanes, zoom, onAddLane, onToggleLane, onZoomToSpine, onZoom }: Props) => {
-  const others = lanes.filter((l) => l.kind !== 'spine').sort((a, b) => a.order - b.order);
+  // The spine and the Level lane are always shown: no chip to hide them.
+  const others = lanes.filter((l) => l.kind !== 'spine' && l.kind !== 'level').sort((a, b) => a.order - b.order);
   return (
     <div className="bottombar">
       <button className="tb-btn add-subplot" onClick={() => onAddLane('subplot')}>

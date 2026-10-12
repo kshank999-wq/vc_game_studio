@@ -7,7 +7,7 @@ describe('the Game Setup Wizard', () => {
   it('divides the spine into the chosen containers, Beginning to Ending', () => {
     const p = createFromSetup('Dust Road', { ...blankSetup('linear'), units: 3 });
     const names = spineSequence(p).map((id) => p.objects[id]!.name);
-    expect(names).toEqual(['Beginning', 'Act I', 'Act II', 'Act III', 'Ending']);
+    expect(names).toEqual(['Beginning', 'Opening', 'Act I', 'Act II', 'Act III', 'Ending']);
     expect(p.name).toBe('Dust Road');
   });
 

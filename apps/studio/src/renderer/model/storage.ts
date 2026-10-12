@@ -1,3 +1,4 @@
+import { withStoryFrame } from './project';
 import { isPreview } from '../edition';
 import type { Project } from './types';
 
@@ -40,7 +41,8 @@ export const readProjectOrWhy = (parsed: unknown): Project | Unreadable => {
   if (!isProject(p)) return 'not-a-project';
   // Projects saved before scenes had scripts have no lines yet.
   const list = <T,>(value: T[] | undefined): T[] => (Array.isArray(value) ? value : []);
-  return { ...p, lines: list(p.lines), events: list(p.events), branches: list(p.branches) };
+  // Projects from before the Opening and the Level lane gain both.
+  return withStoryFrame({ ...p, lines: list(p.lines), events: list(p.events), branches: list(p.branches) });
 };
 
 /** A project from parsed JSON, or null when it isn't one. Older projects gain what they lack. */

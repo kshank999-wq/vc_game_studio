@@ -276,8 +276,12 @@ func _initialize() -> void:
 	story_player.autostart = false
 	root.add_child(story)
 	story_player.start_now()
+	# The Opening plays first; Continue goes on into SC-01.
+	if story_player.labels() != ["Continue"]:
+		fail("the story should open with the Opening, got " + str(story_player.labels()))
+	story_player.press(0)
 	if story_player.labels() != ["Play The Cave Mouth"]:
-		fail("the story should start at SC-01, got " + str(story_player.labels()))
+		fail("the story should start at SC-01 after the Opening, got " + str(story_player.labels()))
 
 	# SC-02's placeholder scene stands in for the eels with Win and Lose.
 	load("res://vcgs/generated/logic/rules.gd").reset(game)

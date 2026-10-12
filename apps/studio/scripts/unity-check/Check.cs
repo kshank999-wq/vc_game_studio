@@ -31,8 +31,11 @@ static class Check
         game.QuestCompleted += q => questsDone.Add(q);
 
         // The whole story from the Beginning to the vault door.
-        var node = StoryWalker.Onward(game, story.Start);
-        if (node != Scenes.Sc01TheCaveMouth) Fail("the story should start at SC-01, got " + node);
+        // The Opening first, then SC-01.
+        var opening = StoryWalker.Onward(game, story.Start);
+        if (D.Str(story.Graph[opening], "kind") != "cinematic") Fail("the story should open with the Opening, got " + opening);
+        var node = StoryWalker.Onward(game, opening);
+        if (node != Scenes.Sc01TheCaveMouth) Fail("the story should start at SC-01 after the Opening, got " + node);
 
         game.GiveItem(Items.VaultKey);
         var player = new ScenePlayer(game, Scenes.Sc03TheVaultDoor);

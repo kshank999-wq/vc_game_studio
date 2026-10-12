@@ -36,9 +36,73 @@ export const makeObject = (type: ObjectType, name: string, now: string, data: St
   data,
 });
 
-/** Where a new project puts its three spine nodes. */
+/** Where a new project puts its spine nodes. */
 const START_X = 0;
 const START_SPACING = 300;
+const OPENING_GAP = 130;
+
+/** The credits an Opening starts with: placeholders to fill in. */
+export const DEFAULT_CREDITS: readonly { role: string; name: string }[] = [
+  { role: 'A game by', name: '' },
+  { role: 'Directed by', name: '' },
+  { role: 'Written by', name: '' },
+  { role: 'Music by', name: '' },
+  { role: 'Starring', name: '' },
+];
+
+/** The game's Opening: its first cinematic, with the opening credits. It sits on the spine just after Beginning. */
+export const makeOpening = (now: string): StoryObject =>
+  makeObject('cinematic', 'Opening', now, {
+    code: 'OPEN',
+    opening: true,
+    summary: 'The opening cinematic and credits.',
+    credits: DEFAULT_CREDITS.map((c, i) => ({ id: `credit_${i + 1}`, ...c })),
+  });
+
+/** Is this the game's Opening? */
+export const isOpening = (object: StoryObject | undefined): boolean => object?.type === 'cinematic' && object.data.opening === true;
+
+/** The spine's plot points, Beginning and Ending included, in order: where a level can start and end. */
+export const plotStops = (project: Project): string[] =>
+  spineSequence(project).filter((id) => ['begin', 'plotPoint', 'end'].includes(project.objects[id]?.type ?? ''));
+
+/** The permanent Level lane above the spine. */
+export const makeLevelLane = (): Lane => ({
+  id: newId('lane'),
+  kind: 'level',
+  name: 'Levels',
+  subtitle: 'Each level runs between two plot points',
+  color: COLORS.level,
+  order: -1,
+  visible: true,
+  locked: false,
+  levels: [],
+});
+
+/**
+ * A project from before the Opening and the Level lane: give it both. The
+ * Opening goes just after Beginning; whatever is on the spine moves along to
+ * make room. Projects that have them come back unchanged.
+ */
+export const withStoryFrame = (project: Project, now = stamp()): Project => {
+  let next = project;
+  if (!next.lanes.some((l) => l.kind === 'level')) next = { ...next, lanes: [makeLevelLane(), ...next.lanes] };
+  if (!Object.values(next.objects).some(isOpening)) {
+    const spine = next.lanes.find((l) => l.kind === 'spine');
+    const beginId = spine && Object.keys(next.objects).find((id) => next.objects[id]!.type === 'begin' && next.placements[id]?.laneId === spine.id);
+    if (spine && beginId) {
+      const opening = makeOpening(now);
+      const x = next.placements[beginId]!.x + OPENING_GAP;
+      next = {
+        ...next,
+        objects: { ...next.objects, [opening.id]: opening },
+        placements: { ...next.placements, [opening.id]: { laneId: spine.id, x, y: 0 } },
+      };
+      next = settle(next);
+    }
+  }
+  return next;
+};
 
 /** A new project: the spine with Beginning, one plot point and Ending, and the Player Lane beneath it (spec §5). */
 export const createProject = (name = 'Untitled Game', now = stamp()): Project => {
@@ -53,6 +117,7 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
     locked: true,
   };
   const begin = makeObject('begin', 'Beginning', now);
+  const opening = makeOpening(now);
   const plotPoint = makeObject('plotPoint', 'Plot Point 1', now, { code: 'PP1' });
   const end = makeObject('end', 'Ending', now);
   // Beneath the spine, from Beginning to Ending: the player's own progression (Writer spec §5).
@@ -73,11 +138,12 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
     version: 1,
     id: newId('proj'),
     name,
-    objects: { [begin.id]: begin, [plotPoint.id]: plotPoint, [end.id]: end },
-    lanes: [spine, player],
+    objects: { [begin.id]: begin, [opening.id]: opening, [plotPoint.id]: plotPoint, [end.id]: end },
+    lanes: [makeLevelLane(), spine, player],
     connections: [],
     placements: {
       [begin.id]: { laneId: spine.id, x: START_X, y: 0 },
+      [opening.id]: { laneId: spine.id, x: START_X + OPENING_GAP, y: 0 },
       [plotPoint.id]: { laneId: spine.id, x: START_X + START_SPACING, y: 0 },
       [end.id]: { laneId: spine.id, x: START_X + START_SPACING * 2, y: 0 },
     },
@@ -158,8 +224,8 @@ export const packLane = (project: Project, laneId: string, floor = -Infinity): P
   const ids = laneSequence(project, laneId);
   if (lane.kind === 'spine') {
     const rank = (id: string): number => {
-      const type = project.objects[id]?.type;
-      return type === 'begin' ? -1 : type === 'end' ? 1 : 0;
+      const object = project.objects[id];
+      return object?.type === 'begin' ? -2 : isOpening(object) ? -1 : object?.type === 'end' ? 1 : 0;
     };
     ids.sort((a, b) => rank(a) - rank(b));
   }
@@ -239,11 +305,11 @@ export const canPlace = (project: Project, type: ObjectType, laneId: string | nu
   return LANE_ACCEPTS[lane.kind].includes(type);
 };
 
-/** The leftmost x a spine node may take: just clear of Beginning. */
+/** The leftmost x a spine node may take: just clear of Beginning and the Opening. */
 const spineFloor = (project: Project): number => {
-  const beginId = spineSequence(project).find((id) => project.objects[id]?.type === 'begin');
-  const begin = beginId ? project.placements[beginId] : undefined;
-  return begin ? begin.x + nodeSize('begin').w + NODE_GAP : -Infinity;
+  const firstId = spineSequence(project).find((id) => isOpening(project.objects[id])) ?? spineSequence(project).find((id) => project.objects[id]?.type === 'begin');
+  const first = firstId ? project.placements[firstId] : undefined;
+  return first ? first.x + nodeSize(project.objects[firstId!]!.type).w + NODE_GAP : -Infinity;
 };
 
 /** Branch nodes float above the spine, never on or below it. */
@@ -315,10 +381,10 @@ export const placeNew = (
   return { project: settle(placed), id: object.id };
 };
 
-/** Beginning and Ending are protected: their content is editable, their place is not. */
+/** Beginning, the Opening and Ending are protected: their content is editable, their place is not. */
 export const isProtected = (project: Project, id: string): boolean => {
-  const type = project.objects[id]?.type;
-  return type === 'begin' || type === 'end';
+  const object = project.objects[id];
+  return object?.type === 'begin' || object?.type === 'end' || isOpening(object);
 };
 
 /**
@@ -415,6 +481,20 @@ export const removeObject = (project: Project, id: string): Project => {
       else if (at > 0) startRef = s[at - 1]!;
     }
     return startRef === lane.span.startRef && endRef === lane.span.endRef ? lane : { ...lane, span: { startRef, endRef } };
+  }).map((lane) => {
+    // A level running to or from a deleted plot point runs to the next plot point instead; one left with no length goes.
+    if (!lane.levels?.length) return lane;
+    const stops = plotStops(project).filter((n) => n !== id);
+    const moved = (ref: string, way: 1 | -1): string => {
+      if (ref !== id) return ref;
+      const at = sequence.indexOf(id);
+      const pick = way > 0 ? sequence.slice(at + 1).find((n) => stops.includes(n)) : [...sequence.slice(0, at)].reverse().find((n) => stops.includes(n));
+      return pick ?? ref;
+    };
+    const levels = lane.levels
+      .map((b) => ({ ...b, startRef: moved(b.startRef, 1), endRef: moved(b.endRef, 1) }))
+      .filter((b) => b.startRef !== id && b.endRef !== id && sequence.indexOf(b.startRef) < sequence.indexOf(b.endRef));
+    return { ...lane, levels };
   }).map((lane) => {
     // An arc lane stays when its character goes, no longer tied to it.
     if (lane.characterId !== id) return lane;
@@ -587,7 +667,7 @@ export const addLane = (
   if (kind === 'subplot') {
     // A new subplot branches off the first node after Beginning and rejoins at
     // the next one; dropping beats in makes it longer.
-    const sequence = spineSequence(project);
+    const sequence = spineSequence(project).filter((n) => !isOpening(project.objects[n]));
     const startRef = sequence[1] ?? sequence[0];
     const endRef = sequence[2] ?? sequence[sequence.length - 1];
     if (startRef && endRef && startRef !== endRef) lane.span = { startRef, endRef };

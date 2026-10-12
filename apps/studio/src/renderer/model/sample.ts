@@ -1,6 +1,6 @@
 import { addInteraction, interactionsOf, setField, setNotes, setSceneUse, setStates, setValue, toggleTag, updateInteraction } from './details';
 import { spineLane } from './layout';
-import { addLane, connect, createProject, makeObject, newId, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
+import { addLane, connect, createProject, makeObject, moveNode, newId, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
 import { sampleLevel } from './level/sample-level';
 import { addPath, pathOf, playBy } from './paths';
 import type { Who } from './collab';
@@ -24,13 +24,15 @@ export const sunkenVault = (): Project => {
     p = renameObject(p, id, name);
     return id;
   };
+  // Everything sits this far right of where it was before the Opening took its place after Beginning.
+  const AFTER_OPENING = 160;
   const onSpine = (type: ObjectType, name: string, x: number) => {
-    const placed = placeNew(p, type, spine, x)!;
+    const placed = placeNew(p, type, spine, x + AFTER_OPENING)!;
     p = placed.project;
     return rename(placed.id, name);
   };
   const branch = (type: ObjectType, name: string, x: number, y: number) => {
-    const placed = placeNew(p, type, null, x, y)!;
+    const placed = placeNew(p, type, null, x + AFTER_OPENING, y)!;
     p = placed.project;
     return rename(placed.id, name);
   };
@@ -43,6 +45,7 @@ export const sunkenVault = (): Project => {
 
   // The spine.
   const descent = rename(byName('Plot Point 1'), 'Descent');
+  p = moveNode(p, descent, p.placements[descent]!.x + AFTER_OPENING);
   const caveMouth = onSpine('scene', 'The Cave Mouth', 110);
   const c1 = onSpine('choice', 'Take the lantern', 250);
   const theKey = onSpine('scene', 'The Key', 460);

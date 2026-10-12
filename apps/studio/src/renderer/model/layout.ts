@@ -1,12 +1,13 @@
 import type { Lane, ObjectType, Project } from './types';
 
 /**
- * Track geometry in world units (1 unit = 1px at 100% zoom). The spine's top
- * edge is y = 0; branches float above it (negative y), lanes stack below.
+ * Track geometry in world units (1 unit = 1px at 100% zoom). The Level lane's
+ * top edge is y = 0 with the spine right under it; branches float above
+ * (negative y), lanes stack below.
  */
 export const SPINE_HEIGHT = 150;
 export const LANE_GAP = 16;
-export const LANE_HEIGHT: Record<Lane['kind'], number> = { spine: SPINE_HEIGHT, subplot: 100, character: 80 };
+export const LANE_HEIGHT: Record<Lane['kind'], number> = { spine: SPINE_HEIGHT, subplot: 100, character: 80, level: 64 };
 
 /** The gap packing keeps between neighbours on a track. */
 export const NODE_GAP = 20;
@@ -46,13 +47,16 @@ export interface LaneRow {
   height: number;
 }
 
-/** Visible tracks top to bottom: the spine first, then lanes by order. */
+/** Where each kind of lane sits: the Level lane on top, the spine under it, then the rest by order. */
+const LANE_RANK: Record<Lane['kind'], number> = { level: 0, spine: 1, subplot: 2, character: 2 };
+
+/** Visible tracks top to bottom: the Level lane, the spine, then lanes by order. */
 export const laneRows = (project: Project): LaneRow[] => {
   const rows: LaneRow[] = [];
   let top = 0;
   const lanes = [...project.lanes]
-    .filter((lane) => lane.visible || lane.kind === 'spine')
-    .sort((a, b) => (a.kind === 'spine' ? -1 : b.kind === 'spine' ? 1 : a.order - b.order));
+    .filter((lane) => lane.visible || lane.kind === 'spine' || lane.kind === 'level')
+    .sort((a, b) => LANE_RANK[a.kind] - LANE_RANK[b.kind] || a.order - b.order);
   for (const lane of lanes) {
     const height = LANE_HEIGHT[lane.kind];
     rows.push({ lane, top, height });

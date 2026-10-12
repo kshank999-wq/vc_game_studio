@@ -60,7 +60,7 @@ export interface StoryObject {
   };
 }
 
-export type LaneKind = 'spine' | 'subplot' | 'character';
+export type LaneKind = 'spine' | 'subplot' | 'character' | 'level';
 
 /** Where a subplot runs, as two spine nodes. The spine has no span; it never ends. */
 export interface LaneSpan {
@@ -82,6 +82,22 @@ export interface Lane {
   characterId?: string;
   /** The Player Lane (Note Sorter spec §9): the player's progression beats, Beginning to Ending. */
   role?: 'player';
+  /** The Level lane above the spine: the game's levels, each stretched between two spine plot points. */
+  levels?: LevelBand[];
+}
+
+/**
+ * One level of the game on the Level lane: from one spine plot point to
+ * another. Everything on the spine (and branching off it) in that stretch
+ * happens in this level. It is a map in the Level Designer too.
+ */
+export interface LevelBand {
+  id: string;
+  name: string;
+  startRef: string;
+  endRef: string;
+  /** Its map in the Level Designer. */
+  mapId?: string;
 }
 
 export type ConnectionKind = 'spine' | 'branch' | 'contains' | 'references' | 'arcEvent' | 'laneTie' | 'gate';

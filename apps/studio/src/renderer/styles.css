@@ -10535,3 +10535,170 @@ button.bible-dual-col:hover {
   color: var(--text);
   line-height: 1.5;
 }
+
+/* ------------------------------------------------------------ the Level lane (above the spine) */
+
+.track-level {
+  border-top: 1px solid color-mix(in srgb, var(--lane) 35%, var(--ground));
+  border-bottom: 1px solid color-mix(in srgb, var(--lane) 35%, var(--ground));
+  background: color-mix(in srgb, var(--lane) 4%, transparent);
+}
+
+.header-level {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.header-add {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--lane) 55%, var(--border));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--lane) 10%, var(--node));
+  color: var(--text);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.header-add:hover {
+  border-color: var(--lane);
+}
+
+.level-hint {
+  position: absolute;
+  left: 140px;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--c-environment);
+  white-space: nowrap;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.level-band {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--c-environment) 70%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--c-environment) 14%, transparent);
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.level-band b {
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--c-environment);
+}
+
+.level-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.level-band .header-input {
+  height: 22px;
+  font-size: 13px;
+}
+
+.level-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.level-actions button {
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--node);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.level-actions button:hover {
+  color: var(--text);
+  border-color: var(--c-environment);
+}
+
+.level-handle {
+  background: var(--c-environment);
+}
+
+/* ------------------------------------------------------------ the Opening's credits (shot list) */
+
+.credits {
+  margin: 18px 22px 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.credits-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.credits-head b {
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--c-cinematic);
+}
+
+.credits-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+}
+
+.credit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.credit-role {
+  flex: 0 1 220px;
+}
+
+.credit-name {
+  flex: 1 1 auto;
+}
+
+.credits-empty {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+}
+
+.play-credits {
+  margin: 8px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px dashed var(--border);
+  list-style: none;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-soft);
+}
+
+.header-level b {
+  flex-shrink: 0;
+}

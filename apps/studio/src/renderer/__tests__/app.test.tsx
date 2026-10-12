@@ -26,11 +26,42 @@ afterEach(() => {
 });
 
 describe('the story graph', () => {
-  it('opens a new project on the spine with Beginning, one plot point and Ending', () => {
+  it('opens a new project on the spine with Beginning, the Opening, one plot point and Ending, under the Level lane', () => {
     const { container } = render(<App />);
     expect(container.querySelector('.header-spine')?.textContent).toContain('SPINE');
+    expect(container.querySelector('.header-level')?.textContent).toContain('LEVELS');
     const types = [...container.querySelectorAll('[data-node]')].map((n) => n.getAttribute('data-type'));
-    expect(types.sort()).toEqual(['begin', 'end', 'plotPoint']);
+    expect(types.sort()).toEqual(['begin', 'cinematic', 'end', 'plotPoint']);
+  });
+
+  it('adds a level on the Level lane, between Beginning and the first plot point, with a map of its own', () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '+ Level' }));
+    expect(container.querySelectorAll('.level-band')).toHaveLength(1);
+    expect(container.querySelectorAll('.level-handle')).toHaveLength(2);
+    // Named as it is added; Enter keeps the name.
+    const name = screen.getByRole('textbox', { name: 'Level name' });
+    fireEvent.change(name, { target: { value: 'The Cave' } });
+    fireEvent.blur(name);
+    expect(container.querySelector('.level-band')?.textContent).toContain('The Cave');
+    fireEvent.click(screen.getByRole('button', { name: '+ Level' }));
+    expect(container.querySelectorAll('.level-band')).toHaveLength(2);
+    // Every stretch has a level now: there is no third to add.
+    fireEvent.click(screen.getByRole('button', { name: '+ Level' }));
+    expect(container.querySelectorAll('.level-band')).toHaveLength(2);
+  });
+
+  it('opens a plot point in the writing box, as a scene opens, and the Opening in its shot list with credits', async () => {
+    const { container } = render(<App />);
+    fireEvent.doubleClick(container.querySelector('[data-type="plotPoint"]')!);
+    expect(await screen.findByRole('tab', { name: 'Script' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Story Graph' }));
+    fireEvent.doubleClick(container.querySelector('[data-type="cinematic"]')!);
+    await opened();
+    expect(await screen.findByRole('region', { name: 'Opening credits' })).toBeTruthy();
+    expect((screen.getByRole('textbox', { name: 'Credit 2 role' }) as HTMLInputElement).value).toBe('Directed by');
+    fireEvent.click(screen.getByRole('button', { name: '+ Credit' }));
+    expect(screen.getAllByRole('textbox', { name: /Credit \d+ role/ })).toHaveLength(6);
   });
 
   it('adds subplot and character lanes from the bottom menu, and undo takes one back', () => {
@@ -39,13 +70,14 @@ describe('the story graph', () => {
     fireEvent.click(screen.getByText('+ Add character lane'));
     // The spine and the character arc run the whole story; the subplot is a
     // band between two spine nodes, like the Player Lane a new project has.
-    expect(container.querySelectorAll('.track')).toHaveLength(2);
+    // With the Level lane above the spine.
+    expect(container.querySelectorAll('.track')).toHaveLength(3);
     expect(container.querySelectorAll('.subplot-band')).toHaveLength(2);
     expect(container.querySelectorAll('.span-handle')).toHaveLength(4);
     act(() => {
       fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
     });
-    expect(container.querySelectorAll('.track')).toHaveLength(1);
+    expect(container.querySelectorAll('.track')).toHaveLength(2);
     expect(container.querySelectorAll('.subplot-band')).toHaveLength(2);
   });
 
@@ -54,9 +86,9 @@ describe('the story graph', () => {
     fireEvent.click(screen.getByText('+ Add character lane'));
     const chip = screen.getByRole('button', { name: 'Character 1' });
     fireEvent.click(chip);
-    expect(container.querySelectorAll('.track')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Character 1 · hidden' }));
     expect(container.querySelectorAll('.track')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Character 1 · hidden' }));
+    expect(container.querySelectorAll('.track')).toHaveLength(3);
   });
 });
 

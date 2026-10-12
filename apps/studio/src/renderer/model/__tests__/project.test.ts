@@ -37,10 +37,12 @@ const noOverlaps = (p: Project, laneId: string): void => {
 };
 
 describe('a new project', () => {
-  it('starts with Beginning, one plot point and Ending on a locked spine', () => {
+  it('starts with Beginning, the Opening, one plot point and Ending on a locked spine, under the Level lane', () => {
     const p = createProject();
-    expect(types(p)).toEqual(['begin', 'plotPoint', 'end']);
-    expect(codes(p)).toEqual(['begin', 'PP1', 'end']);
+    expect(types(p)).toEqual(['begin', 'cinematic', 'plotPoint', 'end']);
+    expect(codes(p)).toEqual(['begin', 'OPEN', 'PP1', 'end']);
+    expect(laneRows(p)[0]!.lane.kind).toBe('level');
+    expect(laneRows(p)[1]!.lane.kind).toBe('spine');
     expect(spineLane(p).locked).toBe(true);
     expect(spineLane(p).span).toBeUndefined();
   });
@@ -49,18 +51,19 @@ describe('a new project', () => {
 describe('placing on the spine', () => {
   it('inserts a node where it is dropped and keeps the track in order', () => {
     let p = createProject();
-    p = place(p, 'choice', spineId(p), 150).project;
-    expect(codes(p)).toEqual(['begin', 'C1', 'PP1', 'end']);
-    p = place(p, 'scene', spineId(p), 320).project;
-    expect(codes(p)).toEqual(['begin', 'C1', 'PP1', 'SC-01', 'end']);
+    p = place(p, 'choice', spineId(p), 280).project;
+    expect(codes(p)).toEqual(['begin', 'OPEN', 'C1', 'PP1', 'end']);
+    p = place(p, 'scene', spineId(p), 420).project;
+    expect(codes(p)).toEqual(['begin', 'OPEN', 'C1', 'PP1', 'SC-01', 'end']);
     noOverlaps(p, spineId(p));
   });
 
-  it('never puts anything before Beginning', () => {
+  it('never puts anything before Beginning or the Opening', () => {
     let p = createProject();
     p = place(p, 'plotPoint', spineId(p), -500).project;
     expect(types(p)[0]).toBe('begin');
-    expect(codes(p)[1]).toBe('PP2');
+    expect(codes(p)[1]).toBe('OPEN');
+    expect(codes(p)[2]).toBe('PP2');
   });
 
   it('pushes Ending along when a node is dropped past it: the track never ends', () => {
@@ -92,17 +95,19 @@ describe('moving along the spine', () => {
   it('reorders by position and pushes neighbours clear', () => {
     let p = createProject();
     const { project, id } = place(p, 'scene', spineId(p), 500);
-    p = moveNode(project, id, 120);
-    expect(codes(p)).toEqual(['begin', 'SC-01', 'PP1', 'end']);
+    p = moveNode(project, id, 280);
+    expect(codes(p)).toEqual(['begin', 'OPEN', 'SC-01', 'PP1', 'end']);
     noOverlaps(p, spineId(p));
   });
 
-  it('leaves Beginning and Ending where they are', () => {
+  it('leaves Beginning, the Opening and Ending where they are', () => {
     const p = createProject();
-    const [beginId, , endId] = spineSequence(p);
+    const [beginId, openingId, , endId] = spineSequence(p);
     expect(moveNode(p, beginId!, 900)).toBe(p);
+    expect(moveNode(p, openingId!, 900)).toBe(p);
     expect(moveNode(p, endId!, -900)).toBe(p);
     expect(removeObject(p, endId!)).toBe(p);
+    expect(removeObject(p, openingId!)).toBe(p);
   });
 });
 
@@ -113,7 +118,7 @@ describe('the Player Lane', () => {
     const seq = spineSequence(p);
     expect(lane.name).toBe('Player Lane');
     expect(lane.span).toEqual({ startRef: seq[0], endRef: seq[seq.length - 1] });
-    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane']);
+    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Levels', 'Spine', 'Player Lane']);
   });
 });
 
@@ -122,10 +127,11 @@ describe('subplot lanes', () => {
     const { project: p, laneId } = addLane(createProject(), 'subplot');
     const lane = p.lanes.find((l) => l.id === laneId)!;
     const seq = spineSequence(p);
-    expect(lane.span).toEqual({ startRef: seq[1], endRef: seq[2] });
+    // From the first plot point after Beginning (the Opening is not one) to the next.
+    expect(lane.span).toEqual({ startRef: seq[2], endRef: seq[3] });
     // Below the spine and the Player Lane a new project starts with.
-    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane', lane.name]);
-    expect(laneRows(p)[2]!.top).toBeGreaterThan(laneRows(p)[1]!.top);
+    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Levels', 'Spine', 'Player Lane', lane.name]);
+    expect(laneRows(p)[3]!.top).toBeGreaterThan(laneRows(p)[2]!.top);
   });
 
   it('span handles snap to spine nodes and the start stays before the end', () => {
@@ -173,7 +179,7 @@ describe('subplot lanes', () => {
     const added = addLane(createProject(), 'subplot');
     const { project } = place(added.project, 'scene', added.laneId, 400);
     const p = removeLane(project, added.laneId);
-    expect(p.lanes.map((l) => l.name)).toEqual(['Spine', 'Player Lane']);
+    expect(p.lanes.map((l) => l.name)).toEqual(['Levels', 'Spine', 'Player Lane']);
     expect(Object.values(p.objects).filter((o) => o.type === 'scene')).toHaveLength(0);
   });
 });
@@ -206,7 +212,7 @@ describe('character lanes', () => {
   it('drop out of the layout while hidden', () => {
     const { project, laneId } = addLane(createProject(), 'character');
     const hidden = updateLane(project, laneId, { visible: false });
-    expect(laneRows(hidden).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane']);
+    expect(laneRows(hidden).map((r) => r.lane.name)).toEqual(['Levels', 'Spine', 'Player Lane']);
     expect(updateLane(hidden, spineId(hidden), { visible: false })).toBe(hidden);
   });
 });
@@ -310,7 +316,7 @@ describe('branches', () => {
 
   it('refuse connections that the tracks already express', () => {
     let p = createProject();
-    const [begin, pp1, end] = spineSequence(p);
+    const [begin, , pp1, end] = spineSequence(p);
     expect(connectionRefusal(p, pp1!, end!)).toMatch(/track order/);
     expect(connectionRefusal(p, pp1!, begin!)).toMatch(/Beginning/);
     expect(connectionRefusal(p, pp1!, pp1!)).toMatch(/itself/);

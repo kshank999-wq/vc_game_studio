@@ -1,3 +1,4 @@
+import { creditLine, creditsOf } from './credits';
 import { describeCost, kindOf, learnCheck, payFor, ranksOf, treeOf } from './skills';
 import { advance as advancePuzzle, type StepProgress } from './puzzle/progress';
 import { nodesOf, treeDrives, usesProgress } from './puzzle/tree';
@@ -64,7 +65,7 @@ export type Entry =
   | { kind: 'heading'; text: string; sub?: string; id: string }
   | { kind: 'line'; speaker: string | null; text: string; direction?: string; sceneId: string; lineId: string; with?: Voice }
   | { kind: 'action'; text: string; detail?: string }
-  | { kind: 'cinematic'; text: string; detail?: string; shots?: string[]; skippable?: boolean }
+  | { kind: 'cinematic'; text: string; detail?: string; shots?: string[]; skippable?: boolean; credits?: string[] }
   | { kind: 'picked'; text: string }
   | { kind: 'did'; text: string }
   | { kind: 'effect'; text: string }
@@ -386,6 +387,7 @@ const cinematicEntry = (project: Project, id: string, text: string, event?: Time
     text,
     detail: [`${timing.seconds}s · ${timing.shots} shot${timing.shots === 1 ? '' : 's'}`, (o.data.camera as string | undefined) ?? ''].filter(Boolean).join(' · '),
     ...(shots.length ? { shots } : {}),
+    ...(creditsOf(o).length ? { credits: creditsOf(o).map(creditLine) } : {}),
     skippable: o.data.skippable !== 'Not skippable',
   };
 };
@@ -420,6 +422,13 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
     where.sceneId = null;
     where.eventId = null;
     const label = `${o.data.code ? `${o.data.code} ` : ''}${o.name}`;
+    // A plot point with a script plays it like a scene, then goes on as a plot point does.
+    if ((o.type === 'plotPoint' || o.type === 'begin' || o.type === 'end') && sceneTimeline(project, o.id)[0]?.events.length) {
+      d.log.push({ kind: 'heading', id: o.id, text: label, sub: (o.data.summary as string | undefined) || undefined });
+      settle(d);
+      where.sceneId = o.id;
+      return { at: 'event', sceneId: o.id, track: MAIN, index: 0 };
+    }
     switch (o.type) {
       case 'begin':
         return { at: 'after', id: o.id };
@@ -447,6 +456,8 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
       }
       case 'cinematic':
         d.log.push(cinematicEntry(project, o.id, label));
+        // The Opening plays and the story starts straight after it.
+        if (o.data.opening === true) return { at: 'after', id: o.id };
         return { at: 'wait', next: { at: 'after', id: o.id } };
       default:
         d.log.push({ kind: 'heading', id: o.id, text: label, sub: (o.data.summary as string | undefined) || o.notes || undefined });
@@ -456,6 +467,11 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
 
   if (cursor.at === 'after') {
     const o = project.objects[cursor.id];
+    // Ending's own script has played: the story ends there.
+    if (o?.type === 'end') {
+      d.log.push({ kind: 'end', text: o.name || 'The End' });
+      return { at: 'end', outcome: 'ending', text: o.name || 'The End' };
+    }
     if (o?.data.outcome) {
       const text = o.data.outcome === 'gameOver' ? `Game over: ${o.name}` : `An ending: ${o.name}`;
       d.log.push({ kind: 'end', text });

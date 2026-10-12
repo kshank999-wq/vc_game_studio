@@ -77,6 +77,9 @@ const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
 
+
+/** What opens in the writing box like a scene: scenes, and the plot points on the spine. */
+const WRITABLE: readonly string[] = ['scene', 'plotPoint', 'begin', 'end'];
 /** How long a game with work in it can go without a file before the app suggests saving, and how long "Later" waits. */
 const SAVE_REMIND_AFTER_MS = 2 * 60 * 1000;
 const SAVE_SNOOZE_MS = 15 * 60 * 1000;
@@ -139,7 +142,8 @@ export const App = () => {
   // A selection that no longer exists (after undo, say) is dropped; so is a scene view whose scene went.
   useEffect(() => {
     if (selection && !project.objects[selection] && !project.connections.some((c) => c.id === selection)) setSelection(null);
-    if (route.view === 'scene' && project.objects[route.sceneId]?.type !== 'scene') setRoute({ view: 'graph' });
+    // Scenes and plot points (Beginning and Ending among them) open in the writing box.
+    if (route.view === 'scene' && !WRITABLE.includes(project.objects[route.sceneId]?.type ?? '')) setRoute({ view: 'graph' });
   }, [project, selection, route]);
 
   /** Open a scene; the graph keeps its zoom, pan and selection for the way back (spec §24). */

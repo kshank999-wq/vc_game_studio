@@ -126,7 +126,9 @@ export const createFromSetup = (name: string, answers: GameSetup, now = stamp())
   const setup = clean(answers);
   let p: Project = { ...createProject(name.trim() || 'Untitled Game', now), setup };
   const spine = spineLane(p).id;
-  const [beginId, firstPoint] = spineSequence(p);
+  const sequence0 = spineSequence(p);
+  const beginId = sequence0.find((id) => p.objects[id]?.type === 'begin');
+  const firstPoint = sequence0.find((id) => p.objects[id]?.type === 'plotPoint');
   p = renameObject(p, firstPoint!, containerName(setup, 0));
   for (let i = 1; i < setup.units; i++) {
     const sequence = spineSequence(p);

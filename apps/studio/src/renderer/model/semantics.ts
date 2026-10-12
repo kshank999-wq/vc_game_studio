@@ -18,6 +18,7 @@ export const COLORS = {
   logic: '#C8BFAE',
   subplot: '#8FA8C4',
   player: '#E8E0C8',
+  level: '#7FB069',
   error: '#E5484D',
 } as const;
 
@@ -55,6 +56,8 @@ export const LANE_ACCEPTS: Record<LaneKind, readonly ObjectType[]> = {
   spine: ['plotPoint', 'scene', 'cinematic', 'choice'],
   subplot: ['plotPoint', 'scene', 'choice'],
   character: ['arcEvent'],
+  // Levels are bands stretched between plot points, not nodes dropped in.
+  level: [],
 };
 
 /** What can float in the open canvas above the spine as a branch or alternate route. */

@@ -75,6 +75,13 @@ const EntryView = ({ entry }: { entry: Entry }) => {
               ))}
             </ol>
           )}
+          {entry.credits && (
+            <ul className="play-credits" aria-label="Credits">
+              {entry.credits.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+          )}
         </div>
       );
     case 'picked':

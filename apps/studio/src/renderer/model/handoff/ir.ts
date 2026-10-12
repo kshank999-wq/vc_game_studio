@@ -1,4 +1,6 @@
 import { recipeOf } from '../crafting';
+import { creditLine, creditsOf } from '../credits';
+import { levelOf } from '../level-lane';
 import { equipmentOf } from '../equipment';
 import { costOf, ranksOf, requiresOf } from '../skills';
 import { describeTarget, whoLabel, type Who } from '../collab';
@@ -517,6 +519,11 @@ const fieldsOf = (o: StoryObject, project?: Project): Record<string, string> => 
       // A codex entry reads as written, without stray blank lines around it.
       .map(([k, v]) => [k, k === 'codex' ? v.trim() : v]),
   ),
+  // The level it happens in, from the Level lane.
+  ...(project && levelOf(project, o.id) ? { level: levelOf(project, o.id)!.name } : {}),
+  // The Opening, and its credits in the order they roll, one a line ("Directed by — [name]" while still a placeholder).
+  ...(o.data.opening === true ? { opening: 'yes' } : {}),
+  ...(creditsOf(o).length ? { credits: creditsOf(o).map(creditLine).join('\n') } : {}),
 });
 
 /** A timed choice's limit and the option it falls to, for the runtimes. */

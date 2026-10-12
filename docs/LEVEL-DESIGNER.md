@@ -22,6 +22,24 @@ adds the scale above a level: worlds, regions and the maps inside them. See
 | Map / graybox (middle) | The same items drawn top-down or in 3D. A status line shows the pointer's position and the selection's name, export name, GUID and size. |
 | Inspector (right) | The authoritative place to edit (spec §6). With nothing selected it shows the level: its floors, story links, units, grid and naming. With several items selected it shows align, distribute, rotate, mirror, group, duplicate, save to library and delete. |
 
+## The Level lane on the story graph
+
+Above the spine is the **Level lane**: the game's levels, in the order the
+player meets them. It is always there and can't be hidden.
+
+- **+ Level** (in the lane's header) adds a level from where the last one
+  ends, or from Beginning, to the next plot point, and makes its map in the
+  Level Designer with the same name. Type its name as it appears.
+- **Stretch it** by dragging either end to another plot point. Levels run
+  between plot points and never overlap; one can end where the next begins.
+- Everything on the spine under a level, and every branch above that stretch,
+  **happens in that level**. An element's detail says which ("Happens in
+  level"), and the engines get it as the field `level`.
+- **Double-click** a level, or use **Map ↗**, to open its map. **×** takes it
+  off the lane; its map stays in the Level Designer with everything built in
+  it. Rename a level by double-clicking its name, and its map follows.
+- Delete a plot point a level runs to and it runs to the next one instead.
+
 ## Worlds, regions and child maps (spec V2)
 
 Start big and work in (spec V2 §2). **+ World** in the navigator, **+ New

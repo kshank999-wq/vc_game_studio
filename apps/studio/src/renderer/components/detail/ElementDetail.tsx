@@ -1,3 +1,4 @@
+import { levelOf } from '../../model/level-of';
 import { CommentsHistory } from '../collab/lazy';
 import { runningTime, shotsOf } from '../../model/shots';
 import { useNav } from '../../nav';
@@ -500,6 +501,26 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
           </div>
         </section>
       )}
+
+      {(() => {
+        // Where it happens on the Level lane, by where it sits on the story graph.
+        const band = levelOf(project, id);
+        return band ? (
+          <section className="detail-section">
+            <div className="dfld">
+              <span>Happens in level</span>
+              <div className="shot-summary">
+                <span className="detail-text">{band.name}</span>
+                {nav.openLevels && band.mapId && (
+                  <button className="tb-btn small" onClick={() => nav.openLevels!(band.mapId)}>
+                    Open its map
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : null;
+      })()}
 
       {nav.openLevels && LEVEL_TYPES.has(object.type) && (
         <section className="detail-section">

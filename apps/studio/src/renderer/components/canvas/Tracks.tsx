@@ -1,5 +1,6 @@
+import { bandRange } from '../../model/level-lane';
 import { spanRange, type LaneRow } from '../../model/layout';
-import type { Lane, Project } from '../../model/types';
+import type { Lane, LevelBand, Project } from '../../model/types';
 import { EyeIcon, LockIcon, UnlockIcon } from '../Symbol';
 
 /** Full-width bands for the spine and character arcs: they run the whole story, at every pan. */
@@ -94,9 +95,25 @@ const LaneMenu = ({ controls }: { controls: LaneControls }) =>
   ) : null;
 
 /** The sticky header on the left of the spine and of each character lane. */
-export const TrackHeader = ({ lane, top, height, controls }: { lane: Lane; top: number; height: number; controls: LaneControls }) => {
+export const TrackHeader = ({ lane, top, height, controls, onAddLevel }: { lane: Lane; top: number; height: number; controls: LaneControls; onAddLevel?: () => void }) => {
   const roomy = height >= 56;
   const inset = lane.kind === 'spine' ? 2 : 1;
+  if (lane.kind === 'level') {
+    return (
+      <div
+        className="track-header header-level"
+        style={{ top: top + inset, height: Math.max(0, height - inset * 2), '--lane': lane.color } as React.CSSProperties}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <b>LEVELS</b>
+        {height >= 28 && (
+          <button className="header-add" title="Add a level after the last one, between the next two plot points" onClick={onAddLevel}>
+            + Level
+          </button>
+        )}
+      </div>
+    );
+  }
   return (
     <div
       className={`track-header header-${lane.kind}`}
@@ -169,6 +186,99 @@ export const SubplotBand = ({ project, row, empty, controls, onHandleDown }: {
       </div>
       {handle('start', range.from)}
       {handle('end', range.to)}
+    </>
+  );
+};
+
+/**
+ * A level on the Level lane: a band from one spine plot point to another.
+ * Its ends are handles to stretch it; double-click opens its map.
+ */
+export const LevelBands = ({ project, row, editing, onEditDone, onEdit, onHandleDown, onOpen, onDelete }: {
+  project: Project;
+  row: LaneRow;
+  editing: string | null;
+  onEdit: (bandId: string) => void;
+  onEditDone: (bandId: string, name: string | null) => void;
+  onHandleDown: (e: React.PointerEvent, bandId: string, edge: 'start' | 'end') => void;
+  onOpen: (band: LevelBand) => void;
+  onDelete: (band: LevelBand) => void;
+}) => {
+  const bands = row.lane.levels ?? [];
+  return (
+    <>
+      {bands.length === 0 && (
+        <span className="level-hint" style={{ top: row.top + row.height / 2 }}>
+          Add a level with + Level, then stretch it between plot points. Scenes and cinematics on the spine under it happen in that level.
+        </span>
+      )}
+      {bands.map((band) => {
+        const range = bandRange(project, band);
+        if (!range) return null;
+        const handle = (edge: 'start' | 'end', x: number) => (
+          <div
+            key={edge}
+            className="span-handle level-handle"
+            role="slider"
+            aria-label={`${band.name}: where it ${edge === 'start' ? 'starts' : 'ends'}`}
+            aria-valuenow={Math.round(x)}
+            title={edge === 'start' ? 'Drag to the plot point this level starts at' : 'Drag to the plot point this level ends at'}
+            style={{ left: x - 4, top: row.top + 8, height: row.height - 16 }}
+            onPointerDown={(e) => onHandleDown(e, band.id, edge)}
+          />
+        );
+        return (
+          <div key={band.id}>
+            <div
+              className="level-band"
+              data-level={band.id}
+              style={{ left: range.from, width: range.to - range.from, top: row.top + 4, height: row.height - 8 }}
+              title="Double-click to open this level’s map"
+              onPointerDown={(e) => e.stopPropagation()}
+              onDoubleClick={() => onOpen(band)}
+            >
+              <b>LEVEL</b>
+              {editing === band.id ? (
+                <input
+                  className="header-input"
+                  aria-label="Level name"
+                  defaultValue={band.name}
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  onBlur={(e) => onEditDone(band.id, e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                    if (e.key === 'Escape') onEditDone(band.id, null);
+                  }}
+                />
+              ) : (
+                <span
+                  className="level-name"
+                  title="Double-click to rename"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(band.id);
+                  }}
+                >
+                  {band.name}
+                </span>
+              )}
+              <span className="level-actions">
+                <button aria-label={`Open the map for ${band.name}`} title="Open its map in the Level Designer" onClick={() => onOpen(band)}>
+                  Map ↗
+                </button>
+                <button aria-label={`Take ${band.name} off the lane`} title="Take it off the Level lane (its map stays in the Level Designer)" onClick={() => onDelete(band)}>
+                  ×
+                </button>
+              </span>
+            </div>
+            {handle('start', range.from)}
+            {handle('end', range.to)}
+          </div>
+        );
+      })}
     </>
   );
 };

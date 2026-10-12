@@ -387,7 +387,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
         <section className="scene-box" aria-label="Scene authoring" style={{ width: BOX_W, height: BOX_H }} onPointerDown={(e) => e.stopPropagation()}>
           <div className="scene-head">
             <div className="scene-title">
-              <Symbol type="scene" size={16} />
+              <Symbol type={scene.type} size={16} />
               <span className="mono scene-code">{scene.data.code}</span>
               {editingName ? (
                 <NameEdit

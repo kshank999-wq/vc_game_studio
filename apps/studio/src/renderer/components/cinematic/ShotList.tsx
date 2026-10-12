@@ -1,3 +1,4 @@
+import { addCredit, creditsOf, moveCredit, removeCredit, updateCredit } from '../../model/credits';
 import { useState } from 'react';
 import type { Destination } from '../../model/details';
 import { addShot, duplicateShot, FRAMINGS, linesFor, MOVES, moveShot, removeShot, runningTime, shotsOf, TRANSITIONS, updateShot, type Framing, type Shot } from '../../model/shots';
@@ -354,6 +355,7 @@ export const ShotList = ({ project, id, onCommit, onNavigate, onOpenBible, onOpe
             </button>
           )}
         </div>
+        {(cinematic.data.opening === true || creditsOf(cinematic).length > 0) && <CreditsEditor project={project} id={id} onCommit={onCommit} />}
       </section>
       {shot ? (
         <ShotInspector project={project} id={id} shot={shot} index={at} onCommit={onCommit} />
@@ -361,5 +363,56 @@ export const ShotList = ({ project, id, onCommit, onNavigate, onOpenBible, onOpe
         <ElementDetail project={project} id={id} onCommit={onCommit} onNavigate={onNavigate} onOpenBible={onOpenBible} onOpenCode={onOpenCode} variant="panel" />
       )}
     </div>
+  );
+};
+
+/**
+ * The Opening's credits, in the order they roll: a role and a name each.
+ * Names left empty are placeholders, shown as [name] in the play-through and
+ * handed to the engines as they are, to fill in later.
+ */
+const CreditsEditor = ({ project, id, onCommit }: { project: Project; id: string; onCommit: (p: Project) => void }) => {
+  const credits = creditsOf(project.objects[id]);
+  return (
+    <section className="credits" aria-label="Opening credits">
+      <div className="credits-head">
+        <b>OPENING CREDITS</b>
+        <span className="muted">In the order they roll. Leave a name empty to keep it as a placeholder.</span>
+        <div className="grow" />
+        <button className="tb-btn small" onClick={() => onCommit(addCredit(project, id))}>
+          + Credit
+        </button>
+      </div>
+      {credits.length === 0 && <p className="muted credits-empty">No credits yet. Add one for each card: who made the game, wrote it, scored it, stars in it.</p>}
+      <ol className="credits-list">
+        {credits.map((c, i) => (
+          <li key={c.id} className="credit-row">
+            <input
+              className="inp small credit-role"
+              aria-label={`Credit ${i + 1} role`}
+              placeholder="Role (Directed by…)"
+              defaultValue={c.role}
+              onBlur={(e) => e.currentTarget.value !== c.role && onCommit(updateCredit(project, id, c.id, { role: e.currentTarget.value }))}
+            />
+            <input
+              className="inp small credit-name"
+              aria-label={`Credit ${i + 1} name`}
+              placeholder="[name]"
+              defaultValue={c.name}
+              onBlur={(e) => e.currentTarget.value !== c.name && onCommit(updateCredit(project, id, c.id, { name: e.currentTarget.value }))}
+            />
+            <button className="icon-btn" aria-label={`Move credit ${i + 1} up`} disabled={i === 0} onClick={() => onCommit(moveCredit(project, id, c.id, -1))}>
+              ↑
+            </button>
+            <button className="icon-btn" aria-label={`Move credit ${i + 1} down`} disabled={i === credits.length - 1} onClick={() => onCommit(moveCredit(project, id, c.id, 1))}>
+              ↓
+            </button>
+            <button className="icon-btn" aria-label={`Remove credit ${i + 1}`} onClick={() => onCommit(removeCredit(project, id, c.id))}>
+              ×
+            </button>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 };

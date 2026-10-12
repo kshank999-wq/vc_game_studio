@@ -22,6 +22,37 @@ timeline event, or by right-clicking it on the story graph.
   table, the play-through lists each shot, and the Godot export writes it to
   the cinematic's resource (`shot_list`, `seconds`, `skippable`).
 
+## The Opening
+
+Every game starts with an **Opening** on the spine, right after Beginning: the
+game's opening cinematic and its credits. It is a cinematic like any other,
+with its own shot list, but it is locked in place: it can't be moved or
+deleted, and nothing goes between Beginning and it.
+
+- **Double-click it** (or any cinematic) to open its shot list and design it
+  shot by shot.
+- **Opening credits** sit under its shots: a role and a name for each card,
+  in the order they roll. It starts with placeholders (A game by, Directed
+  by, Written by, Music by, Starring). Leave a name empty to keep it as a
+  placeholder; it shows as `[name]`. Add, reorder and remove cards as you
+  like.
+- In the **play-through** the Opening plays first, its shots and credits
+  shown, and the story carries straight on into what follows it.
+- The **engines** get it as the first cinematic the story reaches, with the
+  fields `opening: yes` and `credits`: one card a line, as
+  `Directed by — Ken` or `Directed by — [name]` while it is a placeholder.
+
+Projects made before the Opening existed are given one the first time they
+open; whatever was on the spine moves along to make room, in the same order.
+
+## Plot points you write in
+
+Double-click a plot point (Beginning and Ending too) to open it in the same
+writing box as a scene: Script, Summary, Purpose and Notes, with the scene
+elements around it. Its script plays in the play-through when the story
+reaches it, and its lines go to the engines with the rest. Ending's script
+plays and then the story ends.
+
 ## Options that go, lock or hide
 
 Every option of a choice (a branch in a scene's timeline, the option that

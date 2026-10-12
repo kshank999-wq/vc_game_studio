@@ -75,7 +75,7 @@ describe('the menu bar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Don’t save' }));
     // A new project starts with the Game Setup Wizard, which can start blank instead.
     fireEvent.click(await screen.findByRole('button', { name: 'Start blank instead' }));
-    expect(container.querySelectorAll('[data-node]')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-node]')).toHaveLength(4);
   });
 
   it('sets up a new game with the wizard, and changes the answers later', async () => {

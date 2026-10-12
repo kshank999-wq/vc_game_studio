@@ -31,7 +31,8 @@ import { useNav } from '../../nav';
 import { scenePreview } from '../../model/scene-preview';
 import { NodeView, type PortState } from './NodeView';
 import { implementationStatuses } from '../../model/implementation';
-import { SubplotBand, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
+import { LevelBands, SubplotBand, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
+import { addLevelBand, nearestStop, removeBand, renameBand, setBandEdge } from '../../model/level-lane';
 
 /** A node being dragged in from the palette (or placed with a click). */
 export interface PaletteDrag {
@@ -91,6 +92,7 @@ type Gesture =
   | { kind: 'pan'; startX: number; startY: number; panX: number; panY: number; moved: boolean }
   | { kind: 'node'; id: string; startX: number; startY: number; x0: number; y0: number; moved: boolean }
   | { kind: 'span'; laneId: string; edge: 'start' | 'end' }
+  | { kind: 'level'; bandId: string; edge: 'start' | 'end' }
   | { kind: 'link'; sourceId: string };
 
 interface Link {
@@ -106,6 +108,7 @@ const REFUSAL: Record<Lane['kind'], string> = {
   spine: 'The spine takes plot points, scenes, cinematics and choices',
   subplot: 'Subplots take plot points, choices and scenes',
   character: 'Character lanes take arc events',
+  level: 'The Level lane takes levels: use + Level, then stretch it between plot points',
 };
 
 /** How far past a subplot band's ends a drop still counts as dropping into it. */
@@ -141,6 +144,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
   const gesture = useRef<Gesture | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editingLane, setEditingLane] = useState<{ laneId: string; field: LaneField } | null>(null);
+  const nav = useNav();
   const [laneMenu, setLaneMenu] = useState<string | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [rulesFor, setRulesFor] = useState<Menu | null>(null);
@@ -274,6 +278,9 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
     } else if (g.kind === 'span') {
       const ref = nearestSpineNode(toWorld(e.clientX, e.clientY, v).x);
       if (ref) setPreview(setSpanEdge(current, g.laneId, g.edge, ref));
+    } else if (g.kind === 'level') {
+      const ref = nearestStop(current, toWorld(e.clientX, e.clientY, v).x);
+      if (ref) setPreview(setBandEdge(current, g.bandId, g.edge, ref));
     } else {
       const p = toWorld(e.clientX, e.clientY, v);
       const to = { x: p.x, y: p.y };
@@ -296,7 +303,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
     if (!g) return;
     const { project: current, preview: pending, link: pendingLink } = latest.current;
     if (g.kind === 'pan' && !g.moved) props.onSelect(null);
-    if ((g.kind === 'node' && g.moved) || g.kind === 'span') {
+    if ((g.kind === 'node' && g.moved) || g.kind === 'span' || g.kind === 'level') {
       if (pending && pending !== current) props.onCommit(pending);
     }
     if (g.kind === 'link' && pendingLink?.targetId) {
@@ -359,6 +366,25 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
     if (e.button !== 0) return;
     e.stopPropagation();
     begin({ kind: 'span', laneId, edge });
+  };
+
+  // ------------------------------------------------------------ levels
+
+  const [editingLevel, setEditingLevel] = useState<string | null>(null);
+  const onLevelHandleDown = (e: React.PointerEvent, bandId: string, edge: 'start' | 'end') => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    begin({ kind: 'level', bandId, edge });
+  };
+  const addLevel = () => {
+    const made = addLevelBand(project);
+    if (!made) {
+      props.onSay('Every stretch of the spine has a level. Add a plot point after the last one to make room for another.');
+      return;
+    }
+    props.onCommit(made.project);
+    setEditingLevel(made.id);
+    props.onSay('A level, with its own map in the Level Designer. Drag its ends to the plot points it runs between.');
   };
 
   const openMenu = (e: React.MouseEvent, kind: Menu['kind'], id: string) => {
@@ -455,6 +481,25 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
         )}
 
         {rows.map((row) =>
+          row.lane.kind === 'level' ? (
+            <LevelBands
+              key={row.lane.id}
+              project={shown}
+              row={row}
+              editing={editingLevel}
+              onEdit={setEditingLevel}
+              onEditDone={(bandId, name) => {
+                setEditingLevel(null);
+                if (name !== null) props.onCommit(renameBand(project, bandId, name));
+              }}
+              onHandleDown={onLevelHandleDown}
+              onOpen={(band) => nav.openLevels?.(band.mapId)}
+              onDelete={(band) => props.onCommit(removeBand(project, band.id))}
+            />
+          ) : null,
+        )}
+
+        {rows.map((row) =>
           row.lane.kind === 'subplot' ? (
             <SubplotBand
               key={row.lane.id}
@@ -500,7 +545,14 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
               target={portState(id)}
               onPointerDown={(e) => onNodeDown(e, id)}
               onPortDown={(e) => onPortDown(e, id)}
-              onDoubleClick={() => (object.type === 'scene' ? props.onOpenScene(id, 'open') : setEditing(id))}
+              onDoubleClick={() =>
+                // Scenes and plot points open their writing box; a cinematic (the Opening among them) its shot list.
+                object.type === 'scene' || object.type === 'plotPoint' || object.type === 'begin' || object.type === 'end'
+                  ? props.onOpenScene(id, 'open')
+                  : object.type === 'cinematic' && nav.openShots
+                    ? nav.openShots(id)
+                    : setEditing(id)
+              }
               onContextMenu={(e) => openMenu(e, 'node', id)}
               onHover={object.type === 'scene' ? (on) => hoverScene(on ? id : null) : undefined}
               detail={object.type === 'scene' ? sceneDetail(shown, id) : undefined}
@@ -549,7 +601,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
       {/* Sticky headers for the tracks that run the whole story. */}
       {rows.map((row) =>
         row.lane.kind === 'subplot' ? null : (
-          <TrackHeader key={row.lane.id} lane={row.lane} top={screenY(row.top)} height={row.height * view.zoom} controls={laneControls(row.lane)} />
+          <TrackHeader key={row.lane.id} lane={row.lane} top={screenY(row.top)} height={row.height * view.zoom} controls={laneControls(row.lane)} onAddLevel={addLevel} />
         ),
       )}
 
