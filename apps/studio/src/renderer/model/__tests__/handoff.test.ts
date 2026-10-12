@@ -24,7 +24,7 @@ describe('the handoff model', () => {
 
   it('flattens the story the engines need', () => {
     const ir = buildIR(sunkenVault());
-    expect(ir.spine.map((n) => n.kind)).toEqual(['begin', 'cinematic', 'scene', 'choice', 'plotPoint', 'scene', 'scene', 'cinematic', 'choice', 'end']);
+    expect(ir.spine.map((n) => n.kind)).toEqual(['cinematic', 'begin', 'scene', 'choice', 'plotPoint', 'scene', 'scene', 'cinematic', 'choice', 'end']);
     const door = ir.scenes.find((s) => s.name === 'The Vault Door')!;
     expect(door.main.map((e) => e.kind)).toEqual(['cinematic', 'dialogue', 'dialogue', 'action', 'freePlay', 'choice']);
     expect(door.branches).toEqual([expect.objectContaining({ label: 'Force it', from: 5, rejoin: 4 })]);
@@ -131,7 +131,7 @@ describe('Godot placeholder scenes', () => {
     // load_steps counts every external resource, plus one.
     expect(Number(/load_steps=(\d+)/.exec(vault)![1])).toBe((vault.match(/\[ext_resource /g) ?? []).length + 1);
     expect(out.files.some((f) => f.path === 'vcgs/generated/play_story.tscn')).toBe(true);
-    expect(out.files.find((f) => f.path.endsWith('story_graph.gd'))!.content).toContain(`const START := "${ir.graph.find((n) => n.kind === 'begin')!.key}"`);
+    expect(out.files.find((f) => f.path.endsWith('story_graph.gd'))!.content).toContain(`const START := "${ir.graph.find((n) => n.start)!.key}"`);
     const off = generateGodot(ir, 'res://vcgs/generated', { placeholderScenes: false });
     // Levels are scenes in their own right, not placeholders: they stay.
     expect(off.files.some((f) => f.path.endsWith('.tscn') && !f.path.includes('/levels/'))).toBe(false);

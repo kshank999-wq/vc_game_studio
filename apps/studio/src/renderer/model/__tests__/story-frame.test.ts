@@ -13,9 +13,9 @@ import type { Project } from '../types';
 const named = (p: Project, name: string) => Object.values(p.objects).find((o) => o.name === name)!.id;
 
 describe('the Opening', () => {
-  it('comes right after Beginning with placeholder credits, and plays first, credits and all', () => {
+  it('is the first box, before Beginning, with placeholder credits, and plays first, credits and all', () => {
     const p = createProject();
-    const [, opening] = spineSequence(p);
+    const [opening] = spineSequence(p);
     expect(isOpening(p.objects[opening!])).toBe(true);
     expect(creditsOf(p.objects[opening!]).map((c) => c.role)).toContain('Directed by');
     const play = startPlay(p);
@@ -26,7 +26,7 @@ describe('the Opening', () => {
 
   it('hands its credits to the engines, in order, filled in or as placeholders', () => {
     let p = createProject();
-    const opening = spineSequence(p)[1]!;
+    const opening = spineSequence(p)[0]!;
     const directed = creditsOf(p.objects[opening]).find((c) => c.role === 'Directed by')!;
     p = updateCredit(p, opening, directed.id, { name: 'Ken' });
     p = addCredit(p, opening, 'Thanks to', '');
@@ -47,10 +47,20 @@ describe('the Opening', () => {
     };
     const read = readProject(JSON.parse(JSON.stringify(old)))!;
     const types = spineSequence(read).map((id) => read.objects[id]!.type);
-    expect(types).toEqual(['begin', 'cinematic', 'plotPoint', 'end']);
+    expect(types).toEqual(['cinematic', 'begin', 'plotPoint', 'end']);
     expect(read.lanes.some((l) => l.kind === 'level')).toBe(true);
     // Twice is the same as once.
     expect(withStoryFrame(read)).toBe(read);
+  });
+
+  it('moves to the front when an earlier version put it after Beginning, and the story starts there', () => {
+    const fresh = createProject();
+    const [opening, begin] = spineSequence(fresh);
+    const after: Project = { ...fresh, placements: { ...fresh.placements, [opening!]: { ...fresh.placements[opening!]!, x: fresh.placements[begin!]!.x + 130 } } };
+    expect(spineSequence(after)[0]).toBe(begin);
+    const read = readProject(JSON.parse(JSON.stringify(after)))!;
+    expect(spineSequence(read).slice(0, 2)).toEqual([opening, begin]);
+    expect(buildIR(read).graph.find((n) => n.start)?.kind).toBe('cinematic');
   });
 });
 

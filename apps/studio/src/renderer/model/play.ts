@@ -601,7 +601,11 @@ const run = (project: Project, play: Play, log: Entry[] = []): Play => {
 
 /** Start at the Beginning, or at a node on the graph (a scene, say) with a fresh world. */
 export const startPlay = (project: Project, from?: string): Play => {
-  const begin = from && project.objects[from] ? from : Object.values(project.objects).find((o) => o.type === 'begin')?.id;
+  // The game starts with its Opening, the first box on the spine; without one, at Beginning.
+  const begin =
+    from && project.objects[from]
+      ? from
+      : (Object.values(project.objects).find((o) => o.type === 'cinematic' && o.data.opening === true && project.placements[o.id]) ?? Object.values(project.objects).find((o) => o.type === 'begin'))?.id;
   // Quests with nothing to wait for are under way from the first moment.
   const d: Doing = { project, world: startWorld(project), log: [] };
   settle(d);

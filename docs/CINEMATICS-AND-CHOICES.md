@@ -24,10 +24,11 @@ timeline event, or by right-clicking it on the story graph.
 
 ## The Opening
 
-Every game starts with an **Opening** on the spine, right after Beginning: the
-game's opening cinematic and its credits. It is a cinematic like any other,
-with its own shot list, but it is locked in place: it can't be moved or
-deleted, and nothing goes between Beginning and it.
+Every game starts with an **Opening**, the very first box on the spine,
+before Beginning: the game's opening cinematic and its credits. It is a
+cinematic like any other, with its own shot list, but it is locked in place:
+it can't be moved or deleted, and nothing goes before it or between it and
+Beginning.
 
 - **Double-click it** (or any cinematic) to open its shot list and design it
   shot by shot.
@@ -38,12 +39,12 @@ deleted, and nothing goes between Beginning and it.
   like.
 - In the **play-through** the Opening plays first, its shots and credits
   shown, and the story carries straight on into what follows it.
-- The **engines** get it as the first cinematic the story reaches, with the
-  fields `opening: yes` and `credits`: one card a line, as
+- The **engines** start the story there: its graph node is marked `start`,
+  and it has the fields `opening: yes` and `credits`: one card a line, as
   `Directed by — Ken` or `Directed by — [name]` while it is a placeholder.
 
 Projects made before the Opening existed are given one the first time they
-open; whatever was on the spine moves along to make room, in the same order.
+open, in front of Beginning; nothing else on the spine moves.
 
 ## Plot points you write in
 

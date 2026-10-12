@@ -7,7 +7,7 @@ describe('the Game Setup Wizard', () => {
   it('divides the spine into the chosen containers, Beginning to Ending', () => {
     const p = createFromSetup('Dust Road', { ...blankSetup('linear'), units: 3 });
     const names = spineSequence(p).map((id) => p.objects[id]!.name);
-    expect(names).toEqual(['Beginning', 'Opening', 'Act I', 'Act II', 'Act III', 'Ending']);
+    expect(names).toEqual(['Opening', 'Beginning', 'Act I', 'Act II', 'Act III', 'Ending']);
     expect(p.name).toBe('Dust Road');
   });
 
@@ -20,7 +20,7 @@ describe('the Game Setup Wizard', () => {
 
   it('writes the premise into the Beginning and puts the resources in the Bible', () => {
     const p = createFromSetup('Hollow', { ...blankSetup('rpg'), premise: '  A town forgets its dead.  ', resources: ['Health', 'Currency', 'Health', ' '] });
-    const begin = p.objects[spineSequence(p)[0]!]!;
+    const begin = p.objects[spineSequence(p)[1]!]!;
     expect(begin.data.summary).toBe('A town forgets its dead.');
     const items = Object.values(p.objects).filter((o) => o.type === 'inventory').map((o) => [o.name, o.data.code]);
     expect(items).toEqual([['Health', 'ITM-01'], ['Currency', 'ITM-02']]);

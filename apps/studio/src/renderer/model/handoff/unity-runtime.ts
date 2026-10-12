@@ -228,11 +228,14 @@ namespace VCGS
         {
             Root = root;
             Name = D.Str(D.Map(root, "project"), "name");
+            var marked = false;
             foreach (var n in D.List(root, "graph"))
             {
                 var node = D.Map(n);
                 Graph[D.Str(node, "key")] = node;
-                if (D.Str(node, "kind") == "begin") Start = D.Str(node, "key");
+                // The node marked start (the Opening); a story from before it starts at Beginning.
+                if (D.Bool(node, "start")) { Start = D.Str(node, "key"); marked = true; }
+                else if (D.Str(node, "kind") == "begin" && !marked) Start = D.Str(node, "key");
             }
             Index(root, "scenes", Scenes);
             Index(root, "choices", Choices);

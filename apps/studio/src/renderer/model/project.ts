@@ -50,7 +50,7 @@ export const DEFAULT_CREDITS: readonly { role: string; name: string }[] = [
   { role: 'Starring', name: '' },
 ];
 
-/** The game's Opening: its first cinematic, with the opening credits. It sits on the spine just after Beginning. */
+/** The game's Opening: its first cinematic, with the opening credits. It is the first box on the spine, before Beginning. */
 export const makeOpening = (now: string): StoryObject =>
   makeObject('cinematic', 'Opening', now, {
     code: 'OPEN',
@@ -81,25 +81,28 @@ export const makeLevelLane = (): Lane => ({
 
 /**
  * A project from before the Opening and the Level lane: give it both. The
- * Opening goes just after Beginning; whatever is on the spine moves along to
- * make room. Projects that have them come back unchanged.
+ * Opening goes first on the spine, before Beginning (one given it after
+ * Beginning by an earlier version moves to the front). Nothing else on the
+ * spine moves. Projects that have both, in place, come back unchanged.
  */
 export const withStoryFrame = (project: Project, now = stamp()): Project => {
   let next = project;
   if (!next.lanes.some((l) => l.kind === 'level')) next = { ...next, lanes: [makeLevelLane(), ...next.lanes] };
-  if (!Object.values(next.objects).some(isOpening)) {
-    const spine = next.lanes.find((l) => l.kind === 'spine');
-    const beginId = spine && Object.keys(next.objects).find((id) => next.objects[id]!.type === 'begin' && next.placements[id]?.laneId === spine.id);
-    if (spine && beginId) {
-      const opening = makeOpening(now);
-      const x = next.placements[beginId]!.x + OPENING_GAP;
-      next = {
-        ...next,
-        objects: { ...next.objects, [opening.id]: opening },
-        placements: { ...next.placements, [opening.id]: { laneId: spine.id, x, y: 0 } },
-      };
-      next = settle(next);
-    }
+  const spine = next.lanes.find((l) => l.kind === 'spine');
+  const beginId = spine && Object.keys(next.objects).find((id) => next.objects[id]!.type === 'begin' && next.placements[id]?.laneId === spine.id);
+  if (!spine || !beginId) return next;
+  const front = next.placements[beginId]!.x - OPENING_GAP;
+  const openingId = Object.keys(next.objects).find((id) => isOpening(next.objects[id]));
+  if (!openingId) {
+    const opening = makeOpening(now);
+    next = {
+      ...next,
+      objects: { ...next.objects, [opening.id]: opening },
+      placements: { ...next.placements, [opening.id]: { laneId: spine.id, x: front, y: 0 } },
+    };
+  } else if ((next.placements[openingId]?.x ?? -Infinity) >= next.placements[beginId]!.x) {
+    next = { ...next, placements: { ...next.placements, [openingId]: { laneId: spine.id, x: front, y: 0 } } };
+    next = settle(next);
   }
   return next;
 };
@@ -143,7 +146,7 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
     connections: [],
     placements: {
       [begin.id]: { laneId: spine.id, x: START_X, y: 0 },
-      [opening.id]: { laneId: spine.id, x: START_X + OPENING_GAP, y: 0 },
+      [opening.id]: { laneId: spine.id, x: START_X - OPENING_GAP, y: 0 },
       [plotPoint.id]: { laneId: spine.id, x: START_X + START_SPACING, y: 0 },
       [end.id]: { laneId: spine.id, x: START_X + START_SPACING * 2, y: 0 },
     },
@@ -225,7 +228,7 @@ export const packLane = (project: Project, laneId: string, floor = -Infinity): P
   if (lane.kind === 'spine') {
     const rank = (id: string): number => {
       const object = project.objects[id];
-      return object?.type === 'begin' ? -2 : isOpening(object) ? -1 : object?.type === 'end' ? 1 : 0;
+      return isOpening(object) ? -2 : object?.type === 'begin' ? -1 : object?.type === 'end' ? 1 : 0;
     };
     ids.sort((a, b) => rank(a) - rank(b));
   }
@@ -305,11 +308,11 @@ export const canPlace = (project: Project, type: ObjectType, laneId: string | nu
   return LANE_ACCEPTS[lane.kind].includes(type);
 };
 
-/** The leftmost x a spine node may take: just clear of Beginning and the Opening. */
+/** The leftmost x a spine node may take: just clear of Beginning (the Opening is before it). */
 const spineFloor = (project: Project): number => {
-  const firstId = spineSequence(project).find((id) => isOpening(project.objects[id])) ?? spineSequence(project).find((id) => project.objects[id]?.type === 'begin');
-  const first = firstId ? project.placements[firstId] : undefined;
-  return first ? first.x + nodeSize(project.objects[firstId!]!.type).w + NODE_GAP : -Infinity;
+  const beginId = spineSequence(project).find((id) => project.objects[id]?.type === 'begin');
+  const begin = beginId ? project.placements[beginId] : undefined;
+  return begin ? begin.x + nodeSize('begin').w + NODE_GAP : -Infinity;
 };
 
 /** Branch nodes float above the spine, never on or below it. */
@@ -322,7 +325,7 @@ const nearestSpineNode = (project: Project, x: number): string | undefined => {
   for (const id of spineSequence(project)) {
     const object = project.objects[id];
     const placement = project.placements[id];
-    if (!object || !placement || object.type === 'begin' || object.type === 'end') continue;
+    if (!object || !placement || object.type === 'begin' || object.type === 'end' || isOpening(object)) continue;
     const d = Math.abs(placement.x + nodeSize(object.type).w / 2 - x);
     if (d < distance) {
       best = id;
@@ -552,6 +555,7 @@ export const connectionRefusal = (project: Project, sourceId: string, targetId: 
   const from = laneKindOf(project, sourceId);
   const to = laneKindOf(project, targetId);
   if (target.type === 'begin') return 'Nothing leads back to Beginning';
+  if (isOpening(target)) return 'Nothing leads back to the Opening';
   if (source.type === 'end') return 'The story ends at Ending';
   if (source.type === 'arcEvent' || target.type === 'arcEvent') {
     const other = source.type === 'arcEvent' ? target : source;
@@ -753,7 +757,7 @@ export const ensurePlayerLane = (project: Project): { project: Project; laneId: 
     order: Math.max(0, ...project.lanes.map((l) => l.order)) + 1,
     visible: true,
     locked: false,
-    ...(sequence.length >= 2 ? { span: { startRef: sequence[0]!, endRef: sequence[sequence.length - 1]! } } : {}),
+    ...(sequence.length >= 2 ? { span: { startRef: sequence.find((n) => project.objects[n]?.type === 'begin') ?? sequence[0]!, endRef: sequence[sequence.length - 1]! } } : {}),
   };
   return { project: settle({ ...project, lanes: [...project.lanes, lane] }), laneId: lane.id };
 };

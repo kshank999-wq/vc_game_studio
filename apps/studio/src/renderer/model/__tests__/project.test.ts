@@ -37,10 +37,10 @@ const noOverlaps = (p: Project, laneId: string): void => {
 };
 
 describe('a new project', () => {
-  it('starts with Beginning, the Opening, one plot point and Ending on a locked spine, under the Level lane', () => {
+  it('starts with the Opening, Beginning, one plot point and Ending on a locked spine, under the Level lane', () => {
     const p = createProject();
-    expect(types(p)).toEqual(['begin', 'cinematic', 'plotPoint', 'end']);
-    expect(codes(p)).toEqual(['begin', 'OPEN', 'PP1', 'end']);
+    expect(types(p)).toEqual(['cinematic', 'begin', 'plotPoint', 'end']);
+    expect(codes(p)).toEqual(['OPEN', 'begin', 'PP1', 'end']);
     expect(laneRows(p)[0]!.lane.kind).toBe('level');
     expect(laneRows(p)[1]!.lane.kind).toBe('spine');
     expect(spineLane(p).locked).toBe(true);
@@ -51,18 +51,18 @@ describe('a new project', () => {
 describe('placing on the spine', () => {
   it('inserts a node where it is dropped and keeps the track in order', () => {
     let p = createProject();
-    p = place(p, 'choice', spineId(p), 280).project;
-    expect(codes(p)).toEqual(['begin', 'OPEN', 'C1', 'PP1', 'end']);
-    p = place(p, 'scene', spineId(p), 420).project;
-    expect(codes(p)).toEqual(['begin', 'OPEN', 'C1', 'PP1', 'SC-01', 'end']);
+    p = place(p, 'choice', spineId(p), 150).project;
+    expect(codes(p)).toEqual(['OPEN', 'begin', 'C1', 'PP1', 'end']);
+    p = place(p, 'scene', spineId(p), 320).project;
+    expect(codes(p)).toEqual(['OPEN', 'begin', 'C1', 'PP1', 'SC-01', 'end']);
     noOverlaps(p, spineId(p));
   });
 
   it('never puts anything before Beginning or the Opening', () => {
     let p = createProject();
     p = place(p, 'plotPoint', spineId(p), -500).project;
-    expect(types(p)[0]).toBe('begin');
-    expect(codes(p)[1]).toBe('OPEN');
+    expect(codes(p)[0]).toBe('OPEN');
+    expect(types(p)[1]).toBe('begin');
     expect(codes(p)[2]).toBe('PP2');
   });
 
@@ -95,14 +95,14 @@ describe('moving along the spine', () => {
   it('reorders by position and pushes neighbours clear', () => {
     let p = createProject();
     const { project, id } = place(p, 'scene', spineId(p), 500);
-    p = moveNode(project, id, 280);
-    expect(codes(p)).toEqual(['begin', 'OPEN', 'SC-01', 'PP1', 'end']);
+    p = moveNode(project, id, 120);
+    expect(codes(p)).toEqual(['OPEN', 'begin', 'SC-01', 'PP1', 'end']);
     noOverlaps(p, spineId(p));
   });
 
   it('leaves Beginning, the Opening and Ending where they are', () => {
     const p = createProject();
-    const [beginId, openingId, , endId] = spineSequence(p);
+    const [openingId, beginId, , endId] = spineSequence(p);
     expect(moveNode(p, beginId!, 900)).toBe(p);
     expect(moveNode(p, openingId!, 900)).toBe(p);
     expect(moveNode(p, endId!, -900)).toBe(p);
@@ -117,7 +117,7 @@ describe('the Player Lane', () => {
     const lane = p.lanes.find((l) => l.role === 'player')!;
     const seq = spineSequence(p);
     expect(lane.name).toBe('Player Lane');
-    expect(lane.span).toEqual({ startRef: seq[0], endRef: seq[seq.length - 1] });
+    expect(lane.span).toEqual({ startRef: seq[1], endRef: seq[seq.length - 1] });
     expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Levels', 'Spine', 'Player Lane']);
   });
 });
@@ -316,9 +316,10 @@ describe('branches', () => {
 
   it('refuse connections that the tracks already express', () => {
     let p = createProject();
-    const [begin, , pp1, end] = spineSequence(p);
+    const [opening, begin, pp1, end] = spineSequence(p);
     expect(connectionRefusal(p, pp1!, end!)).toMatch(/track order/);
     expect(connectionRefusal(p, pp1!, begin!)).toMatch(/Beginning/);
+    expect(connectionRefusal(p, pp1!, opening!)).toMatch(/Opening/);
     expect(connectionRefusal(p, pp1!, pp1!)).toMatch(/itself/);
     p = place(p, 'choice', spineId(p), 120).project;
     expect(connectionRefusal(p, node(p, 'choice').id, end!)).toBeNull();
@@ -347,7 +348,7 @@ describe('arc events', () => {
     let p = createProject();
     const added = addLane(p, 'character');
     p = added.project;
-    const pp1 = spineSequence(p)[1]!;
+    const pp1 = spineSequence(p)[2]!;
     const { project, id } = place(p, 'arcEvent', added.laneId, p.placements[pp1]!.x);
     expect(project.connections).toEqual([expect.objectContaining({ sourceId: id, targetId: pp1, kind: 'arcEvent' })]);
     expect(canPlace(project, 'arcEvent', spineId(project))).toBe(false);

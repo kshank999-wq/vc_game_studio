@@ -1330,7 +1330,7 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
       '',
       '## Where the story starts, and every node on the graph with where it goes:',
       '## routes in order (the first whose conditions hold), else onward along the spine.',
-      `const START := ${gd(ir.graph.find((n) => n.kind === 'begin')?.key ?? '')}`,
+      `const START := ${gd((ir.graph.find((n) => n.start) ?? ir.graph.find((n) => n.kind === 'begin'))?.key ?? '')}`,
       `const NODES := ${gd(storyNodes(ir, root))}`,
     ].join('\n'),
   );

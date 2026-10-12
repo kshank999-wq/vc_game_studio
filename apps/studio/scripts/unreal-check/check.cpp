@@ -196,10 +196,9 @@ int main()
     using namespace VcgsKeys;
     if (game.GetFlag(Flags::DoorSolved) != "no") Fail("door_solved should start at no");
     if (game.GetObjectState(Objects::RustedLever) != "down") Fail("the lever should start down");
-    // The Opening first, then SC-01.
-    const std::string opening = vcgs::StoryWalker::Onward(game, story.Start);
-    if (opening == Scenes::Sc01TheCaveMouth || opening.empty()) Fail("the story should open with the Opening, got " + opening);
-    if (vcgs::StoryWalker::Onward(game, opening) != Scenes::Sc01TheCaveMouth) Fail("the story should start at SC-01 after the Opening");
+    // The story starts at the Opening, the first box; then Beginning, then SC-01.
+    if ((*story.Graph.at(story.Start))["kind"].Str() != "cinematic") Fail("the story should start at the Opening, got " + story.Start);
+    if (vcgs::StoryWalker::Onward(game, vcgs::StoryWalker::Onward(game, story.Start)) != Scenes::Sc01TheCaveMouth) Fail("the story should reach SC-01 after the Opening and Beginning");
     // The quest starts only by an effect (finding the key): not yet.
     if (!game.QuestState(Quests::OpenTheVault).empty()) Fail("Open the vault should wait for its effect, is " + game.QuestState(Quests::OpenTheVault));
     if (game.KnowsLore(Lore::TheDrownedOrder) || game.HasMechanic(Mechanics::LanternOil)) Fail("the Order's lore and the lantern's oil should wait for their rules");

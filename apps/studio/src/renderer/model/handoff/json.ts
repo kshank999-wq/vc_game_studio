@@ -278,7 +278,7 @@ export const storySchema = () => ({
     effects: { type: 'array', items: ref('effect') },
     storyNode: obj({ key: str, kind: str, name: str }),
     graphNode: {
-      ...obj({ key: str, kind: str, name: str, onward: { type: ['string', 'null'] }, routes: { type: 'array', items: obj({ to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['to', 'label']) }, outcome: { enum: ['ending', 'gameOver'] } }, ['key', 'kind', 'name', 'onward', 'routes']),
+      ...obj({ key: str, kind: str, name: str, start: { const: true }, onward: { type: ['string', 'null'] }, routes: { type: 'array', items: obj({ to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['to', 'label']) }, outcome: { enum: ['ending', 'gameOver'] } }, ['key', 'kind', 'name', 'onward', 'routes']),
       description: 'A node on the story graph. Where it goes: the first route whose conditions hold, else onward along the spine.',
     },
     lore: { allOf: [ref('thing'), obj({ byEffect: { const: true }, discoveredWhen: ref('rule') }, [])], description: 'A lore entry: known once `discoveredWhen` holds, from the start when there is none.' },
@@ -425,7 +425,9 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
 
 ## Playing it
 
-1. **Start** at the \`graph\` node whose \`kind\` is \`begin\`.
+1. **Start** at the \`graph\` node marked \`start\` (the game's Opening);
+   a file from before the Opening has none, so start at the node whose
+   \`kind\` is \`begin\`.
 2. **At a node**, go to its first \`route\` whose \`when\` holds (doing its
    \`effects\`), else \`onward\`. A node with an \`outcome\` ends the story there.
 3. **A scene** plays its \`main\` events in order. An event whose \`when\` fails

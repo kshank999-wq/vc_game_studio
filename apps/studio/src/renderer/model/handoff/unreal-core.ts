@@ -249,10 +249,13 @@ namespace vcgs
         explicit Story(Value root) : Root(std::move(root))
         {
             Name = Root["project"]["name"].Str();
+            bool marked = false;
             for (const auto& n : Root["graph"].items)
             {
                 Graph[n["key"].Str()] = &n;
-                if (n["kind"].Str() == "begin") Start = n["key"].Str();
+                // The node marked start (the Opening); a story from before it starts at Beginning.
+                if (n["start"].Bool()) { Start = n["key"].Str(); marked = true; }
+                else if (n["kind"].Str() == "begin" && !marked) Start = n["key"].Str();
             }
             Index("scenes", Scenes);
             Index("choices", Choices);

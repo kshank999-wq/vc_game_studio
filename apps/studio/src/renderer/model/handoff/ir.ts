@@ -436,6 +436,8 @@ export interface IrStoryNode {
 
 /** Every node on the story graph, with where it goes: routes in order (first whose conditions hold), else onward. */
 export interface IrGraphNode extends IrStoryNode {
+  /** Where the story starts: the first box on the spine (the Opening, or Beginning without one). */
+  start?: true;
   onward: string | null;
   routes: { to: string; label: string; when?: IrRule; effects?: IrEffect[] }[];
   outcome?: 'ending' | 'gameOver';
@@ -679,6 +681,7 @@ export const buildIR = (project: Project): HandoffIR => {
         const outcome = project.objects[id]!.data.outcome;
         return {
           ...node(id),
+          ...(at === 0 ? { start: true as const } : {}),
           onward: at >= 0 && spine[at + 1] ? key(spine[at + 1]) : null,
           routes: project.connections
             .filter((c) => c.kind === 'branch' && c.sourceId === id && project.objects[c.targetId])
