@@ -1454,3 +1454,74 @@
   display: flex;
   gap: 8px;
 }
+
+/* A Word document's look, kept beside its plain text (read.ts). */
+.ns-bold {
+  font-weight: 700;
+}
+
+.ns-italic {
+  font-style: italic;
+}
+
+.ns-underline {
+  text-decoration: underline;
+}
+
+.ns-strike {
+  text-decoration: line-through;
+}
+
+.ns-underline.ns-strike {
+  text-decoration: underline line-through;
+}
+
+.ns-words.ns-title,
+.ns-words.ns-h1,
+.ns-words.ns-h2,
+.ns-words.ns-h3 {
+  font-family: var(--font-label, inherit);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ns-words.ns-title {
+  font-size: 26px;
+}
+
+.ns-words.ns-h1 {
+  font-size: 22px;
+}
+
+.ns-words.ns-h2 {
+  font-size: 19px;
+}
+
+.ns-words.ns-h3 {
+  font-size: 17px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ns-words.ns-quote {
+  padding-left: 14px;
+  border-left: 3px solid rgba(201, 164, 92, 0.45);
+  font-style: italic;
+}
+
+.ns-words.ns-bullet,
+.ns-words.ns-number {
+  position: relative;
+  padding-left: calc(28px + var(--ns-level, 0) * 22px);
+}
+
+.ns-words.ns-bullet::before,
+.ns-words.ns-number::before {
+  content: attr(data-marker);
+  position: absolute;
+  left: calc(var(--ns-level, 0) * 22px);
+  width: 24px;
+  color: var(--muted);
+  user-select: none;
+}

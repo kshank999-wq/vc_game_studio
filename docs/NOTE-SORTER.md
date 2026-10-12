@@ -67,6 +67,17 @@ one, and the whole panel can be switched off.
 On an empty Note Sorter, **Try a sample brainstorm** loads three documents for
 The Sunken Vault with the Action-adventure categories.
 
-## Not yet
+## Word documents
 
-- The raw notes panel shows plain text. Formatting in a `.docx` is not kept.
+A `.docx` keeps its look in the raw notes: **bold**, *italic*, underlined and
+struck-out words, the title and headings (Word's built-in heading styles, or
+any style named "heading 1" to "heading 3"), quotes, and bulleted and
+numbered lists with Word's own bullets and numbers (1., a), ii.), nested
+by level. Lists defined in a list style (Word's List Bullet and List
+Number) count too.
+
+The look is stored beside the text, never in it. Passages, highlighting
+part of a line and the cards made from them work on the same plain words as
+any other source, so a card holds the words without their formatting.
+Pasted text, `.txt` and `.md` files show as typed (Markdown's `**` and `#`
+included).

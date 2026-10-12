@@ -1,7 +1,7 @@
 import { newId } from '../project';
 import type { Project } from '../types';
 import { TEMPLATES } from './templates';
-import type { Category, ExtractedNote, NoteSet, NoteStatus, Range, SourceDocument, Verb } from './types';
+import type { Category, ExtractedNote, InlineMark, LineFormat, NoteSet, NoteStatus, Range, SourceDocument, SourceFormat, Verb } from './types';
 
 /**
  * The shared Note Sorter engine (Note Sorter spec §3, §6): immutable sources,
@@ -29,9 +29,10 @@ const shortFor = (set: NoteSet, name: string): string => {
 };
 
 /** Bring raw notes in. The text is kept exactly as it came and never changes. */
-export const importSource = (project: Project, name: string, content: string, now = stamp()): { project: Project; id: string } => {
+export const importSource = (project: Project, name: string, content: string, now = stamp(), format?: SourceFormat): { project: Project; id: string } => {
   const set = notesOf(project);
-  const source: SourceDocument = { id: newId('src'), name: name.trim() || 'Notes', importedAt: now, content: content.replace(/\r\n?/g, '\n'), short: shortFor(set, name) };
+  // A Word document's formatting is worked out on its own text, which has no carriage returns.
+  const source: SourceDocument = { id: newId('src'), name: name.trim() || 'Notes', importedAt: now, content: content.replace(/\r\n?/g, '\n'), short: shortFor(set, name), ...(format ? { format } : {}) };
   return { project: withNotes(project, (s) => ({ ...s, sources: [...s.sources, source] })), id: source.id };
 };
 
@@ -286,6 +287,31 @@ export const segmentsOf = (project: Project, source: SourceDocument, within: Ran
     if (last && last.notes.length === 0 && notes.length === 0) last.end = end;
     else out.push({ start, end, notes });
   }
+  return out;
+};
+
+/** A Word document's line style for the passage starting at `start`: heading, quote or list item. */
+export const lineFormatAt = (source: SourceDocument, start: number): LineFormat | undefined => source.format?.lines.find((l) => l.start === start);
+
+/** A stretch of a segment in one set of inline styles (bold, italic…), to draw it as the document had it. */
+export interface Piece extends Range {
+  marks: InlineMark[];
+}
+
+/** A segment cut where its inline styles change. Plain text, or text with no formatting kept, is one piece. */
+export const piecesOf = (source: SourceDocument, segment: Range): Piece[] => {
+  const runs = (source.format?.runs ?? []).filter((r) => r.end > segment.start && r.start < segment.end);
+  if (!runs.length) return [{ start: segment.start, end: segment.end, marks: [] }];
+  const out: Piece[] = [];
+  let at = segment.start;
+  for (const r of runs) {
+    const from = Math.max(segment.start, r.start);
+    const to = Math.min(segment.end, r.end);
+    if (from > at) out.push({ start: at, end: from, marks: [] });
+    out.push({ start: from, end: to, marks: r.marks });
+    at = to;
+  }
+  if (at < segment.end) out.push({ start: at, end: segment.end, marks: [] });
   return out;
 };
 

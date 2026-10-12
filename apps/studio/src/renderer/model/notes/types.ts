@@ -27,6 +27,36 @@ export interface SourceDocument {
   content: string;
   /** Short name for references, as in "memo ¶3". */
   short: string;
+  /** How a Word document looked: drawn over `content`, which stays the plain text. */
+  format?: SourceFormat;
+}
+
+/** Inline styles kept from a Word document. */
+export type InlineMark = 'bold' | 'italic' | 'underline' | 'strike';
+
+/** A stretch of a source's text in one set of inline styles. */
+export interface FormatRun {
+  start: number;
+  end: number;
+  marks: InlineMark[];
+}
+
+export type LineKind = 'title' | 'h1' | 'h2' | 'h3' | 'bullet' | 'number' | 'quote';
+
+/** What a line (a passage) of a source is: a heading, a list item, a quote. */
+export interface LineFormat {
+  /** Where the line starts in the text, as its passage does. */
+  start: number;
+  kind: LineKind;
+  /** A list item's depth, from 0. */
+  level?: number;
+  /** A list item's bullet or number, as Word showed it: "•", "2.", "b)". */
+  marker?: string;
+}
+
+export interface SourceFormat {
+  runs: FormatRun[];
+  lines: LineFormat[];
 }
 
 export type NoteStatus = 'unsorted' | 'sorted' | 'converted' | 'placed' | 'setAside';

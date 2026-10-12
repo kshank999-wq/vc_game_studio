@@ -7,11 +7,13 @@ import {
   extract,
 
   importSource,
+  lineFormatAt,
   loadTemplate,
   moveNote,
   notesIn,
   notesOf,
   passagesOf,
+  piecesOf,
   progressOf,
   removeCategory,
   renameCategory,
@@ -21,7 +23,7 @@ import {
 } from '../../model/notes/sorter';
 import { dismissSuggestion, suggestionsFor } from '../../model/notes/suggest';
 import { CATEGORY_TYPES, TEMPLATES } from '../../model/notes/templates';
-import type { Category } from '../../model/notes/types';
+import type { Category, SourceFormat } from '../../model/notes/types';
 import { ReadError, readNotesFile } from '../../model/notes/read';
 import type { Project } from '../../model/types';
 import { Symbol } from '../Symbol';
@@ -314,15 +316,30 @@ export const SortTab = ({ project, onCommit, onSay, onOpenNote, onReview, show }
           const all = taken.length > 0 && segments.every((s) => s.notes.length || !source.content.slice(s.start, s.end).trim());
           if (hideSorted && all) return null;
           const tags = [...new Set(taken.flatMap((s) => s.notes.map((n) => categoryName(n.categoryId))))];
+          // A Word document's look: headings, quotes and list items, drawn over the plain words.
+          const line = lineFormatAt(source, p.start);
           return (
             <div key={p.start} className={`ns-passage${all ? ' sorted' : ''}`} data-start={p.start} data-end={p.end}>
               <span className="ns-tags">{tags.length > 0 && <span className="ns-tag">{tags.join(' · ')}</span>}</span>
-              <p className="ns-words" data-start={p.start} data-end={p.end}>
-                {segments.map((s) => (
-                  <span key={s.start} data-at={s.start} className={s.notes.length ? 'ns-taken' : undefined} title={s.notes.length ? `Sorted into ${[...new Set(s.notes.map((n) => categoryName(n.categoryId)))].join(', ')}` : undefined}>
-                    {source.content.slice(s.start, s.end)}
-                  </span>
-                ))}
+              <p
+                className={`ns-words${line ? ` ns-${line.kind}` : ''}`}
+                data-start={p.start}
+                data-end={p.end}
+                data-marker={line?.marker}
+                style={line?.level ? ({ '--ns-level': line.level } as React.CSSProperties) : undefined}
+              >
+                {segments.flatMap((s) =>
+                  piecesOf(source, s).map((piece) => (
+                    <span
+                      key={piece.start}
+                      data-at={piece.start}
+                      className={[s.notes.length ? 'ns-taken' : '', ...piece.marks.map((m) => `ns-${m}`)].filter(Boolean).join(' ') || undefined}
+                      title={s.notes.length ? `Sorted into ${[...new Set(s.notes.map((n) => categoryName(n.categoryId)))].join(', ')}` : undefined}
+                    >
+                      {source.content.slice(piece.start, piece.end)}
+                    </span>
+                  )),
+                )}
               </p>
               <span
                 className="ns-grip"
@@ -471,7 +488,7 @@ export const SortTab = ({ project, onCommit, onSay, onOpenNote, onReview, show }
             let next = project;
             let first: string | null = null;
             for (const d of docs) {
-              const made = importSource(next, d.name, d.content);
+              const made = importSource(next, d.name, d.content, undefined, d.format);
               next = made.project;
               first ??= made.id;
             }
@@ -487,7 +504,7 @@ export const SortTab = ({ project, onCommit, onSay, onOpenNote, onReview, show }
 };
 
 /** Bring notes in: pasted, or read from .txt, .md and .docx files. */
-const ImportDialog = ({ onImport, onClose }: { onImport: (docs: { name: string; content: string }[]) => void; onClose: () => void }) => {
+const ImportDialog = ({ onImport, onClose }: { onImport: (docs: { name: string; content: string; format?: SourceFormat }[]) => void; onClose: () => void }) => {
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -510,12 +527,12 @@ const ImportDialog = ({ onImport, onClose }: { onImport: (docs: { name: string; 
             accept=".txt,.md,.markdown,.docx,text/plain,text/markdown"
             onChange={async (e) => {
               const files = [...(e.currentTarget.files ?? [])];
-              const docs: { name: string; content: string }[] = [];
+              const docs: { name: string; content: string; format?: SourceFormat }[] = [];
               const problems: string[] = [];
               for (const f of files) {
                 try {
-                  const content = await readNotesFile(f);
-                  if (content.trim()) docs.push({ name: f.name.replace(/\.[^.]+$/, ''), content });
+                  const { content, format } = await readNotesFile(f);
+                  if (content.trim()) docs.push({ name: f.name.replace(/\.[^.]+$/, ''), content, format });
                   else problems.push(`${f.name} is empty.`);
                 } catch (err) {
                   problems.push(err instanceof ReadError ? err.message : `${f.name} couldn’t be read.`);
