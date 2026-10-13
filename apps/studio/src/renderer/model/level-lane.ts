@@ -2,7 +2,7 @@ import { addLevel, levelsOf, updateLevel } from './level/level';
 import { nodeSize, spineLane, spineSequence } from './layout';
 import { bandRange, levelBands, levelLane, levelOf } from './level-of';
 export { bandRange, levelBands, levelLane, levelOf } from './level-of';
-import { newId, plotStops } from './project';
+import { newId, placeNew, plotStops } from './project';
 import type { Lane, LevelBand, Project } from './types';
 
 /**
@@ -33,8 +33,10 @@ const overlaps = (project: Project, a: { startRef: string; endRef: string }, b: 
 
 /**
  * A new level: from where the last one ends (or Beginning) to the next plot
- * point, with its own map in the Level Designer. Null when the spine has no
- * plot point left after the last level to stretch to.
+ * point, with its own map in the Level Designer. The spine is open until an
+ * ending goes on it, so when every stretch has its level already, a new plot
+ * point goes at the end of the spine for this one to run to. Null only when
+ * the spine has closed on an ending and every stretch is taken.
  */
 export const addLevelBand = (project: Project, name?: string): { project: Project; id: string; mapId: string } | null => {
   if (!levelLane(project)) return null;
@@ -42,7 +44,15 @@ export const addLevelBand = (project: Project, name?: string): { project: Projec
   const bands = levelBands(project);
   const lastEnd = bands.reduce<number>((at, b) => Math.max(at, stops.indexOf(b.endRef)), 0);
   const start = stops[lastEnd];
-  const end = stops[lastEnd + 1];
+  let end = stops[lastEnd + 1];
+  if (start && !end && project.objects[start]?.type !== 'end') {
+    const at = project.placements[start]!.x + nodeSize(project.objects[start]!.type).w + 260;
+    const placed = placeNew(project, 'plotPoint', spineLane(project).id, at);
+    if (placed) {
+      project = placed.project;
+      end = placed.id;
+    }
+  }
   if (!start || !end) return null;
   const title = name?.trim() || `Level ${bands.length + 1}`;
   const made = addLevel(project, title);

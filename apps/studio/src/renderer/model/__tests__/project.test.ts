@@ -9,9 +9,11 @@ import {
   removeObject,
   renameObject,
   moveLane,
+  endingToSpine,
+  addEnding,
   updateLane,
 } from '../project';
-import { NODE_GAP, laneRows, laneSequence, nodeSize, spineLane, spineSequence, subplotReach } from '../layout';
+import { NODE_GAP, columnEndings, endingsColumn, nodeBox, laneRows, laneSequence, nodeSize, spineLane, spineSequence, subplotReach } from '../layout';
 import { readProject } from '../storage';
 import { commit, redo, startHistory, undo } from '../history';
 import type { Project } from '../types';
@@ -36,9 +38,18 @@ const noOverlaps = (p: Project, laneId: string): void => {
   }
 };
 
+/** A project whose spine runs to an ending (its first ending, put on the spine), as projects did before the Endings column. */
+const withEnd = (): Project => {
+  const p = createProject();
+  return endingToSpine(p, columnEndings(p)[0]!);
+};
+
 describe('a new project', () => {
-  it('starts with the Opening, Beginning, one plot point and Ending on a locked spine, with the Level lane at the bottom', () => {
-    const p = createProject();
+  it('starts with the Opening, Beginning and one plot point on a locked, open-ended spine, Ending 1 in the Endings column, and the Level lane at the bottom', () => {
+    const fresh = createProject();
+    expect(types(fresh)).toEqual(['cinematic', 'begin', 'plotPoint']);
+    expect(columnEndings(fresh).map((id) => fresh.objects[id]!.name)).toEqual(['Ending 1']);
+    const p = withEnd();
     expect(types(p)).toEqual(['cinematic', 'begin', 'plotPoint', 'end']);
     expect(codes(p)).toEqual(['OPEN', 'begin', 'PP1', 'end']);
     expect(laneRows(p).map((r) => r.lane.kind)).toEqual(['spine', 'subplot', 'level']);
@@ -49,7 +60,7 @@ describe('a new project', () => {
 
 describe('placing on the spine', () => {
   it('inserts a node where it is dropped and keeps the track in order', () => {
-    let p = createProject();
+    let p = withEnd();
     p = place(p, 'choice', spineId(p), 150).project;
     expect(codes(p)).toEqual(['OPEN', 'begin', 'C1', 'PP1', 'end']);
     p = place(p, 'scene', spineId(p), 320).project;
@@ -58,7 +69,7 @@ describe('placing on the spine', () => {
   });
 
   it('never puts anything before Beginning or the Opening', () => {
-    let p = createProject();
+    let p = withEnd();
     p = place(p, 'plotPoint', spineId(p), -500).project;
     expect(codes(p)[0]).toBe('OPEN');
     expect(types(p)[1]).toBe('begin');
@@ -66,7 +77,7 @@ describe('placing on the spine', () => {
   });
 
   it('pushes Ending along when a node is dropped past it: the track never ends', () => {
-    let p = createProject();
+    let p = withEnd();
     const endBefore = p.placements[spineSequence(p).at(-1)!]!.x;
     p = place(p, 'cinematic', spineId(p), endBefore + 400).project;
     expect(types(p).at(-1)).toBe('end');
@@ -75,7 +86,7 @@ describe('placing on the spine', () => {
   });
 
   it('numbers codes from the highest one in use, so a code is never reused', () => {
-    let p = createProject();
+    let p = withEnd();
     const first = place(p, 'scene', spineId(p), 300);
     p = place(first.project, 'scene', spineId(p), 400).project;
     p = removeObject(p, first.id);
@@ -84,7 +95,7 @@ describe('placing on the spine', () => {
   });
 
   it('refuses scene elements, which belong inside a scene', () => {
-    const p = createProject();
+    const p = withEnd();
     expect(canPlace(p, 'character', spineId(p))).toBe(false);
     expect(placeNew(p, 'dialogue', spineId(p), 100)).toBeNull();
   });
@@ -92,7 +103,7 @@ describe('placing on the spine', () => {
 
 describe('moving along the spine', () => {
   it('reorders by position and pushes neighbours clear', () => {
-    let p = createProject();
+    let p = withEnd();
     const { project, id } = place(p, 'scene', spineId(p), 500);
     p = moveNode(project, id, 120);
     expect(codes(p)).toEqual(['OPEN', 'begin', 'SC-01', 'PP1', 'end']);
@@ -100,7 +111,7 @@ describe('moving along the spine', () => {
   });
 
   it('leaves Beginning, the Opening and Ending where they are', () => {
-    const p = createProject();
+    const p = withEnd();
     const [openingId, beginId, , endId] = spineSequence(p);
     expect(moveNode(p, beginId!, 900)).toBe(p);
     expect(moveNode(p, openingId!, 900)).toBe(p);
@@ -112,7 +123,7 @@ describe('moving along the spine', () => {
 
 describe('the Player Lane', () => {
   it('is there from the start, a lane of its own beneath the spine', () => {
-    const p = createProject();
+    const p = withEnd();
     const lane = p.lanes.find((l) => l.role === 'player')!;
     expect(lane.name).toBe('Player Lane');
     expect(lane.span).toBeUndefined();
@@ -122,7 +133,7 @@ describe('the Player Lane', () => {
 
 describe('subplot lanes', () => {
   it('are added as lanes of their own, above the Level lane at the bottom, one under another', () => {
-    const first = addLane(createProject(), 'subplot');
+    const first = addLane(withEnd(), 'subplot');
     const second = addLane(first.project, 'subplot');
     const p = second.project;
     expect(p.lanes.find((l) => l.id === first.laneId)!.span).toBeUndefined();
@@ -131,7 +142,7 @@ describe('subplot lanes', () => {
   });
 
   it('take beats anywhere along the story, without moving the spine', () => {
-    const added = addLane(createProject(), 'subplot');
+    const added = addLane(withEnd(), 'subplot');
     const before = added.project.placements;
     let p = added.project;
     for (const x of [3000, 200, 1200]) p = place(p, 'scene', added.laneId, x).project;
@@ -143,7 +154,7 @@ describe('subplot lanes', () => {
   });
 
   it('run alongside the stretch of spine their beats are under', () => {
-    let p = createProject();
+    let p = withEnd();
     p = place(p, 'scene', spineId(p), 600).project;
     const added = addLane(p, 'subplot');
     p = added.project;
@@ -158,7 +169,7 @@ describe('subplot lanes', () => {
   });
 
   it('take plot points, choices and scenes, coded as subplot beats', () => {
-    const added = addLane(createProject(), 'subplot');
+    const added = addLane(withEnd(), 'subplot');
     const { project } = place(added.project, 'plotPoint', added.laneId, 400);
     const ids = laneSequence(project, added.laneId);
     expect(ids.map((id) => project.objects[id]!.data.code)).toEqual(['SP1']);
@@ -166,13 +177,13 @@ describe('subplot lanes', () => {
   });
 
   it('refuse edits while locked', () => {
-    const added = addLane(createProject(), 'subplot');
+    const added = addLane(withEnd(), 'subplot');
     const locked = updateLane(added.project, added.laneId, { locked: true });
     expect(placeNew(locked, 'scene', added.laneId, 400)).toBeNull();
   });
 
   it('take their nodes with them when removed', () => {
-    const added = addLane(createProject(), 'subplot');
+    const added = addLane(withEnd(), 'subplot');
     const { project } = place(added.project, 'scene', added.laneId, 400);
     const p = removeLane(project, added.laneId);
     expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane', 'Levels']);
@@ -182,7 +193,7 @@ describe('subplot lanes', () => {
 
 describe('character lanes', () => {
   it('follow a canonical character with its own colour', () => {
-    const first = addLane(createProject(), 'character');
+    const first = addLane(withEnd(), 'character');
     const second = addLane(first.project, 'character');
     const lanes = second.project.lanes.filter((l) => l.kind === 'character');
     expect(lanes.map((l) => l.color)).toEqual(['#D9607A', '#E8E0C8']);
@@ -191,7 +202,7 @@ describe('character lanes', () => {
   });
 
   it('rename their character, and renaming the character renames the lane', () => {
-    const { project, laneId } = addLane(createProject(), 'character');
+    const { project, laneId } = addLane(withEnd(), 'character');
     let p = updateLane(project, laneId, { name: 'Mara' });
     const lane = p.lanes.find((l) => l.id === laneId)!;
     expect(p.objects[lane.characterId!]!.name).toBe('Mara');
@@ -200,13 +211,13 @@ describe('character lanes', () => {
   });
 
   it('keep their character when the lane goes', () => {
-    const { project, laneId } = addLane(createProject(), 'character');
+    const { project, laneId } = addLane(withEnd(), 'character');
     const characterId = project.lanes.find((l) => l.id === laneId)!.characterId!;
     expect(removeLane(project, laneId).objects[characterId]).toBeDefined();
   });
 
   it('drop out of the layout while hidden', () => {
-    const { project, laneId } = addLane(createProject(), 'character');
+    const { project, laneId } = addLane(withEnd(), 'character');
     const hidden = updateLane(project, laneId, { visible: false });
     expect(laneRows(hidden).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane', 'Levels']);
     expect(updateLane(hidden, spineId(hidden), { visible: false })).toBe(hidden);
@@ -215,7 +226,7 @@ describe('character lanes', () => {
 
 describe('undo', () => {
   it('steps back and forward through interactions', () => {
-    const p0 = createProject();
+    const p0 = withEnd();
     let h = startHistory(p0);
     const p1 = place(p0, 'choice', spineId(p0), 150).project;
     h = commit(h, p1);
@@ -235,9 +246,34 @@ import { findIssues } from '../validate';
 
 const node = (p: Project, type: string, n = 0) => Object.values(p.objects).filter((o) => o.type === type)[n]!;
 
+describe('the Endings column', () => {
+  it('stands right of everything, its endings top to bottom; more are added below, and dragging reorders them', () => {
+    let p = createProject();
+    const first = columnEndings(p)[0]!;
+    const second = addEnding(p);
+    p = second.project;
+    p = addEnding(p, 'The flood').project;
+    expect(columnEndings(p).map((id) => p.objects[id]!.name)).toEqual(['Ending 1', 'Ending 2', 'The flood']);
+    const column = endingsColumn(p);
+    const spineRight = Math.max(...spineSequence(p).map((id) => nodeBox(p, id)!.x + nodeBox(p, id)!.w));
+    expect(column.x).toBeGreaterThan(spineRight);
+    const [a, b] = [nodeBox(p, first)!, nodeBox(p, second.id)!];
+    expect(a.x).toBe(b.x);
+    expect(b.y).toBeGreaterThan(a.y);
+    // Drag Ending 1 below the others.
+    p = moveNode(p, first, 0, nodeBox(p, columnEndings(p).at(-1)!)!.y + 40);
+    expect(columnEndings(p).map((id) => p.objects[id]!.name)).toEqual(['Ending 2', 'The flood', 'Ending 1']);
+    // They can be tied into from the spine, and deleted, unlike the spine's own Beginning.
+    const pp1 = spineSequence(p).find((id) => p.objects[id]!.type === 'plotPoint')!;
+    const tied = connect(p, pp1, first);
+    expect('error' in tied).toBe(false);
+    expect(removeObject(p, first).objects[first]).toBeUndefined();
+  });
+});
+
 describe('arranging lanes', () => {
   it('moves any lane above or below the others, the spine included, and keeps the order', () => {
-    const added = addLane(createProject(), 'subplot');
+    const added = addLane(withEnd(), 'subplot');
     let p = added.project;
     const names = () => laneRows(p).map((r) => r.lane.name);
     const level = p.lanes.find((l) => l.kind === 'level')!.id;
@@ -255,7 +291,7 @@ describe('arranging lanes', () => {
   });
 
   it('turns an older project’s lanes into free lanes: the spine first, the Level lane at the bottom, subplots untied', () => {
-    const fresh = addLane(createProject(), 'subplot');
+    const fresh = addLane(withEnd(), 'subplot');
     const seq = spineSequence(fresh.project);
     const old: Project = {
       ...fresh.project,
@@ -274,7 +310,7 @@ describe('arranging lanes', () => {
 
 describe('branches', () => {
   it('float above the spine and never sit on it', () => {
-    const p = createProject();
+    const p = withEnd();
     const { project, id } = place(p, 'scene', null as unknown as string, 200);
     expect(project.placements[id]!.laneId).toBeNull();
     expect(project.placements[id]!.y + nodeSize('scene').h).toBeLessThan(0);
@@ -284,7 +320,7 @@ describe('branches', () => {
   });
 
   it('connect from a choice with a numbered option label that can be renamed', () => {
-    let p = createProject();
+    let p = withEnd();
     p = place(p, 'choice', spineId(p), 120).project;
     const branch = placeNew(p, 'scene', null, 200, -200)!;
     p = branch.project;
@@ -299,7 +335,7 @@ describe('branches', () => {
   });
 
   it('refuse connections that the tracks already express', () => {
-    let p = createProject();
+    let p = withEnd();
     const [opening, begin, pp1, end] = spineSequence(p);
     expect(connectionRefusal(p, pp1!, end!)).toMatch(/track order/);
     expect(connectionRefusal(p, pp1!, begin!)).toMatch(/Beginning/);
@@ -310,7 +346,7 @@ describe('branches', () => {
   });
 
   it('flag dead ends until they lead on or are marked as an ending', () => {
-    let p = createProject();
+    let p = withEnd();
     p = place(p, 'choice', spineId(p), 120).project;
     const choice = node(p, 'choice');
     expect(findIssues(p).map((i) => i.id)).toEqual([choice.id]);
@@ -329,7 +365,7 @@ describe('branches', () => {
 
 describe('arc events', () => {
   it('land on a character lane tied to the spine moment above them', () => {
-    let p = createProject();
+    let p = withEnd();
     const added = addLane(p, 'character');
     p = added.project;
     const pp1 = spineSequence(p)[2]!;

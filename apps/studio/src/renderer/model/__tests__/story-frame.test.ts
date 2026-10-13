@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { addCredit, creditsOf, updateCredit } from '../credits';
 import { buildIR } from '../handoff/ir';
-import { spineLane, spineSequence } from '../layout';
+import { columnEndings, spineLane, spineSequence } from '../layout';
 import { levelsOf } from '../level/level';
 import { addLevelBand, inLevel, levelBands, levelOf, removeBand, renameBand, setBandEdge } from '../level-lane';
 import { advance, startPlay } from '../play';
-import { createProject, isOpening, placeNew, plotStops, removeObject, withStoryFrame } from '../project';
+import { addEnding, connect, createProject, makeObject, endingToSpine, isOpening, setConnectionRules, placeNew, plotStops, removeObject, withStoryFrame } from '../project';
 import { addLine, updateLine } from '../scene';
 import { readProject } from '../storage';
+import { levelEnds } from '../level-of';
+import { findIssues } from '../validate';
 import type { Project } from '../types';
 
 const named = (p: Project, name: string) => Object.values(p.objects).find((o) => o.name === name)!.id;
@@ -47,7 +49,7 @@ describe('the Opening', () => {
     };
     const read = readProject(JSON.parse(JSON.stringify(old)))!;
     const types = spineSequence(read).map((id) => read.objects[id]!.type);
-    expect(types).toEqual(['cinematic', 'begin', 'plotPoint', 'end']);
+    expect(types).toEqual(['cinematic', 'begin', 'plotPoint']);
     expect(read.lanes.some((l) => l.kind === 'level')).toBe(true);
     // Twice is the same as once.
     expect(withStoryFrame(read)).toBe(read);
@@ -80,9 +82,15 @@ describe('the Level lane', () => {
     const second = addLevelBand(p)!;
     p = second.project;
     expect(levelBands(p)[1]).toMatchObject({ startRef: stops[1], endRef: stops[2] });
+    // Every stretch has its level now: the spine is open, so the next level makes a plot point at its end to run to.
+    p = addLevelBand(p, 'More')!.project;
+    const more = plotStops(p);
+    expect(more).toHaveLength(4);
+    expect(levelBands(p)[2]).toMatchObject({ name: 'More', startRef: stops[2], endRef: more[3] });
+    // Once the spine closes on an ending, the last stretch is the last level.
+    p = endingToSpine(p, columnEndings(p)[0]!);
     p = addLevelBand(p)!.project;
-    // Every stretch of the spine has its level now.
-    expect(addLevelBand(p, 'More')).toBeNull();
+    expect(addLevelBand(p)).toBeNull();
   });
 
   it('stretches between plot points, never over another level', () => {
@@ -131,6 +139,7 @@ describe('the Level lane', () => {
 describe('plot points written like scenes', () => {
   it('play their script in the play-through, then go on along the spine', () => {
     let p = createProject();
+    p = endingToSpine(p, columnEndings(p)[0]!);
     const pp1 = named(p, 'Plot Point 1');
     const line = addLine(p, pp1, 'dialogue');
     p = updateLine(line.project, line.id, { text: 'The flood door groans shut behind you.' });
@@ -140,5 +149,61 @@ describe('plot points written like scenes', () => {
     expect(texts).toContain('PP1 Plot Point 1');
     expect(texts.some((t) => t.includes('The flood door groans shut'))).toBe(true);
     expect(play.cursor).toMatchObject({ at: 'end', outcome: 'ending' });
+  });
+});
+
+describe('the endings', () => {
+  it('wait in their column until a plot point leads to one, by its conditions', () => {
+    let p = createProject();
+    // The spine is open: with no ending tied in, the play-through says so.
+    let play = startPlay(p);
+    for (let i = 0; i < 8 && play.cursor.at !== 'end'; i++) play = advance(p, play);
+    expect(play.cursor).toMatchObject({ at: 'end', outcome: 'deadEnd' });
+    expect(play.cursor.at === 'end' && play.cursor.text).toContain('no ending is tied in yet');
+    const [one] = columnEndings(p);
+    const two = addEnding(p);
+    p = two.project;
+    const pp1 = named(p, 'Plot Point 1');
+    const key = makeObject('inventory', 'Key', '2026-01-01T00:00:00.000Z');
+    const keyId = key.id;
+    p = { ...p, objects: { ...p.objects, [key.id]: key } };
+    // Ending 2 when the player has the key; else Ending 1.
+    const toTwo = connect(p, pp1, two.id) as { project: Project; id: string };
+    p = setConnectionRules(toTwo.project, toTwo.id, { conditions: { match: 'all', items: [{ kind: 'item', ref: keyId, op: 'has' }] } });
+    p = (connect(p, pp1, one!) as { project: Project }).project;
+    expect(findIssues(p).filter((i) => i.id === one || i.id === two.id)).toEqual([]);
+    play = startPlay(p);
+    for (let i = 0; i < 8 && play.cursor.at !== 'end'; i++) play = advance(p, play);
+    expect(play.cursor).toMatchObject({ at: 'end', outcome: 'ending', text: 'Ending 1' });
+    p = setConnectionRules(p, toTwo.id, { conditions: { match: 'all', items: [{ kind: 'item', ref: keyId, op: 'hasNot' }] } });
+    play = startPlay(p);
+    for (let i = 0; i < 8 && play.cursor.at !== 'end'; i++) play = advance(p, play);
+    expect(play.cursor).toMatchObject({ at: 'end', outcome: 'ending', text: 'Ending 2' });
+    // The engines get both routes, in order, with the condition on the first.
+    const node = buildIR(p).graph.find((n) => n.name === 'Plot Point 1')!;
+    expect(node.routes.map((r) => r.to)).toEqual(['ending_2', 'ending_1']);
+  });
+});
+
+describe('level ends', () => {
+  it('mark the spine where each level ends, and the play-through crosses into the next', () => {
+    let p = createProject();
+    p = placeNew(p, 'plotPoint', spineLane(p).id, 800)!.project;
+    p = addLevelBand(p, 'The Cave')!.project;
+    p = addLevelBand(p, 'The Ridge')!.project;
+    const ends = levelEnds(p);
+    expect(ends.map((e) => [e.name, e.next?.name])).toEqual([
+      ['The Cave', 'The Ridge'],
+      ['The Ridge', undefined],
+    ]);
+    expect(ends[0]!.at).toBe(plotStops(p)[1]);
+    p = endingToSpine(p, columnEndings(p)[0]!);
+    let play = startPlay(p);
+    for (let i = 0; i < 12 && play.cursor.at !== 'end'; i++) play = advance(p, play);
+    const levels = play.log.filter((e) => e.kind === 'level');
+    expect(levels.map((e) => [e.text, 'from' in e ? e.from : undefined])).toEqual([
+      ['The Cave', undefined],
+      ['The Ridge', 'The Cave'],
+    ]);
   });
 });

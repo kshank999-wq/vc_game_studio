@@ -109,11 +109,11 @@ export const NodeView = (props: NodeProps) => {
       <div className={`node card card-plotPoint card-${object.type}${state}`} style={style} title={begin ? 'Where the story begins. Double-click to write it.' : 'Where the story ends. Double-click to write it.'} {...common}>
         <span className="card-kicker">
           <i />
-          Plot point
+          {begin ? 'Plot point' : 'Ending'}
         </span>
         <NameField {...props} className="card-name" prompt={unwritten ? 'Name it…' : undefined} />
         {/* Where other plot points show their code. */}
-        <span className="card-sub">{begin ? 'Beginning' : 'Ending'}</span>
+        <span className="card-sub">{begin ? 'Beginning' : props.place === 'branch' ? 'Ends the story' : 'Ending'}</span>
         {begin && <Port onPortDown={props.onPortDown} />}
         <Badge issue={props.issue} implementation={props.implementation} />
       </div>

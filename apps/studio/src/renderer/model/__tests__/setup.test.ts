@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { spineSequence } from '../layout';
+import { columnEndings, spineSequence } from '../layout';
 import { blankSetup, containerName, createFromSetup, defaultsFor, setupSummary, updateSetup } from '../setup';
 import { readProject } from '../storage';
 
 describe('the Game Setup Wizard', () => {
-  it('divides the spine into the chosen containers, Beginning to Ending', () => {
+  it('divides the spine into the chosen containers, from Beginning on, with the endings in their column', () => {
     const p = createFromSetup('Dust Road', { ...blankSetup('linear'), units: 3 });
     const names = spineSequence(p).map((id) => p.objects[id]!.name);
-    expect(names).toEqual(['Opening', 'Beginning', 'Act I', 'Act II', 'Act III', 'Ending']);
+    expect(names).toEqual(['Opening', 'Beginning', 'Act I', 'Act II', 'Act III']);
+    expect(columnEndings(p).map((id) => p.objects[id]!.name)).toEqual(['Ending 1']);
+    const several = createFromSetup('Forks', { ...blankSetup('linear'), endings: 'multiple' });
+    expect(columnEndings(several).map((id) => several.objects[id]!.name)).toEqual(['Ending 1', 'Ending 2', 'Ending 3']);
     expect(p.name).toBe('Dust Road');
   });
 

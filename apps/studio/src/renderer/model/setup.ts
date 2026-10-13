@@ -1,4 +1,4 @@
-import { createProject, makeObject, nextCode, placeNew, renameObject } from './project';
+import { addEnding, createProject, makeObject, nextCode, placeNew, renameObject } from './project';
 
 const stamp = (): string => new Date().toISOString();
 import { spineLane, spineSequence } from './layout';
@@ -118,7 +118,9 @@ const clean = (setup: GameSetup): GameSetup => {
 
 /**
  * A new project from the wizard: the spine divided into the chosen
- * containers (Beginning, one plot point per act or chapter, Ending), the
+ * containers (Beginning, one plot point per act or chapter; the spine
+ * stays open, and the endings wait in the Endings column, more than one
+ * when the game has several), the
  * premise written into the Beginning, and each recurring resource in the
  * Bible as an inventory entry to fill in.
  */
@@ -132,11 +134,13 @@ export const createFromSetup = (name: string, answers: GameSetup, now = stamp())
   p = renameObject(p, firstPoint!, containerName(setup, 0));
   for (let i = 1; i < setup.units; i++) {
     const sequence = spineSequence(p);
-    const before = p.placements[sequence[sequence.length - 2]!]!.x;
+    const before = p.placements[sequence[sequence.length - 1]!]!.x;
     const placed = placeNew(p, 'plotPoint', spine, before + 300, 0, now);
     if (!placed) break;
     p = renameObject(placed.project, placed.id, containerName(setup, i));
   }
+  const endings = setup.endings === 'multiple' || setup.endings === 'branching' ? 3 : 1;
+  for (let i = 1; i < endings; i++) p = addEnding(p, undefined, now).project;
   if (setup.premise && beginId) {
     const begin = p.objects[beginId]!;
     p = { ...p, objects: { ...p.objects, [beginId]: { ...begin, data: { ...begin.data, summary: setup.premise } } } };

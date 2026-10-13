@@ -39,3 +39,19 @@ export const levelOf = (project: Project, id: string): LevelBand | undefined => 
   return hits.find((b) => b.startRef === id) ?? hits[0];
 };
 
+
+/**
+ * Where each level ends on the spine, left to right: the plot point it ends
+ * at, and the level that starts there (the transition), if one does.
+ */
+export const levelEnds = (project: Project): { id: string; name: string; at: string; x: number; next?: LevelBand }[] => {
+  const bands = levelBands(project);
+  return bands
+    .map((band) => ({ band, range: bandRange(project, band) }))
+    .filter((b): b is { band: LevelBand; range: { from: number; to: number } } => !!b.range)
+    .sort((a, b) => a.range.from - b.range.from)
+    .map(({ band, range }) => {
+      const next = bands.find((b) => b.id !== band.id && b.startRef === band.endRef);
+      return { id: band.id, name: band.name, at: band.endRef, x: range.to, ...(next ? { next } : {}) };
+    });
+};

@@ -1,7 +1,10 @@
 import { BRANCH_ACCEPTS, CHARACTER_COLORS, COLORS, LANE_ACCEPTS } from './semantics';
 import {
   BRANCH_CLEARANCE,
+  ENDING_STEP,
+  isColumnEnding,
   NODE_GAP,
+  columnEndings,
   SPAN_PAD,
   laneSequence,
   nodeSize,
@@ -172,7 +175,8 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
   const begin = makeObject('begin', 'Beginning', now);
   const opening = makeOpening(now);
   const plotPoint = makeObject('plotPoint', 'Plot Point 1', now, { code: 'PP1' });
-  const end = makeObject('end', 'Ending', now);
+  // The spine runs on with no end: the story's endings stand in the Endings column, to be tied into.
+  const end = makeObject('end', 'Ending 1', now);
   // Beneath the spine, from Beginning to Ending: the player's own progression (Writer spec §5).
   const player: Lane = {
     id: newId('lane'),
@@ -197,7 +201,7 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
       [begin.id]: { laneId: spine.id, x: START_X, y: 0 },
       [opening.id]: { laneId: spine.id, x: START_X - OPENING_GAP, y: 0 },
       [plotPoint.id]: { laneId: spine.id, x: START_X + START_SPACING, y: 0 },
-      [end.id]: { laneId: spine.id, x: START_X + START_SPACING * 2, y: 0 },
+      [end.id]: { laneId: null, x: 0, y: ENDING_SLOT(0) },
     },
     lines: [],
     events: [],
@@ -394,7 +398,8 @@ export const placeNew = (
 /** Beginning, the Opening and Ending are protected: their content is editable, their place is not. */
 export const isProtected = (project: Project, id: string): boolean => {
   const object = project.objects[id];
-  return object?.type === 'begin' || object?.type === 'end' || isOpening(object);
+  // An Ending on the spine stays put; one in the Endings column can be moved up and down, or deleted.
+  return object?.type === 'begin' || (object?.type === 'end' && !isColumnEnding(project, id)) || isOpening(object);
 };
 
 /**
@@ -405,6 +410,22 @@ export const moveNode = (project: Project, id: string, x: number, y?: number): P
   const placement = project.placements[id];
   const object = project.objects[id];
   if (!placement || !object || isProtected(project, id)) return project;
+  // An ending in the Endings column stays in the column: dragging it up or down reorders the endings.
+  if (placement.laneId === null && object.type === 'end') {
+    const at = (y ?? placement.y) + nodeSize('end').h / 2;
+    const others = columnEndings(project).filter((e) => e !== id);
+    const slot = others.filter((e) => ENDING_SLOT(others.indexOf(e)) + nodeSize('end').h / 2 < at).length;
+    const order = [...others.slice(0, slot), id, ...others.slice(slot)];
+    const placements = { ...project.placements };
+    let changed = false;
+    order.forEach((e, i) => {
+      if (placements[e]!.y !== ENDING_SLOT(i)) {
+        placements[e] = { ...placements[e]!, y: ENDING_SLOT(i) };
+        changed = true;
+      }
+    });
+    return changed ? { ...project, placements } : project;
+  }
   if (placement.laneId === null) {
     const nextX = Math.round(x);
     const nextY = branchY(object.type, y ?? placement.y);
@@ -418,6 +439,36 @@ export const moveNode = (project: Project, id: string, x: number, y?: number): P
   if (nextX === placement.x) return project;
   const moved = { ...project, placements: { ...project.placements, [id]: { ...placement, x: nextX } } };
   return settle(packLane(moved, placement.laneId));
+};
+
+/** Where the nth ending of the column stands (its top, in world units: the column starts at the top lane). */
+const ENDING_SLOT = (n: number): number => 12 + n * ENDING_STEP;
+
+/**
+ * A new ending in the Endings column, at the bottom: “Ending n”. The story
+ * ties into it from its plot points, scenes and choices, each route with its
+ * conditions (spec: a storyteller knows the endings first).
+ */
+export const addEnding = (project: Project, name?: string, now = stamp()): { project: Project; id: string } => {
+  const ids = columnEndings(project);
+  const ending = makeObject('end', name?.trim() || `Ending ${ids.length + 1}`, now);
+  const last = ids.length ? project.placements[ids[ids.length - 1]!]!.y : 0;
+  return {
+    project: { ...project, objects: { ...project.objects, [ending.id]: ending }, placements: { ...project.placements, [ending.id]: { laneId: null, x: 0, y: Math.max(ENDING_SLOT(ids.length), last + ENDING_STEP) } } },
+    id: ending.id,
+  };
+};
+
+/**
+ * Put an ending from the Endings column at the end of the spine: the ending
+ * the main line reaches by carrying on. It is the spine's last node from then on.
+ */
+export const endingToSpine = (project: Project, id: string): Project => {
+  if (!isColumnEnding(project, id)) return project;
+  const spine = spineLane(project);
+  const last = spineSequence(project).at(-1);
+  const at = last ? project.placements[last]!.x + nodeSize(project.objects[last]!.type).w + START_SPACING - nodeSize('end').w : START_X;
+  return settle({ ...project, placements: { ...project.placements, [id]: { laneId: spine.id, x: at, y: 0 } } });
 };
 
 export const renameObject = (project: Project, id: string, name: string, now = stamp()): Project => {

@@ -46,9 +46,8 @@ describe('the story graph', () => {
     expect(container.querySelector('.level-band')?.textContent).toContain('The Cave');
     fireEvent.click(screen.getByRole('button', { name: '+ Level' }));
     expect(container.querySelectorAll('.level-band')).toHaveLength(2);
-    // Every stretch has a level now: there is no third to add.
-    fireEvent.click(screen.getByRole('button', { name: '+ Level' }));
-    expect(container.querySelectorAll('.level-band')).toHaveLength(2);
+    // The spine is open, so the second level ran to a new plot point at its end.
+    expect(container.querySelectorAll('[data-type="plotPoint"]')).toHaveLength(2);
   });
 
   it('opens a plot point in the writing box, as a scene opens, and the Opening in its shot list with credits', async () => {

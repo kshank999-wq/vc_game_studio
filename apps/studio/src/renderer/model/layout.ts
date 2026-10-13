@@ -85,11 +85,55 @@ export interface Box {
   h: number;
 }
 
+/** How far right of everything else the Endings column stands, and the gap between its endings. */
+export const ENDINGS_GAP = 200;
+export const ENDING_STEP = 84;
+/** How wide the Endings column is drawn, around its endings. */
+export const ENDINGS_WIDTH = 210;
+
+/** An ending in the Endings column: an Ending off every track, which the story ties into. */
+export const isColumnEnding = (project: Project, id: string): boolean => project.objects[id]?.type === 'end' && project.placements[id]?.laneId === null;
+
+/** The endings in the column, top to bottom (by where each was put). */
+export const columnEndings = (project: Project): string[] =>
+  Object.keys(project.placements)
+    .filter((id) => isColumnEnding(project, id))
+    .sort((a, b) => project.placements[a]!.y - project.placements[b]!.y || a.localeCompare(b));
+
+/**
+ * The Endings column (a vertical lane at the right of the story): where it
+ * stands, beyond everything on the tracks and branches, and its endings top
+ * to bottom. Worked out once per project.
+ */
+const columns = new WeakMap<Project, { x: number; top: number; ids: string[] }>();
+export const endingsColumn = (project: Project, rows: LaneRow[] = laneRows(project)): { x: number; top: number; ids: string[] } => {
+  const known = columns.get(project);
+  if (known) return known;
+  let right = 0;
+  for (const [id, p] of Object.entries(project.placements)) {
+    const o = project.objects[id];
+    if (!o || isColumnEnding(project, id)) continue;
+    if (p.laneId === null) right = Math.max(right, p.x + nodeSize(o.type).w);
+    else {
+      const row = rows.find((r) => r.lane.id === p.laneId);
+      if (row) right = Math.max(right, p.x + nodeSize(o.type, row.lane.kind).w);
+    }
+  }
+  const column = { x: right + ENDINGS_GAP, top: (rows[0]?.top ?? 0) + 12, ids: columnEndings(project) };
+  columns.set(project, column);
+  return column;
+};
+
 /** A node's box in world units. Track nodes are centred vertically in their band. */
 export const nodeBox = (project: Project, id: string, rows: LaneRow[] = laneRows(project)): Box | null => {
   const object = project.objects[id];
   const placement = project.placements[id];
   if (!object || !placement) return null;
+  if (placement.laneId === null && object.type === 'end') {
+    const column = endingsColumn(project, rows);
+    const at = column.ids.indexOf(id);
+    return { x: column.x, y: column.top + Math.max(0, at) * ENDING_STEP, ...nodeSize('end') };
+  }
   if (placement.laneId === null) {
     const size = nodeSize(object.type);
     return { x: placement.x, y: placement.y, ...size };
@@ -145,6 +189,8 @@ export const contentBounds = (project: Project): Box => {
     maxX = Math.max(maxX, box.x + box.w);
     minY = Math.min(minY, box.y);
   }
+  // The Endings column, empty or not, is part of the story to fit.
+  maxX = Math.max(maxX, endingsColumn(project, rows).x - 20 + ENDINGS_WIDTH);
   const last = rows[rows.length - 1];
   const maxY = last ? last.top + last.height : SPINE_HEIGHT;
   if (!Number.isFinite(minX)) return { x: 0, y: 0, w: 600, h: maxY };

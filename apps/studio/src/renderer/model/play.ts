@@ -8,6 +8,7 @@ import { craftCheck, recipeOf } from './crafting';
 import { initialState, interactionsOf, statesOf } from './details';
 import { timeLimitOf, timeoutLabelOf, timeoutPick } from './timed';
 import { spineSequence } from './layout';
+import { levelOf } from './level-of';
 import { parentSceneOf, subScenesOf } from './subscene';
 import { apply, dropEquipped, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
 import { dualWith, elementsIn, spokenTogether } from './scene';
@@ -84,6 +85,8 @@ export type Entry =
   /** Something crafted: what it made, and what it took (spec §8). */
   | { kind: 'craft'; text: string; detail: string }
   | { kind: 'skip'; text: string; needs: string }
+  /** Into a level of the Level lane: the one it is, and the one just finished, if any. */
+  | { kind: 'level'; id: string; text: string; from?: string }
   | { kind: 'end'; text: string };
 
 export type Cursor =
@@ -409,6 +412,23 @@ const eventRule = (project: Project, event: TimelineEvent): Rule | undefined =>
 
 const trackOf = (project: Project, sceneId: string, track: string) => sceneTimeline(project, sceneId).find((t) => t.id === track);
 
+/**
+ * Crossing into another level of the Level lane: where one level ends on the
+ * spine, the transition to the next. Only what is on the story graph is in a
+ * level; rooms and the endings column keep the level the player is in.
+ */
+const enterLevel = (d: Doing, id: string) => {
+  const band = levelOf(d.project, id);
+  if (!band) return;
+  let last: Extract<Entry, { kind: 'level' }> | undefined;
+  for (let i = d.log.length - 1; i >= 0 && !last; i--) {
+    const e = d.log[i]!;
+    if (e.kind === 'level') last = e;
+  }
+  if (last?.id === band.id) return;
+  d.log.push({ kind: 'level', id: band.id, text: band.name, ...(last ? { from: last.text } : {}) });
+};
+
 /** A choice with nothing left to pick: every option gone, locked or not on offer. */
 const stuck = (d: Doing, label: string): Cursor => {
   const text = `Stuck at ${label}: no option is left to pick.`;
@@ -425,6 +445,7 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
     where.nodeId = o.id;
     where.sceneId = null;
     where.eventId = null;
+    enterLevel(d, o.id);
     const label = `${o.data.code ? `${o.data.code} ` : ''}${o.name}`;
     // A plot point with a script plays it like a scene, then goes on as a plot point does.
     if ((o.type === 'plotPoint' || o.type === 'begin' || o.type === 'end') && sceneTimeline(project, o.id)[0]?.events.length) {
@@ -497,7 +518,7 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
     }
     const next = spineNext(project, cursor.id);
     if (next) return { at: 'node', id: next };
-    const text = routes.length ? `No way on from ${o?.name ?? 'here'}: no route out has its conditions met.` : `The story stops at ${o?.name ?? 'here'}: nothing comes after it.`;
+    const text = routes.length ? `No way on from ${o?.name ?? 'here'}: no route out has its conditions met.` : `The story goes on past ${o?.name ?? 'here'}, but no ending is tied in yet: lead a plot point or scene to one in the Endings column.`;
     d.log.push({ kind: 'end', text });
     return { at: 'end', outcome: 'deadEnd', text };
   }

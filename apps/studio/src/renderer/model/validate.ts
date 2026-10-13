@@ -65,6 +65,11 @@ export const findIssues = (project: Project): Issue[] => {
       continue;
     }
     if (placement.laneId === null) {
+      // An ending in the Endings column is where routes finish: it needs a way in, never a way on.
+      if (object.type === 'end') {
+        if (!incoming.get(id)) issues.push({ id, message: 'Nothing leads to this ending yet. Connect a plot point, scene or choice to it.' });
+        continue;
+      }
       if (!incoming.get(id)) issues.push({ id, message: 'Nothing leads here. Connect a choice or node to it.' });
       else if (!outgoing.get(id) && !object.data.outcome) {
         issues.push({ id, message: 'Dead end. Connect it onward, or mark it as an ending or game over.' });

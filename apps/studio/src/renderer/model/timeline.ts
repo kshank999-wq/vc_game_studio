@@ -335,7 +335,7 @@ export const sceneExit = (project: Project, sceneId: string): string | null => {
   if (at < 0) return null;
   const next = project.objects[spine[at + 1] ?? ''];
   if (!next) return null;
-  return next.type === 'end' ? 'Ending' : `${next.data.code ?? next.name} on the spine`;
+  return next.type === 'end' ? next.name : `${next.data.code ?? next.name} on the spine`;
 };
 
 /** Consecutive dialogue on a track, for "Group dialogue exchanges". */

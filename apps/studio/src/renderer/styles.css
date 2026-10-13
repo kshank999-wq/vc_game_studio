@@ -11404,3 +11404,82 @@ button.bible-dual-col:hover {
   background: var(--node-raised);
   color: var(--gold-hi);
 }
+
+/* The Endings column: a vertical lane at the right of the story. */
+.endings-column {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--gold) 5%, transparent);
+  z-index: 0;
+}
+.endings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.endings-head b {
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+}
+.endings-hint {
+  display: block;
+  padding: 4px 12px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* Where a level ends on the spine: a dashed post at its last plot point, tagged with the level it hands on to. */
+.level-end {
+  position: absolute;
+  width: 0;
+  border-left: 2px dashed color-mix(in srgb, var(--c-environment) 80%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+.level-end-tag {
+  position: absolute;
+  bottom: 4px;
+  left: 6px;
+  display: flex;
+  flex-direction: column;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--c-environment) 22%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--c-environment) 60%, transparent);
+  font-size: 10px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.level-end-tag b {
+  letter-spacing: 0.06em;
+}
+.level-end.last .level-end-tag span {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* Into another level in the play-through. */
+.play-level {
+  margin: 14px 0 8px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border-top: 1px dashed color-mix(in srgb, var(--c-environment) 70%, transparent);
+  border-bottom: 1px dashed color-mix(in srgb, var(--c-environment) 70%, transparent);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.play-level-from {
+  opacity: 0.75;
+}
+.play-level-to {
+  font-weight: 700;
+  color: var(--c-environment);
+}

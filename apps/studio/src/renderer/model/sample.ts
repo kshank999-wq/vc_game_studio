@@ -1,6 +1,6 @@
 import { addInteraction, interactionsOf, setField, setNotes, setSceneUse, setStates, setValue, toggleTag, updateInteraction } from './details';
 import { spineLane } from './layout';
-import { addLane, connect, createProject, makeObject, newId, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, updateLane } from './project';
+import { addLane, connect, createProject, makeObject, newId, nextCode, codeFormatFor, placeNew, plotStops, relabelConnection, renameObject, setOutcome, setPolarity, endingToSpine, updateLane } from './project';
 import { sampleLevel } from './level/sample-level';
 import { addPath, pathOf, playBy } from './paths';
 import type { Who } from './collab';
@@ -9,7 +9,7 @@ import { addBranch, addEvent, moveEvent, sceneTimeline, updateBranch, updateEven
 import type { Condition } from './rules';
 import { addShot, updateShot } from './shots';
 import { setTree, updateDefinition } from './puzzle/design';
-import type { ObjectType, Project } from './types';
+import type { LevelBand, ObjectType, Project } from './types';
 
 /**
  * "The Sunken Vault", the sample from the mockups, built with the same
@@ -41,7 +41,9 @@ export const sunkenVault = (): Project => {
     if (label) p = relabelConnection(p, made.id, label);
   };
 
-  // The spine.
+  // The spine. This story's last plot point is its ending: Ending 1 goes on the spine after the rest (the endings of other routes are scenes off it).
+  const finale = byName('Ending 1');
+  p = endingToSpine(p, finale);
   const descent = rename(byName('Plot Point 1'), 'Descent');
   const caveMouth = onSpine('scene', 'The Cave Mouth', 110);
   const c1 = onSpine('choice', 'Take the lantern', 250);
@@ -50,7 +52,7 @@ export const sunkenVault = (): Project => {
   const vaultOpens = onSpine('cinematic', 'The Vault Opens', 740);
   const c2 = onSpine('choice', 'Pocket the ring', 880);
   p = renameObject(p, byName('Beginning'), 'The flooded vault');
-  p = renameObject(p, byName('Ending'), 'Shared Light');
+  p = renameObject(p, finale, 'Shared Light');
 
   // Branches above it.
   const squeeze = branch('scene', 'The Squeeze', 300, -220);
@@ -302,6 +304,16 @@ export const sunkenVault = (): Project => {
 
   // Where it all happens: one level, tied to the scenes and the Bible.
   p = sampleLevel(p, { caveMouth, squeeze, theKey, vaultDoor, chamber, mara, lever, key, puzzle, cinematic, descent, oil: design.mechanic! });
+  // Two levels on the Level lane: the flooded cave to the descent (no map of its own yet), then the vault to the end, on the map above.
+  {
+    const stops = plotStops(p);
+    const vaultMap = p.levels!.levels.find((l) => l.name === 'Sunken Vault')!.id;
+    const bands: LevelBand[] = [
+      { id: newId('lvl'), name: 'The Flooded Cave', startRef: stops[0]!, endRef: stops[1]! },
+      { id: newId('lvl'), name: 'The Sunken Vault', startRef: stops[1]!, endRef: stops[2]!, mapId: vaultMap },
+    ];
+    p = { ...p, lanes: p.lanes.map((l) => (l.kind === 'level' ? { ...l, levels: bands } : l)) };
+  }
 
   // Two expected paths, checked in the play-through: straight on to Shared Light, and every other way to Heavy Pockets.
   p = addPath(p, pathOf(playBy(p, 'first'), 'Straight on to Shared Light', undefined, Date.UTC(2026, 8, 1)));

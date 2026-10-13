@@ -54,6 +54,26 @@ elements around it. Its script plays in the play-through when the story
 reaches it, and its lines go to the engines with the rest. Ending's script
 plays and then the story ends.
 
+## Endings
+
+A new project's spine runs from the Opening and Beginning through its plot
+points and stays **open**: there is no Ending on it until you put one there.
+Its endings wait in the **Endings column**, the vertical lane at the right
+of the story graph, top to bottom: **Ending 1** to start with, and
+**+ Ending** adds **Ending 2**, **Ending 3** and so on. (The Game Setup
+Wizard starts a game with several or branching endings with three.) Drag an
+ending up or down the column to reorder it; double-click it to write it.
+
+Tie the story into them: drag from a plot point's, scene's or choice's gold
+ring to an ending. A plot point or scene with routes out takes the first
+whose **conditions** hold (right-click the route, **Conditions & effects…**, to set them: items carried,
+choices made, puzzles solved, places visited, stats), so one way of playing
+reaches Ending 1 and another Ending 2; with none holding it goes on along
+the spine. The play-through stops at the ending reached, and says so when
+the spine runs out with no ending tied in yet. An ending nothing leads to
+gets a "!" until something does. The engines get every route with its
+conditions, as for any branch.
+
 ## Options that go, lock or hide
 
 Every option of a choice (a branch in a scene's timeline, the option that

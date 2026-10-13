@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { spineLane } from '../layout';
-import { createProject, placeNew, removeObject } from '../project';
+import { columnEndings, spineLane } from '../layout';
+import { createProject, endingToSpine, placeNew, removeObject } from '../project';
 import { addElement, addLine, removeFromScene, updateLine } from '../scene';
 import {
   MAIN,
@@ -22,6 +22,7 @@ import type { Project } from '../types';
 
 const setup = () => {
   let p = createProject();
+  p = endingToSpine(p, columnEndings(p)[0]!);
   const placed = placeNew(p, 'scene', spineLane(p).id, 400)!;
   const scene = placed.id;
   p = placed.project;
@@ -132,6 +133,6 @@ describe('a scene timeline', () => {
 
   it('says where the scene goes next on the spine', () => {
     const { p, scene } = setup();
-    expect(sceneExit(p, scene)).toBe('Ending');
+    expect(sceneExit(p, scene)).toBe('Ending 1');
   });
 });

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { createProject, placeNew } from '../project';
-import { spineLane } from '../layout';
+import { createProject, endingToSpine, placeNew } from '../project';
+import { columnEndings, spineLane } from '../layout';
 import { addSubScene } from '../subscene';
 import { buildIR } from '../handoff/ir';
 
 describe('rooms for the engines', () => {
   it('go out as a Where now? choice after the scene, into each room and back, and leave along the spine', () => {
     let p = createProject('Rooms');
+    p = endingToSpine(p, columnEndings(p)[0]!);
     const scene = placeNew(p, 'scene', spineLane(p).id, 400)!;
     p = scene.project;
     const study = addSubScene(p, scene.id, 'The Study')!;
@@ -26,7 +27,7 @@ describe('rooms for the engines', () => {
       ['Go into The Study', node('The Study').key],
       ['Leave New scene', onward.key],
     ]);
-    expect(onward.name).toBe('Ending');
+    expect(onward.name).toBe('Ending 1');
     // The room option names the room, so the runtimes can mark it “(been)”; leaving does not.
     expect(where.options.map((o) => o.been ?? null)).toEqual([node('The Study').key, null]);
     // The study has its own choice; the closet goes back to it; leaving the study goes back to the scene's.

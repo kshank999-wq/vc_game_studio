@@ -1,6 +1,6 @@
 import { CommentsHistory } from '../collab/lazy';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { laneRows, laneSequence, nodeBox, nodeSize, spineSequence, type Box, type LaneRow } from '../../model/layout';
+import { ENDING_STEP, ENDINGS_WIDTH, endingsColumn, laneRows, laneSequence, nodeBox, nodeSize, spineSequence, type Box, type LaneRow } from '../../model/layout';
 import {
   canPlace,
   connect,
@@ -11,6 +11,7 @@ import {
   placeNew,
   relabelConnection,
   setConnectionRules,
+  addEnding,
   moveLane,
   removeLane,
   renameObject,
@@ -33,6 +34,7 @@ import { NodeView, type PortState } from './NodeView';
 import { implementationStatuses } from '../../model/implementation';
 import { LevelBands, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
 import { addLevelBand, nearestStop, removeBand, renameBand, setBandEdge } from '../../model/level-lane';
+import { levelEnds } from '../../model/level-of';
 
 /** A node being dragged in from the palette (or placed with a click). */
 export interface PaletteDrag {
@@ -506,6 +508,52 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
             />
           ) : null,
         )}
+
+        {/* Where each level ends on the spine, and the level it hands on to. */}
+        {(() => {
+          const spineRow = rows.find((r) => r.lane.kind === 'spine');
+          if (!spineRow) return null;
+          return levelEnds(shown).map((end) => (
+            <div
+              key={end.id}
+              className={`level-end${end.next ? '' : ' last'}`}
+              data-level-end={end.id}
+              style={{ left: end.x, top: spineRow.top, height: spineRow.height }}
+              title={end.next ? `${end.name} ends here; ${end.next.name} begins` : `${end.name} ends here; no level after it yet (+ Level adds one)`}
+            >
+              <span className="level-end-tag">
+                <b>END · {end.name}</b>
+                <span>{end.next ? `→ ${end.next.name}` : shown.objects[end.at]?.type === 'end' ? '→ the end' : '→ next level?'}</span>
+              </span>
+            </div>
+          ));
+        })()}
+
+        {/* The Endings column: the story's endings, top to bottom, at the right of everything; tie scenes and plot points into them. */}
+        {(() => {
+          const column = endingsColumn(shown, rows);
+          const bottom = Math.max(lastRow ? lastRow.top + lastRow.height : 0, column.top + column.ids.length * ENDING_STEP + 40);
+          return (
+            <div className="endings-column" style={{ left: column.x - 20, top: column.top - 52, width: ENDINGS_WIDTH, height: bottom - column.top + 64 }} onPointerDown={(e) => e.stopPropagation()}>
+              <div className="endings-head">
+                <b>ENDINGS</b>
+                <button
+                  className="header-add"
+                  title="Add an ending at the bottom of the column; tie scenes, plot points and choices into it, with conditions on each route"
+                  onClick={() => {
+                    const made = addEnding(project);
+                    props.onCommit(made.project);
+                    props.onSelect(made.id);
+                    setEditing(made.id);
+                  }}
+                >
+                  + Ending
+                </button>
+              </div>
+              {column.ids.length === 0 && <span className="endings-hint">No ending yet: add one, then drag from a gold ring to it.</span>}
+            </div>
+          );
+        })()}
 
         <Connectors
           project={shown}

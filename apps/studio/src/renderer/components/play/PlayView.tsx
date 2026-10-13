@@ -151,6 +151,15 @@ const EntryView = ({ entry }: { entry: Entry }) => {
           <span className="play-note"> · {entry.detail}</span>
         </div>
       );
+    case 'level':
+      return (
+        <div className="play-level" role="note" aria-label={`Level: ${entry.text}`}>
+          {entry.from && <span className="play-level-from">End of {entry.from}</span>}
+          <span className="play-level-to">
+            {entry.from ? '→ ' : ''}LEVEL · {entry.text}
+          </span>
+        </div>
+      );
     case 'end':
       return <div className="play-end">{entry.text}</div>;
   }

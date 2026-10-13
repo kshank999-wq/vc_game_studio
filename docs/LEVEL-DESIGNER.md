@@ -31,7 +31,15 @@ lanes, above the spine or below it.
 
 - **+ Level** (in the lane's header) adds a level from where the last one
   ends, or from Beginning, to the next plot point, and makes its map in the
-  Level Designer with the same name. Type its name as it appears.
+  Level Designer with the same name. Type its name as it appears. Add as
+  many as the game has, one after another along the spine. The spine stays
+  open until an ending goes on it, so when every stretch already has a
+  level, **+ Level** puts a new plot point at the end of the spine for the
+  new level to run to.
+- **Where a level ends**, a dashed marker stands on the spine at its last
+  plot point, tagged **END · <level> → <next level>** (or **→ the end** when
+  it ends on the spine's Ending, **→ next level?** when nothing follows yet).
+  In the play-through, crossing it shows **End of <level> → LEVEL · <next>**.
 - **Stretch it** by dragging either end to another plot point. Levels run
   between plot points and never overlap; one can end where the next begins.
 - Everything on the spine under a level, and every branch above that stretch,
