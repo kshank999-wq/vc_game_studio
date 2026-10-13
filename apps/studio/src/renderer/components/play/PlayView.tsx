@@ -867,6 +867,54 @@ const WorldPanel = ({ project, world, onChange, onLearn, onGear, onCraft }: { pr
 };
 
 /** A timed choice's clock: it runs down, then takes the option time running out picks. */
+/**
+ * A level transition playing: a bar for the time left, and its shot list with the
+ * shot playing now lit (shots with no length share the time). It goes on by itself.
+ */
+const TransitionPlayback = ({ transition, onDone }: { transition: { seconds: number; shots: { text: string; seconds: number }[] }; onDone: () => void }) => {
+  const [elapsed, setElapsed] = useState(0);
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(() => {
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      const at = Math.min(transition.seconds, (Date.now() - started) / 1000);
+      setElapsed(at);
+      if (at >= transition.seconds) {
+        window.clearInterval(timer);
+        done.current();
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [transition.seconds]);
+  const left = Math.max(0, transition.seconds - elapsed);
+  const timed = transition.shots.some((s) => s.seconds > 0);
+  let start = 0;
+  const playing = transition.shots.findIndex((s, i) => {
+    const length = timed ? s.seconds : transition.seconds / transition.shots.length;
+    start += length;
+    return elapsed < start || i === transition.shots.length - 1;
+  });
+  return (
+    <>
+      <div className="play-countdown" role="timer" aria-label={`${Math.ceil(left)} seconds of the transition left`}>
+        <div className="play-countdown-bar" style={{ width: `${(left / transition.seconds) * 100}%` }} />
+        <span>{Math.ceil(left)}s</span>
+      </div>
+      {transition.shots.length > 0 && (
+        <ol className="play-transition-shots" aria-label="Shot list">
+          {transition.shots.map((shot, i) => (
+            <li key={i} className={i === playing ? 'playing' : undefined} aria-current={i === playing ? 'step' : undefined}>
+              <span>{shot.text}</span>
+              {shot.seconds > 0 && <span className="play-note"> · {shot.seconds}s</span>}
+            </li>
+          ))}
+        </ol>
+      )}
+    </>
+  );
+};
+
 const Countdown = ({ seconds, label, onDone, what = 'to answer' }: { seconds: number; label: string; onDone: () => void; what?: string }) => {
   const [left, setLeft] = useState(seconds);
   const done = useRef(onDone);
@@ -1101,7 +1149,7 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
             // A level transition plays for its length and goes on by itself; Skip goes on at once.
             <div className="play-transition" role="group" aria-label="Level transition">
               <div className="play-choice-title">▶ {prompt.transition.title}</div>
-              <Countdown key={`transition:${play.log.length}`} seconds={prompt.transition.seconds} label="" what="of the transition left" onDone={() => push(advance(project, play))} />
+              <TransitionPlayback key={`transition:${play.log.length}`} transition={prompt.transition} onDone={() => push(advance(project, play))} />
               <button className="tb-btn primary play-continue" autoFocus onClick={() => push(advance(project, play))}>
                 Skip <kbd>↵</kbd>
               </button>

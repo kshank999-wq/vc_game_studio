@@ -8,6 +8,7 @@ import { advance, promptOf, startPlay } from '../play';
 import { addEnding, connect, createProject, makeObject, endingToSpine, isOpening, setConnectionRules, placeNew, plotStops, removeObject, withStoryFrame } from '../project';
 import { addLine, updateLine } from '../scene';
 import { readProject } from '../storage';
+import { newShot } from '../shots';
 import { levelEnds } from '../level-of';
 import { findIssues } from '../validate';
 import type { Project } from '../types';
@@ -262,7 +263,20 @@ describe('level transitions on the spine', () => {
     // In the play-through it runs its length (3 s with no shots) and can be skipped.
     let at = startPlay(p);
     for (let i = 0; i < 16 && !(promptOf(p, at).kind === 'continue' && (promptOf(p, at) as { transition?: unknown }).transition); i++) at = advance(p, at);
-    expect(promptOf(p, at)).toEqual({ kind: 'continue', transition: { title: '[Transition] Age of Wonder → Age of Iron', seconds: 3 } });
+    expect(promptOf(p, at)).toEqual({ kind: 'continue', transition: { title: '[Transition] Age of Wonder → Age of Iron', seconds: 3, shots: [] } });
+    // With a shot list, it runs the shots' length and lists them.
+    const withShots: Project = {
+      ...p,
+      objects: { ...p.objects, [made.id]: { ...p.objects[made.id]!, data: { ...p.objects[made.id]!.data, shots: [newShot({ framing: 'Wide', action: 'The ice cracks', seconds: 2 }), newShot({ framing: 'Close-up', action: 'Iron gates', seconds: 4 })] } } },
+    };
+    expect((promptOf(withShots, at) as { transition: unknown }).transition).toEqual({
+      title: '[Transition] Age of Wonder → Age of Iron',
+      seconds: 6,
+      shots: [
+        { text: 'Wide — The ice cracks', seconds: 2 },
+        { text: 'Close-up — Iron gates', seconds: 4 },
+      ],
+    });
     expect(promptOf(p, advance(p, at))).not.toMatchObject({ transition: expect.anything() });
     // Into the next level, then its transition plays.
     const crossing = play.log.findIndex((e) => e.kind === 'level' && e.text === 'Age of Iron');

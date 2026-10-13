@@ -153,7 +153,7 @@ export interface PlayVerb {
 
 export type Prompt =
   /** Go on; a level transition cinematic says which levels it joins and how long it runs, to go on by itself (or be skipped). */
-  | { kind: 'continue'; transition?: { title: string; seconds: number } }
+  | { kind: 'continue'; transition?: { title: string; seconds: number; shots: { text: string; seconds: number }[] } }
   /** A choice, or an encounter (`symbol` says which): its options are Win and Lose. */
   | {
       kind: 'choice';
@@ -1451,7 +1451,8 @@ export const promptOf = (project: Project, play: Play): Prompt => {
       const id = c.next.at === 'after' ? c.next.id : undefined;
       const levels = id ? transitionLevels(project, id) : undefined;
       if (!id || !levels) return { kind: 'continue' };
-      return { kind: 'continue', transition: { title: `[Transition] ${levels.from} → ${levels.to}`, seconds: cinematicTiming(project, id).seconds || 3 } };
+      const shots = shotsOf(project.objects[id]).map((shot) => ({ text: describeShot(project, shot) || 'Shot', seconds: shot.seconds || 0 }));
+      return { kind: 'continue', transition: { title: `[Transition] ${levels.from} → ${levels.to}`, seconds: cinematicTiming(project, id).seconds || 3, shots } };
     }
     case 'end':
       return { kind: 'end', outcome: c.outcome, text: c.text };

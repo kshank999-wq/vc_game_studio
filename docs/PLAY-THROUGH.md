@@ -180,7 +180,7 @@ Crossing from one level of the Level lane into the next shows **End of
 <level> → LEVEL · <next>**. A transition cinematic between them (+ Transition
 on the level-end marker) then plays as **▶ [Transition] <level> → <next>**
 for its length, its shots' seconds (3 seconds with no shots yet), with a
-countdown, and goes on by itself; **Skip** (or Enter or Space) goes on at once.
+countdown and its shot list, the shot playing now lit, and goes on by itself; **Skip** (or Enter or Space) goes on at once.
 
 ## Deleting
 

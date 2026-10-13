@@ -11546,3 +11546,16 @@ button.bible-dual-col:hover {
 .play-transition .play-countdown {
   align-self: stretch;
 }
+.play-transition-shots {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12px;
+  align-self: stretch;
+  color: var(--muted);
+}
+.play-transition-shots li {
+  padding: 1px 0;
+}
+.play-transition-shots li.playing {
+  color: var(--gold-hi);
+}
