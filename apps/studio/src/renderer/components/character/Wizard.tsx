@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ABILITY_CATEGORIES, ABILITY_LIBRARY } from '../../model/character/abilities';
-import { ARCHETYPES, archetypeOf, createCharacter, INVENTORY_MODES, itemsLibrary, overrideAbility, patchStats, profileOf, ROLES, setStartingItem, type CharacterRole, type InventoryMode } from '../../model/character/profile';
+import { ARCHETYPES, archetypeOf, createCharacter, INVENTORY_MODES, itemsLibrary, overrideAbility, patchAI, patchStats, profileOf, ROLES, setStartingItem, type CharacterRole, type InventoryMode } from '../../model/character/profile';
 import type { Project } from '../../model/types';
 import { Figure } from './Figure';
 import { NumberField } from './NumberField';
@@ -46,6 +46,7 @@ export const Wizard = ({ project, onCancel, onDone }: { project: Project; onCanc
       const card = profileOf(p.objects[made.id]!).abilities.find((a) => a.source.kind === 'library' && a.source.key === 'perception');
       if (card) p = overrideAbility(p, made.id, card.id, { range: sight });
     }
+    if (roles.includes('enemy') || roles.includes('ally')) p = patchAI(p, made.id, { viewDistance: sight });
     onDone(p, made.id);
   };
 
@@ -141,8 +142,8 @@ export const Wizard = ({ project, onCancel, onDone }: { project: Project; onCanc
             <div className="pz-writing">
               <NumberField label="Health" unit="pts" min={1} max={100000} step={1} value={health} onCommit={setHealth} />
               {(talks || roles.includes('player') || !roles.length) && <NumberField label="Interaction radius" unit="m" min={0} max={20} step={0.1} value={interaction} onCommit={setInteraction} />}
-              {roles.includes('enemy') && abilities.includes('perception') && <NumberField label="Sight distance" unit="m" min={0} max={200} step={0.5} value={sight} onCommit={setSight} />}
-              {fight && <p className="pref-hint">The full AI profile (perception, pursuit, tactics, the state machine) comes with phase 2; until then a placed enemy patrols and an ally follows as its level actor says.</p>}
+              {(roles.includes('enemy') || roles.includes('ally')) && <NumberField label="Sight distance" unit="m" min={0} max={200} step={0.5} value={sight} onCommit={setSight} />}
+              {fight && <p className="pref-hint">Its full AI profile (detection, skill, tactics and the state machine) is on the AI view after saving, with a preview to try it.</p>}
               {roles.includes('extra') && <p className="pref-hint">Ambient extras keep to lightweight loops: walk, idle, talk, work, flee. Promote one to an NPC any time without losing where it is placed.</p>}
               {roles.includes('player') && <p className="pref-hint">Controller mappings are Play Mode’s (Levels › Play); respawn and failure follow the story’s game-over endings.</p>}
             </div>

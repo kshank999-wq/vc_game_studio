@@ -1,8 +1,11 @@
 import { setData } from '../details';
 import { equipmentOf } from '../equipment';
-import { ENTRY_CODE, makeObject, newId, nextCode } from '../project';
+import { ENTRY_CODE, makeObject, newId, nextCode, removeObject } from '../project';
 import type { Project, StoryObject } from '../types';
 import { abilityTemplate, actionProblems, describeAction, type AbilityCategory, type AbilityParams, type CustomAction, type Graybox, type Resource } from './abilities';
+import { aiProblems, normalizeAI, type AIProfile } from './ai';
+import { allyProblems, defaultAlly, defaultExtra, defaultNpc, defaultPlayer, extraProblems, npcProblems, type AllyProfile, type ExtraProfile, type NpcProfile, type PlayerProfile } from './roles';
+import { defaultVariantRules, variantProblems, type EnemyVariant, type VariantRules } from './variants';
 
 /**
  * The character registry (Character Creator spec §1, §3, §11). A character
@@ -163,6 +166,16 @@ export interface CharacterProfile {
   inventory: InventoryProfile;
   enabled: boolean;
   revision: number;
+  /** Role settings (spec §6): each kept whether or not the role is on, so turning a role off and on loses nothing. */
+  player: PlayerProfile;
+  npc: NpcProfile;
+  ally: AllyProfile;
+  extra: ExtraProfile;
+  /** Enemies' and allies' AI (spec §6.2). */
+  ai: AIProfile;
+  /** Escalating enemy variants of this character, and the guardrails they keep to. */
+  variants: EnemyVariant[];
+  variantRules: VariantRules;
 }
 
 // ---------------------------------------------------------------- archetypes
@@ -258,6 +271,13 @@ export const profileOf = (o: StoryObject): CharacterProfile => {
     },
     enabled: p.enabled !== false,
     revision: num(p.revision, 0),
+    player: { ...defaultPlayer(), ...(p.player ?? {}) },
+    npc: { ...defaultNpc(o.name), ...(p.npc ?? {}) },
+    ally: { ...defaultAlly(), faction: String(o.data.faction ?? ''), ...(p.ally ?? {}) },
+    extra: { ...defaultExtra(), ...(p.extra ?? {}) },
+    ai: normalizeAI(p.ai),
+    variants: Array.isArray(p.variants) ? p.variants : [],
+    variantRules: { ...defaultVariantRules(), ...(p.variantRules ?? {}) },
   };
 };
 
@@ -331,6 +351,13 @@ export const createCharacter = (project: Project, spec: NewCharacter, now = new 
     inventory: { ...DEFAULT_INVENTORY, ...spec.inventory, equipment: spec.inventory?.equipment ?? DEFAULT_INVENTORY.equipment },
     enabled: true,
     revision: 1,
+    player: defaultPlayer(),
+    npc: defaultNpc(name),
+    ally: defaultAlly(),
+    extra: defaultExtra(),
+    ai: normalizeAI(undefined),
+    variants: [],
+    variantRules: defaultVariantRules(),
   };
   const role = profile.roles.includes('player') ? 'Player character' : profile.roles.length ? 'NPC' : undefined;
   const object = makeObject('character', name, now, { code, color: placeholder.tint, ...(role ? { role } : {}), profile });
@@ -343,7 +370,14 @@ export const duplicateCharacter = (project: Project, id: string, now = new Date(
   if (!o || o.type !== 'character') return undefined;
   const p = profileOf(o);
   const name = `${o.name} copy`;
-  const profile: CharacterProfile = { ...p, slug: uniqueSlug(project, name), abilities: p.abilities.map((a) => ({ ...a, id: newId('ab') })), revision: 1 };
+  const ids = new Map(p.abilities.map((a) => [a.id, newId('ab')]));
+  const variants = p.variants.map((v) => ({
+    ...structuredClone(v),
+    id: newId('var'),
+    ranks: Object.fromEntries(Object.entries(v.ranks).map(([k, r]) => [ids.get(k) ?? k, r])),
+    remove: v.remove.map((k) => ids.get(k) ?? k),
+  }));
+  const profile: CharacterProfile = { ...p, slug: uniqueSlug(project, name), abilities: p.abilities.map((a) => ({ ...a, id: ids.get(a.id)! })), variants, revision: 1 };
   const copy = makeObject('character', name, now, { ...structuredClone(o.data), code: nextCode(project, ENTRY_CODE.character!), profile });
   return { project: { ...project, objects: { ...project.objects, [copy.id]: copy } }, id: copy.id };
 };
@@ -519,7 +553,7 @@ export interface CharacterIssue {
   text: string;
   /** What it is about: an ability card, an item, a slot. */
   ref?: string;
-  area: 'identity' | 'roles' | 'abilities' | 'inventory' | 'art' | 'stats';
+  area: 'identity' | 'roles' | 'abilities' | 'inventory' | 'art' | 'stats' | 'dialogue' | 'ai' | 'variants';
 }
 
 /** What is wrong or unfinished (spec §2: broken references, placeholder state, unsupported combinations). */
@@ -585,6 +619,14 @@ export const characterIssues = (project: Project, id: string): CharacterIssue[] 
     if (!inv.items.some((i) => i.item === e.item)) say('error', 'inventory', `${it?.name ?? 'The item'} is equipped but not carried.`, e.slot);
   }
   if (p.roles.length && p.roles.every((r) => r === 'extra') && inv.items.length > 3) say('info', 'inventory', 'Ambient extras usually carry little; they can still drop what they have.');
+
+  const fighter = p.abilities.some((a) => a.enabled && (a.category === 'combat' || a.category === 'magic'));
+  if (p.roles.includes('enemy') || p.roles.includes('ally')) for (const x of aiProblems(p.ai, { hasAttack: fighter })) say(x.severity, 'ai', `AI: ${x.text}`);
+  if (p.roles.includes('npc')) for (const x of npcProblems(project, p.npc, { hasTrade: p.abilities.some((a) => a.enabled && a.source.kind === 'library' && a.source.key === 'trade') })) say(x.severity, 'dialogue', x.text);
+  if (p.roles.includes('ally')) for (const x of allyProblems(p.ally)) say(x.severity, 'roles', `Ally: ${x.text}`);
+  if (p.roles.includes('extra')) for (const x of extraProblems(p.extra)) say(x.severity, 'roles', x.text);
+  if (p.variants.length && !p.roles.includes('enemy')) say('warning', 'variants', 'It has enemy variants but isn’t an enemy NPC.');
+  for (const v of p.variants) for (const x of variantProblems(project, p, v, p.variants)) say(x.severity, 'variants', x.text, v.id);
 
   if (p.art.use === 'placeholder') say('info', 'art', 'Uses placeholder art: a dummy that keeps its collider and props when final art is bound.');
   else if (!p.art.refs.some((r) => r.id === p.art.use)) say('error', 'art', 'The art it uses has been removed.');
@@ -666,4 +708,70 @@ export const importCharacter = (project: Project, file: unknown, now = new Date(
   const profile: CharacterProfile = { ...p, slug: uniqueSlug(project, p.slug), abilities, inventory: { ...p.inventory, items: invItems, equipment }, revision: p.revision + 1 };
   const object: StoryObject = { ...temp, id, notes: String(f.character.notes ?? ''), data: { ...temp.data, code, color: profile.art.placeholder.tint, profile } };
   return { project: { ...project, objects: { ...project.objects, [id]: object } }, id, notes };
+};
+
+// ---------------------------------------------------------------- role settings, AI, variants
+
+export const patchRole = <K extends 'player' | 'npc' | 'ally' | 'extra'>(project: Project, id: string, key: K, patch: Partial<CharacterProfile[K]>): Project =>
+  updateProfile(project, id, (p) => ({ ...p, [key]: { ...p[key], ...patch } }));
+
+export const patchAI = (project: Project, id: string, patch: Partial<AIProfile>): Project => updateProfile(project, id, (p) => ({ ...p, ai: { ...p.ai, ...patch, skill: { ...p.ai.skill, ...(patch.skill ?? {}) } } }));
+
+export const setVariants = (project: Project, id: string, variants: EnemyVariant[]): Project => updateProfile(project, id, (p) => ({ ...p, variants }));
+
+export const updateVariant = (project: Project, id: string, variantId: string, patch: Partial<EnemyVariant>): Project =>
+  updateProfile(project, id, (p) => ({ ...p, variants: p.variants.map((v) => (v.id === variantId ? { ...v, ...patch } : v)) }));
+
+export const patchVariantRules = (project: Project, id: string, patch: Partial<VariantRules>): Project => updateProfile(project, id, (p) => ({ ...p, variantRules: { ...p.variantRules, ...patch } }));
+
+/** An ambient extra made a full interactive NPC (spec §6.5): same id, so every placement stays. */
+export const promoteExtra = (project: Project, id: string): Project =>
+  updateProfile(project, id, (p) => ({ ...p, roles: ROLES.map((r) => r.id).filter((r) => r === 'npc' || (r !== 'extra' && p.roles.includes(r))) }));
+
+// ---------------------------------------------------------------- references (spec §12)
+
+export interface CharacterUses {
+  lines: number;
+  scenes: string[];
+  actors: string[];
+  /** Arc lanes tied to it. */
+  laneArcs: string[];
+}
+
+export const usesOf = (project: Project, id: string): CharacterUses => ({
+  lines: project.lines.filter((l) => l.speakerId === id).length,
+  scenes: project.connections.filter((c) => c.kind === 'contains' && c.targetId === id && project.objects[c.sourceId]).map((c) => project.objects[c.sourceId]!.name),
+  actors: (project.levels?.items ?? []).filter((i) => i.params?.character === id).map((i) => i.name),
+  laneArcs: project.lanes.filter((l) => l.characterId === id).map((l) => l.name),
+});
+
+/** Retire rather than delete: kept, every link intact, but out of the game. */
+export const retireCharacter = (project: Project, id: string): Project => patchProfile(project, id, { enabled: false });
+
+/**
+ * Hand everything that points at one character to another, then delete the
+ * first (spec §12's replace option): its lines are spoken by the other, its
+ * scenes have the other in them, its level actors and arc lanes are the other's.
+ */
+export const replaceCharacter = (project: Project, from: string, to: string): Project => {
+  if (from === to || project.objects[from]?.type !== 'character' || project.objects[to]?.type !== 'character') return project;
+  const hasTo = new Set(project.connections.filter((c) => c.kind === 'contains' && c.targetId === to).map((c) => c.sourceId));
+  const connections = project.connections.flatMap((c) => {
+    if (c.kind !== 'contains' || c.targetId !== from) return [c];
+    if (hasTo.has(c.sourceId)) return [];
+    hasTo.add(c.sourceId);
+    return [{ ...c, targetId: to }];
+  });
+  const levels = project.levels && {
+    ...project.levels,
+    items: project.levels.items.map((i) => (i.params?.character === from ? { ...i, params: { ...i.params, character: to } } : i)),
+  };
+  const moved: Project = {
+    ...project,
+    connections,
+    lines: project.lines.map((l) => (l.speakerId === from ? { ...l, speakerId: to } : l)),
+    lanes: project.lanes.map((l) => (l.characterId === from ? { ...l, characterId: to } : l)),
+    ...(levels ? { levels } : {}),
+  };
+  return removeObject(moved, from);
 };

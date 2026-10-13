@@ -29,6 +29,8 @@ import {
   profileOf,
   removeAbility,
   removeSlot,
+  replaceCharacter,
+  retireCharacter,
   roleLabel,
   ROLES,
   setStartingItem,
@@ -50,6 +52,10 @@ import { skillsOf } from '../../model/skills';
 import type { Project } from '../../model/types';
 import { Field } from '../puzzle/Field';
 import { AbilityInspector } from './AbilityInspector';
+import { AIPanel } from './AIPanel';
+import { DialoguePanel } from './DialoguePanel';
+import { RolePanel } from './RolePanel';
+import { VariantsPanel } from './VariantsPanel';
 import { ArtPane } from './ArtPane';
 import { Figure } from './Figure';
 import { NumberField } from './NumberField';
@@ -65,16 +71,23 @@ interface Props {
   focus?: string;
 }
 
-type Tab = 'dialogue' | 'ai' | 'variants' | 'placements' | 'relationships' | 'preview' | 'diagnostics';
+type Tab = 'placements' | 'relationships' | 'preview' | 'diagnostics';
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'dialogue', label: 'Dialogue & knowledge' },
-  { id: 'ai', label: 'AI & detection' },
-  { id: 'variants', label: 'Variants' },
   { id: 'placements', label: 'Placements' },
   { id: 'relationships', label: 'Relationships' },
   { id: 'preview', label: '2D/3D preview' },
   { id: 'diagnostics', label: 'Diagnostics' },
 ];
+
+type View = 'profile' | 'role' | 'dialogue' | 'ai' | 'variants';
+const VIEWS: { id: View; label: string; roles?: CharacterRole[] }[] = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'role', label: 'Role settings', roles: ['player', 'ally', 'extra'] },
+  { id: 'dialogue', label: 'Dialogue & knowledge', roles: ['npc'] },
+  { id: 'ai', label: 'AI & detection', roles: ['enemy', 'ally'] },
+  { id: 'variants', label: 'Variants', roles: ['enemy'] },
+];
+const AREA_VIEW: Partial<Record<CharacterIssue['area'], View>> = { dialogue: 'dialogue', ai: 'ai', variants: 'variants', identity: 'profile', abilities: 'profile', inventory: 'profile', stats: 'profile' };
 
 const CATEGORY_MARK: Record<AbilityCategory, string> = { movement: '➜', combat: '⚔', magic: '✦', utility: '⚙', social: '☺', defense: '⛨' };
 
@@ -98,6 +111,8 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
   const [adding, setAdding] = useState(false);
   const [tab, setTab] = useState<Tab>('diagnostics');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [view, setView] = useState<View>('profile');
+  const [replaceWith, setReplaceWith] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const current = selected ? project.objects[selected] : undefined;
@@ -115,6 +130,7 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
 
   const select = (id: string) => {
     setSelected(id);
+    setView('profile');
     setPicked(null);
     setAdding(false);
   };
@@ -185,6 +201,8 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
             <button
               className={`pz-issue ${i.severity}`}
               onClick={() => {
+                const goTo = AREA_VIEW[i.area];
+                if (goTo) setView(goTo);
                 if (i.ref && prof?.abilities.some((a) => a.id === i.ref)) setPicked({ kind: 'ability', id: i.ref });
                 else if (i.ref && project.objects[i.ref]?.type === 'inventory') setPicked({ kind: 'item', id: i.ref });
               }}
@@ -305,6 +323,42 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
               ) : (
                 <span className="cc-confirm" role="alert">
                   {deletionImpact(project, ch.id).join(' ') || 'Nothing else refers to it.'}{' '}
+                  <button
+                    className="tb-btn small"
+                    title="Keep it and every link, but take it out of the game"
+                    onClick={() => {
+                      onCommit(retireCharacter(project, ch.id));
+                      setConfirmDelete(false);
+                      onSay(`${ch.name} retired: kept, links intact, out of the game.`);
+                    }}
+                  >
+                    Retire instead
+                  </button>
+                  <select className="inp small" aria-label="Replace with" value={replaceWith} onChange={(e) => setReplaceWith(e.target.value)}>
+                    <option value="">Replace with…</option>
+                    {all
+                      .filter((c) => c.id !== ch.id)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                  {replaceWith && (
+                    <button
+                      className="tb-btn small danger"
+                      onClick={() => {
+                        const to = project.objects[replaceWith]?.name ?? 'the other';
+                        const name = ch.name;
+                        onCommit(replaceCharacter(project, ch.id, replaceWith));
+                        select(replaceWith);
+                        setReplaceWith('');
+                        onSay(`${name}’s lines, scenes and level actors are ${to}’s now; ${name} is deleted.`);
+                      }}
+                    >
+                      Replace and delete
+                    </button>
+                  )}
                   <button className="tb-btn small danger" onClick={remove}>
                     Delete {ch.name}
                   </button>
@@ -314,7 +368,24 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
                 </span>
               )}
             </header>
+            <div className="view-toggle cc-views" role="tablist" aria-label="Character views">
+              {VIEWS.map((x) => {
+                const relevant = !x.roles || x.roles.some((r) => prof.roles.includes(r));
+                const n = issues.filter((i) => i.severity !== 'info' && AREA_VIEW[i.area] === x.id && x.id !== 'profile').length;
+                return (
+                  <button key={x.id} role="tab" aria-selected={view === x.id} className={`${view === x.id ? 'on' : ''}${relevant ? '' : ' faint'}`} title={relevant ? undefined : `For the ${x.roles!.map(roleLabel).join(' or ')} role`} onClick={() => setView(x.id)}>
+                    {x.label}
+                    {n > 0 && <span className="lvl-count">{n}</span>}
+                  </button>
+                );
+              })}
+            </div>
 
+            {view === 'role' && <RolePanel project={project} id={ch.id} profile={prof} onCommit={onCommit} onSay={onSay} />}
+            {view === 'dialogue' && <DialoguePanel project={project} id={ch.id} profile={prof} onCommit={onCommit} />}
+            {view === 'ai' && <AIPanel project={project} id={ch.id} profile={prof} onCommit={onCommit} />}
+            {view === 'variants' && <VariantsPanel project={project} id={ch.id} name={ch.name} profile={prof} issues={issues} onCommit={onCommit} />}
+            {view === 'profile' && (
             <div className="cc-columns">
               <div className="cc-col">
                 <section className="pz-sec" aria-label="Identity">
@@ -607,6 +678,7 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
                 )}
               </div>
             </div>
+            )}
           </>
         )}
       </section>
@@ -666,19 +738,6 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
         <div className="cc-tab" role="tabpanel">
           {!ch || !prof ? (
             <p className="lvl-hint">Make or pick a character.</p>
-          ) : tab === 'dialogue' ? (
-            <p className="pz-says">
-              {ch.name} is a speaker in every scene’s script{lines.length ? `, with ${lines.length} line${lines.length === 1 ? '' : 's'}` : ''}
-              {scenes.length ? ` and in ${scenes.map((s) => s!.name).join(', ')}` : ''}. Lines point at the character’s id, so a rename here renames every cue. Topics, quest flags and dialogue entrances come with NPC profiles (phase 2).
-            </p>
-          ) : tab === 'ai' ? (
-            <p className="pz-says">
-              {prof.roles.includes('enemy') || prof.roles.includes('ally')
-                ? `The AI profile (perception, reaction, pursuit, tactics, the Idle → Patrol → Alert → Chase → Attack → Search → Return state machine) comes in phase 2. Until then a placed ${prof.roles.includes('enemy') ? 'enemy patrols' : 'ally follows'} as its level actor says, and its Perception ability (${prof.abilities.find((a) => a.source.kind === 'library' && a.source.key === 'perception') ? 'set' : 'not set'}) is its sight distance.`
-                : 'This role has no AI to set. Give it the Enemy NPC or Ally role for an AI profile (phase 2).'}
-            </p>
-          ) : tab === 'variants' ? (
-            <p className="pz-says">Escalating variants (Orc → Orc Guard → Orc Elite) that inherit this character and list only what differs, with guardrails on stat growth and spawn budget, come in phase 2. Duplicate makes an independent copy today.</p>
           ) : tab === 'placements' ? (
             placements.length ? (
               <ul className="pz-issues">

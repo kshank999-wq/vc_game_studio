@@ -94,3 +94,64 @@ describe('the Character Creator (character spec)', () => {
     expect(screen.getByText(/Block: a graybox stub/)).toBeTruthy();
   });
 });
+
+describe('the Character Creator, phase 2 (character spec §6)', () => {
+  const makeOrc = async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Characters' }));
+    await opened();
+    fireEvent.click(screen.getAllByRole('button', { name: '+ New character' })[0]!);
+    const wizard = screen.getByRole('dialog', { name: 'New character' });
+    fireEvent.click(within(wizard).getByRole('checkbox', { name: /Enemy NPC/ }));
+    fireEvent.click(within(wizard).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(wizard).getByRole('radio', { name: /Orc/ }));
+    for (let i = 0; i < 4; i++) fireEvent.click(within(wizard).getByRole('button', { name: 'Next' }));
+    fireEvent.change(within(wizard).getByRole('textbox', { name: 'Character name' }), { target: { value: 'Orc' } });
+    fireEvent.click(within(wizard).getByRole('button', { name: 'Save to the registry' }));
+  };
+
+  it('sets an enemy’s AI: detection, the starter state machine, and a preview that says why', async () => {
+    await makeOrc();
+    fireEvent.click(screen.getByRole('tab', { name: /AI & detection/ }));
+    expect((screen.getByRole('spinbutton', { name: 'Sight distance' }) as HTMLInputElement).value).toBe('12');
+    const table = screen.getByRole('table', { name: 'Transitions' });
+    expect(within(table).getAllByRole('row').length).toBeGreaterThan(20);
+    // The preview: the orc starts on patrol; a step later it is still patrolling, with its senses said.
+    expect(screen.getByRole('img', { name: 'Patrol: the AI preview' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Step' }));
+    expect(document.querySelector('.cc-diag')!.textContent).toMatch(/^Patrol/);
+    // Turn Search off: the chase now has nowhere to go when it loses the target, and that is said.
+    fireEvent.click(within(screen.getByRole('group', { name: 'States it uses' })).getByRole('checkbox', { name: 'Search' }));
+    expect(document.querySelector('.cc-state')!.textContent).toMatch(/to check/);
+    fireEvent.click(screen.getByRole('tab', { name: /Diagnostics/ }));
+    expect(screen.getAllByText(/AI: Chase → Search goes to a state that is off/).length).toBeGreaterThan(0);
+  });
+
+  it('generates Orc Guard and Orc Elite variants, each with its differences and budget', async () => {
+    await makeOrc();
+    fireEvent.click(screen.getByRole('tab', { name: /Variants/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate 2 variants' }));
+    expect(screen.getByRole('button', { name: /^Orc Guard tier/ }).getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('button', { name: /^Orc Elite tier/ })).toBeTruthy();
+    const diffs = screen.getByRole('table', { name: 'Orc Guard differences' });
+    expect(within(diffs).getByText('Health')).toBeTruthy();
+    expect(within(diffs).getByText('→ 156')).toBeTruthy();
+  });
+
+  it('gives an interactive NPC topics tied to its script lines', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Characters' }));
+    await opened();
+    fireEvent.click(within(screen.getByRole('listbox', { name: 'Character registry' })).getByRole('option', { name: /Mara/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Interactive NPC' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Dialogue & knowledge/ }));
+    expect(screen.getByText(/in every scene’s speaker list/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '+ Topic' }));
+    const add = screen.getByRole('combobox', { name: 'Add a line' });
+    const first = within(add).getAllByRole('option')[1] as HTMLOptionElement;
+    fireEvent.change(add, { target: { value: first.value } });
+    expect(screen.getByRole('button', { name: /New topic/ }).textContent).toContain('1 line');
+  });
+});
