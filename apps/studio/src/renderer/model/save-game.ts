@@ -40,6 +40,7 @@ const cursorIds = (c: Cursor): string[] => {
     case 'node':
     case 'after':
     case 'graphChoice':
+    case 'rooms':
       return [c.id];
     case 'event':
     case 'sceneChoice':

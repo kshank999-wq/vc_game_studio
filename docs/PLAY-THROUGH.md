@@ -183,3 +183,13 @@ that start or end on it, and every condition or effect that names it
 (`model/impact.ts`). Taking an element out of the only scene that uses it
 deletes it, and warns the same way. The Game Bible has a Delete button on
 each element.
+
+## Rooms
+
+When a scene with rooms (sub-scenes) has played, the play-through asks
+**Where now?**: **Go into** each room, or **Leave** the scene. A room plays
+like any scene; when it is done the player is back at its scene's question,
+with the rooms already visited marked “(been)”. A room can have rooms of its
+own, and leaving it goes back out one level. **Leave** the scene and the story
+goes on from it as before: its routes out, else the next node on the spine.
+Each pick is a decision on the path, so paths and saves keep it.

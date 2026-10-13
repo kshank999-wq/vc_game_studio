@@ -8,6 +8,7 @@ import { craftCheck, recipeOf } from './crafting';
 import { initialState, interactionsOf, statesOf } from './details';
 import { timeLimitOf, timeoutLabelOf, timeoutPick } from './timed';
 import { spineSequence } from './layout';
+import { parentSceneOf, subScenesOf } from './subscene';
 import { apply, dropEquipped, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
 import { dualWith, elementsIn, spokenTogether } from './scene';
 import { cinematicTiming, describeShot, shotsOf } from './shots';
@@ -87,7 +88,10 @@ export type Entry =
 
 export type Cursor =
   | { at: 'node'; id: string }
-  | { at: 'after'; id: string }
+  /** Past a node. `left`: its rooms are behind the player, so the story goes on from it. */
+  | { at: 'after'; id: string; left?: boolean }
+  /** At a scene with rooms (sub-scenes): go into one, or leave the scene. */
+  | { at: 'rooms'; id: string }
   | { at: 'event'; sceneId: string; track: string; index: number }
   | { at: 'wait'; next: Cursor }
   | { at: 'graphChoice'; id: string }
@@ -467,6 +471,11 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
 
   if (cursor.at === 'after') {
     const o = project.objects[cursor.id];
+    // A scene with rooms: the player picks one to go into, or leaves.
+    if (o?.type === 'scene' && !cursor.left && subScenesOf(project, o.id).length) return { at: 'rooms', id: o.id };
+    // A room played through: back to the scene it is in, to pick another or leave.
+    const inside = o ? parentSceneOf(project, o.id) : undefined;
+    if (inside) return { at: 'rooms', id: inside.id };
     // Ending's own script has played: the story ends there.
     if (o?.type === 'end') {
       d.log.push({ kind: 'end', text: o.name || 'The End' });
@@ -691,6 +700,12 @@ const remember = (d: Doing, key: string) => {
   d.world = { ...d.world, picked: { ...d.world.picked, [key]: (d.world.picked[key] ?? 0) + 1 } };
 };
 
+/** At a scene with rooms: each room to go into (marked once been), then leaving. */
+const roomOptions = (project: Project, world: PlayWorld, sceneId: string): (PlayOption & { to: string | null })[] => [
+  ...subScenesOf(project, sceneId).map((r) => ({ label: `Go into ${r.name}${world.visited[r.id] ? ' (been)' : ''}`, available: true, to: r.id })),
+  { label: `Leave ${name(project, sceneId)}`, available: true, to: null },
+];
+
 const eventAt = (project: Project, c: { sceneId: string; track: string; index: number }) => trackOf(project, c.sceneId, c.track)?.events[c.index];
 
 const chooseHere = (project: Project, play: Play, index: number): Play => {
@@ -705,6 +720,12 @@ const chooseHere = (project: Project, play: Play, index: number): Play => {
     doEffects(d, option.effects);
     settle(d);
     return run(project, { ...play, world: d.world, log: d.log, cursor: { at: 'node', id: option.to } });
+  }
+  if (c.at === 'rooms') {
+    const option = roomOptions(project, play.world, c.id)[index];
+    if (!option) return play;
+    d.log.push({ kind: 'picked', text: option.label });
+    return run(project, { ...play, world: d.world, log: d.log, cursor: option.to ? { at: 'node', id: option.to } : { at: 'after', id: c.id, left: true } });
   }
   if (c.at === 'encounter') {
     const event = eventAt(project, c);
@@ -1291,7 +1312,7 @@ const endHere = (project: Project, play: Play): Play => {
 /** What the decision on offer is made at: a graph choice, a scene's choice or encounter (by its story object), or a free play (by its event). */
 export const decisionAt = (project: Project, play: Play): string | null => {
   const c = play.cursor;
-  if (c.at === 'graphChoice') return c.id;
+  if (c.at === 'graphChoice' || c.at === 'rooms') return c.id;
   if (c.at !== 'sceneChoice' && c.at !== 'encounter' && c.at !== 'freePlay') return null;
   const e = eventAt(project, c);
   return c.at !== 'freePlay' && e?.refId ? e.refId : (e?.id ?? `${c.sceneId}/${c.track}/${c.index}`);
@@ -1411,6 +1432,10 @@ export const promptOf = (project: Project, play: Play): Prompt => {
       const o = project.objects[c.id]!;
       const options = graphOptions(project, play.world, c.id).map(({ label, available, needs }) => ({ label, available, needs }));
       return { kind: 'choice', title: `${o.data.code ? `${o.data.code} ` : ''}${o.name}`, prompt: String(o.data.prompt ?? ''), options, ...timed(o, options) };
+    }
+    case 'rooms': {
+      const o = project.objects[c.id]!;
+      return { kind: 'choice', symbol: 'scene', title: `${o.data.code ? `${o.data.code} ` : ''}${o.name}`, prompt: 'Where now?', options: roomOptions(project, play.world, c.id).map(({ label, available }) => ({ label, available })) };
     }
     case 'sceneChoice': {
       const event = eventAt(project, c)!;
