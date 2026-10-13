@@ -57,6 +57,27 @@ int main()
     const std::string onward = vcgs::StoryWalker::Choose(game, where, 1);
     if (onward.empty() || onward == where || !story.Graph.count(onward)) Fail("Leave The Cave Mouth should go on along the story, got " + onward);
     else std::printf("rooms: %s · %s · then %s\n", Labels(game, where).c_str(), Labels(game, studyWhere).c_str(), (*story.Graph.at(onward))["name"].Str().c_str());
+    // Level transitions: each node on the graph says the level of the Level lane it is in.
+    const std::string cave = Named(story, "The Cave Mouth"), key = Named(story, "The Key");
+    if (vcgs::StoryWalker::LevelOf(game, cave) != "The Flooded Cave" || vcgs::StoryWalker::LevelOf(game, key) != "The Sunken Vault")
+        Fail("the graph should carry each node's level, got " + vcgs::StoryWalker::LevelOf(game, cave) + " / " + vcgs::StoryWalker::LevelOf(game, key));
+    std::string entered;
+    game.OnLevelEntered = [&](const std::string& from, const std::string& to) { entered += (entered.empty() ? "" : ",") + from + ">" + to; };
+    game.Level.clear();
+    const std::string first = vcgs::StoryWalker::Arrive(game, cave);
+    const std::string again = vcgs::StoryWalker::Arrive(game, cave);
+    const std::string crossing = vcgs::StoryWalker::Arrive(game, key);
+    if (first != "LEVEL · The Flooded Cave" || !again.empty() || crossing != "End of The Flooded Cave → LEVEL · The Sunken Vault")
+        Fail("level transitions are wrong: [" + first + "] [" + again + "] [" + crossing + "]");
+    if (entered != ">The Flooded Cave,The Flooded Cave>The Sunken Vault") Fail("OnLevelEntered should fire on each crossing, got " + entered);
+    // The level the player is in is kept in a save.
+    game.Checkpoint(key);
+    const std::string saved = game.SaveText("check");
+    game.Level.clear();
+    std::string at;
+    game.LoadSave(saved, at);
+    if (game.Level != "The Sunken Vault") Fail("a save should keep the level, got " + game.Level);
+    std::printf("levels: %s · %s\n", first.c_str(), crossing.c_str());
     if (failures) return 1;
     std::printf("rooms OK\n");
     return 0;

@@ -671,6 +671,25 @@ since, and the handoff asks before replacing them. The checks in
 the sample's level and play its key, door and lever.
 
 
+## Level transitions
+
+Each node on the story graph carries the level of the Level lane it is in
+(`level`, by name; the Opening and the endings column have none). Arriving
+at a node in another level is a **level transition**, as in the
+play-through: "End of The Flooded Cave → LEVEL · The Sunken Vault" ("LEVEL ·
+The Flooded Cave" for the first). The level the player is in is kept in the
+shared save as `level`, so a save from one engine resumes in the same level
+in another.
+
+- **Godot:** the story player shows the transition above what plays next;
+  `GameState.enter_level(name)` returns it and `GameState.level` is the level.
+- **Unity:** `StoryWalker.Arrive(State, node)` returns the transition and
+  fires `State.LevelEntered(from, to)`, the place to load the level's scene;
+  `State.Level` is the level.
+- **Unreal:** `UVcgsSubsystem::Arrive(Node)` returns it and broadcasts
+  `OnLevelEntered(From, To)`, the place to open the level's map;
+  `GetLevel()` is the level.
+
 ## What each engine gets
 
 The handoff screen's *What … gets* table (spec §14, the capability matrix)

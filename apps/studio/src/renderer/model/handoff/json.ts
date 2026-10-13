@@ -278,7 +278,7 @@ export const storySchema = () => ({
     effects: { type: 'array', items: ref('effect') },
     storyNode: obj({ key: str, kind: str, name: str }),
     graphNode: {
-      ...obj({ key: str, kind: str, name: str, start: { const: true }, onward: { type: ['string', 'null'] }, routes: { type: 'array', items: obj({ to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['to', 'label']) }, outcome: { enum: ['ending', 'gameOver'] } }, ['key', 'kind', 'name', 'onward', 'routes']),
+      ...obj({ key: str, kind: str, name: str, start: { const: true }, onward: { type: ['string', 'null'] }, routes: { type: 'array', items: obj({ to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['to', 'label']) }, outcome: { enum: ['ending', 'gameOver'] }, level: { type: 'string', description: 'The level it happens in (the Level lane), by name. Arriving at a node in another level is a level transition.' } }, ['key', 'kind', 'name', 'onward', 'routes']),
       description: 'A node on the story graph. Where it goes: the first route whose conditions hold, else onward along the spine.',
     },
     lore: { allOf: [ref('thing'), obj({ byEffect: { const: true }, discoveredWhen: ref('rule') }, [])], description: 'A lore entry: known once `discoveredWhen` holds, from the start when there is none.' },
@@ -430,6 +430,10 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
    \`kind\` is \`begin\`.
 2. **At a node**, go to its first \`route\` whose \`when\` holds (doing its
    \`effects\`), else \`onward\`. A node with an \`outcome\` ends the story there.
+   A node with a \`level\` other than the one the player is in is a **level
+   transition**: show "End of <old level> → LEVEL · <new level>" (just
+   "LEVEL · <new level>" for the first), load that level if the game has one by that name, and keep it
+   in the save as \`level\`. A node with no \`level\` keeps the one the player is in.
 3. **A scene** plays its \`main\` events in order. An event whose \`when\` fails
    is skipped. A \`freePlay\` waits until \`ends\` holds. A \`choice\` offers its
    \`mainLabel\` and each branch with \`from\` equal to its index; a branch plays

@@ -443,6 +443,8 @@ export interface IrGraphNode extends IrStoryNode {
   onward: string | null;
   routes: { to: string; label: string; when?: IrRule; effects?: IrEffect[] }[];
   outcome?: 'ending' | 'gameOver';
+  /** The level of the Level lane it happens in, by name: arriving at a node in another level is a level transition. */
+  level?: string;
 }
 
 export interface HandoffIR {
@@ -694,6 +696,7 @@ export const buildIR = (given: Project): HandoffIR => {
             .filter((c) => c.kind === 'branch' && c.sourceId === id && project.objects[c.targetId])
             .map((c) => ({ to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
           ...(outcome ? { outcome } : {}),
+          ...(levelOf(project, id) ? { level: levelOf(project, id)!.name } : {}),
         };
       }),
     branches: project.connections

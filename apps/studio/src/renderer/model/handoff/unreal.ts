@@ -193,6 +193,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsQuestSignature, const FString&,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsSceneSignature, const FString&, Scene);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsSkillSignature, const FString&, Skill, int32, Rank);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsGearSignature, const FString&, Item, const FString&, Slot);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsLevelSignature, const FString&, From, const FString&, To);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FVcgsPuzzleStepSignature, const FString&, Puzzle, const FString&, Step, const FString&, What);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsHintSignature, const FString&, Puzzle, const FString&, Text);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVcgsCueSignature, const FString&, Puzzle, const FString&, Kind, const FString&, Text, const FString&, Ref);
@@ -280,6 +281,8 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestStarted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnLoreDiscovered;
+    /** Into another level of the Level lane (From is "" for the first): load its map here. */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsLevelSignature OnLevelEntered;
 
     /**
      * Save the game (Saved/SaveGame.json when Path is empty): as the scene being
@@ -400,6 +403,10 @@ public:
 
     /** Where a graph node goes next: its first route whose conditions hold, else on along the spine. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") FString Onward(const FString& Node);
+    /** Arriving at a node: the level transition to show ("End of … → LEVEL · …"), or "" when it stays in the same level. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Story") FString Arrive(const FString& Node);
+    /** The level of the Level lane the player is in. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetLevel() const;
     /** "scene", "choice", "plotPoint", "cinematic", "begin", "end"... */
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString NodeKind(const FString& Node) const;
     /** "ending", "gameOver", or empty when the node goes on. */
@@ -475,6 +482,7 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     Game->OnQuestStarted = [this](const std::string& Quest) { OnQuestStarted.Broadcast(ToF(Quest)); };
     Game->OnQuestCompleted = [this](const std::string& Quest) { OnQuestCompleted.Broadcast(ToF(Quest)); };
     Game->OnLoreDiscovered = [this](const std::string& Lore) { OnLoreDiscovered.Broadcast(ToF(Lore)); };
+    Game->OnLevelEntered = [this](const std::string& From, const std::string& To) { OnLevelEntered.Broadcast(ToF(From), ToF(To)); };
     Game->OnMechanicAvailable = [this](const std::string& Mechanic) { OnMechanicAvailable.Broadcast(ToF(Mechanic)); };
     Game->OnSkillLearned = [this](const std::string& Skill, int Rank) { OnSkillLearned.Broadcast(ToF(Skill), Rank); };
     Game->OnItemEquipped = [this](const std::string& Item, const std::string& Slot) { OnItemEquipped.Broadcast(ToF(Item), ToF(Slot)); };
@@ -739,6 +747,8 @@ FString UVcgsSubsystem::CraftItem(const FString& Item) { return Game ? ToF(Game-
 FString UVcgsSubsystem::GetCraftCheck(const FString& Item) const { return Game ? ToF(Game->CraftCheck(ToStd(Item))) : FString(); }
 
 FString UVcgsSubsystem::Onward(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Onward(*Game, ToStd(Node))) : FString(); }
+FString UVcgsSubsystem::Arrive(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Arrive(*Game, ToStd(Node))) : FString(); }
+FString UVcgsSubsystem::GetLevel() const { return Game ? ToF(Game->Level) : FString(); }
 FString UVcgsSubsystem::NodeKind(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::KindOf(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::NodeOutcome(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::OutcomeOf(*Game, ToStd(Node))) : FString(); }
 
@@ -1519,7 +1529,10 @@ all Blueprint-callable). Quests start and complete by their rules (\`OnQuestStar
 \`GetKnownLore\`, \`GetLoreEntry\`) and mechanics become available (\`OnMechanicAvailable\`,
 \`HasMechanic\`, \`GetMechanicDetail\`). Triggers fire and puzzles solve themselves as their
 conditions come true; \`Onward\` and \`ChooseOnGraph\` follow the graph between
-scenes.
+scenes. Call \`Arrive(Node)\` at each node you go to: crossing into another level of
+the Level lane it returns the transition to show ("End of The Flooded Cave → LEVEL ·
+The Sunken Vault") and broadcasts \`OnLevelEntered\` (open the level's map there);
+\`GetLevel\` is the level the player is in, kept in saves.
 
 **Puzzles** built in the Puzzle Creator play their steps as the studio does
 (order, links, time limits on the play clock, which the level director advances

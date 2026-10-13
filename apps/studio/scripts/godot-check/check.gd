@@ -257,8 +257,9 @@ func _initialize() -> void:
 		fail("pulling the lever should end the free play into the choice, got " + str(player.labels()))
 	player.press(0)
 	print("after the scene: ", player.text().split("\n")[0], " ", player.labels())
-	if not player.text().begins_with("[Cinematic] The Vault Opens"):
-		fail("the scene should go on to the cinematic on the spine, got " + player.text())
+	# The story player says which level the story is in as it first walks the graph (the check started in a scene).
+	if not player.text().begins_with("LEVEL · The Sunken Vault\n\n[Cinematic] The Vault Opens"):
+		fail("the scene should go on to the cinematic on the spine, in The Sunken Vault, got " + player.text())
 	player.press(0)
 	if player.labels() != ["Carry on", "Pocket it"]:
 		fail("then the ring choice, got " + str(player.labels()))

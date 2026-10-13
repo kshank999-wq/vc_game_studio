@@ -49,6 +49,26 @@ static class RoomsCheck
         var onward = StoryWalker.Choose(game, where, 1);
         if (onward == "" || onward == where || !story.Graph.ContainsKey(onward)) Fail("Leave The Cave Mouth should go on along the story, got " + onward);
         Console.WriteLine("rooms: " + Labels(game, where) + " · " + Labels(game, studyWhere) + " · then " + D.Str(story.Graph[onward], "name"));
+        // Level transitions: each node on the graph says the level of the Level lane it is in.
+        var key = Named(story, "The Key");
+        if (StoryWalker.LevelOf(game, cave) != "The Flooded Cave" || StoryWalker.LevelOf(game, key) != "The Sunken Vault")
+            Fail("the graph should carry each node's level, got " + StoryWalker.LevelOf(game, cave) + " / " + StoryWalker.LevelOf(game, key));
+        var entered = new System.Collections.Generic.List<string>();
+        game.LevelEntered += (from, to) => entered.Add(from + ">" + to);
+        game.Level = "";
+        var first = StoryWalker.Arrive(game, cave);
+        var again = StoryWalker.Arrive(game, cave);
+        var crossing = StoryWalker.Arrive(game, key);
+        if (first != "LEVEL · The Flooded Cave" || again != "" || crossing != "End of The Flooded Cave → LEVEL · The Sunken Vault")
+            Fail("level transitions are wrong: [" + first + "] [" + again + "] [" + crossing + "]");
+        if (string.Join(",", entered) != ">The Flooded Cave,The Flooded Cave>The Sunken Vault") Fail("LevelEntered should fire on each crossing, got " + string.Join(",", entered));
+        // The level the player is in is kept in a save.
+        game.Checkpoint(key);
+        var saved = game.SaveText("check");
+        game.Level = "";
+        game.LoadSave(saved);
+        if (game.Level != "The Sunken Vault") Fail("a save should keep the level, got " + game.Level);
+        Console.WriteLine("levels: " + first + " · " + crossing);
         if (failures > 0) return 1;
         Console.WriteLine("rooms OK");
         return 0;

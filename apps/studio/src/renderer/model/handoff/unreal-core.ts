@@ -437,6 +437,10 @@ ${UNREAL_STEP_PROGRESS}
         std::map<std::string, int> ScreenFails;
         /** Seconds of play: timed puzzle steps run on it (the level director advances it each frame). */
         double Clock = 0;
+        /** The level of the Level lane the player is in, by name ("" before the first). */
+        std::string Level;
+        /** Into another level of the Level lane: the one left ("" for the first), the one entered. Load its map here. */
+        std::function<void(const std::string&, const std::string&)> OnLevelEntered;
         /** A puzzle step done, failed (a wrong move), expired (out of time) or reset: the puzzle, the step, what (puzzle spec §6). */
         std::function<void(const std::string&, const std::string&, const std::string&)> OnPuzzleStep;
         /** A staged hint given: the puzzle, the hint (puzzle spec §10). */
@@ -477,7 +481,7 @@ ${UNREAL_STEP_PROGRESS}
             Loaded = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
             Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear(); Equipped.clear(); Wear.clear();
-            PuzzleSteps.clear(); Hinted.clear(); ScreenFails.clear(); Clock = 0;
+            PuzzleSteps.clear(); Hinted.clear(); ScreenFails.clear(); Clock = 0; Level.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
@@ -704,6 +708,21 @@ ${UNREAL_STEP_PROGRESS}
         void RememberChoice(const std::string& choice, const std::string& option) { Chosen[choice] = option; Changed(); }
         void MarkSolved(const std::string& puzzle) { if (Solved.insert(puzzle).second) Changed(); }
         void Visit(const std::string& scene) { if (Visited.insert(scene).second) Changed(); }
+
+        /**
+         * Arriving in a level (a graph node's "level"): the transition to show, "End of <old> →
+         * LEVEL · <new>" ("LEVEL · <new>" for the first), or "" when the player is in it already
+         * or the node has no level.
+         */
+        std::string EnterLevel(const std::string& level)
+        {
+            if (level.empty() || level == Level) return "";
+            const std::string from = Level;
+            Level = level;
+            if (OnLevelEntered) OnLevelEntered(from, level);
+            Changed();
+            return from.empty() ? "LEVEL · " + level : "End of " + from + " → LEVEL · " + level;
+        }
         /** Bookmark a codex entry ("lore:the_drowned_order"), or take its bookmark off. Returns whether it is bookmarked now. */
         bool ToggleBookmark(const std::string& entry)
         {
@@ -863,7 +882,7 @@ ${UNREAL_STEP_PROGRESS}
                    ",\n  \"characters\": " + list(MetCharacters) + ",\n  \"found\": " + list(FoundItems) + ",\n  \"locations\": " + list(VisitedLocations) +
                    ",\n  \"used\": " + list(UsedObjects) + ",\n  \"lore\": " + list(KnownLore) + ",\n  \"mechanics\": " + list(MechanicOrder) +
                    ",\n  \"skills\": " + learned() + ",\n  \"equipped\": " + strings(Equipped) + ",\n  \"wear\": " + numbers(Wear) +
-                   ",\n  \"puzzles\": " + puzzles() + ",\n  \"hinted\": " + list(Hinted) + ",\n  \"screenFails\": " + numbers(ScreenFails) + ",\n  \"clock\": " + Number(Clock);
+                   ",\n  \"puzzles\": " + puzzles() + ",\n  \"hinted\": " + list(Hinted) + ",\n  \"screenFails\": " + numbers(ScreenFails) + ",\n  \"clock\": " + Number(Clock) + ",\n  \"level\": " + JsonQuote(Level);
         }
 
         /** Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it. */
@@ -957,6 +976,7 @@ ${UNREAL_STEP_PROGRESS}
             for (const Value& h : data["hinted"].items) if (h.type == Value::Type::String) Hinted.insert(h.text);
             for (const auto& e : data["screenFails"].fields) ScreenFails[e.first] = static_cast<int>(e.second.Num());
             Clock = data["clock"].Num();
+            Level = data["level"].Str();
             Checkpoint(data["at"].Str());
             Loaded = true;
             Changed();
@@ -2370,6 +2390,12 @@ ${UNREAL_PUZZLES}
             }
             return n["onward"].Str();
         }
+
+        /** The level a node on the graph happens in ("" for none). */
+        inline std::string LevelOf(const GameState& game, const std::string& node) { return Story::Find(game.StoryData.Graph, node)["level"].Str(); }
+
+        /** Arriving at a node: the level transition to show ("" when it stays in the same level). */
+        inline std::string Arrive(GameState& game, const std::string& node) { return game.EnterLevel(LevelOf(game, node)); }
 
         inline std::string KindOf(const GameState& game, const std::string& node) { return Story::Find(game.StoryData.Graph, node)["kind"].Str(); }
         inline std::string OutcomeOf(const GameState& game, const std::string& node) { return Story::Find(game.StoryData.Graph, node)["outcome"].Str(); }

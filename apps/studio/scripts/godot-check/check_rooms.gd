@@ -1,7 +1,7 @@
 extends SceneTree
 # Rooms (sub-scenes) in the story graph: SC-01 The Cave Mouth has The Study,
 # and The Closet is inside it. Played through: Where now?, into a room and
-# back, out a level, and on along the story.
+# back, out a level, and on along the story. Then the levels it passes through.
 
 var failures := 0
 
@@ -69,6 +69,25 @@ func _initialize() -> void:
 	if onward == "" or onward == cave_where or not story.NODES.has(onward):
 		fail("Leave The Cave Mouth should go on along the story, got " + onward)
 	print("rooms: ", where.label(0, game), " · ", labels(where), " · ", labels(study_choice), " · then ", story.NODES[onward]["name"])
+	# Level transitions: each node on the graph says the level of the Level lane it is in.
+	var key_node := key_named(story, "The Key")
+	if str(story.NODES[cave_key].get("level", "")) != "The Flooded Cave" or str(story.NODES[key_node].get("level", "")) != "The Sunken Vault":
+		fail("the graph should carry each node's level, got " + str(story.NODES[cave_key].get("level", "")) + " / " + str(story.NODES[key_node].get("level", "")))
+	game.level = ""
+	var first: String = game.enter_level("The Flooded Cave")
+	var again: String = game.enter_level("The Flooded Cave")
+	var none: String = game.enter_level("")
+	var crossing: String = game.enter_level("The Sunken Vault")
+	if first != "LEVEL · The Flooded Cave" or again != "" or none != "" or crossing != "End of The Flooded Cave → LEVEL · The Sunken Vault":
+		fail("level transitions are wrong: [%s] [%s] [%s] [%s]" % [first, again, none, crossing])
+	# The level the player is in is kept in a save.
+	game.checkpoint(key_node)
+	var saved: String = game.save_text("check")
+	game.level = ""
+	game.load_text(saved)
+	if game.level != "The Sunken Vault":
+		fail("a save should keep the level, got " + game.level)
+	print("levels: ", first, " · ", crossing)
 	if failures > 0:
 		quit(1)
 		return

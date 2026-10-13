@@ -143,7 +143,12 @@ project.
    \`KnownLore\`, \`Story.LoreEntry\`) and mechanics become available
    (\`MechanicAvailable\`, \`HasMechanic\`, \`Story.MechanicDetail\`) as their
    conditions come true;
-   \`StoryWalker\` follows the graph between scenes.
+   \`StoryWalker\` follows the graph between scenes. Call
+   \`StoryWalker.Arrive(State, node)\` at each node you go to: crossing into
+   another level of the Level lane it returns the transition to show ("End of
+   The Flooded Cave → LEVEL · The Sunken Vault") and fires \`LevelEntered\`
+   (load the level's scene there); \`State.Level\` is the level the player is
+   in, kept in saves.
 5. **Puzzles** built in the Puzzle Creator play their steps as the studio does
    (order, links, time limits on \`State.Clock\`, which VcgsGame advances,
    rewards, wrong moves, resets): \`PuzzleStep\`, \`StepDone\`, \`HintGiven\` and

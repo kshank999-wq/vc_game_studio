@@ -207,3 +207,19 @@ describe('level ends', () => {
     ]);
   });
 });
+
+describe('level transitions for the engines', () => {
+  it('give each graph node the level it is in, by name, for the runtimes to cross', () => {
+    let p = createProject();
+    p = placeNew(p, 'plotPoint', spineLane(p).id, 800)!.project;
+    p = addLevelBand(p, 'The Cave')!.project;
+    p = addLevelBand(p, 'The Ridge')!.project;
+    const graph = buildIR(p).graph;
+    const at = (name: string) => graph.find((n) => n.name === name)!;
+    expect(at('Beginning').level).toBe('The Cave');
+    expect(at('Plot Point 1').level).toBe('The Ridge');
+    // The Opening comes before any level; the endings column is in none.
+    expect(at('Opening').level).toBeUndefined();
+    expect(at('Ending 1').level).toBeUndefined();
+  });
+});

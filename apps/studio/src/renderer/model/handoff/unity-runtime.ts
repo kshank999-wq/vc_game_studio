@@ -356,6 +356,10 @@ namespace VCGS
         public readonly Dictionary<string, int> ScreenFails = new Dictionary<string, int>();
         /// <summary>Seconds of play: timed puzzle steps run on it (VcgsGame advances it each frame).</summary>
         public double Clock;
+        /// <summary>The level of the Level lane the player is in, by name ("" before the first).</summary>
+        public string Level = "";
+        /// <summary>Into another level of the Level lane: the one left ("" for the first), the one entered. Load its scene here.</summary>
+        public event Action<string, string> LevelEntered;
 
         /// <summary>A puzzle step done, failed (a wrong move), expired (out of time) or reset (puzzle spec §6).</summary>
         public event Action<string, string, string> PuzzleStep;
@@ -426,7 +430,7 @@ namespace VCGS
             Loaded = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
             Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear(); Equipped.Clear(); Wear.Clear();
-            PuzzleSteps.Clear(); Hinted.Clear(); ScreenFails.Clear(); Clock = 0;
+            PuzzleSteps.Clear(); Hinted.Clear(); ScreenFails.Clear(); Clock = 0; Level = "";
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -709,6 +713,21 @@ namespace VCGS
             LocationVisited?.Invoke(location);
         }
 
+        /// <summary>
+        /// Arriving in a level (a graph node's "level"): the transition to show, "End of &lt;old&gt; →
+        /// LEVEL · &lt;new&gt;" ("LEVEL · &lt;new&gt;" for the first), or "" when the player is in it
+        /// already or the node has no level.
+        /// </summary>
+        public string EnterLevel(string level)
+        {
+            if (string.IsNullOrEmpty(level) || level == Level) return "";
+            var from = Level;
+            Level = level;
+            LevelEntered?.Invoke(from, level);
+            OnChanged();
+            return from != "" ? "End of " + from + " → LEVEL · " + level : "LEVEL · " + level;
+        }
+
         public void Visit(string scene)
         {
             if (Visited.Add(scene)) OnChanged();
@@ -842,7 +861,8 @@ namespace VCGS
                 ",\n  \"skills\": " + Map(Skills, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
                 ",\n  \"equipped\": " + Map(Equipped, Q) + ",\n  \"wear\": " + Map(Wear, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
                 ",\n  \"puzzles\": " + Map(PuzzleSteps, p => p.ToJson()) + ",\n  \"hinted\": " + Sorted(Hinted) + ",\n  \"screenFails\": " + Map(ScreenFails, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
-                ",\n  \"clock\": " + Clock.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+                ",\n  \"clock\": " + Clock.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
+                ",\n  \"level\": " + Q(Level);
         }
 
         /// <summary>Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it.</summary>
@@ -890,6 +910,7 @@ namespace VCGS
             foreach (var h in D.List(data, "hinted")) if (h is string hint) Hinted.Add(hint);
             foreach (var e in D.Map(data, "screenFails")) ScreenFails[e.Key] = (int)D.Num(e.Value, 0);
             Clock = D.Num(data, "clock");
+            Level = D.Str(data, "level");
             foreach (var e in D.Map(data, "flags")) Flags[e.Key] = D.Str(data["flags"] as Dictionary<string, object>, e.Key);
             foreach (var e in D.Map(data, "objects")) ObjectStates[e.Key] = D.Str(data["objects"] as Dictionary<string, object>, e.Key);
             foreach (var e in D.Map(data, "chosen")) Chosen[e.Key] = D.Str(data["chosen"] as Dictionary<string, object>, e.Key);
@@ -1671,6 +1692,12 @@ namespace VCGS
             }
             return D.Str(n, "onward");
         }
+
+        /// <summary>The level a node on the graph happens in ("" for none).</summary>
+        public static string LevelOf(GameState game, string node) => game.Story.Graph.TryGetValue(node, out var n) ? D.Str(n, "level") : "";
+
+        /// <summary>Arriving at a node: the level transition to show ("" when it stays in the same level).</summary>
+        public static string Arrive(GameState game, string node) => game.EnterLevel(LevelOf(game, node));
 
         public static string KindOf(GameState game, string node) => game.Story.Graph.TryGetValue(node, out var n) ? D.Str(n, "kind") : "";
 
