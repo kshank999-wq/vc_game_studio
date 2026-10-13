@@ -11086,3 +11086,321 @@ button.bible-dual-col:hover {
   background: var(--gold-gradient);
   border-color: var(--gold);
 }
+
+/* The scene box's Overview: the summary that organises the scene. */
+.scene-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 920px;
+}
+.ov-label {
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  flex: none;
+  min-width: 96px;
+}
+.ov-where,
+.ov-section {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--node);
+}
+.ov-where.missing {
+  border-color: var(--gold-lo);
+  background: color-mix(in srgb, var(--gold) 8%, var(--node));
+}
+.ov-path {
+  flex: 1;
+  color: var(--text);
+}
+.ov-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ov-field span {
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+.ov-field textarea {
+  min-height: 64px;
+  resize: vertical;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--node);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.ov-field textarea:focus {
+  outline: none;
+  border-color: var(--gold-lo);
+}
+.ov-cats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ov-cat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ov-cat-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 110px;
+  color: var(--cat);
+  font-size: 12.5px;
+}
+.ov-item {
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.ov-item:hover:not(:disabled) {
+  border-color: var(--gold-lo);
+  color: var(--gold-hi);
+}
+.ov-item:disabled {
+  cursor: default;
+}
+.ov-exits {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* The Map tab: the scene's area on the 2D map, with its pin and what is in it. */
+.scene-body:has(.area-map) {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+}
+.area-map {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.area-bar,
+.area-elements {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding: 8px 12px;
+  background: var(--panel);
+}
+.area-bar {
+  border-bottom: 1px solid var(--border);
+}
+.area-elements {
+  border-top: 1px solid var(--border);
+}
+.area-path {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+.area-sep {
+  margin: 0 6px;
+  color: var(--muted);
+}
+.area-here {
+  color: var(--gold-hi);
+  font-weight: 600;
+}
+.area-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.area-hint {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.75);
+  color: var(--text);
+  font-size: 12.5px;
+  pointer-events: none;
+}
+.area-elements-head {
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+}
+.area-empty {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.area-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: var(--node);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.area-chip.placed {
+  border-style: solid;
+}
+.area-chip.on {
+  border-color: var(--gold-hi);
+  box-shadow: 0 0 0 1px var(--gold-hi);
+}
+.area-check {
+  color: var(--c-environment);
+}
+.tb-btn.on {
+  border-color: var(--gold-hi);
+  color: var(--gold-hi);
+}
+
+/* Choosing where a scene happens. */
+.area-chooser {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+}
+.area-chooser h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text);
+}
+.area-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.area-field span {
+  min-width: 56px;
+}
+.area-field input,
+.area-field select {
+  flex: 1;
+  max-width: 360px;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--node);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+.area-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.area-preset {
+  flex: 1 1 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--node);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.area-preset b {
+  color: var(--text);
+  font-size: 13px;
+}
+.area-preset.on {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+.area-new,
+.area-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--node);
+}
+.area-new > .tb-btn {
+  align-self: flex-start;
+}
+.area-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.area-row:hover,
+.area-row.on {
+  background: var(--panel);
+}
+.area-kind {
+  min-width: 80px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.area-name {
+  flex: 1;
+  color: var(--text);
+}
+.area-seg {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.area-seg button {
+  padding: 4px 10px;
+  border: 0;
+  background: var(--node);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.area-seg button.on {
+  background: var(--node-raised);
+  color: var(--gold-hi);
+}

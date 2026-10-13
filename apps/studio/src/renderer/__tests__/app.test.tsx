@@ -54,7 +54,7 @@ describe('the story graph', () => {
   it('opens a plot point in the writing box, as a scene opens, and the Opening in its shot list with credits', async () => {
     const { container } = render(<App />);
     fireEvent.doubleClick(container.querySelector('[data-type="plotPoint"]')!);
-    expect(await screen.findByRole('tab', { name: 'Script' })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Dialogue' })).toBeTruthy();
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Workspaces' })).getByRole('button', { name: 'Story Graph' }));
     fireEvent.doubleClick(container.querySelector('[data-type="cinematic"]')!);
     await opened();
@@ -183,6 +183,34 @@ describe('a scene', () => {
 });
 
 describe('the scene box', () => {
+  it('asks where a new scene happens, makes the world and an area for it, and puts what is in it on the map', async () => {
+    let project = createProject('Aldermoor');
+    const placed = placeNew(project, 'scene', spineLane(project).id, 400)!;
+    project = addElement(placed.project, placed.id, 'character', 'Mara')!.project;
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
+    const { container } = render(<App />);
+    fireEvent.doubleClick(container.querySelector('[data-type="scene"]')!);
+    // Nowhere yet: the scene opens on its map, which asks for the world first.
+    const where = await screen.findByRole('region', { name: 'Where this scene happens' });
+    expect(where.textContent).toContain('First, the world this game is set in');
+    expect((within(where).getByLabelText('World name') as HTMLInputElement).value).toBe('Aldermoor');
+    fireEvent.click(within(where).getByRole('button', { name: 'Make the world' }));
+    // Then an area inside it, named after the scene.
+    const again = screen.getByRole('region', { name: 'Where this scene happens' });
+    fireEvent.change(within(again).getByLabelText('Kind of area'), { target: { value: 'region' } });
+    fireEvent.change(within(again).getByLabelText('Area name'), { target: { value: 'Northern Forest' } });
+    fireEvent.click(within(again).getByRole('button', { name: 'Make it and set the scene there' }));
+    expect(screen.getByRole('navigation', { name: 'Where it happens' }).textContent).toBe('Aldermoor›Northern Forest');
+    // Mara goes on the map around the scene's pin.
+    const strip = screen.getByRole('list', { name: 'Put on the map' });
+    fireEvent.click(within(strip).getByRole('button', { name: 'Put the rest on the map' }));
+    expect(within(strip).getByLabelText('on the map')).toBeTruthy();
+    // The Overview says where it happens.
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    expect(screen.getByRole('region', { name: 'Where it happens' }).textContent).toContain('Aldermoor › Northern Forest');
+    expect(screen.getByRole('region', { name: 'What is in it' }).textContent).toContain('Mara');
+  });
+
   it('lists what is in the scene down the right, opens one on a double-click, and adds a trigger from Logic', () => {
     let project = createProject('The Sunken Vault');
     const placed = placeNew(project, 'scene', spineLane(project).id, 400)!;
@@ -250,6 +278,7 @@ describe('the scene timeline', () => {
     fireEvent.change(text, { target: { value: 'Water’s holding it shut.' } });
     fireEvent.blur(text);
     fireEvent.click(screen.getByRole('button', { name: 'Scene' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Dialogue' }));
     expect(screen.getByDisplayValue('Water’s holding it shut.')).toBeTruthy();
   });
 });

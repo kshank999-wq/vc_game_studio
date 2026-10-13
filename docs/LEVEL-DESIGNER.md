@@ -414,3 +414,24 @@ Against spec V2:
 | §10 Personal library and import | Done: reference images per map and floor (map, floor plan, heightmap, photo), sized in metres or metres per pixel; OBJ, glTF and GLB proxy models with unit and up-axis conversion, scale, pivot, collision, category, tags and a thumbnail, in Personal assets for every project. Scene files beyond these three formats aren't read. |
 | §14 Puzzles | Done: the overlay of entries, required objects, clues, gates and outputs, read from the level and bound by hand; binding through presence, links and rules, so play and export follow without new runtime code; routes and other maps' parts counted. |
 | Engine export of V2 (§11, §12, §13) | Done: the hierarchy, boundaries, placements and travel links in the IR and JSON, and in Godot (scenes, child maps instanced and streamed, Path3D routes, travel with locks), Unity (nested roots, streaming, travel links) and Unreal (child maps in their parent's world, a director each, streaming, spline routes); checked in each. |
+
+## Where each scene happens
+
+Work runs from the macro to the micro: the world, its regions, then each
+scene's own area, then what is in it.
+
+- A scene opens on its **Map** tab until it is set somewhere. With no maps at
+  all it asks for the world first (its name and how big), then for the
+  scene's area: a level, a town, a building or a room inside the world or one
+  of its regions. Or pick a map the game already has. A scene inside a level
+  on the Level lane is offered that level's map first.
+- The scene's **pin** goes on the map its area is part of (the region or the
+  world), so the scene shows up there. Switch the Map tab to **On <region>**
+  to drag the pin to the spot and **Draw a path** from it to other places.
+- In **The scene's area**, the strip at the bottom lists the scene's
+  characters, objects, inventory, choices, puzzles, logic and cinematics.
+  Click one, then the map, to put it there (double-click puts it in the
+  middle); **Put the rest on the map** places everything not yet placed. Each
+  is a marker linked to its element and to the scene, the same item the Level
+  Designer shows; select it to open the element in the scene's panel.
+- **Open in Levels ↗** opens the same map in the Level Designer with every tool.

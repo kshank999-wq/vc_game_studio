@@ -1,4 +1,8 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { SceneOverview } from './SceneOverview';
+
+/** The scene's area on the 2D map: loaded when the Map tab opens, with the Level Designer's map. */
+const SceneMap = lazy(() => import('./SceneMap').then((m) => ({ default: m.SceneMap })));
 import { renameObject } from '../../model/project';
 import {
   PERIMETER,
@@ -77,7 +81,8 @@ const STATUS: { key: NonNullable<SceneData['status']>; label: string }[] = [
   { key: 'complete', label: 'Complete' },
 ];
 
-const TABS = ['Script', 'Summary', 'Purpose', 'Notes'] as const;
+/** The scene box's pages: the summary that organises it, its map, its dialogue, and notes. */
+const TABS = ['Overview', 'Map', 'Dialogue', 'Notes'] as const;
 
 /**
  * The Scene Workspace (spec §10): the writing box, and down the right a panel
@@ -93,11 +98,12 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Script');
+  // A scene with nowhere to happen yet opens on its map, which asks where first.
+  const [tab, setTab] = useState<(typeof TABS)[number]>(() => (props.focusLine ? 'Dialogue' : scene.type === 'scene' && typeof scene.data.mapId !== 'string' ? 'Map' : 'Overview'));
   const [focusLine, setFocusLine] = useState<string | null>(props.focusLine ?? null);
   useEffect(() => {
     if (props.focusLine) {
-      setTab('Script');
+      setTab('Dialogue');
       setFocusLine(props.focusLine);
     }
   }, [props.focusLine]);
@@ -171,7 +177,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
       if (!result || !category) return false;
       if (drag.type === 'dialogue') {
         props.onCommit(result.project);
-        setTab('Script');
+        setTab('Dialogue');
         setFocusLine(result.id);
         openCategory('characters');
         return true;
@@ -258,28 +264,34 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
           </div>
 
           <div className="scene-body">
-            {tab === 'Script' && <ScriptEditor project={project} sceneId={sceneId} onCommit={props.onCommit} focusLine={focusLine} />}
-            {tab !== 'Script' && (
+            {tab === 'Overview' && (
+              <SceneOverview
+                project={project}
+                sceneId={sceneId}
+                onCommit={props.onCommit}
+                onTab={setTab}
+                onOpenElement={setDetail}
+                onOpenScene={props.onNavigate ? (id) => props.onNavigate!({ kind: 'scene', sceneId: id, mode: 'open' }) : undefined}
+              />
+            )}
+            {tab === 'Map' && (
+              <Suspense fallback={<div className="view-loading" role="status">Opening the map…</div>}>
+                <SceneMap project={project} sceneId={sceneId} onCommit={props.onCommit} onSay={props.onSay} onOpenElement={setDetail} />
+              </Suspense>
+            )}
+            {tab === 'Dialogue' && <ScriptEditor project={project} sceneId={sceneId} onCommit={props.onCommit} focusLine={focusLine} />}
+            {tab === 'Notes' && (
               <textarea
-                key={`${tab}:${sceneId}`}
+                key={`notes:${sceneId}`}
                 className="scene-field"
-                aria-label={tab}
-                placeholder={
-                  tab === 'Summary'
-                    ? 'What happens in this scene, in a sentence or two. It shows on the story graph.'
-                    : tab === 'Purpose'
-                      ? 'Why this scene is in the game: what it changes for the player or the story.'
-                      : 'Anything else: references, open questions, production notes.'
-                }
-                defaultValue={tab === 'Notes' ? scene.notes : ((scene.data[tab.toLowerCase()] as string | undefined) ?? '')}
-                onBlur={(e) => {
-                  const value = e.currentTarget.value.trim();
-                  props.onCommit(tab === 'Notes' ? setSceneNotes(project, sceneId, value) : setSceneData(project, sceneId, { [tab.toLowerCase()]: value }));
-                }}
+                aria-label="Notes"
+                placeholder="Anything else: references, open questions, production notes."
+                defaultValue={scene.notes}
+                onBlur={(e) => props.onCommit(setSceneNotes(project, sceneId, e.currentTarget.value.trim()))}
               />
             )}
           </div>
-          {tab === 'Script' && <ScriptFooter project={project} sceneId={sceneId} onCommit={props.onCommit} />}
+          {tab === 'Dialogue' && <ScriptFooter project={project} sceneId={sceneId} onCommit={props.onCommit} />}
         </section>
       </div>
 
@@ -369,7 +381,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                                     line={l}
                                     pair={dualLines.get(l.id)}
                                     onPick={() => {
-                                      setTab('Script');
+                                      setTab('Dialogue');
                                       setFocusLine(l.id);
                                     }}
                                   />

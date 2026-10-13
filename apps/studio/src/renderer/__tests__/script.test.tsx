@@ -33,6 +33,7 @@ const setup = (): Project => {
 const openScene = () => {
   const view = render(<App />);
   fireEvent.doubleClick(view.container.querySelector('[data-type="scene"]')!);
+  fireEvent.click(screen.getByRole('tab', { name: 'Dialogue' }));
   return view;
 };
 
