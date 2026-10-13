@@ -6,7 +6,6 @@ import {
   categoryCounts,
   elementsIn,
   linesOf,
-  sceneLines,
   setSceneData,
   setSceneNotes,
   type Category,
@@ -20,10 +19,7 @@ import { ScriptEditor, ScriptFooter } from './ScriptEditor';
 import { timelineSummary } from '../../model/timeline';
 import { ElementDetail } from '../detail/ElementDetail';
 import type { Destination } from '../../model/details';
-import { DialogueRow, dualRowsShown, dualsIn } from './DialogueRows';
-
-/** The collapsed timeline under the writing box. */
-const STRIP_H = 52;
+import { DialogueRow, dualsIn } from './DialogueRows';
 
 export interface SceneSurface {
   /** Drop a palette element into the scene. False when it can't go there. */
@@ -51,82 +47,29 @@ interface Props {
   focusLine?: string | null;
 }
 
-// The scene box and the perimeter around it, in stage units (mockup 03). The
-// box can be dragged bigger (or smaller) by its edge; the size is kept for
-// next time. Its current size is read by the layout helpers below.
-const BOX = { w: 680, h: 560 };
-const BOX_MIN = { w: 560, h: 420 };
-const BOX_MAX = { w: 1600, h: 1200 };
-const BOX_KEY = 'vcgs.sceneBox';
-const savedBox = (): { w: number; h: number } => {
+// The panel on the right: what is in the scene, by kind. Its left edge
+// drags it wider or narrower; the width is kept for next time.
+const SIDE = { min: 240, max: 640, normal: 320 };
+const SIDE_KEY = 'vcgs.sceneSide';
+const savedSide = (): number => {
   try {
-    const v = JSON.parse(localStorage.getItem(BOX_KEY) ?? 'null') as { w?: unknown; h?: unknown } | null;
-    if (v && typeof v.w === 'number' && typeof v.h === 'number')
-      return { w: Math.min(BOX_MAX.w, Math.max(BOX_MIN.w, v.w)), h: Math.min(BOX_MAX.h, Math.max(BOX_MIN.h, v.h)) };
+    const v = Number(localStorage.getItem(SIDE_KEY));
+    if (v) return Math.min(SIDE.max, Math.max(SIDE.min, v));
   } catch {
-    // No saved size, or storage is off: the default.
+    // No saved width, or storage is off: the normal one.
   }
-  return { w: 680, h: 560 };
-};
-const PILL_W = 150;
-const PILL_H = 38;
-const GAP = 40;
-const CHIP_W = 160;
-const CHIP_H = 34;
-const CHIP_STEP = 42;
-
-const pillPosition = (c: Category): { x: number; y: number } => {
-  switch (c.side) {
-    case 'left':
-      return { x: -GAP - PILL_W, y: BOX.h * c.at - PILL_H / 2 };
-    case 'right':
-      return { x: BOX.w + GAP, y: BOX.h * c.at - PILL_H / 2 };
-    case 'top':
-      return { x: BOX.w * c.at - PILL_W / 2, y: -GAP - PILL_H };
-    case 'bottom':
-      return { x: BOX.w * c.at - PILL_W / 2, y: BOX.h + GAP };
-  }
+  return SIDE.normal;
 };
 
-/** Where an expanded category's items go: outward from its perimeter node. */
-const chipPosition = (c: Category, index: number, count: number): { x: number; y: number } => {
-  const pill = pillPosition(c);
-  const stack = (index - (count - 1) / 2) * CHIP_STEP;
-  switch (c.side) {
-    case 'left':
-      return { x: pill.x - 36 - CHIP_W, y: pill.y + PILL_H / 2 - CHIP_H / 2 + stack };
-    case 'right':
-      return { x: pill.x + PILL_W + 36, y: pill.y + PILL_H / 2 - CHIP_H / 2 + stack };
-    case 'top':
-      return { x: pill.x + (PILL_W - CHIP_W) / 2, y: pill.y - 22 - CHIP_H - index * CHIP_STEP };
-    case 'bottom':
-      return { x: pill.x + (PILL_W - CHIP_W) / 2, y: pill.y + PILL_H + 22 + index * CHIP_STEP };
-  }
-};
+/** The order the panel lists a scene's contents in: who, then what they handle, then how it plays. */
+const SIDE_ORDER = ['characters', 'objects', 'inventory', 'choices', 'puzzles', 'logic', 'cinematics', 'environment'];
+const SIDE_CATEGORIES: readonly Category[] = SIDE_ORDER.map((key) => PERIMETER.find((c) => c.key === key)).filter((c): c is Category => !!c);
 
-// A character's dialogue box: beside the character, a row per line (the first few).
-const DLG_W = 230;
+/** "+ Add object", "+ Add logic". */
+const addLabel = (c: Category) => `+ Add ${c.key === 'logic' ? 'logic' : c.key === 'inventory' ? 'inventory item' : c.label.toLowerCase().replace(/s$/, '')}`;
+
+// A character's lines shown under it in the panel (the first few).
 const DLG_ROWS = 3;
-const DLG_ROW = 18;
-// A dual line's row is two lines high: the two speakers' halves, side by side.
-const dialogueHeight = (n: number, duals = 0) => (n ? 22 + (Math.min(n, DLG_ROWS) + duals) * DLG_ROW + (n > DLG_ROWS ? DLG_ROW : 0) + 6 : 0);
-
-/**
- * The cast down the left: each character, and its dialogue box beside it when
- * it has lines, one slot each, stacked around the Characters node.
- */
-const castPositions = (c: Category, heights: readonly number[]): { chip: { x: number; y: number }; dialogue: { x: number; y: number } }[] => {
-  const pill = pillPosition(c);
-  const slots = heights.map((h) => Math.max(CHIP_H, h));
-  const total = slots.reduce((a, b) => a + b, 0) + Math.max(0, slots.length - 1) * 10;
-  let y = pill.y + PILL_H / 2 - total / 2;
-  return slots.map((slot, i) => {
-    const chip = { x: pill.x - 36 - CHIP_W, y: y + slot / 2 - CHIP_H / 2 };
-    const dialogue = { x: chip.x - 28 - DLG_W, y: y + slot / 2 - heights[i]! / 2 };
-    y += slot + 10;
-    return { chip, dialogue };
-  });
-};
 
 const STATUS: { key: NonNullable<SceneData['status']>; label: string }[] = [
   { key: 'outline', label: 'Outline' },
@@ -137,20 +80,16 @@ const STATUS: { key: NonNullable<SceneData['status']>; label: string }[] = [
 const TABS = ['Script', 'Summary', 'Purpose', 'Notes'] as const;
 
 /**
- * The Scene Workspace (spec §10): a large writing box in the middle, the
- * scene's categories as compact nodes around its edge. Clicking a category
- * opens just that one; Expand All in the top bar explodes the whole scene.
+ * The Scene Workspace (spec §10): the writing box, and down the right a panel
+ * of what is in the scene: characters, objects, choices, puzzles, logic and
+ * the rest. Click a kind to list them and add more; double-click one to open
+ * it and set how it plays. Expand All in the top bar explodes the whole scene.
  */
 export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWorkspace(props, ref) {
   const { project, sceneId } = props;
   const scene = project.objects[sceneId]!;
   const rootRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 1200, h: 800 });
-  const [box, setBox] = useState(savedBox);
-  // The layout helpers read the box's size from here.
-  BOX.w = box.w;
-  BOX.h = box.h;
-  const resizing = useRef<{ x: number; y: number; w: number; h: number; edge: 'right' | 'bottom' | 'corner' } | null>(null);
+  const [side, setSide] = useState(savedSide);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -164,7 +103,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   }, [props.focusLine]);
   const [editingName, setEditingName] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
-  // Escape closes an element's detail (unless a field in it is being typed in).
+  // Escape goes back from an element to the list (unless a field in it is being typed in).
   useEffect(() => {
     if (!detail) return;
     const close = (e: KeyboardEvent) => {
@@ -175,81 +114,34 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
     return () => window.removeEventListener('keydown', close);
   }, [detail]);
 
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const observer = new ResizeObserver(() => setSize({ w: root.clientWidth, h: root.clientHeight }));
-    observer.observe(root);
-    setSize({ w: root.clientWidth, h: root.clientHeight });
-    return () => observer.disconnect();
-  }, []);
-
   const counts = categoryCounts(project, sceneId);
   const dualLines = dualsIn(project, sceneId);
-  const lines = sceneLines(project, sceneId);
   const dragCategory = props.paletteDrag ? dropCategory(props.paletteDrag.type) : undefined;
 
   const itemsOf = (c: Category): { id: string; label: string; code?: string; color?: string; symbol: Category['symbol'] }[] =>
     elementsIn(project, sceneId, c.key).map((o) => ({ id: o.id, label: o.name, code: o.data.code, color: symbolColor(o), symbol: o.type }));
-  // Characters open by themselves once the scene has any, so the cast shows as it's written.
-  const isOpen = (c: Category) => expanded[c.key] ?? (c.key === 'characters' && counts.characters > 0);
-  /** Where each item of an open category goes (and the add button after them); the cast leaves room for dialogue. */
-  const slotsOf = (c: Category, n: number) => {
-    if (c.key !== 'characters') return Array.from({ length: n }, (_, i) => ({ chip: chipPosition(c, i, n), dialogue: null as { x: number; y: number } | null }));
-    const cast = itemsOf(c);
-    const duals = dualsIn(project, sceneId);
-    const heights = Array.from({ length: n }, (_, i) => {
-      const said = cast[i] ? linesOf(project, sceneId, cast[i]!.id) : [];
-      return dialogueHeight(said.length, dualRowsShown(said, DLG_ROWS, duals));
-    });
-    return castPositions(c, heights).map((p, i) => ({ chip: p.chip, dialogue: heights[i] ? p.dialogue : null }));
-  };
-
-  // Fit the stage (box, perimeter and whatever is open) into the view.
-  let minX = -GAP - PILL_W;
-  let maxX = BOX.w + GAP + PILL_W;
-  let minY = -GAP - PILL_H;
-  let maxY = BOX.h + GAP + PILL_H;
-  for (const c of PERIMETER) {
-    if (!isOpen(c)) continue;
-    for (const { chip: p, dialogue } of slotsOf(c, itemsOf(c).length + 1)) {
-      minX = Math.min(minX, p.x, dialogue?.x ?? Infinity);
-      maxX = Math.max(maxX, p.x + CHIP_W);
-      minY = Math.min(minY, p.y, dialogue?.y ?? Infinity);
-      maxY = Math.max(maxY, p.y + CHIP_H, dialogue ? dialogue.y + 120 : -Infinity);
-    }
-  }
-  const margin = 28;
-  const usableH = size.h - STRIP_H;
-  const k = Math.min(1, (size.w - margin * 2) / (maxX - minX), (usableH - margin * 2) / (maxY - minY));
-  const ox = (size.w - (maxX - minX) * k) / 2 - minX * k;
-  const oy = (usableH - (maxY - minY) * k) / 2 - minY * k;
+  // A kind with something in it starts open, so the panel shows what the scene holds.
+  const isOpen = (c: Category) => expanded[c.key] ?? counts[c.key] > 0;
   const summary = timelineSummary(project, sceneId);
 
-  // Drag the box's right edge, bottom edge or corner to resize it. It stays centred, so it grows both ways.
-  const startResize = (e: React.PointerEvent, edge: 'right' | 'bottom' | 'corner') => {
+  // Drag the panel's left edge to make it wider or narrower.
+  const startResize = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    resizing.current = { x: e.clientX, y: e.clientY, w: box.w, h: box.h, edge };
+    const from = { x: e.clientX, w: side };
+    let last = side;
     const move = (ev: PointerEvent) => {
-      const r = resizing.current;
-      if (!r) return;
-      const w = r.edge === 'bottom' ? r.w : Math.round(Math.min(BOX_MAX.w, Math.max(BOX_MIN.w, r.w + ((ev.clientX - r.x) * 2) / k)));
-      const h = r.edge === 'right' ? r.h : Math.round(Math.min(BOX_MAX.h, Math.max(BOX_MIN.h, r.h + ((ev.clientY - r.y) * 2) / k)));
-      setBox({ w, h });
+      last = Math.round(Math.min(SIDE.max, Math.max(SIDE.min, from.w + from.x - ev.clientX)));
+      setSide(last);
     };
     const up = () => {
-      resizing.current = null;
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      setBox((b) => {
-        try {
-          localStorage.setItem(BOX_KEY, JSON.stringify(b));
-        } catch {
-          // Not kept for next time; it still works now.
-        }
-        return b;
-      });
+      try {
+        localStorage.setItem(SIDE_KEY, String(last));
+      } catch {
+        // Not kept for next time; it still works now.
+      }
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -284,166 +176,32 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
         openCategory('characters');
         return true;
       }
+      setDetail(null);
       added(result.project, result.id, true, category.key);
       return true;
     },
-    rename: (id) => setEditing(id),
+    rename: (id) => {
+      setDetail(null);
+      setEditing(id);
+    },
   }));
 
   const refusal = props.paletteDrag ? sceneRefusal(props.paletteDrag.type) : null;
   const rect = rootRef.current?.getBoundingClientRect();
+  const opened = detail ? project.objects[detail] : undefined;
 
   return (
     <div
       ref={rootRef}
-      className={`workspace${props.paletteDrag ? ' dropping' : ''}`}
+      className={`workspace scene-split${props.paletteDrag ? ' dropping' : ''}`}
+      style={{ '--side': `${side}px` } as React.CSSProperties}
       onPointerDown={() => {
         setAdding(null);
         props.onSelect(null);
       }}
     >
-      <div className="stage" style={{ transform: `translate(${ox}px, ${oy}px) scale(${k})` }}>
-        <svg className="stage-lines" style={{ left: -2000, top: -2000 }} width={4000 + BOX.w} height={4000 + BOX.h} aria-hidden="true">
-          <g transform="translate(2000 2000)">
-            {PERIMETER.map((c) => {
-              const p = pillPosition(c);
-              const inner =
-                c.side === 'left'
-                  ? `M${p.x + PILL_W} ${p.y + PILL_H / 2} H0`
-                  : c.side === 'right'
-                    ? `M${BOX.w} ${p.y + PILL_H / 2} H${p.x}`
-                    : c.side === 'top'
-                      ? `M${p.x + PILL_W / 2} ${p.y + PILL_H} V0`
-                      : `M${p.x + PILL_W / 2} ${BOX.h} V${p.y}`;
-              const items = isOpen(c) ? itemsOf(c).length + 1 : 0;
-              const slots = slotsOf(c, items);
-              const fan = slots.map(({ chip: q }) => {
-                if (c.side === 'left') return `M${p.x} ${p.y + PILL_H / 2} C${p.x - 18} ${p.y + PILL_H / 2} ${q.x + CHIP_W + 18} ${q.y + CHIP_H / 2} ${q.x + CHIP_W} ${q.y + CHIP_H / 2}`;
-                if (c.side === 'right') return `M${p.x + PILL_W} ${p.y + PILL_H / 2} C${p.x + PILL_W + 18} ${p.y + PILL_H / 2} ${q.x - 18} ${q.y + CHIP_H / 2} ${q.x} ${q.y + CHIP_H / 2}`;
-                if (c.side === 'top') return `M${p.x + PILL_W / 2} ${p.y} V${q.y + CHIP_H}`;
-                return `M${p.x + PILL_W / 2} ${p.y + PILL_H} V${q.y}`;
-              });
-              return (
-                <g key={c.key} style={{ stroke: c.color }}>
-                  <path className={`stage-link${counts[c.key] || isOpen(c) ? ' live' : ''}`} d={inner} />
-                  {fan.map((d, i) => (
-                    <path key={i} className="stage-fan" d={d} />
-                  ))}
-                  {/* A character's dialogue hangs off it. */}
-                  {slots.map(({ chip, dialogue }, i) =>
-                    dialogue ? <path key={`d${i}`} className="stage-fan dialogue-fan" d={`M${chip.x} ${chip.y + CHIP_H / 2} H${dialogue.x + DLG_W}`} /> : null,
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-
-        {PERIMETER.map((c) => {
-          const p = pillPosition(c);
-          const open = isOpen(c);
-          const items = open ? itemsOf(c) : [];
-          const slots = slotsOf(c, items.length + 1);
-          const addAt = slots[items.length]!.chip;
-          return (
-            <div key={c.key}>
-              <button
-                className={`perimeter${open ? ' open' : ''}${counts[c.key] === 0 ? ' empty' : ''}${dragCategory?.key === c.key ? ' target' : ''}`}
-                style={{ left: p.x, top: p.y, '--cat': c.color } as React.CSSProperties}
-                aria-expanded={open}
-                title={open ? `Hide this scene’s ${c.label.toLowerCase()}` : counts[c.key] ? `Show this scene’s ${c.label.toLowerCase()} (${counts[c.key]}): click one to open it` : `No ${c.label.toLowerCase()} in this scene yet: click to add one`}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => setExpanded((x) => ({ ...x, [c.key]: !open }))}
-              >
-                <Symbol type={c.symbol} />
-                {c.label}
-                <span className="cnt">{counts[c.key] || '+'}</span>
-              </button>
-              {items.map((item, i) => {
-                const q = slots[i]!.chip;
-                const said = c.key === 'characters' ? linesOf(project, sceneId, item.id) : [];
-                const box = slots[i]!.dialogue;
-                return (
-                  <div key={item.id}>
-                  {box && said.length > 0 && (
-                    <div
-                      className="dlg-box"
-                      role="group"
-                      aria-label={`${item.label}’s dialogue`}
-                      style={{ left: box.x, top: box.y, width: DLG_W, '--cat': 'var(--c-dialogue)' } as React.CSSProperties}
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      <span className="dlg-head">
-                        <Symbol type="dialogue" size={11} />
-                        Dialogue · {said.length}
-                      </span>
-                      {said.slice(0, DLG_ROWS).map((l) => (
-                        <DialogueRow
-                          key={l.id}
-                          project={project}
-                          line={l}
-                          pair={dualLines.get(l.id)}
-                          onPick={() => {
-                            setTab('Script');
-                            setFocusLine(l.id);
-                          }}
-                        />
-                      ))}
-                      {said.length > DLG_ROWS && <span className="dlg-more">+ {said.length - DLG_ROWS} more</span>}
-                    </div>
-                  )}
-                  <div
-                    className={`chip-item${props.selection === item.id ? ' selected' : ''}`}
-                    style={{ left: q.x, top: q.y, '--cat': c.color } as React.CSSProperties}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      props.onSelect(item.id);
-                    }}
-                    onClick={() => editing !== item.id && setDetail(item.id)}
-                    title="Click to open it · F2 renames"
-                  >
-                    <Symbol type={item.symbol} size={13} color={item.color} />
-                    {editing === item.id ? (
-                      <NameEdit
-                        value={project.objects[item.id]?.name ?? ''}
-                        onDone={(value) => {
-                          setEditing(null);
-                          if (value !== null) props.onCommit(renameObject(project, item.id, value));
-                        }}
-                      />
-                    ) : (
-                      <span className="chip-name">{item.label}</span>
-                    )}
-                    {item.code && editing !== item.id && <span className="chip-code mono">{item.code}</span>}
-                  </div>
-                  </div>
-                );
-              })}
-              {open && (
-                <div className="chip-add-wrap" style={{ left: addAt.x, top: addAt.y }}>
-                  <button
-                    className="chip-add"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={() => setAdding(adding === c.key ? null : c.key)}
-                  >
-                    + Add {c.key === 'logic' ? 'logic' : c.label.toLowerCase().replace(/s$/, '')}
-                  </button>
-                  {adding === c.key && (
-                    <AddMenu
-                      project={project}
-                      sceneId={sceneId}
-                      category={c}
-                      onAdd={(next, id, fresh) => added(next, id, fresh, c.key)}
-                      onClose={() => setAdding(null)}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        <section className="scene-box" aria-label="Scene authoring" style={{ width: BOX.w, height: BOX.h }} onPointerDown={(e) => e.stopPropagation()}>
+      <div className="scene-main">
+        <section className="scene-box" aria-label="Scene authoring" onPointerDown={(e) => e.stopPropagation()}>
           <div className="scene-head">
             <div className="scene-title">
               <Symbol type={scene.type} size={16} />
@@ -522,25 +280,130 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
             )}
           </div>
           {tab === 'Script' && <ScriptFooter project={project} sceneId={sceneId} onCommit={props.onCommit} />}
-          <div className="box-resize right" role="separator" aria-orientation="vertical" aria-label="Drag to make the scene box wider or narrower" title="Drag to resize" onPointerDown={(e) => startResize(e, 'right')} />
-          <div className="box-resize bottom" role="separator" aria-orientation="horizontal" aria-label="Drag to make the scene box taller or shorter" title="Drag to resize" onPointerDown={(e) => startResize(e, 'bottom')} />
-          <div className="box-resize corner" aria-label="Drag to resize the scene box" title="Drag to resize" onPointerDown={(e) => startResize(e, 'corner')} onDoubleClick={() => { setBox({ w: 680, h: 560 }); try { localStorage.removeItem(BOX_KEY); } catch { /* fine */ } }} />
         </section>
       </div>
 
-      {detail && project.objects[detail] && (
-        <ElementDetail
-          project={project}
-          id={detail}
-          sceneId={sceneId}
-          onCommit={props.onCommit}
-          onClose={() => setDetail(null)}
-          onOpenBible={props.onOpenBible}
-          onOpenCode={props.onOpenCode}
-          onNavigate={props.onNavigate}
-          variant="panel"
-        />
-      )}
+      <aside className="scene-side" aria-label="In this scene" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="side-resize" role="separator" aria-orientation="vertical" aria-label="Drag to make the panel wider or narrower" title="Drag to resize · double-click for the normal width" onPointerDown={startResize} onDoubleClick={() => { setSide(SIDE.normal); try { localStorage.removeItem(SIDE_KEY); } catch { /* fine */ } }} />
+        {opened ? (
+          <div className="side-detail">
+            <button className="side-back" onClick={() => setDetail(null)}>
+              ← In this scene
+            </button>
+            <ElementDetail
+              project={project}
+              id={opened.id}
+              sceneId={sceneId}
+              onCommit={props.onCommit}
+              onClose={() => setDetail(null)}
+              onOpenBible={props.onOpenBible}
+              onOpenCode={props.onOpenCode}
+              onNavigate={props.onNavigate}
+              variant="panel"
+            />
+          </div>
+        ) : (
+          <div className="side-list">
+            <div className="side-head">
+              IN THIS SCENE
+              <span className="side-hint">Double-click one to open it</span>
+            </div>
+            {SIDE_CATEGORIES.map((c) => {
+              const open = isOpen(c);
+              const items = open ? itemsOf(c) : [];
+              return (
+                <div key={c.key} className={`side-cat${open ? ' open' : ''}${dragCategory?.key === c.key ? ' target' : ''}`} style={{ '--cat': c.color } as React.CSSProperties}>
+                  <button className="side-cat-head" aria-label={`${c.label} (${counts[c.key]})`} aria-expanded={open} onClick={() => setExpanded((x) => ({ ...x, [c.key]: !open }))}>
+                    <span className="side-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+                    <Symbol type={c.symbol} />
+                    <span className="side-cat-name">{c.label}</span>
+                    <span className="cnt">{counts[c.key]}</span>
+                  </button>
+                  {open && (
+                    <div className="side-items" role="list" aria-label={c.label}>
+                      {items.map((item) => {
+                        const said = c.key === 'characters' ? linesOf(project, sceneId, item.id) : [];
+                        return (
+                          <div key={item.id} role="listitem">
+                            <div
+                              className={`side-item${props.selection === item.id ? ' selected' : ''}`}
+                              tabIndex={0}
+                              title="Double-click to open it · F2 renames"
+                              onClick={() => props.onSelect(item.id)}
+                              onDoubleClick={() => editing !== item.id && setDetail(item.id)}
+                              onKeyDown={(e) => {
+                                if (editing === item.id) return;
+                                if (e.key === 'Enter') setDetail(item.id);
+                                if (e.key === 'F2') setEditing(item.id);
+                              }}
+                            >
+                              <Symbol type={item.symbol} size={13} color={item.color} />
+                              {editing === item.id ? (
+                                <NameEdit
+                                  value={project.objects[item.id]?.name ?? ''}
+                                  onDone={(value) => {
+                                    setEditing(null);
+                                    if (value !== null) props.onCommit(renameObject(project, item.id, value));
+                                  }}
+                                />
+                              ) : (
+                                <span className="chip-name">{item.label}</span>
+                              )}
+                              {item.code && editing !== item.id && <span className="chip-code mono">{item.code}</span>}
+                              {editing !== item.id && (
+                                <button className="side-open" aria-label={`Open ${item.label}`} title="Open it" onClick={(e) => { e.stopPropagation(); setDetail(item.id); }}>
+                                  ›
+                                </button>
+                              )}
+                            </div>
+                            {said.length > 0 && (
+                              <div className="dlg-box side-dlg" role="group" aria-label={`${item.label}’s dialogue`} style={{ '--cat': 'var(--c-dialogue)' } as React.CSSProperties}>
+                                <span className="dlg-head">
+                                  <Symbol type="dialogue" size={11} />
+                                  Dialogue · {said.length}
+                                </span>
+                                {said.slice(0, DLG_ROWS).map((l) => (
+                                  <DialogueRow
+                                    key={l.id}
+                                    project={project}
+                                    line={l}
+                                    pair={dualLines.get(l.id)}
+                                    onPick={() => {
+                                      setTab('Script');
+                                      setFocusLine(l.id);
+                                    }}
+                                  />
+                                ))}
+                                {said.length > DLG_ROWS && <span className="dlg-more">+ {said.length - DLG_ROWS} more</span>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {items.length === 0 && <div className="side-empty">None in this scene yet.</div>}
+                      <div className="side-add">
+                        <button className="chip-add" aria-expanded={adding === c.key} onClick={() => setAdding(adding === c.key ? null : c.key)}>
+                          {addLabel(c)}
+                        </button>
+                        {adding === c.key && (
+                          <AddMenu
+                            project={project}
+                            sceneId={sceneId}
+                            category={c}
+                            inline
+                            onAdd={(next, id, fresh) => added(next, id, fresh, c.key)}
+                            onClose={() => setAdding(null)}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </aside>
 
       <div className="timeline-strip" onPointerDown={(e) => e.stopPropagation()}>
         <button className="strip-open" onClick={props.onTimeline}>

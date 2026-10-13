@@ -10795,3 +10795,208 @@ button.bible-dual-col:hover {
 .save-name .mono {
   color: var(--text-soft);
 }
+
+/* The scene workspace: the writing box on the left, what's in the scene on the right. */
+.scene-split .scene-main {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: var(--side, 320px);
+  bottom: 52px;
+  padding: 16px;
+}
+.scene-split .scene-box {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.scene-side {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 52px;
+  width: var(--side, 320px);
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 2;
+}
+.side-list,
+.side-detail {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.side-resize {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  z-index: 3;
+}
+.side-resize:hover {
+  background: var(--gold-lo);
+}
+.side-list {
+  padding: 12px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.side-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  padding: 2px 4px 6px;
+}
+.side-hint {
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.side-cat {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--node);
+}
+.side-cat.target {
+  border-color: var(--cat);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cat) 35%, transparent);
+}
+.side-cat-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: none;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.side-cat-head:hover {
+  color: var(--gold-hi);
+}
+.side-caret {
+  width: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.side-cat-name {
+  flex: 1;
+}
+.side-cat .cnt {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--ground);
+  background: var(--cat);
+}
+.side-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px 8px;
+}
+.side-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--cat) 55%, transparent);
+  background: var(--panel);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.side-item:hover {
+  border-color: var(--cat);
+}
+.side-item.selected {
+  box-shadow: 0 0 0 1.5px var(--gold-hi);
+}
+.side-item .chip-name {
+  flex: 1;
+}
+.side-item .chip-input {
+  flex: 1;
+  min-width: 0;
+}
+.side-open {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.side-open:hover {
+  color: var(--gold-hi);
+  background: var(--node-raised);
+}
+.side-dlg {
+  position: static;
+  margin: 4px 0 2px 18px;
+}
+.side-empty {
+  padding: 2px 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.side-add {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.side-add .chip-add {
+  width: 100%;
+}
+.add-menu.inline {
+  position: static;
+  min-width: 0;
+  max-height: none;
+  box-shadow: none;
+}
+.side-detail {
+  padding: 10px 12px 20px;
+}
+.side-back {
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--node);
+  color: var(--text-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+.side-back:hover {
+  color: var(--gold-hi);
+}
+.scene-side .detail-panel {
+  position: static;
+  width: auto;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: none;
+  overflow: visible;
+}

@@ -72,7 +72,7 @@ Core hierarchy: MAIN GRAPH → SCENE → SCENE DETAIL / TIMELINE → ELEMENT DET
 - Scenes can connect to plot points, choices, subplots and character arcs.
 
 ## 10. Scene Workspace
-Opening a scene focuses the interface on a large central scene authoring box. Detailed scene categories remain collapsed as labeled nodes around the perimeter until requested.
+Opening a scene focuses the interface on a large scene authoring box, with a panel down the right listing what is in the scene by category.
 
 ### 10.1 Central Scene Box
 - Scene title/ID plus optional INT/EXT, location and time metadata.
@@ -80,10 +80,12 @@ Opening a scene focuses the interface on a large central scene authoring box. De
 - The author writes in familiar screenplay-like form instead of raw node properties.
 - Scene summary, purpose and notes remain accessible without crowding the writing surface.
 
-### 10.2 Perimeter Element Nodes
-- Characters, Dialogue, Environment, Objects, Interactions, Cinematics, Triggers/Logic, Inventory, Puzzles and other categories sit as compact labeled nodes around the scene edge.
-- Each category may display a count and compact status.
-- Clicking expands only that category.
+### 10.2 In This Scene panel
+- Characters (with their dialogue), Objects, Inventory, Choices, Puzzles, Logic, Cinematics and Environment are listed down the right, each with a count. A category with something in it starts open.
+- Clicking a category opens or closes its list. Each list ends with an add button: an element from the Bible, or a new one, named in place.
+- A click selects an element; a double-click (or Enter, or its › button) opens it in the panel, where its states, interactions, rules and effects make it play. "← In this scene" or Escape goes back to the list.
+- Palette drops onto the scene land in their category, which lights up while dragging.
+- The panel's left edge drags it wider or narrower; the width is kept.
 - Expand All transforms the scene into a complete mind-map/node graph.
 - Collapse restores the clean scene view without changing data or relationships.
 
@@ -94,7 +96,7 @@ Opening a scene focuses the interface on a large central scene authoring box. De
 - Objects can expose pickup/use requirements, states and downstream effects.
 - Choices expose outcomes and downstream scene links.
 - The user can expand one branch, a category or the complete scene.
-- Collapse Scene returns to the compact perimeter representation.
+- Collapse Scene returns to the scene box and its panel.
 
 ## 12. Dialogue Authoring
 - Dialogue is stored with the scene while referencing canonical characters from the Bible.

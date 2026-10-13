@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { spineLane } from '../model/layout';
@@ -171,7 +171,7 @@ describe('a scene', () => {
 });
 
 describe('the scene box', () => {
-  it('shows a category’s elements from its node, opens one on a click, and adds a trigger from Logic', () => {
+  it('lists what is in the scene down the right, opens one on a double-click, and adds a trigger from Logic', () => {
     let project = createProject('The Sunken Vault');
     const placed = placeNew(project, 'scene', spineLane(project).id, 400)!;
     project = addElement(placed.project, placed.id, 'inventory', 'Vault Key')!.project;
@@ -179,22 +179,34 @@ describe('the scene box', () => {
 
     const { container } = render(<App />);
     fireEvent.doubleClick(container.querySelector('[data-type="scene"]')!);
-    // Inventory shows its one item; a click opens its detail, and Escape closes it.
-    const node = (label: string) => [...container.querySelectorAll('.perimeter')].find((b) => b.textContent?.startsWith(label))!;
-    fireEvent.click(node('Inventory'));
-    fireEvent.click(screen.getByText('Vault Key'));
+    const panel = screen.getByRole('complementary', { name: 'In this scene' });
+    const kind = (label: string) => within(panel).getByRole('button', { name: new RegExp(`^${label} \\(\\d+\\)$`) });
+    // Inventory has something in it, so it is open; Logic is empty, so it is shut.
+    expect(kind('Inventory').getAttribute('aria-expanded')).toBe('true');
+    expect(kind('Logic').getAttribute('aria-expanded')).toBe('false');
+    // A click selects the key; a double-click opens it in the panel, and Escape goes back to the list.
+    fireEvent.click(within(panel).getByText('Vault Key'));
+    expect(screen.queryByRole('complementary', { name: 'Vault Key detail' })).toBeNull();
+    fireEvent.doubleClick(within(panel).getByText('Vault Key'));
     expect(screen.getByRole('complementary', { name: 'Vault Key detail' })).toBeTruthy();
     act(() => {
       fireEvent.keyDown(window, { key: 'Escape' });
     });
     expect(screen.queryByRole('complementary', { name: 'Vault Key detail' })).toBeNull();
-    // Logic: + Add logic, + New trigger, and the trigger is in the scene.
-    fireEvent.click(node('Logic'));
-    fireEvent.click(screen.getByRole('button', { name: '+ Add logic' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '+ New trigger' }));
-    expect(container.querySelectorAll('.chip-item')).toHaveLength(2);
-    // The box can be dragged bigger by its corner.
-    expect(container.querySelector('.box-resize.corner')).toBeTruthy();
+    // Logic: + Add logic, + New trigger, and the trigger is in the scene, ready to name.
+    fireEvent.click(kind('Logic'));
+    fireEvent.click(within(panel).getByRole('button', { name: '+ Add logic' }));
+    fireEvent.click(within(panel).getByRole('menuitem', { name: '+ New trigger' }));
+    expect(container.querySelectorAll('.side-item')).toHaveLength(2);
+    expect(within(panel).getByLabelText('Name')).toBeTruthy();
+    fireEvent.change(within(panel).getByLabelText('Name'), { target: { value: 'Rope snaps' } });
+    fireEvent.blur(within(panel).getByLabelText('Name'));
+    // Its open button takes it to where its rule is set.
+    fireEvent.click(within(panel).getByRole('button', { name: 'Open Rope snaps' }));
+    expect(screen.getByRole('complementary', { name: 'Rope snaps detail' }).textContent).toContain('Fires when');
+    fireEvent.click(within(panel).getByRole('button', { name: '← In this scene' }));
+    // The panel can be dragged wider by its edge.
+    expect(within(panel).getByRole('separator')).toBeTruthy();
   });
 });
 
@@ -257,6 +269,6 @@ describe('the Game Bible', () => {
     fireEvent.click(screen.getByRole('button', { name: /Back to Story Graph/ }));
     fireEvent.doubleClick(container.querySelector('[data-type="scene"]')!);
     // The cast shows by itself once the scene has one.
-    expect(container.querySelector('.chip-item')!.textContent).toContain('Mara Vell');
+    expect(container.querySelector('.side-item')!.textContent).toContain('Mara Vell');
   });
 });

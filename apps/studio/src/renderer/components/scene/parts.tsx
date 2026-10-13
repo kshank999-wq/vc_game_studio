@@ -37,10 +37,12 @@ export const NameEdit = ({ value, onDone, className = 'chip-input' }: { value: s
  * Add to a category: an element the project already has (a character from the
  * Bible, a location used elsewhere), or a new one.
  */
-export const AddMenu = ({ project, sceneId, category, onAdd, onClose }: {
+export const AddMenu = ({ project, sceneId, category, onAdd, onClose, inline = false }: {
   project: Project;
   sceneId: string;
   category: Category;
+  /** In the flow of a list (the scene's panel), not floating. */
+  inline?: boolean;
   /** The project with the element added, and its id; `fresh` when it was created just now. */
   onAdd: (project: Project, id: string, fresh: boolean) => void;
   onClose: () => void;
@@ -56,13 +58,17 @@ export const AddMenu = ({ project, sceneId, category, onAdd, onClose }: {
   const menu = useRef<HTMLDivElement>(null);
   const [up, setUp] = useState(false);
   useLayoutEffect(() => {
+    if (inline) {
+      menu.current?.scrollIntoView?.({ block: 'nearest' });
+      return;
+    }
     const el = menu.current;
     const area = el?.closest('.workspace')?.getBoundingClientRect();
     const r = el?.getBoundingClientRect();
     if (r && r.bottom > (area ? area.bottom - 56 : window.innerHeight)) setUp(true);
   }, []);
   return (
-    <div ref={menu} className={`add-menu${up ? ' up' : ''}`} role="menu" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+    <div ref={menu} className={`add-menu${up ? ' up' : ''}${inline ? ' inline' : ''}`} role="menu" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
       {existing.length > 0 && <div className="menu-heading">FROM THE BIBLE</div>}
       {existing.map((o) => (
         <button

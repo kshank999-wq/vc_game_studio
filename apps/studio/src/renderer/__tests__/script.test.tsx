@@ -85,7 +85,7 @@ describe('writing the script (VC Writer’s editor)', () => {
     typeIn(text, 'Mind the water.');
     fireEvent.blur(text);
     // The Characters node now holds him, and his dialogue box hangs off him.
-    const chips = [...container.querySelectorAll('.chip-item')].map((c) => c.textContent);
+    const chips = [...container.querySelectorAll('.side-item')].map((c) => c.textContent);
     expect(chips).toEqual([expect.stringContaining('Mara'), expect.stringContaining('Old Ferryman')]);
     const box = screen.getByRole('group', { name: 'Old Ferryman’s dialogue' });
     expect(box.textContent).toContain('Dialogue · 1');
@@ -268,8 +268,8 @@ describe('writing the script (VC Writer’s editor)', () => {
     typeIn(heading, 'ext. lighthouse cliff - dusk');
     key(heading, 'Enter');
     expect((screen.getByRole('textbox', { name: 'Scene heading' }) as HTMLInputElement).value).toBe('EXT. LIGHTHOUSE CLIFF — DUSK');
-    const environment = [...container.querySelectorAll('.perimeter')].find((b) => b.textContent!.startsWith('Environment'))!;
-    expect(environment.textContent).toBe('Environment1');
+    const environment = [...container.querySelectorAll('.side-cat-head')].find((b) => b.textContent!.includes('Environment'))!;
+    expect(environment.textContent).toMatch(/Environment1$/);
   });
 
   it('writes transitions on the right, from Ctrl+6 or an action typed as one', () => {
