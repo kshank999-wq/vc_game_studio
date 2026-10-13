@@ -704,7 +704,37 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
         {columnEndings(shown).length === 0 && <span className="endings-hint">No ending yet: the spine runs on until you add one. Add one, then drag from a gold ring to it.</span>}
         {columnEndings(shown).length > 0 && <span className="endings-hint endings-foot">Drag from a gold ring onto an ending to lead there; right-click the route to set its conditions.</span>}
       </aside>
-      <div className="world world-rail">{columnEndings(shown).map((id) => renderNode(id, true))}</div>
+      <div className="world world-rail">
+        {/* The routes into the rail's endings, drawn again over the rail (clipped to it) so they reach the cards. */}
+        <svg className="connectors rail-connectors" width={size.w} height={size.h} aria-hidden="true">
+          <defs>
+            <clipPath id="endings-rail-clip">
+              <rect x={size.w - RAIL_W} y={0} width={RAIL_W} height={size.h} />
+            </clipPath>
+          </defs>
+          <g clipPath="url(#endings-rail-clip)">
+            <g transform={`translate(${view.panX} ${view.panY}) scale(${view.zoom})`}>
+              {shown.connections
+                .filter((c) => isColumnEnding(shown, c.targetId))
+                .map((c) => {
+                  const shape = connectionCurve(shown, c, rows);
+                  return shape ? (
+                    <g key={c.id} className={`connection connection-${c.kind}${props.selection === c.id ? ' selected' : ''}`}>
+                      <path className="connection-line" d={shape.d} />
+                    </g>
+                  ) : null;
+                })}
+              {link &&
+                (() => {
+                  const from = nodeBox(shown, link.sourceId, rows);
+                  const to = link.targetId ? nodeBox(shown, link.targetId, rows) : null;
+                  return from ? <path className={`draft${link.refusal ? ' refused' : link.targetId ? ' valid' : ''}`} d={draftCurve(from, to ? { x: to.x, y: to.y + to.h / 2 } : link.to).d} /> : null;
+                })()}
+            </g>
+          </g>
+        </svg>
+        {columnEndings(shown).map((id) => renderNode(id, true))}
+      </div>
 
       {target && !target.ok && paletteDrag && (
         <div className="drop-refusal" style={{ left: toWorld(paletteDrag.clientX, 0).sx + 12, top: toWorld(0, paletteDrag.clientY).sy + 50 }}>
