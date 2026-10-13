@@ -204,4 +204,20 @@ describe('the Character Creator, phase 4 (character spec §10, §11)', () => {
     expect(problems.textContent).toContain('no “idle” animation');
     expect(problems.textContent).toContain('no “walk” animation');
   });
+
+  it('says what the chosen engine gets for the character, and what is left to do there', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Characters' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: '+ Sample cast' }));
+    fireEvent.click(within(screen.getByRole('listbox', { name: 'Character registry' })).getByRole('option', { name: /Orc Sentry/ }));
+    fireEvent.click(screen.getByRole('tab', { name: 'In the engine' }));
+    const panel = screen.getByLabelText('In the engine');
+    expect(panel.textContent).toContain('orc_sentry');
+    expect(panel.textContent).toContain('the placeholder figure stands in');
+    const all = within(panel).getByRole('list', { name: 'For every character' }).textContent ?? '';
+    expect(all).toContain('To do in the engine');
+    expect(all).toContain('Characters walk straight lines');
+  });
 });

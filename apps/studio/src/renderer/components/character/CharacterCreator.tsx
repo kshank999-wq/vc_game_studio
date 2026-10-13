@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { downloadText, readText } from '../../files';
+import { castReport } from '../../model/handoff/cast';
+import { buildIR } from '../../model/handoff/ir';
+import { engineById, targetOf } from '../../model/handoff';
 import { ABILITY_CATEGORIES, ABILITY_LIBRARY, RESOURCES, type AbilityCategory, type Resource } from '../../model/character/abilities';
 import {
   addCustomAbility,
@@ -73,11 +76,12 @@ interface Props {
   focus?: string;
 }
 
-type Tab = 'placements' | 'relationships' | 'preview' | 'diagnostics';
+type Tab = 'placements' | 'relationships' | 'preview' | 'engine' | 'diagnostics';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'placements', label: 'Placements' },
   { id: 'relationships', label: 'Relationships' },
   { id: 'preview', label: '2D/3D preview' },
+  { id: 'engine', label: 'In the engine' },
   { id: 'diagnostics', label: 'Diagnostics' },
 ];
 
@@ -785,6 +789,8 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
               <Field label="Faction" value={String(ch.data.faction ?? '')} placeholder="The Order" onCommit={(v) => onCommit(setText(project, ch.id, 'faction', v))} />
               <Field label="Relationships" multiline rows={2} value={String(ch.data.relationships ?? '')} placeholder="Distrusts the Order; owes the explorer" onCommit={(v) => onCommit(setText(project, ch.id, 'relationships', v))} />
             </div>
+          ) : tab === 'engine' ? (
+            <EngineDiagnostics project={project} id={ch.id} name={ch.name} />
           ) : tab === 'preview' ? (
             <div className="cc-preview">
               <Figure placeholder={prof.art.placeholder} height={110} title={`${ch.name} placeholder, front`} />
@@ -864,3 +870,45 @@ const NewSlot = ({ onAdd }: { onAdd: (slot: string) => void }) => {
   );
 };
 
+
+/**
+ * What the export does with this character in the chosen engine (spec §10,
+ * §15 preview diagnostics): its engine key, final art or placeholder, and the
+ * export report's lines for it — mapped, warnings and TODOs, never passed off
+ * as working when they are the engine team's.
+ */
+const EngineDiagnostics = ({ project, id, name }: { project: Project; id: string; name: string }) => {
+  const engine = targetOf(project).engine;
+  const adapter = engineById(engine);
+  const { c, report } = useMemo(() => {
+    const cast = buildIR(project).cast;
+    return { c: cast?.characters.find((x) => x.id === id), report: cast ? castReport(cast, engine) : [] };
+  }, [project, id, engine]);
+  if (!c) return <p className="pz-says">Not exported: give {name} a profile first.</p>;
+  const mine = report.filter((r) => r.about === name);
+  const general = report.filter((r) => ['Runtime', 'Navigation', 'Animation', 'Effects', 'Performance'].includes(r.about));
+  const LABEL = { todo: 'To do in the engine', warning: 'Warning', info: 'Mapped' } as const;
+  const line = (r: (typeof report)[number], n: number) => (
+    <li key={n} className={`pz-issue ${r.severity === 'todo' ? 'warning' : r.severity}`}>
+      <strong>{LABEL[r.severity]}:</strong> {r.text}
+    </li>
+  );
+  return (
+    <div className="cc-engine" aria-label="In the engine">
+      <p className="pz-says">
+        In {adapter.name} it is <code>{c.key}</code> in characters.json{c.variants.length ? `, with ${c.variants.length} variant${c.variants.length === 1 ? '' : 's'}` : ''}. {c.binding.final_model ? `Final art: ${c.binding.final_model} (${c.binding.rig}).` : 'No final art bound: the placeholder figure stands in.'} Renaming it keeps the key.
+      </p>
+      <ul className="pz-issues" aria-label={`What ${name} gets in the engine`}>
+        {mine.map(line)}
+      </ul>
+      {general.length > 0 && (
+        <>
+          <span className="pz-label">For every character in {adapter.name}</span>
+          <ul className="pz-issues" aria-label="For every character">
+            {general.map(line)}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+};

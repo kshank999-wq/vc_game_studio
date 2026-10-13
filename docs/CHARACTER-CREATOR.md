@@ -473,6 +473,11 @@ Every export with Character Creator profiles writes, next to the story:
 - `characters/<key>.json` and `groups/<key>.json`: one manifest per character and group.
 - `CHARACTERS.md`, the export report. It says what the starter runtime does, and lists as TODOs what is the engine team's: navigation, animation, effects, stub abilities, scheduled groups, shops.
 
+**In the engine** (a tab under the character) shows it before you export,
+for the engine chosen in Engine Handoff: the character's engine key, its
+final art or placeholder, and the report's lines for it and for every
+character.
+
 **Stable ids.** A character's key is its internal id (the slug), which is
 kept on rename, so the engine's id doesn't move when the name does.
 `story_key` is its key in the story's own files, which follows the name.
