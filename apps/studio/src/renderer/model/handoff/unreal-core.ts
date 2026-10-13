@@ -2434,6 +2434,29 @@ ${UNREAL_PUZZLES}
         }
     };
 
+    /**
+     * Where the transition stand-in stands on a screen of W × H: its box (a line for the
+     * heading and one per shot) and its Skip button, bottom right. The HUD draws it.
+     */
+    struct TransitionStandInLayout
+    {
+        float X = 0, Y = 0, W = 0, H = 0;
+        float SkipX = 0, SkipY = 0, SkipW = 80, SkipH = 28;
+
+        TransitionStandInLayout(float screenW, float screenH, size_t shots)
+        {
+            W = std::min(560.f, screenW - 40.f);
+            H = 70.f + 20.f * static_cast<float>(shots);
+            X = (screenW - W) / 2.f;
+            Y = screenH * 0.3f;
+            SkipX = X + W - SkipW - 10.f;
+            SkipY = Y + H - SkipH - 10.f;
+        }
+
+        /** Is a point (a click) on the Skip button? */
+        bool HitsSkip(float x, float y) const { return x >= SkipX && x <= SkipX + SkipW && y >= SkipY && y <= SkipY + SkipH; }
+    };
+
     namespace StoryWalker
     {
         /** Where a node goes: its first route whose conditions hold, else on along the spine. */

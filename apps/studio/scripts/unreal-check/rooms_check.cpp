@@ -96,7 +96,15 @@ int main()
     playback.Start(story, transition, "The Flooded Cave", "The Sunken Vault");
     playback.Advance(1);
     if (!playback.Playing() || playback.Title != "[Transition] The Flooded Cave → The Sunken Vault" || playback.Seconds != 3) Fail("the transition should be playing, got " + playback.Title);
-    playback.Advance(2.5);
+    // The stand-in's box on a 1280 × 720 screen, with Skip at its bottom right: a click there skips.
+    const vcgs::TransitionStandInLayout box(1280.f, 720.f, playback.Shots.size());
+    if (!box.HitsSkip(box.SkipX + 5.f, box.SkipY + 5.f) || box.HitsSkip(box.X + 5.f, box.Y + 5.f) || box.SkipX + box.SkipW > box.X + box.W || box.SkipY + box.SkipH > box.Y + box.H)
+        Fail("the stand-in's Skip button should sit inside its box, and only it should skip");
+    playback.Finish();
+    if (playback.Playing() || finished != transition) Fail("Skip should finish the transition");
+    playback.Start(story, transition, "The Flooded Cave", "The Sunken Vault");
+    finished.clear();
+    playback.Advance(3.5);
     if (playback.Playing() || finished != transition) Fail("the transition should finish once its time is up");
     std::printf("levels: %s · %s · transition %s\n", first.c_str(), crossing.c_str(), vcgs::StoryWalker::TransitionOf(game, transition).c_str());
     if (failures) return 1;

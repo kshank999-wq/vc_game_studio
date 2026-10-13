@@ -46,6 +46,7 @@ struct EKeys
     static const FKey Eight;
     static const FKey Nine;
     static const FKey SpaceBar;
+    static const FKey LeftMouseButton;
     static const FKey BackSpace;
     static const FKey Enter;
     static const FKey F5;
@@ -95,6 +96,7 @@ inline const FKey EKeys::Seven = FKey("Seven");
 inline const FKey EKeys::Eight = FKey("Eight");
 inline const FKey EKeys::Nine = FKey("Nine");
 inline const FKey EKeys::SpaceBar = FKey("SpaceBar");
+inline const FKey EKeys::LeftMouseButton = FKey("LeftMouseButton");
 inline const FKey EKeys::BackSpace = FKey("BackSpace");
 inline const FKey EKeys::Enter = FKey("Enter");
 inline const FKey EKeys::Escape = FKey("Escape");

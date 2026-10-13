@@ -303,6 +303,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") bool IsTransitionPlaying() const { return Transition.Playing(); }
     /** The transition playing: "[Transition] <level left> → <level entered>" ("" for none). */
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetTransitionTitle() const;
+    /** Is the transition playing the stand-in (no OnTransitionRequested handler)? AVcgsCodexHUD draws it, with Skip. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Story") bool IsTransitionStandIn() const { return bTransitionStandIn && Transition.Playing(); }
+    /** The transition playing: its heading, shots and length (for a HUD that draws the stand-in). */
+    const vcgs::TransitionPlayback& TransitionState() const { return Transition; }
+    /** A HUD is drawing the stand-in: take its on-screen text away. */
+    void HideTransitionText();
     /** The level map streamed in now ("" for none). */
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetShownLevelMap() const { return ShownLevelMap; }
 
@@ -452,6 +458,8 @@ private:
     FString ShownLevelMap;
     vcgs::TransitionPlayback Transition;
     bool bTransitionStandIn = false;
+    /** The key of the stand-in's on-screen text (so a skip, or the HUD, takes it away). */
+    static constexpr unsigned long long TransitionTextKey = 0x56434753ull;
     FTSTicker::FDelegateHandle TransitionTicker;
     bool TickTransition(float DeltaTime);
     std::unique_ptr<vcgs::Codex> CodexData;
@@ -804,6 +812,7 @@ bool UVcgsSubsystem::PlayTransition(const FString& From, const FString& To)
         if (TransitionTicker.IsValid()) FTSTicker::GetCoreTicker().RemoveTicker(TransitionTicker);
         TransitionTicker.Reset();
         bTransitionStandIn = false;
+        HideTransitionText();
         OnTransitionFinished.Broadcast(ToF(Done));
     };
     Transition.Start(*StoryData, Key, ToStd(From), ToStd(To));
@@ -813,7 +822,8 @@ bool UVcgsSubsystem::PlayTransition(const FString& From, const FString& To)
         // The stand-in: its heading and shots on screen for its length, then on with the game.
         FString Text = ToF(Transition.Title);
         for (const std::string& Shot : Transition.Shots) Text = Text + TEXT("\\n") + ToF(Shot);
-        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, static_cast<float>(Transition.Seconds), FColor::White, Text);
+        // On-screen text, for a game with its own HUD; AVcgsCodexHUD draws a box with Skip instead.
+        if (GEngine) GEngine->AddOnScreenDebugMessage(TransitionTextKey, static_cast<float>(Transition.Seconds), FColor::White, Text);
         TransitionTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UVcgsSubsystem::TickTransition));
     }
     else
@@ -830,6 +840,10 @@ bool UVcgsSubsystem::TickTransition(float DeltaTime)
 }
 
 void UVcgsSubsystem::FinishTransition() { Transition.Finish(); }
+void UVcgsSubsystem::HideTransitionText()
+{
+    if (GEngine) GEngine->RemoveOnScreenDebugMessage(TransitionTextKey);
+}
 FString UVcgsSubsystem::GetTransitionTitle() const { return Transition.Playing() ? ToF(Transition.Title) : FString(); }
 
 bool UVcgsSubsystem::ShowLevelMap(const FString& Map)
@@ -939,6 +953,8 @@ public:
     virtual void DrawHUD() override;
 
 private:
+    /** The level transition's stand-in: its heading and shots in a box, Skip (click, Space, Enter or Escape). */
+    void DrawTransition(UVcgsSubsystem& Story);
     bool bCodexOpen = false;
     bool bTypingSearch = false;
     std::string SearchText;
@@ -1051,10 +1067,37 @@ void AVcgsCodexHUD::ToggleCodex()
     if (UVcgsSubsystem* Story = Subsystem()) Story->MarkCodexRead();
 }
 
+void AVcgsCodexHUD::DrawTransition(UVcgsSubsystem& Story)
+{
+    const vcgs::TransitionPlayback& Playing = Story.TransitionState();
+    const vcgs::TransitionStandInLayout Box(Canvas->ClipX, Canvas->ClipY, Playing.Shots.size());
+    Story.HideTransitionText();
+    DrawRect(FLinearColor(0.05f, 0.04f, 0.03f, 0.92f), Box.X, Box.Y, Box.W, Box.H);
+    DrawText(ToF(Playing.Title), FLinearColor(0.85f, 0.7f, 0.4f, 1.f), Box.X + 14.f, Box.Y + 12.f);
+    float Line = Box.Y + 36.f;
+    for (const std::string& Shot : Playing.Shots)
+    {
+        DrawText(ToF(Shot), FLinearColor::White, Box.X + 14.f, Line);
+        Line += 20.f;
+    }
+    DrawRect(FLinearColor(0.25f, 0.2f, 0.12f, 1.f), Box.SkipX, Box.SkipY, Box.SkipW, Box.SkipH);
+    DrawText(TEXT("Skip"), FLinearColor::White, Box.SkipX + 24.f, Box.SkipY + 6.f);
+    if (!PlayerOwner) return;
+    float MouseX = 0.f, MouseY = 0.f;
+    const bool bClicked = PlayerOwner->WasInputKeyJustPressed(EKeys::LeftMouseButton) && PlayerOwner->GetMousePosition(MouseX, MouseY) && Box.HitsSkip(MouseX, MouseY);
+    if (bClicked || PlayerOwner->WasInputKeyJustPressed(EKeys::SpaceBar) || PlayerOwner->WasInputKeyJustPressed(EKeys::Enter) || PlayerOwner->WasInputKeyJustPressed(EKeys::Escape))
+        Story.FinishTransition();
+}
+
 void AVcgsCodexHUD::DrawHUD()
 {
     Super::DrawHUD();
     UVcgsSubsystem* Story = Subsystem();
+    if (Story && Canvas && Story->IsTransitionStandIn())
+    {
+        DrawTransition(*Story);
+        return;
+    }
     vcgs::Codex* Book = Story ? Story->CodexState() : nullptr;
     if (!Book || !Canvas) return;
     if (PlayerOwner && bCodexOpen && bTypingNote)
@@ -1642,8 +1685,10 @@ and the subsystem streams it in on each transition in place of the last one
 two levels is their transition: \`TransitionOf(Node)\` names them. The subsystem plays it on its
 own as the player crosses (\`bPlayTransitions\`, on by default): bind \`OnTransitionRequested\`
 to play your own cut (a Level Sequence) and call \`FinishTransition\` when it ends; unbound, a
-stand-in shows its heading and shots on screen for its length. \`OnTransitionFinished\` says
-when it is over.
+stand-in shows its heading and shots on screen for its length. With \`AVcgsCodexHUD\` as the HUD
+it is a box with a **Skip** button (click it, or press Space, Enter or Escape); with your own HUD
+it is on-screen text (draw it yourself from \`GetTransitionTitle\` and call \`FinishTransition\`
+to skip). \`OnTransitionFinished\` says when it is over.
 
 **Puzzles** built in the Puzzle Creator play their steps as the studio does
 (order, links, time limits on the play clock, which the level director advances
