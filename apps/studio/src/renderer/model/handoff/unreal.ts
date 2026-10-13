@@ -413,6 +413,8 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") FString Arrive(const FString& Node);
     /** The level of the Level lane the player is in. */
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetLevel() const;
+    /** A cinematic that is the transition between two levels: "<level left> → <level entered>", or "" for any other node. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString TransitionOf(const FString& Node) const;
     /** "scene", "choice", "plotPoint", "cinematic", "begin", "end"... */
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString NodeKind(const FString& Node) const;
     /** "ending", "gameOver", or empty when the node goes on. */
@@ -766,6 +768,7 @@ FString UVcgsSubsystem::GetCraftCheck(const FString& Item) const { return Game ?
 FString UVcgsSubsystem::Onward(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Onward(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::Arrive(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Arrive(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::GetLevel() const { return Game ? ToF(Game->Level) : FString(); }
+FString UVcgsSubsystem::TransitionOf(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::TransitionOf(*Game, ToStd(Node))) : FString(); }
 
 bool UVcgsSubsystem::ShowLevelMap(const FString& Map)
 {
@@ -1573,7 +1576,8 @@ player is in, kept in saves. To have the level maps load on those transitions, s
 \`BUILD_EACH_AS_MAP = True\` in \`Content/VCGS/Generated/Levels/build_level.py\` and run it
 once after each export: each level map the story uses becomes \`/Game/VCGS/Levels/<map>\`,
 and the subsystem streams it in on each transition in place of the last one
-(\`bLoadLevelMaps\`, on by default; \`ShowLevelMap\` does it by hand).
+(\`bLoadLevelMaps\`, on by default; \`ShowLevelMap\` does it by hand). A cinematic between
+two levels is their transition: \`TransitionOf(Node)\` names them; play it as the player crosses.
 
 **Puzzles** built in the Puzzle Creator play their steps as the studio does
 (order, links, time limits on the play clock, which the level director advances

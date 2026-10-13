@@ -278,7 +278,7 @@ export const storySchema = () => ({
     effects: { type: 'array', items: ref('effect') },
     storyNode: obj({ key: str, kind: str, name: str }),
     graphNode: {
-      ...obj({ key: str, kind: str, name: str, start: { const: true }, onward: { type: ['string', 'null'] }, routes: { type: 'array', items: obj({ to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['to', 'label']) }, outcome: { enum: ['ending', 'gameOver'] }, level: { type: 'string', description: 'The level it happens in (the Level lane), by name. Arriving at a node in another level is a level transition.' }, level_map: { type: 'string', description: 'That level\'s map, by its key in `levels`: load it on the transition.' } }, ['key', 'kind', 'name', 'onward', 'routes']),
+      ...obj({ key: str, kind: str, name: str, start: { const: true }, onward: { type: ['string', 'null'] }, routes: { type: 'array', items: obj({ to: str, label: str, when: ref('rule'), effects: ref('effects') }, ['to', 'label']) }, outcome: { enum: ['ending', 'gameOver'] }, level: { type: 'string', description: 'The level it happens in (the Level lane), by name. Arriving at a node in another level is a level transition.' }, level_map: { type: 'string', description: 'That level\'s map, by its key in `levels`: load it on the transition.' }, transition: { ...obj({ from: str, to: str }), description: 'A cinematic that is the transition between two levels: the level left and the one entered. Play it as the player crosses.' } }, ['key', 'kind', 'name', 'onward', 'routes']),
       description: 'A node on the story graph. Where it goes: the first route whose conditions hold, else onward along the spine.',
     },
     lore: { allOf: [ref('thing'), obj({ byEffect: { const: true }, discoveredWhen: ref('rule') }, [])], description: 'A lore entry: known once `discoveredWhen` holds, from the start when there is none.' },
@@ -434,6 +434,8 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
    transition**: show "End of <old level> → LEVEL · <new level>" (just
    "LEVEL · <new level>" for the first), load that level's map (\`level_map\`, a key in \`levels\`) when it has one, and keep the level
    in the save as \`level\`. A node with no \`level\` keeps the one the player is in.
+   A cinematic with a \`transition\` is the transition between those two levels:
+   play it straight after the level change, as the player crosses.
 3. **A scene** plays its \`main\` events in order. An event whose \`when\` fails
    is skipped. A \`freePlay\` waits until \`ends\` holds. A \`choice\` offers its
    \`mainLabel\` and each branch with \`from\` equal to its index; a branch plays

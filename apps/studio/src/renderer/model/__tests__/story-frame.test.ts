@@ -254,6 +254,11 @@ describe('level transitions on the spine', () => {
     p = endingToSpine(p, columnEndings(p)[0]!);
     let play = startPlay(p);
     for (let i = 0; i < 16 && play.cursor.at !== 'end'; i++) play = advance(p, play);
+    // The engines get it as the transition between those levels.
+    const ir = buildIR(p);
+    expect(ir.graph.find((n) => n.key === ir.graph.find((g) => g.name === 'Age of Wonder → Age of Iron')!.key)!.transition).toEqual({ from: 'Age of Wonder', to: 'Age of Iron' });
+    expect(ir.cinematics.find((c) => c.name === 'Age of Wonder → Age of Iron')!.fields).toMatchObject({ transition: 'Age of Wonder → Age of Iron', level: 'Age of Iron' });
+    expect(ir.cinematics.find((c) => c.name === 'Age of Wonder → Age of Iron')!.fields.transitionOf).toBeUndefined();
     // Into the next level, then its transition plays.
     const crossing = play.log.findIndex((e) => e.kind === 'level' && e.text === 'Age of Iron');
     const cinematic = play.log.findIndex((e) => e.kind === 'cinematic' && e.text.endsWith('Age of Wonder → Age of Iron'));

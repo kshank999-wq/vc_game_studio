@@ -1703,6 +1703,17 @@ namespace VCGS
         /// <summary>Arriving at a node: the level transition to show ("" when it stays in the same level).</summary>
         public static string Arrive(GameState game, string node) => game.EnterLevel(LevelOf(game, node), LevelMapOf(game, node));
 
+        /// <summary>
+        /// A cinematic that is the transition between two levels: "&lt;level left&gt; → &lt;level entered&gt;"
+        /// ("" for any other node). Play it as the player crosses, right after Arrive reports the level change.
+        /// </summary>
+        public static string TransitionOf(GameState game, string node)
+        {
+            if (!game.Story.Graph.TryGetValue(node, out var n)) return "";
+            var t = D.Map(n, "transition");
+            return t.Count > 0 ? D.Str(t, "from") + " → " + D.Str(t, "to") : "";
+        }
+
         /// <summary>The key of the map of the level a node happens in ("" for none).</summary>
         public static string LevelMapOf(GameState game, string node) => game.Story.Graph.TryGetValue(node, out var n) ? D.Str(n, "level_map") : "";
 

@@ -2,6 +2,7 @@
  * Write the sample project's Godot handoff into a folder, for checking the
  * generated code with a real engine (custom code already in the files is kept): `npx vite-node scripts/export-sample.ts <dir> [godot|unity|custom] [puzzles]`.
  */
+import { addTransition, levelBands } from '../src/renderer/model/level-lane';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { keepCustom, planHandoff, setTarget } from '../src/renderer/model/handoff';
@@ -34,12 +35,15 @@ const withPuzzles = (project: Project): Project => {
 /**
  * With "rooms": the sample with rooms in SC-01 The Cave Mouth (The Study,
  * and The Closet inside it), to check the runtimes play rooms: Where now?,
- * into a room and back, and out.
+ * into a room and back, and out; and a transition cinematic between its
+ * two levels, to check the runtimes play it as the player crosses.
  */
 const withRooms = (project: Project): Project => {
   const cave = Object.values(project.objects).find((o) => o.type === 'scene' && o.name === 'The Cave Mouth')!;
   const study = addSubScene(project, cave.id, 'The Study')!;
-  return addSubScene(study.project, study.id, 'The Closet')!.project;
+  const rooms = addSubScene(study.project, study.id, 'The Closet')!.project;
+  // And the transition between the sample's two levels: a cinematic as the player crosses from the cave into the vault.
+  return addTransition(rooms, levelBands(rooms)[0]!.id)!.project;
 };
 
 const dir = process.argv[2];

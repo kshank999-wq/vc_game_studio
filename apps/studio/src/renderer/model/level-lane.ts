@@ -144,3 +144,14 @@ export const addTransition = (project: Project, bandId: string): { project: Proj
   const named = { ...made, name: `${band.name} → ${next.name}`, data: { ...made.data, transitionOf: band.id } };
   return { project: { ...placed.project, objects: { ...placed.project.objects, [placed.id]: named } }, id: placed.id };
 };
+
+/** The levels a transition cinematic joins: the one it ends and the one after; undefined for any other node. */
+export const transitionLevels = (project: Project, id: string): { from: string; to: string } | undefined => {
+  const o = project.objects[id];
+  const bandId = o?.type === 'cinematic' ? o.data.transitionOf : undefined;
+  if (typeof bandId !== 'string' || transitionOf(project, bandId) !== id) return undefined;
+  const bands = levelBands(project);
+  const band = bands.find((b) => b.id === bandId);
+  const next = band && bands.find((b) => b.id !== band.id && b.startRef === band.endRef);
+  return band && next ? { from: band.name, to: next.name } : undefined;
+};

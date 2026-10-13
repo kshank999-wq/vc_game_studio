@@ -106,6 +106,24 @@ func _initialize() -> void:
 	if game.show_level_map("res://vcgs/generated/levels/no_such_map.tscn") != null:
 		fail("a map that is not there should load nothing")
 	print("levels: ", first, " · ", crossing, " · map ", vault_map)
+	# The transition between the levels: a cinematic just after Descent, where they meet, played as the player crosses.
+	var descent := key_named(story, "Descent")
+	var transition := key_named(story, "The Flooded Cave → The Sunken Vault")
+	if str(story.NODES[descent].get("onward", "")) != transition or story.NODES[transition].get("transition", {}) != {"from": "The Flooded Cave", "to": "The Sunken Vault"}:
+		fail("the transition cinematic should follow Descent and name the levels it joins, got " + str(story.NODES[transition]))
+	var scene: Node = (load(str(story.NODES[cave_key]["file"])) as PackedScene).instantiate()
+	var player: Node = scene.get_node("DebugPlayer")
+	player.autostart = false
+	root.add_child(scene)
+	game.level = "The Flooded Cave"
+	game.level_map = ""
+	player.go_to(descent)
+	if not player.text().begins_with("End of The Flooded Cave → LEVEL · The Sunken Vault\n\n") or player.labels() != ["Continue"]:
+		fail("Descent should cross into The Sunken Vault, got " + player.text())
+	player.press(0)
+	if not player.text().begins_with("[Transition] The Flooded Cave → The Sunken Vault\n[Cinematic] The Flooded Cave → The Sunken Vault"):
+		fail("the transition cinematic should play next, got " + player.text())
+	print("transition: ", player.text().split("\n")[0])
 	if failures > 0:
 		quit(1)
 		return

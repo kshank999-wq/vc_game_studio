@@ -83,7 +83,15 @@ static class RoomsCheck
         game.Level = "";
         game.LoadSave(saved);
         if (game.Level != "The Sunken Vault") Fail("a save should keep the level, got " + game.Level);
-        Console.WriteLine("levels: " + first + " · " + crossing + " · scene " + scenePath);
+        // The transition between the levels: a cinematic just after Descent, played as the player crosses.
+        var descent = Named(story, "Descent");
+        var transition = Named(story, "The Flooded Cave → The Sunken Vault");
+        if (StoryWalker.Onward(game, descent) != transition || StoryWalker.KindOf(game, transition) != "cinematic" || StoryWalker.TransitionOf(game, transition) != "The Flooded Cave → The Sunken Vault" || StoryWalker.TransitionOf(game, key) != "")
+            Fail("the transition cinematic should follow Descent and name the levels it joins, got [" + StoryWalker.TransitionOf(game, transition) + "]");
+        game.Level = "The Flooded Cave";
+        if (StoryWalker.Arrive(game, descent) != "End of The Flooded Cave → LEVEL · The Sunken Vault" || StoryWalker.Arrive(game, transition) != "")
+            Fail("crossing at Descent should change the level once, before its transition plays");
+        Console.WriteLine("levels: " + first + " · " + crossing + " · scene " + scenePath + " · transition " + StoryWalker.TransitionOf(game, transition));
         if (failures > 0) return 1;
         Console.WriteLine("rooms OK");
         return 0;

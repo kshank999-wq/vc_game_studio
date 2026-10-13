@@ -151,7 +151,9 @@ project.
    **VCGS › Build each level as a scene** once after each export: each level
    map becomes \`Assets/VCGS/Levels/<map>.unity\` in Build Settings, and
    VcgsGame loads the level's scene additively on each transition, in place
-   of the last one (\`loadLevelScenes\`, on by default).
+   of the last one (\`loadLevelScenes\`, on by default). A cinematic between two
+   levels is their transition: \`StoryWalker.TransitionOf(State, node)\` names
+   them ("The Flooded Cave → The Sunken Vault"); play it as the player crosses.
 5. **Puzzles** built in the Puzzle Creator play their steps as the studio does
    (order, links, time limits on \`State.Clock\`, which VcgsGame advances,
    rewards, wrong moves, resets): \`PuzzleStep\`, \`StepDone\`, \`HintGiven\` and

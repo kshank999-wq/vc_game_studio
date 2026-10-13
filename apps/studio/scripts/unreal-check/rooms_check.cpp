@@ -79,7 +79,15 @@ int main()
     std::string at;
     game.LoadSave(saved, at);
     if (game.Level != "The Sunken Vault") Fail("a save should keep the level, got " + game.Level);
-    std::printf("levels: %s · %s\n", first.c_str(), crossing.c_str());
+    // The transition between the levels: a cinematic just after Descent, played as the player crosses.
+    const std::string descent = Named(story, "Descent"), transition = Named(story, "The Flooded Cave → The Sunken Vault");
+    if (vcgs::StoryWalker::Onward(game, descent) != transition || vcgs::StoryWalker::KindOf(game, transition) != "cinematic" ||
+        vcgs::StoryWalker::TransitionOf(game, transition) != "The Flooded Cave → The Sunken Vault" || !vcgs::StoryWalker::TransitionOf(game, key).empty())
+        Fail("the transition cinematic should follow Descent and name the levels it joins, got [" + vcgs::StoryWalker::TransitionOf(game, transition) + "]");
+    game.Level = "The Flooded Cave";
+    if (vcgs::StoryWalker::Arrive(game, descent) != "End of The Flooded Cave → LEVEL · The Sunken Vault" || !vcgs::StoryWalker::Arrive(game, transition).empty())
+        Fail("crossing at Descent should change the level once, before its transition plays");
+    std::printf("levels: %s · %s · transition %s\n", first.c_str(), crossing.c_str(), vcgs::StoryWalker::TransitionOf(game, transition).c_str());
     if (failures) return 1;
     std::printf("rooms OK\n");
     return 0;

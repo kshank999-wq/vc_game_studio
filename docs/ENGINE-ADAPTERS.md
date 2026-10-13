@@ -703,6 +703,15 @@ transition**, in place of the last level's:
   (\`bLoadLevelMaps\`, on by default; \`ShowLevelMap\` by hand) and
   broadcasts \`OnLevelEntered(From, To, Map)\`.
 
+**Transition cinematics** (+ Transition on a level-end marker) go to the
+engines as the cinematic on the spine just after the plot point where two
+levels meet, with `transition: { from, to }` on its graph node (and the
+field `transition` on the cinematic). It plays straight after the level
+change: Godot's story player shows it as "[Transition] <from> → <to>" with
+its shots; in Unity `StoryWalker.TransitionOf(State, node)` and in Unreal
+`UVcgsSubsystem::TransitionOf(Node)` name the levels it joins, for the
+game to play it as the player crosses.
+
 ## What each engine gets
 
 The handoff screen's *What … gets* table (spec §14, the capability matrix)

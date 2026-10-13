@@ -1,6 +1,6 @@
 import { recipeOf } from '../crafting';
 import { creditLine, creditsOf } from '../credits';
-import { levelOf } from '../level-lane';
+import { levelOf, transitionLevels } from '../level-lane';
 import { equipmentOf } from '../equipment';
 import { costOf, ranksOf, requiresOf } from '../skills';
 import { describeTarget, whoLabel, type Who } from '../collab';
@@ -447,6 +447,8 @@ export interface IrGraphNode extends IrStoryNode {
   level?: string;
   /** That level's map (its key in \`levels\`), when it has one: what to load on the transition. */
   level_map?: string;
+  /** A cinematic that is the transition between two levels: the level left and the one entered. It plays as the player crosses. */
+  transition?: { from: string; to: string };
 }
 
 export interface HandoffIR {
@@ -523,15 +525,16 @@ const fieldsOf = (o: StoryObject, project?: Project): Record<string, string> => 
   // Its kind, by name (custom node types).
   ...(project && customTypeOf(project, o) ? { customType: customTypeOf(project, o)!.name } : {}),
   ...Object.fromEntries(
-    (Object.entries(o.data).filter(([k, v]) => typeof v === 'string' && !['code', 'color', 'initialState', 'setsFlag', 'fromNote', 'customType', 'parentSceneId', 'mapId'].includes(k)) as [string, string][])
+    (Object.entries(o.data).filter(([k, v]) => typeof v === 'string' && !['code', 'color', 'initialState', 'setsFlag', 'fromNote', 'customType', 'parentSceneId', 'mapId', 'transitionOf'].includes(k)) as [string, string][])
       // A codex entry reads as written, without stray blank lines around it.
       .map(([k, v]) => [k, k === 'codex' ? v.trim() : v]),
   ),
   // A sub-scene's scene, and the map area a scene happens in, by name.
   ...(project && typeof o.data.parentSceneId === 'string' && project.objects[o.data.parentSceneId] ? { part_of: project.objects[o.data.parentSceneId]!.name } : {}),
   ...(project && typeof o.data.mapId === 'string' && project.levels?.levels.some((l) => l.id === o.data.mapId) ? { area: project.levels!.levels.find((l) => l.id === o.data.mapId)!.name } : {}),
-  // The level it happens in, from the Level lane.
+  // The level it happens in, from the Level lane; a transition cinematic, the levels it joins.
   ...(project && levelOf(project, o.id) ? { level: levelOf(project, o.id)!.name } : {}),
+  ...(project && transitionLevels(project, o.id) ? { transition: `${transitionLevels(project, o.id)!.from} → ${transitionLevels(project, o.id)!.to}` } : {}),
   // The Opening, and its credits in the order they roll, one a line ("Directed by — [name]" while still a placeholder).
   ...(o.data.opening === true ? { opening: 'yes' } : {}),
   ...(creditsOf(o).length ? { credits: creditsOf(o).map(creditLine).join('\n') } : {}),
@@ -699,6 +702,7 @@ export const buildIR = (given: Project): HandoffIR => {
             .map((c) => ({ to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
           ...(outcome ? { outcome } : {}),
           ...(levelOf(project, id) ? { level: levelOf(project, id)!.name } : {}),
+          ...(transitionLevels(project, id) ? { transition: transitionLevels(project, id)! } : {}),
           ...(levelOf(project, id)?.mapId && levels.some((l) => l.guid === levelOf(project, id)!.mapId)
             ? { level_map: levels.find((l) => l.guid === levelOf(project, id)!.mapId)!.key }
             : {}),

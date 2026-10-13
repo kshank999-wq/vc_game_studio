@@ -2399,6 +2399,16 @@ ${UNREAL_PUZZLES}
         inline std::string LevelOf(const GameState& game, const std::string& node) { return Story::Find(game.StoryData.Graph, node)["level"].Str(); }
 
         /** Arriving at a node: the level transition to show ("" when it stays in the same level). */
+        /**
+         * A cinematic that is the transition between two levels: "<level left> → <level entered>"
+         * ("" for any other node). Play it as the player crosses, right after Arrive reports the level change.
+         */
+        inline std::string TransitionOf(const GameState& game, const std::string& node)
+        {
+            const Value& t = Story::Find(game.StoryData.Graph, node)["transition"];
+            return t.IsObject() ? t["from"].Str() + " → " + t["to"].Str() : std::string();
+        }
+
         /** The key of the map of the level a node happens in ("" for none). */
         inline std::string LevelMapOf(const GameState& game, const std::string& node) { return Story::Find(game.StoryData.Graph, node)["level_map"].Str(); }
 
