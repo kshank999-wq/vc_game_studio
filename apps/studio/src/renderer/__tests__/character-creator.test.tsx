@@ -213,7 +213,8 @@ describe('the Character Creator, phase 4 (character spec §10, §11)', () => {
     fireEvent.click(screen.getByRole('button', { name: '+ Sample cast' }));
     fireEvent.click(within(screen.getByRole('listbox', { name: 'Character registry' })).getByRole('option', { name: /Orc Sentry/ }));
     fireEvent.click(screen.getByRole('tab', { name: 'In the engine' }));
-    const panel = screen.getByLabelText('In the engine');
+    await waitFor(() => expect(document.querySelector('.cc-engine')).not.toBeNull(), { timeout: 5000 });
+    const panel = document.querySelector('.cc-engine') as HTMLElement;
     expect(panel.textContent).toContain('orc_sentry');
     expect(panel.textContent).toContain('the placeholder figure stands in');
     const all = within(panel).getByRole('list', { name: 'For every character' }).textContent ?? '';

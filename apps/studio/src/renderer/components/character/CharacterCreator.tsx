@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { downloadText, readText } from '../../files';
-import { castReport } from '../../model/handoff/cast';
-import { buildIR } from '../../model/handoff/ir';
-import { engineById, targetOf } from '../../model/handoff';
+import type { IrCastCharacter, IrCastIssue } from '../../model/handoff/cast';
+import { loadHandoff } from '../../views';
 import { ABILITY_CATEGORIES, ABILITY_LIBRARY, RESOURCES, type AbilityCategory, type Resource } from '../../model/character/abilities';
 import {
   addCustomAbility,
@@ -878,12 +877,23 @@ const NewSlot = ({ onAdd }: { onAdd: (slot: string) => void }) => {
  * as working when they are the engine team's.
  */
 const EngineDiagnostics = ({ project, id, name }: { project: Project; id: string; name: string }) => {
-  const engine = targetOf(project).engine;
-  const adapter = engineById(engine);
-  const { c, report } = useMemo(() => {
-    const cast = buildIR(project).cast;
-    return { c: cast?.characters.find((x) => x.id === id), report: cast ? castReport(cast, engine) : [] };
-  }, [project, id, engine]);
+  // The handoff loads on demand (it holds every engine's runtime), as the Engine Handoff view does.
+  const [got, setGot] = useState<{ engine: string; c?: IrCastCharacter; report: IrCastIssue[] } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadHandoff().then((h) => {
+      if (!live) return;
+      const target = h.targetOf(project);
+      const cast = h.buildIR(project).cast;
+      setGot({ engine: h.engineById(target.engine).name, c: cast?.characters.find((x) => x.id === id), report: cast ? h.castReport(cast, target.engine) : [] });
+    });
+    return () => {
+      live = false;
+    };
+  }, [project, id]);
+  if (!got) return <p className="pz-says">Working out the export…</p>;
+  const { c, report } = got;
+  const adapter = { name: got.engine };
   if (!c) return <p className="pz-says">Not exported: give {name} a profile first.</p>;
   const mine = report.filter((r) => r.about === name);
   const general = report.filter((r) => ['Runtime', 'Navigation', 'Animation', 'Effects', 'Performance'].includes(r.about));

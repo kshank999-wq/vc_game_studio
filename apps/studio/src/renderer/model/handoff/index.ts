@@ -143,3 +143,5 @@ export const recordExport = (project: Project, handoff: Handoff, at = new Date()
 export type { EngineAdapter, ElementOutput, EngineOutput } from './engines';
 export { reviewSend, lineDiff, hunksOf, type SendReview, type SendFile, type DiffLine } from './review';
 export { customRegion, keepCustom, customCode, withoutCustom } from './custom';
+export { buildIR };
+export { castReport } from './cast';
