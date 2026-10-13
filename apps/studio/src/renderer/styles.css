@@ -894,7 +894,7 @@ a:hover {
 
 .minimap {
   position: absolute;
-  right: 16px;
+  right: 216px; /* clear of the Endings rail */
   top: 14px;
   width: 160px;
   height: 100px;
@@ -11482,4 +11482,56 @@ button.bible-dual-col:hover {
 .play-level-to {
   font-weight: 700;
   color: var(--c-environment);
+}
+
+/* The Endings rail: a panel at the right of the story graph, its endings top to bottom whatever the pan. */
+.endings-rail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--gold) 40%, var(--border));
+  backdrop-filter: blur(2px);
+}
+.endings-rail .endings-head {
+  height: 48px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+}
+.endings-rail .endings-hint {
+  margin-top: 8px;
+}
+.endings-rail .endings-foot {
+  margin-top: auto;
+  padding-bottom: 14px;
+  font-size: 11px;
+}
+.world-rail {
+  z-index: 4;
+}
+
+.level-end-tag {
+  pointer-events: auto;
+}
+.level-end-btn {
+  margin-top: 2px;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--c-environment) 60%, transparent);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  text-align: left;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.level-end-btn:hover {
+  background: color-mix(in srgb, var(--c-environment) 25%, transparent);
 }

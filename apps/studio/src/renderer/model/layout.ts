@@ -105,8 +105,24 @@ export const columnEndings = (project: Project): string[] =>
  * stands, beyond everything on the tracks and branches, and its endings top
  * to bottom. Worked out once per project.
  */
+/**
+ * The Endings rail: on the story graph the endings stand in a panel at the
+ * right of the screen, whatever the pan and zoom, so the canvas gives the
+ * column's place in world units for its current view (rows carry it).
+ */
+export interface EndingsRail {
+  x: number;
+  top: number;
+  step: number;
+  w: number;
+  h: number;
+}
+export type RailRows = LaneRow[] & { rail?: EndingsRail };
+export const withRail = (rows: LaneRow[], rail: EndingsRail | undefined): RailRows => (rail ? Object.assign([...rows], { rail }) : rows);
+
 const columns = new WeakMap<Project, { x: number; top: number; ids: string[] }>();
-export const endingsColumn = (project: Project, rows: LaneRow[] = laneRows(project)): { x: number; top: number; ids: string[] } => {
+export const endingsColumn = (project: Project, rows: RailRows = laneRows(project)): { x: number; top: number; ids: string[]; step?: number; w?: number; h?: number } => {
+  if (rows.rail) return { ...rows.rail, ids: columnEndings(project) };
   const known = columns.get(project);
   if (known) return known;
   let right = 0;
@@ -132,7 +148,8 @@ export const nodeBox = (project: Project, id: string, rows: LaneRow[] = laneRows
   if (placement.laneId === null && object.type === 'end') {
     const column = endingsColumn(project, rows);
     const at = column.ids.indexOf(id);
-    return { x: column.x, y: column.top + Math.max(0, at) * ENDING_STEP, ...nodeSize('end') };
+    const size = nodeSize('end');
+    return { x: column.x, y: column.top + Math.max(0, at) * (column.step ?? ENDING_STEP), w: column.w ?? size.w, h: column.h ?? size.h };
   }
   if (placement.laneId === null) {
     const size = nodeSize(object.type);
@@ -183,14 +200,14 @@ export const contentBounds = (project: Project): Box => {
   let maxX = -Infinity;
   let minY = 0;
   for (const id of Object.keys(project.placements)) {
+    // The endings stand in their rail at the side of the screen, not in the story's space.
+    if (isColumnEnding(project, id)) continue;
     const box = nodeBox(project, id, rows);
     if (!box) continue;
     minX = Math.min(minX, box.x);
     maxX = Math.max(maxX, box.x + box.w);
     minY = Math.min(minY, box.y);
   }
-  // The Endings column, empty or not, is part of the story to fit.
-  maxX = Math.max(maxX, endingsColumn(project, rows).x - 20 + ENDINGS_WIDTH);
   const last = rows[rows.length - 1];
   const maxY = last ? last.top + last.height : SPINE_HEIGHT;
   if (!Number.isFinite(minX)) return { x: 0, y: 0, w: 600, h: maxY };

@@ -17,6 +17,8 @@ export const clampZoom = (zoom: number): number => Math.min(MAX_ZOOM, Math.max(M
 
 /** Room the sticky track headers take on the left of the canvas. */
 export const HEADER_W = 130;
+/** The Endings rail at the right of the story graph. */
+export const RAIL_W = 200;
 const MARGIN = 48;
 
 export const zoomAt = (view: View, factor: number, sx: number, sy: number): View => {
@@ -27,7 +29,7 @@ export const zoomAt = (view: View, factor: number, sx: number, sy: number): View
 
 /** Fit a world box into the canvas, clear of the track headers. */
 const fitBox = (box: { x: number; y: number; w: number; h: number }, width: number, height: number, maxZoom = 1): View => {
-  const usableW = Math.max(100, width - HEADER_W - MARGIN * 2);
+  const usableW = Math.max(100, width - HEADER_W - RAIL_W - MARGIN * 2);
   const usableH = Math.max(100, height - MARGIN * 2);
   const zoom = clampZoom(Math.min(maxZoom, usableW / Math.max(1, box.w), usableH / Math.max(1, box.h)));
   return {

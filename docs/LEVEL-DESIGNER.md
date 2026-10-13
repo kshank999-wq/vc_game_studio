@@ -40,6 +40,14 @@ lanes, above the spine or below it.
   plot point, tagged **END · <level> → <next level>** (or **→ the end** when
   it ends on the spine's Ending, **→ next level?** when nothing follows yet).
   In the play-through, crossing it shows **End of <level> → LEVEL · <next>**.
+- **+ Next level** on the last level's marker adds the next level on the end
+  of it, and keeps going: when the last level runs to an Ending on the
+  spine, a plot point goes in before the Ending, the last level ends there
+  and the new one runs on to the Ending.
+- **+ Transition** on a marker between two levels puts a cinematic on the
+  spine just after the plot point where they meet, named "<level> → <next
+  level>". It plays as the player crosses into the next level (after the
+  level change), and the marker then opens its shot list (**▶**).
 - **Stretch it** by dragging either end to another plot point. Levels run
   between plot points and never overlap; one can end where the next begins.
 - Everything on the spine under a level, and every branch above that stretch,

@@ -3,7 +3,7 @@ import { addCredit, creditsOf, updateCredit } from '../credits';
 import { buildIR } from '../handoff/ir';
 import { columnEndings, spineLane, spineSequence } from '../layout';
 import { levelsOf } from '../level/level';
-import { addLevelBand, inLevel, levelBands, levelOf, removeBand, renameBand, setBandEdge } from '../level-lane';
+import { addLevelBand, addTransition, inLevel, levelBands, levelOf, removeBand, renameBand, setBandEdge, transitionOf } from '../level-lane';
 import { advance, startPlay } from '../play';
 import { addEnding, connect, createProject, makeObject, endingToSpine, isOpening, setConnectionRules, placeNew, plotStops, removeObject, withStoryFrame } from '../project';
 import { addLine, updateLine } from '../scene';
@@ -87,10 +87,18 @@ describe('the Level lane', () => {
     const more = plotStops(p);
     expect(more).toHaveLength(4);
     expect(levelBands(p)[2]).toMatchObject({ name: 'More', startRef: stops[2], endRef: more[3] });
-    // Once the spine closes on an ending, the last stretch is the last level.
+    // Once the spine closes on an ending, a new level still goes on the end of the last: a plot
+    // point before the Ending, where the last level now ends and the new one runs on to the Ending.
     p = endingToSpine(p, columnEndings(p)[0]!);
-    p = addLevelBand(p)!.project;
-    expect(addLevelBand(p)).toBeNull();
+    p = addLevelBand(p, 'Fourth')!.project;
+    const closing = spineSequence(p).at(-1)!;
+    expect(p.objects[closing]!.type).toBe('end');
+    p = addLevelBand(p, 'Fifth')!.project;
+    const [fourth, fifth] = levelBands(p).slice(3);
+    expect(fourth!.endRef).toBe(fifth!.startRef);
+    expect(p.objects[fifth!.startRef]!.type).toBe('plotPoint');
+    expect(fifth!.endRef).toBe(closing);
+    expect(spineSequence(p).at(-1)).toBe(closing);
   });
 
   it('stretches between plot points, never over another level', () => {
@@ -221,5 +229,35 @@ describe('level transitions for the engines', () => {
     // The Opening comes before any level; the endings column is in none.
     expect(at('Opening').level).toBeUndefined();
     expect(at('Ending 1').level).toBeUndefined();
+  });
+});
+
+describe('level transitions on the spine', () => {
+  it('put a cinematic between two levels, which plays as the player crosses into the next', () => {
+    let p = createProject();
+    p = placeNew(p, 'plotPoint', spineLane(p).id, 800)!.project;
+    p = addLevelBand(p, 'Age of Wonder')!.project;
+    const second = addLevelBand(p, 'Age of Iron')!;
+    p = second.project;
+    const [first] = levelBands(p);
+    // The last level has no next one to go to.
+    expect(addTransition(p, second.id)).toBeNull();
+    const made = addTransition(p, first!.id)!;
+    p = made.project;
+    expect(p.objects[made.id]).toMatchObject({ type: 'cinematic', name: 'Age of Wonder → Age of Iron' });
+    expect(transitionOf(p, first!.id)).toBe(made.id);
+    expect(addTransition(p, first!.id)).toBeNull();
+    // On the spine just after the plot point where the levels meet, in the next level.
+    const spine = spineSequence(p);
+    expect(spine.indexOf(made.id)).toBe(spine.indexOf(first!.endRef) + 1);
+    expect(levelOf(p, made.id)?.name).toBe('Age of Iron');
+    p = endingToSpine(p, columnEndings(p)[0]!);
+    let play = startPlay(p);
+    for (let i = 0; i < 16 && play.cursor.at !== 'end'; i++) play = advance(p, play);
+    // Into the next level, then its transition plays.
+    const crossing = play.log.findIndex((e) => e.kind === 'level' && e.text === 'Age of Iron');
+    const cinematic = play.log.findIndex((e) => e.kind === 'cinematic' && e.text.endsWith('Age of Wonder → Age of Iron'));
+    expect(crossing).toBeGreaterThan(-1);
+    expect(cinematic).toBeGreaterThan(crossing);
   });
 });

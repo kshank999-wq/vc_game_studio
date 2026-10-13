@@ -41,10 +41,25 @@ const overlaps = (project: Project, a: { startRef: string; endRef: string }, b: 
 export const addLevelBand = (project: Project, name?: string): { project: Project; id: string; mapId: string } | null => {
   if (!levelLane(project)) return null;
   const stops = plotStops(project);
-  const bands = levelBands(project);
+  let bands = levelBands(project);
   const lastEnd = bands.reduce<number>((at, b) => Math.max(at, stops.indexOf(b.endRef)), 0);
-  const start = stops[lastEnd];
+  let start = stops[lastEnd];
   let end = stops[lastEnd + 1];
+  // The last level runs to the spine's Ending: a plot point goes in before the Ending, the last
+  // level ends there, and the new one runs on from it to the Ending.
+  if (start && !end && project.objects[start]?.type === 'end' && bands.length) {
+    const closing = start;
+    const at = project.placements[closing]!.x;
+    // The Ending moves on, to leave the new level room.
+    project = { ...project, placements: { ...project.placements, [closing]: { ...project.placements[closing]!, x: at + 420 } } };
+    const placed = placeNew(project, 'plotPoint', spineLane(project).id, at);
+    if (placed) {
+      project = withBands(placed.project, bands.map((b) => (b.endRef === closing ? { ...b, endRef: placed.id } : b)));
+      bands = levelBands(project);
+      start = placed.id;
+      end = closing;
+    }
+  }
   if (start && !end && project.objects[start]?.type !== 'end') {
     const at = project.placements[start]!.x + nodeSize(project.objects[start]!.type).w + 260;
     const placed = placeNew(project, 'plotPoint', spineLane(project).id, at);
@@ -106,3 +121,26 @@ export const inLevel = (project: Project, bandId: string): string[] =>
   Object.keys(project.placements)
     .filter((id) => levelOf(project, id)?.id === bandId)
     .sort((a, b) => project.placements[a]!.x - project.placements[b]!.x);
+
+/**
+ * The transition between two levels: a cinematic on the spine just after the
+ * plot point where one level ends and the next begins (it plays as the player
+ * crosses into the next level). One per level end.
+ */
+export const transitionOf = (project: Project, bandId: string): string | undefined =>
+  Object.values(project.objects).find((o) => o.type === 'cinematic' && o.data.transitionOf === bandId && project.placements[o.id])?.id;
+
+/** Add the transition cinematic after a level's end, named "<level> → <next level>"; null when the level has no next one. */
+export const addTransition = (project: Project, bandId: string): { project: Project; id: string } | null => {
+  const bands = levelBands(project);
+  const band = bands.find((b) => b.id === bandId);
+  const next = band && bands.find((b) => b.id !== band.id && b.startRef === band.endRef);
+  const stop = band && project.objects[band.endRef];
+  const at = band && project.placements[band.endRef];
+  if (!band || !next || !stop || !at || transitionOf(project, bandId)) return null;
+  const placed = placeNew(project, 'cinematic', spineLane(project).id, at.x + nodeSize(stop.type).w + 30);
+  if (!placed) return null;
+  const made = placed.project.objects[placed.id]!;
+  const named = { ...made, name: `${band.name} → ${next.name}`, data: { ...made.data, transitionOf: band.id } };
+  return { project: { ...placed.project, objects: { ...placed.project.objects, [placed.id]: named } }, id: placed.id };
+};

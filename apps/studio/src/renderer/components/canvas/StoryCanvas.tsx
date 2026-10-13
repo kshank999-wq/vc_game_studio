@@ -1,6 +1,6 @@
 import { CommentsHistory } from '../collab/lazy';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { ENDING_STEP, ENDINGS_WIDTH, endingsColumn, laneRows, laneSequence, nodeBox, nodeSize, spineSequence, type Box, type LaneRow } from '../../model/layout';
+import { ENDING_STEP, columnEndings, isColumnEnding, laneRows, laneSequence, nodeBox, nodeSize, spineSequence, withRail, type Box, type EndingsRail, type LaneRow } from '../../model/layout';
 import {
   canPlace,
   connect,
@@ -23,7 +23,7 @@ import { SCENE_ONLY, TYPE_LABEL } from '../../model/semantics';
 import { categoryCounts } from '../../model/scene';
 import type { Connection, Lane, ObjectType, Project } from '../../model/types';
 import { useWheelPanZoom } from '../../use-pan-zoom';
-import { HEADER_W, type View } from '../../view';
+import { HEADER_W, RAIL_W, type View } from '../../view';
 import { connectionCurve, draftCurve, type Point } from './geometry';
 import { EffectsEditor, OptionBehaviourEditor, RuleEditor } from '../rules/RuleEditor';
 import { Minimap } from './Minimap';
@@ -33,7 +33,7 @@ import { scenePreview } from '../../model/scene-preview';
 import { NodeView, type PortState } from './NodeView';
 import { implementationStatuses } from '../../model/implementation';
 import { LevelBands, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
-import { addLevelBand, nearestStop, removeBand, renameBand, setBandEdge } from '../../model/level-lane';
+import { addLevelBand, addTransition, nearestStop, removeBand, renameBand, setBandEdge, transitionOf } from '../../model/level-lane';
 import { levelEnds } from '../../model/level-of';
 
 /** A node being dragged in from the palette (or placed with a click). */
@@ -115,6 +115,27 @@ const REFUSAL: Record<Lane['kind'], string> = {
 
 /** Half the size of the connector layer; it is centred on the world origin. */
 const LAYER = 20000;
+
+/** Where the Endings rail's endings stand on screen: the first one's top, the gap between them, and the inset from the rail's sides. */
+const RAIL_TOP = 64;
+const RAIL_GAP = 14;
+const RAIL_INSET = 14;
+
+/** The rail's place in world units for a view, so its endings are nodes the story's routes reach. */
+const railFor = (view: View, size: { w: number; h: number }): EndingsRail | undefined => {
+  if (!size.w) return undefined;
+  const end = nodeSize('end');
+  return {
+    x: (size.w - RAIL_W + RAIL_INSET - view.panX) / view.zoom,
+    top: (RAIL_TOP - view.panY) / view.zoom,
+    step: (end.h + RAIL_GAP) / view.zoom,
+    w: (RAIL_W - RAIL_INSET * 2) / view.zoom,
+    h: end.h / view.zoom,
+  };
+};
+
+/** A pointer's height on screen in the rail as the column's slot height (moveNode orders the endings by it). */
+const railSlotY = (sy: number): number => 12 + ((sy - RAIL_TOP - nodeSize('end').h / 2) / (nodeSize('end').h + RAIL_GAP)) * ENDING_STEP;
 
 const rowAt = (rows: LaneRow[], y: number): LaneRow | undefined => rows.find((r) => y >= r.top && y <= r.top + r.height);
 
@@ -238,15 +259,15 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
   // Where each node is in the engine, once the project has been exported (spec §3).
   const implementation = useMemo(() => implementationStatuses(project), [project]);
   const ghostId = !preview && dropPreview ? dropPreview.id : null;
-  const rows = laneRows(shown);
+  const rows = withRail(laneRows(shown), railFor(view, size));
 
   // ------------------------------------------------------------ gestures
 
   // Gestures listen on the window, so a drag keeps going outside the canvas
   // and a node still gets its double-click. Handlers read the latest render
   // through a ref.
-  const latest = useRef({ project, view, preview, link });
-  latest.current = { project, view, preview, link };
+  const latest = useRef({ project, view, preview, link, size });
+  latest.current = { project, view, preview, link, size };
 
   const nearestSpineNode = (x: number): string | null => {
     const current = latest.current.project;
@@ -278,7 +299,9 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
       const dx = (e.clientX - g.startX) / v.zoom;
       const dy = (e.clientY - g.startY) / v.zoom;
       if (Math.hypot(dx, dy) * v.zoom > 3) g.moved = true;
-      if (g.moved) setPreview(moveNode(current, g.id, g.x0 + dx, g.y0 + dy));
+      // An ending in the rail moves up or down the rail, in its slots.
+      if (g.moved && isColumnEnding(current, g.id)) setPreview(moveNode(current, g.id, 0, railSlotY(e.clientY - (rootRef.current?.getBoundingClientRect().top ?? 0))));
+      else if (g.moved) setPreview(moveNode(current, g.id, g.x0 + dx, g.y0 + dy));
     } else if (g.kind === 'lane') {
       setPreview(moveLane(current, g.laneId, laneDropIndex(current, g.laneId, toWorld(e.clientX, e.clientY, v).y)));
     } else if (g.kind === 'level') {
@@ -287,7 +310,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
     } else {
       const p = toWorld(e.clientX, e.clientY, v);
       const to = { x: p.x, y: p.y };
-      const targetId = nodeAt(current, laneRows(current), to, g.sourceId);
+      const targetId = nodeAt(current, withRail(laneRows(current), railFor(v, latest.current.size)), to, g.sourceId);
       setLink({
         sourceId: g.sourceId,
         to,
@@ -468,6 +491,49 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
 
   const laneOf = (id: string): Lane | undefined => rows.find((r) => r.lane.id === shown.placements[id]?.laneId)?.lane;
 
+  /** A node on the graph; the rail's endings at screen size. */
+  const renderNode = (id: string, screen = false) => {
+    const object = shown.objects[id];
+    const world = nodeBox(shown, id, rows);
+    // The rail's endings are drawn at screen size, unscaled, where their world box shows them.
+    const box = world && screen ? { x: world.x * view.zoom + view.panX, y: world.y * view.zoom + view.panY, w: world.w * view.zoom, h: world.h * view.zoom } : world;
+    if (!object || !box) return null;
+    const lane = laneOf(id);
+    return (
+      <NodeView
+        key={id}
+        object={object}
+        place={shown.placements[id]?.laneId === null ? 'branch' : (lane?.kind ?? 'spine')}
+        laneColor={lane?.color}
+        box={box}
+        selected={props.selection === id}
+        ghost={id === ghostId}
+        editing={editing === id}
+        issue={props.issues.get(id)}
+        implementation={implementation.get(id)}
+        target={portState(id)}
+        onPointerDown={(e) => onNodeDown(e, id)}
+        onPortDown={(e) => onPortDown(e, id)}
+        onDoubleClick={() =>
+          // Scenes and plot points open their writing box; a cinematic (the Opening among them) its shot list.
+          object.type === 'scene' || object.type === 'plotPoint' || object.type === 'begin' || object.type === 'end'
+            ? props.onOpenScene(id, 'open')
+            : object.type === 'cinematic' && nav.openShots
+              ? nav.openShots(id)
+              : setEditing(id)
+        }
+        onContextMenu={(e) => openMenu(e, 'node', id)}
+        onHover={object.type === 'scene' ? (on) => hoverScene(on ? id : null) : undefined}
+        detail={object.type === 'scene' ? sceneDetail(shown, id) : undefined}
+        onRename={(name) => {
+          setEditing(null);
+          props.onCommit(renameObject(project, id, name));
+        }}
+        onCancelRename={() => setEditing(null)}
+      />
+    );
+  };
+
   return (
     <div
       ref={rootRef}
@@ -521,38 +587,40 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
               style={{ left: end.x, top: spineRow.top, height: spineRow.height }}
               title={end.next ? `${end.name} ends here; ${end.next.name} begins` : `${end.name} ends here; no level after it yet (+ Level adds one)`}
             >
-              <span className="level-end-tag">
+              <span className="level-end-tag" onPointerDown={(e) => e.stopPropagation()}>
                 <b>END · {end.name}</b>
                 <span>{end.next ? `→ ${end.next.name}` : shown.objects[end.at]?.type === 'end' ? '→ the end' : '→ next level?'}</span>
+                {end.next ? (
+                  (() => {
+                    const cinematic = transitionOf(shown, end.id);
+                    return cinematic ? (
+                      <button className="level-end-btn" title="The transition into the next level: open its shot list" onClick={() => nav.openShots?.(cinematic)}>
+                        ▶ {shown.objects[cinematic]!.name}
+                      </button>
+                    ) : (
+                      <button
+                        className="level-end-btn"
+                        title="A cinematic on the spine that plays as the player crosses into the next level"
+                        onClick={() => {
+                          const made = addTransition(project, end.id);
+                          if (!made) return;
+                          props.onCommit(made.project);
+                          props.onSelect(made.id);
+                          props.onSay('A transition cinematic between the levels. Double-click it for its shot list.');
+                        }}
+                      >
+                        + Transition
+                      </button>
+                    );
+                  })()
+                ) : (
+                  <button className="level-end-btn" title="Add the next level on the end of this one" onClick={addLevel}>
+                    + Next level
+                  </button>
+                )}
               </span>
             </div>
           ));
-        })()}
-
-        {/* The Endings column: the story's endings, top to bottom, at the right of everything; tie scenes and plot points into them. */}
-        {(() => {
-          const column = endingsColumn(shown, rows);
-          const bottom = Math.max(lastRow ? lastRow.top + lastRow.height : 0, column.top + column.ids.length * ENDING_STEP + 40);
-          return (
-            <div className="endings-column" style={{ left: column.x - 20, top: column.top - 52, width: ENDINGS_WIDTH, height: bottom - column.top + 64 }} onPointerDown={(e) => e.stopPropagation()}>
-              <div className="endings-head">
-                <b>ENDINGS</b>
-                <button
-                  className="header-add"
-                  title="Add an ending at the bottom of the column; tie scenes, plot points and choices into it, with conditions on each route"
-                  onClick={() => {
-                    const made = addEnding(project);
-                    props.onCommit(made.project);
-                    props.onSelect(made.id);
-                    setEditing(made.id);
-                  }}
-                >
-                  + Ending
-                </button>
-              </div>
-              {column.ids.length === 0 && <span className="endings-hint">No ending yet: add one, then drag from a gold ring to it.</span>}
-            </div>
-          );
         })()}
 
         <Connectors
@@ -568,45 +636,9 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
           onMenu={(e, id) => openMenu(e, 'connection', id)}
         />
 
-        {Object.keys(shown.placements).map((id) => {
-          const object = shown.objects[id];
-          const box = nodeBox(shown, id, rows);
-          if (!object || !box) return null;
-          const lane = laneOf(id);
-          return (
-            <NodeView
-              key={id}
-              object={object}
-              place={shown.placements[id]?.laneId === null ? 'branch' : (lane?.kind ?? 'spine')}
-              laneColor={lane?.color}
-              box={box}
-              selected={props.selection === id}
-              ghost={id === ghostId}
-              editing={editing === id}
-              issue={props.issues.get(id)}
-              implementation={implementation.get(id)}
-              target={portState(id)}
-              onPointerDown={(e) => onNodeDown(e, id)}
-              onPortDown={(e) => onPortDown(e, id)}
-              onDoubleClick={() =>
-                // Scenes and plot points open their writing box; a cinematic (the Opening among them) its shot list.
-                object.type === 'scene' || object.type === 'plotPoint' || object.type === 'begin' || object.type === 'end'
-                  ? props.onOpenScene(id, 'open')
-                  : object.type === 'cinematic' && nav.openShots
-                    ? nav.openShots(id)
-                    : setEditing(id)
-              }
-              onContextMenu={(e) => openMenu(e, 'node', id)}
-              onHover={object.type === 'scene' ? (on) => hoverScene(on ? id : null) : undefined}
-              detail={object.type === 'scene' ? sceneDetail(shown, id) : undefined}
-              onRename={(name) => {
-                setEditing(null);
-                props.onCommit(renameObject(project, id, name));
-              }}
-              onCancelRename={() => setEditing(null)}
-            />
-          );
-        })}
+        {Object.keys(shown.placements)
+          .filter((id) => !isColumnEnding(shown, id))
+          .map((id) => renderNode(id))}
 
         {props.selection && shown.objects[props.selection]?.type === 'scene' && !preview && (() => {
           const box = nodeBox(shown, props.selection, rows);
@@ -646,11 +678,33 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
         <TrackHeader key={row.lane.id} lane={row.lane} top={screenY(row.top)} height={row.height * view.zoom} controls={laneControls(row.lane)} onAddLevel={addLevel} />
       ))}
 
-      <div className="continues" style={{ top: screenY(0), height: Math.max(0, tracksBottom - screenY(0)) }} aria-hidden="true">
+      <div className="continues" style={{ right: RAIL_W, top: screenY(0), height: Math.max(0, tracksBottom - screenY(0)) }} aria-hidden="true">
         <span className="continues-mark" style={{ top: 6 * Math.min(1, view.zoom) }}>
           <span>»</span>CONTINUES
         </span>
       </div>
+
+      {/* The Endings rail: the story's endings, top to bottom, at the right of the screen whatever the pan; drag from a gold ring onto one to tie it in. */}
+      <aside className="endings-rail" aria-label="Endings" style={{ width: RAIL_W }} onPointerDown={(e) => e.stopPropagation()}>
+        <div className="endings-head">
+          <b>ENDINGS</b>
+          <button
+            className="header-add"
+            title="Add an ending at the bottom of the rail; tie plot points, scenes and choices into it, with conditions on each route"
+            onClick={() => {
+              const made = addEnding(project);
+              props.onCommit(made.project);
+              props.onSelect(made.id);
+              setEditing(made.id);
+            }}
+          >
+            + Ending
+          </button>
+        </div>
+        {columnEndings(shown).length === 0 && <span className="endings-hint">No ending yet: the spine runs on until you add one. Add one, then drag from a gold ring to it.</span>}
+        {columnEndings(shown).length > 0 && <span className="endings-hint endings-foot">Drag from a gold ring onto an ending to lead there; right-click the route to set its conditions.</span>}
+      </aside>
+      <div className="world world-rail">{columnEndings(shown).map((id) => renderNode(id, true))}</div>
 
       {target && !target.ok && paletteDrag && (
         <div className="drop-refusal" style={{ left: toWorld(paletteDrag.clientX, 0).sx + 12, top: toWorld(0, paletteDrag.clientY).sy + 50 }}>
@@ -741,7 +795,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
         width={size.w}
         height={size.h - props.bottomInset}
         onJump={(x, y) =>
-          props.setView((v) => ({ ...v, panX: (size.w + HEADER_W) / 2 - x * v.zoom, panY: (size.h - props.bottomInset) / 2 - y * v.zoom }))
+          props.setView((v) => ({ ...v, panX: (size.w + HEADER_W - RAIL_W) / 2 - x * v.zoom, panY: (size.h - props.bottomInset) / 2 - y * v.zoom }))
         }
       />}
     </div>

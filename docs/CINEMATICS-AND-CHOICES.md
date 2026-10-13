@@ -58,11 +58,12 @@ plays and then the story ends.
 
 A new project's spine runs from the Opening and Beginning through its plot
 points and stays **open**: there is no Ending on it until you put one there.
-Its endings wait in the **Endings column**, the vertical lane at the right
-of the story graph, top to bottom: **Ending 1** to start with, and
-**+ Ending** adds **Ending 2**, **Ending 3** and so on. (The Game Setup
-Wizard starts a game with several or branching endings with three.) Drag an
-ending up or down the column to reorder it; double-click it to write it.
+Its endings wait in the **Endings rail**, the panel down the right of the
+story graph, which stays put whatever the pan and zoom: **Ending 1** to start
+with, and **+ Ending** adds **Ending 2**, **Ending 3** and so on, top to
+bottom. (The Game Setup Wizard starts a game with several or branching
+endings with three.) Drag an ending up or down the rail to reorder it;
+double-click it to write it.
 
 Tie the story into them: drag from a plot point's, scene's or choice's gold
 ring to an ending. A plot point or scene with routes out takes the first
