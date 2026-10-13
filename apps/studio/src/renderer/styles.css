@@ -11000,3 +11000,51 @@ button.bible-dual-col:hover {
   background: none;
   overflow: visible;
 }
+
+/* Lanes run the whole story and can be dragged up or down by their grip. */
+.track-subplot {
+  border-top: 1px solid color-mix(in srgb, var(--lane) 35%, var(--ground));
+  border-bottom: 1px solid color-mix(in srgb, var(--lane) 35%, var(--ground));
+  background: color-mix(in srgb, var(--lane) 5%, transparent);
+}
+.header-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.header-row b {
+  min-width: 0;
+}
+.lane-grip {
+  flex: none;
+  width: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.lane-grip:hover {
+  color: var(--gold-hi);
+}
+.lane-grip:active {
+  cursor: grabbing;
+}
+.lane-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.header-level .header-row {
+  flex-shrink: 0;
+}
+.header-lane-name {
+  flex: none;
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

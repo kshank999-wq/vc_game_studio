@@ -8,11 +8,11 @@ import {
   removeLane,
   removeObject,
   renameObject,
-  setSpanEdge,
-  spanDependents,
+  moveLane,
   updateLane,
 } from '../project';
-import { NODE_GAP, laneRows, laneSequence, nodeSize, spanRange, spineLane, spineSequence } from '../layout';
+import { NODE_GAP, laneRows, laneSequence, nodeSize, spineLane, spineSequence, subplotReach } from '../layout';
+import { readProject } from '../storage';
 import { commit, redo, startHistory, undo } from '../history';
 import type { Project } from '../types';
 
@@ -37,12 +37,11 @@ const noOverlaps = (p: Project, laneId: string): void => {
 };
 
 describe('a new project', () => {
-  it('starts with the Opening, Beginning, one plot point and Ending on a locked spine, under the Level lane', () => {
+  it('starts with the Opening, Beginning, one plot point and Ending on a locked spine, with the Level lane at the bottom', () => {
     const p = createProject();
     expect(types(p)).toEqual(['cinematic', 'begin', 'plotPoint', 'end']);
     expect(codes(p)).toEqual(['OPEN', 'begin', 'PP1', 'end']);
-    expect(laneRows(p)[0]!.lane.kind).toBe('level');
-    expect(laneRows(p)[1]!.lane.kind).toBe('spine');
+    expect(laneRows(p).map((r) => r.lane.kind)).toEqual(['spine', 'subplot', 'level']);
     expect(spineLane(p).locked).toBe(true);
     expect(spineLane(p).span).toBeUndefined();
   });
@@ -112,53 +111,50 @@ describe('moving along the spine', () => {
 });
 
 describe('the Player Lane', () => {
-  it('is there from the start, beneath the spine, from Beginning to Ending', () => {
+  it('is there from the start, a lane of its own beneath the spine', () => {
     const p = createProject();
     const lane = p.lanes.find((l) => l.role === 'player')!;
-    const seq = spineSequence(p);
     expect(lane.name).toBe('Player Lane');
-    expect(lane.span).toEqual({ startRef: seq[1], endRef: seq[seq.length - 1] });
-    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Levels', 'Spine', 'Player Lane']);
+    expect(lane.span).toBeUndefined();
+    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane', 'Levels']);
   });
 });
 
 describe('subplot lanes', () => {
-  it('are added below the spine with a span from the first node after Beginning to Ending', () => {
-    const { project: p, laneId } = addLane(createProject(), 'subplot');
-    const lane = p.lanes.find((l) => l.id === laneId)!;
-    const seq = spineSequence(p);
-    // From the first plot point after Beginning (the Opening is not one) to the next.
-    expect(lane.span).toEqual({ startRef: seq[2], endRef: seq[3] });
-    // Below the spine and the Player Lane a new project starts with.
-    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Levels', 'Spine', 'Player Lane', lane.name]);
+  it('are added as lanes of their own, above the Level lane at the bottom, one under another', () => {
+    const first = addLane(createProject(), 'subplot');
+    const second = addLane(first.project, 'subplot');
+    const p = second.project;
+    expect(p.lanes.find((l) => l.id === first.laneId)!.span).toBeUndefined();
+    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane', 'Subplot 1', 'Subplot 2', 'Levels']);
     expect(laneRows(p)[3]!.top).toBeGreaterThan(laneRows(p)[2]!.top);
   });
 
-  it('span handles snap to spine nodes and the start stays before the end', () => {
-    let p = createProject();
-    p = place(p, 'scene', spineId(p), 500).project;
-    const added = addLane(p, 'subplot');
-    p = added.project;
-    const [begin, pp1, , end] = spineSequence(p);
-    p = setSpanEdge(p, added.laneId, 'start', begin!);
-    expect(p.lanes.find((l) => l.id === added.laneId)!.span!.startRef).toBe(begin);
-    expect(setSpanEdge(p, added.laneId, 'end', begin!)).toBe(p);
-    expect(setSpanEdge(p, added.laneId, 'start', end!)).toBe(p);
-    const range = spanRange(p, p.lanes.find((l) => l.id === added.laneId)!)!;
-    expect(range.from).toBeLessThan(range.to);
-    expect(pp1).toBeDefined();
+  it('take beats anywhere along the story, without moving the spine', () => {
+    const added = addLane(createProject(), 'subplot');
+    const before = added.project.placements;
+    let p = added.project;
+    for (const x of [3000, 200, 1200]) p = place(p, 'scene', added.laneId, x).project;
+    const xs = laneSequence(p, added.laneId).map((id) => p.placements[id]!.x);
+    expect(xs[0]).toBe(200);
+    expect(xs[2]).toBe(3000);
+    for (const id of spineSequence(p)) expect(p.placements[id]).toEqual(before[id]);
+    noOverlaps(p, added.laneId);
   });
 
-  it('keeps a span whole when the node it starts on is deleted', () => {
+  it('run alongside the stretch of spine their beats are under', () => {
     let p = createProject();
-    const { project, id } = place(p, 'scene', spineId(p), 120);
-    const added = addLane(project, 'subplot');
-    p = setSpanEdge(added.project, added.laneId, 'start', id);
-    expect(spanDependents(p, id).map((l) => l.id)).toEqual([added.laneId]);
-    p = removeObject(p, id);
-    const span = p.lanes.find((l) => l.id === added.laneId)!.span!;
-    expect(p.objects[span.startRef]).toBeDefined();
-    expect(spanRange(p, p.lanes.find((l) => l.id === added.laneId)!)).not.toBeNull();
+    p = place(p, 'scene', spineId(p), 600).project;
+    const added = addLane(p, 'subplot');
+    p = added.project;
+    const lane = () => p.lanes.find((l) => l.id === added.laneId)!;
+    expect(subplotReach(p, lane())).toBeNull();
+    const [, begin, pp1, scene, end] = spineSequence(p);
+    p = place(p, 'scene', added.laneId, p.placements[pp1!]!.x + 40).project;
+    expect(subplotReach(p, lane())).toEqual({ startRef: pp1, endRef: scene });
+    p = place(p, 'scene', added.laneId, p.placements[end!]!.x + 400).project;
+    expect(subplotReach(p, lane())!.endRef).toBe(end);
+    expect(begin).toBeDefined();
   });
 
   it('take plot points, choices and scenes, coded as subplot beats', () => {
@@ -179,7 +175,7 @@ describe('subplot lanes', () => {
     const added = addLane(createProject(), 'subplot');
     const { project } = place(added.project, 'scene', added.laneId, 400);
     const p = removeLane(project, added.laneId);
-    expect(p.lanes.map((l) => l.name)).toEqual(['Levels', 'Spine', 'Player Lane']);
+    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane', 'Levels']);
     expect(Object.values(p.objects).filter((o) => o.type === 'scene')).toHaveLength(0);
   });
 });
@@ -212,7 +208,7 @@ describe('character lanes', () => {
   it('drop out of the layout while hidden', () => {
     const { project, laneId } = addLane(createProject(), 'character');
     const hidden = updateLane(project, laneId, { visible: false });
-    expect(laneRows(hidden).map((r) => r.lane.name)).toEqual(['Levels', 'Spine', 'Player Lane']);
+    expect(laneRows(hidden).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane', 'Levels']);
     expect(updateLane(hidden, spineId(hidden), { visible: false })).toBe(hidden);
   });
 });
@@ -239,52 +235,40 @@ import { findIssues } from '../validate';
 
 const node = (p: Project, type: string, n = 0) => Object.values(p.objects).filter((o) => o.type === type)[n]!;
 
-describe('a subplot', () => {
-  it('grows to fit what is dropped into it, pushing the spine apart where it rejoins', () => {
+describe('arranging lanes', () => {
+  it('moves any lane above or below the others, the spine included, and keeps the order', () => {
     const added = addLane(createProject(), 'subplot');
     let p = added.project;
-    const end = spineSequence(p).at(-1)!;
-    const before = p.placements[end]!.x;
-    for (let i = 0; i < 4; i++) {
-      const range = spanRange(p, p.lanes.find((l) => l.id === added.laneId)!)!;
-      p = place(p, 'scene', added.laneId, range.to + 100).project;
-    }
-    expect(p.placements[end]!.x).toBeGreaterThan(before);
-    const lane = p.lanes.find((l) => l.id === added.laneId)!;
-    const range = spanRange(p, lane)!;
-    for (const id of laneSequence(p, added.laneId)) {
-      const x = p.placements[id]!.x;
-      expect(x).toBeGreaterThanOrEqual(range.from);
-      expect(x + nodeSize('scene', 'subplot').w).toBeLessThanOrEqual(range.to);
-    }
-    noOverlaps(p, spineId(p));
-    noOverlaps(p, added.laneId);
+    const names = () => laneRows(p).map((r) => r.lane.name);
+    const level = p.lanes.find((l) => l.kind === 'level')!.id;
+    p = moveLane(p, level, 0);
+    expect(names()).toEqual(['Levels', 'Spine', 'Player Lane', 'Subplot 1']);
+    p = moveLane(p, added.laneId, 1);
+    expect(names()).toEqual(['Levels', 'Subplot 1', 'Spine', 'Player Lane']);
+    p = moveLane(p, spineId(p), 3);
+    expect(names()).toEqual(['Levels', 'Subplot 1', 'Player Lane', 'Spine']);
+    expect(moveLane(p, spineId(p), 3)).toBe(p);
+    expect(moveLane(p, spineId(p), 99)).toBe(p);
+    // A new lane still goes in above the Level lane only when that is at the bottom.
+    p = addLane(p, 'character').project;
+    expect(names().at(-1)).toBe('Character 1');
   });
 
-  it('always rejoins the spine: its ends are spine nodes, and a deleted rejoin moves on', () => {
-    let p = createProject();
-    p = place(p, 'scene', spineId(p), 400).project;
-    const added = addLane(p, 'subplot');
-    p = added.project;
-    const lane = () => p.lanes.find((l) => l.id === added.laneId)!;
-    p = removeObject(p, lane().span!.endRef);
-    expect(spineSequence(p)).toContain(lane().span!.endRef);
-    expect(spineSequence(p)).toContain(lane().span!.startRef);
-    expect(lane().span!.startRef).not.toBe(lane().span!.endRef);
-  });
-
-  it('keeps its beats inside when an end is dragged in, opening the spine if it must', () => {
-    let p = createProject();
-    p = place(p, 'scene', spineId(p), 400).project;
-    p = place(p, 'scene', spineId(p), 700).project;
-    const added = addLane(p, 'subplot');
-    p = setSpanEdge(added.project, added.laneId, 'end', spineSequence(added.project).at(-1)!);
-    for (let i = 0; i < 3; i++) p = place(p, 'plotPoint', added.laneId, 5000).project;
-    p = setSpanEdge(p, added.laneId, 'end', spineSequence(p)[2]!);
-    const range = spanRange(p, p.lanes.find((l) => l.id === added.laneId)!)!;
-    const last = laneSequence(p, added.laneId).at(-1)!;
-    expect(p.placements[last]!.x + nodeSize('plotPoint', 'subplot').w).toBeLessThanOrEqual(range.to);
-    expect(settle(p)).toBe(p);
+  it('turns an older project’s lanes into free lanes: the spine first, the Level lane at the bottom, subplots untied', () => {
+    const fresh = addLane(createProject(), 'subplot');
+    const seq = spineSequence(fresh.project);
+    const old: Project = {
+      ...fresh.project,
+      lanes: fresh.project.lanes.map((l) =>
+        l.kind === 'level' ? { ...l, order: -1 } : l.kind === 'subplot' ? { ...l, span: { startRef: seq[1]!, endRef: seq.at(-1)! } } : l,
+      ),
+    };
+    const p = readProject(JSON.parse(JSON.stringify(old)))!;
+    expect(laneRows(p).map((r) => r.lane.name)).toEqual(['Spine', 'Player Lane', 'Subplot 1', 'Levels']);
+    expect(p.lanes.every((l) => !l.span)).toBe(true);
+    // Done once: a Level lane dragged to the top stays there.
+    const moved = moveLane(p, p.lanes.find((l) => l.kind === 'level')!.id, 0);
+    expect(laneRows(readProject(JSON.parse(JSON.stringify(moved)))!)[0]!.lane.kind).toBe('level');
   });
 });
 

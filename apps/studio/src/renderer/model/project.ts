@@ -1,7 +1,6 @@
 import { BRANCH_ACCEPTS, CHARACTER_COLORS, COLORS, LANE_ACCEPTS } from './semantics';
 import {
   BRANCH_CLEARANCE,
-  MIN_SPAN,
   NODE_GAP,
   SPAN_PAD,
   laneSequence,
@@ -66,14 +65,14 @@ export const isOpening = (object: StoryObject | undefined): boolean => object?.t
 export const plotStops = (project: Project): string[] =>
   spineSequence(project).filter((id) => ['begin', 'plotPoint', 'end'].includes(project.objects[id]?.type ?? ''));
 
-/** The permanent Level lane above the spine. */
-export const makeLevelLane = (): Lane => ({
+/** The permanent Level lane: at the bottom, under the spine and its lanes, until it is dragged elsewhere. */
+export const makeLevelLane = (order = 2): Lane => ({
   id: newId('lane'),
   kind: 'level',
   name: 'Levels',
   subtitle: 'Each level runs between two plot points',
   color: COLORS.level,
-  order: -1,
+  order,
   visible: true,
   locked: false,
   levels: [],
@@ -87,7 +86,8 @@ export const makeLevelLane = (): Lane => ({
  */
 export const withStoryFrame = (project: Project, now = stamp()): Project => {
   let next = project;
-  if (!next.lanes.some((l) => l.kind === 'level')) next = { ...next, lanes: [makeLevelLane(), ...next.lanes] };
+  if (!next.lanes.some((l) => l.kind === 'level')) next = { ...next, lanes: [...next.lanes, makeLevelLane(Math.max(0, ...next.lanes.map((l) => l.order)) + 1)] };
+  next = withFreeLanes(next);
   const spine = next.lanes.find((l) => l.kind === 'spine');
   const beginId = spine && Object.keys(next.objects).find((id) => next.objects[id]!.type === 'begin' && next.placements[id]?.laneId === spine.id);
   if (!spine || !beginId) return next;
@@ -105,6 +105,56 @@ export const withStoryFrame = (project: Project, now = stamp()): Project => {
     next = settle(next);
   }
   return next;
+};
+
+/**
+ * Lanes from before they could be moved: the Level lane sat above the spine
+ * (order -1) and each subplot was a band tied to two spine nodes. Now the
+ * lanes stack in their own order, the spine first and the Level lane at the
+ * bottom, and a subplot is a lane of its own that runs the whole story; its
+ * beats stay where they were.
+ */
+const withFreeLanes = (project: Project): Project => {
+  const old = project.lanes.some((l) => l.kind === 'level' && l.order < 0);
+  const tied = project.lanes.some((l) => l.kind === 'subplot' && l.span);
+  if (!old && !tied) return project;
+  let lanes = project.lanes.map((l) => {
+    if (l.kind !== 'subplot' || !l.span) return l;
+    const { span: _span, ...free } = l;
+    return free;
+  });
+  if (old) {
+    const rank = (l: Lane) => (l.kind === 'spine' ? 0 : l.kind === 'level' ? 2 : 1);
+    const ordered = [...lanes].sort((a, b) => rank(a) - rank(b) || a.order - b.order);
+    lanes = lanes.map((l) => ({ ...l, order: ordered.indexOf(l) }));
+  }
+  let next: Project = { ...project, lanes };
+  for (const lane of lanes) if (lane.kind === 'subplot') next = packLane(next, lane.id);
+  return next;
+};
+
+/** The order a new lane takes: at the bottom, or just above the Level lane when that is the bottom one. Lanes below it move down. */
+const newLaneOrder = (project: Project): { order: number; lanes: Lane[] } => {
+  const bottom = [...project.lanes].sort((a, b) => b.order - a.order)[0];
+  if (bottom?.kind !== 'level') return { order: Math.max(0, ...project.lanes.map((l) => l.order)) + 1, lanes: project.lanes };
+  return { order: bottom.order, lanes: project.lanes.map((l) => (l.order >= bottom.order ? { ...l, order: l.order + 1 } : l)) };
+};
+
+/**
+ * Move a lane to another place in the stack (0 is the top). Any lane can go
+ * above or below the spine; the free area above the top lane stays for
+ * branches and the mind map.
+ */
+export const moveLane = (project: Project, laneId: string, toIndex: number): Project => {
+  const stack = [...project.lanes].sort((a, b) => a.order - b.order);
+  const from = stack.findIndex((l) => l.id === laneId);
+  if (from < 0) return project;
+  const to = Math.max(0, Math.min(stack.length - 1, Math.round(toIndex)));
+  if (to === from) return project;
+  const [lane] = stack.splice(from, 1);
+  stack.splice(to, 0, lane!);
+  const orderOf = new Map(stack.map((l, i) => [l.id, i]));
+  return { ...project, lanes: project.lanes.map((l) => (l.order === orderOf.get(l.id) ? l : { ...l, order: orderOf.get(l.id)! })) };
 };
 
 /** A new project: the spine with Beginning, one plot point and Ending, and the Player Lane beneath it (spec §5). */
@@ -134,7 +184,6 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
     order: 1,
     visible: true,
     locked: false,
-    span: { startRef: begin.id, endRef: end.id },
   };
   return {
     format: 'vcgs',
@@ -142,7 +191,7 @@ export const createProject = (name = 'Untitled Game', now = stamp()): Project =>
     id: newId('proj'),
     name,
     objects: { [begin.id]: begin, [opening.id]: opening, [plotPoint.id]: plotPoint, [end.id]: end },
-    lanes: [makeLevelLane(), spine, player],
+    lanes: [spine, player, makeLevelLane(2)],
     connections: [],
     placements: {
       [begin.id]: { laneId: spine.id, x: START_X, y: 0 },
@@ -249,52 +298,10 @@ export const packLane = (project: Project, laneId: string, floor = -Infinity): P
   return changed ? { ...project, placements } : project;
 };
 
-/** Move every spine node from `fromId` onward right by `delta`. */
-const shiftSpineFrom = (project: Project, fromId: string, delta: number): Project => {
-  const sequence = spineSequence(project);
-  const at = sequence.indexOf(fromId);
-  if (at < 0 || delta <= 0) return project;
-  const placements = { ...project.placements };
-  for (const id of sequence.slice(at)) {
-    const placement = placements[id];
-    if (placement) placements[id] = { ...placement, x: placement.x + Math.ceil(delta) };
-  }
-  return { ...project, placements };
-};
-
-/**
- * Bring the whole graph back into shape after any change: the spine in order,
- * and every subplot's beats inside its band. A subplot always rejoins the
- * spine, so when its beats need more room than the band has, the spine opens
- * up at the node it rejoins, and everything after that moves along.
- */
+/** Bring the graph back into shape after any change: the spine in order, and each subplot lane's beats clear of each other. */
 export const settle = (project: Project): Project => {
   let next = packLane(project, spineLane(project).id);
-  for (let pass = 0; pass < 12; pass++) {
-    let grew = false;
-    const subplots = next.lanes
-      .filter((l) => l.kind === 'subplot' && l.span)
-      .map((l) => ({ lane: l, range: spanRange(next, l) }))
-      .sort((a, b) => (a.range?.from ?? 0) - (b.range?.from ?? 0));
-    for (const { lane } of subplots) {
-      const range = spanRange(next, lane);
-      if (!range || !lane.span) continue;
-      next = packLane(next, lane.id, range.from + SPAN_PAD);
-      const ids = laneSequence(next, lane.id);
-      const last = ids[ids.length - 1];
-      const lastPlacement = last ? next.placements[last] : undefined;
-      const lastObject = last ? next.objects[last] : undefined;
-      const needed =
-        lastPlacement && lastObject
-          ? lastPlacement.x + nodeSize(lastObject.type, 'subplot').w + SPAN_PAD
-          : range.from + MIN_SPAN;
-      if (needed > range.to + 0.5) {
-        next = packLane(shiftSpineFrom(next, lane.span.endRef, needed - range.to), spineLane(next).id);
-        grew = true;
-      }
-    }
-    if (!grew) break;
-  }
+  for (const lane of next.lanes) if (lane.kind === 'subplot') next = packLane(next, lane.id);
   return next;
 };
 
@@ -655,7 +662,7 @@ export const addLane = (
   kind: Exclude<LaneKind, 'spine'>,
   now = stamp(),
 ): { project: Project; laneId: string } => {
-  const order = Math.max(0, ...project.lanes.map((l) => l.order)) + 1;
+  const { order, lanes } = newLaneOrder(project);
   const count = project.lanes.filter((l) => l.kind === kind && l.role !== 'player').length + 1;
   const lane: Lane = {
     id: newId('lane'),
@@ -668,14 +675,8 @@ export const addLane = (
     locked: false,
   };
   let objects = project.objects;
-  if (kind === 'subplot') {
-    // A new subplot branches off the first node after Beginning and rejoins at
-    // the next one; dropping beats in makes it longer.
-    const sequence = spineSequence(project).filter((n) => !isOpening(project.objects[n]));
-    const startRef = sequence[1] ?? sequence[0];
-    const endRef = sequence[2] ?? sequence[sequence.length - 1];
-    if (startRef && endRef && startRef !== endRef) lane.span = { startRef, endRef };
-  } else {
+  // A subplot is a lane of its own, the length of the story: its beats go anywhere along it.
+  if (kind !== 'subplot') {
     const used = new Set(project.lanes.filter((l) => l.role !== 'player').map((l) => l.color.toUpperCase()));
     lane.color = CHARACTER_COLORS.find((c) => !used.has(c)) ?? CHARACTER_COLORS[count % CHARACTER_COLORS.length]!;
     // The lane follows a canonical character, which the Bible will list.
@@ -683,7 +684,7 @@ export const addLane = (
     lane.characterId = character.id;
     objects = { ...objects, [character.id]: character };
   }
-  return { project: settle({ ...project, objects, lanes: [...project.lanes, lane] }), laneId: lane.id };
+  return { project: settle({ ...project, objects, lanes: [...lanes, lane] }), laneId: lane.id };
 };
 
 export type LanePatch = Partial<Pick<Lane, 'name' | 'subtitle' | 'visible' | 'locked'>>;
@@ -746,7 +747,7 @@ export const playerLaneOf = (project: Project): Lane | undefined => project.lane
 export const ensurePlayerLane = (project: Project): { project: Project; laneId: string } => {
   const existing = playerLaneOf(project);
   if (existing) return { project, laneId: existing.id };
-  const sequence = spineSequence(project);
+  const { order, lanes } = newLaneOrder(project);
   const lane: Lane = {
     id: newId('lane'),
     kind: 'subplot',
@@ -754,10 +755,9 @@ export const ensurePlayerLane = (project: Project): { project: Project; laneId: 
     name: 'Player Lane',
     subtitle: 'Player progression',
     color: PLAYER_LANE_COLOR,
-    order: Math.max(0, ...project.lanes.map((l) => l.order)) + 1,
+    order,
     visible: true,
     locked: false,
-    ...(sequence.length >= 2 ? { span: { startRef: sequence.find((n) => project.objects[n]?.type === 'begin') ?? sequence[0]!, endRef: sequence[sequence.length - 1]! } } : {}),
   };
-  return { project: settle({ ...project, lanes: [...project.lanes, lane] }), laneId: lane.id };
+  return { project: settle({ ...project, lanes: [...lanes, lane] }), laneId: lane.id };
 };

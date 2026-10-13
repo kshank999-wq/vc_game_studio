@@ -6,7 +6,7 @@ import { newId, plotStops } from './project';
 import type { Lane, LevelBand, Project } from './types';
 
 /**
- * The Level lane above the spine: the game's levels, each a band from one
+ * The Level lane: the game's levels, each a band from one
  * spine plot point to another. A scene, cinematic or choice on the spine (or
  * branching off it) in that stretch happens in that level. Each level is a
  * map in the Level Designer as well, made when the level is added.

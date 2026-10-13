@@ -5,7 +5,7 @@ import { equipmentOf } from '../equipment';
 import { costOf, ranksOf, requiresOf } from '../skills';
 import { describeTarget, whoLabel, type Who } from '../collab';
 import { customOf, interactionsOf, initialState, statesOf, varTypeOf, type VarType } from '../details';
-import { laneSequence, spineSequence } from '../layout';
+import { laneSequence, spineSequence, subplotReach } from '../layout';
 import { CATEGORIES, dualWith, elementsIn, sceneLines } from '../scene';
 import { hasInline, plainInline } from '../inline';
 import { eventTitle, loseOf, sceneTimeline } from '../timeline';
@@ -693,8 +693,11 @@ export const buildIR = (project: Project): HandoffIR => {
       .filter((c) => c.kind === 'branch' && project.objects[c.sourceId] && project.objects[c.targetId])
       .map((c) => ({ from: key(c.sourceId)!, to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
     subplots: project.lanes
-      .filter((l) => l.kind === 'subplot' && l.span)
-      .map((l) => ({ key: toKey(l.name), name: l.name, from: key(l.span!.startRef)!, to: key(l.span!.endRef)!, beats: laneSequence(project, l.id).map(node) })),
+      .filter((l) => l.kind === 'subplot')
+      .flatMap((l) => {
+        const reach = subplotReach(project, l);
+        return reach ? [{ key: toKey(l.name), name: l.name, from: key(reach.startRef)!, to: key(reach.endRef)!, beats: laneSequence(project, l.id).map(node) }] : [];
+      }),
     arcs: project.lanes
       .filter((l) => l.kind === 'character')
       .map((l) => ({

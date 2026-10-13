@@ -26,10 +26,10 @@ const GROUPS: { title: string; items: { type: ObjectType; kind?: string }[] }[] 
 
 const TIPS: Partial<Record<ObjectType, string>> = {
   plotPoint: 'A bone of the story. Goes on the spine or a subplot.',
-  scene: 'A playable scene. Goes on the spine, a subplot, or above the spine as a branch.',
+  scene: 'A playable scene. Goes on the spine, a subplot, or above the lanes as a branch.',
   cinematic: 'A non-interactive sequence. Goes on the spine.',
-  choice: 'A decision point. Goes on the spine, a subplot or above the spine.',
-  dialogue: 'An exchange of lines. Floats above the spine as part of a branch.',
+  choice: 'A decision point. Goes on the spine, a subplot or above the lanes.',
+  dialogue: 'An exchange of lines. Floats above the lanes as part of a branch.',
   arcEvent: 'A change in a character: growth, setback or turning point. Goes on a character lane.',
   character: 'A person in a scene, from the Bible.',
   object: 'Something the player can use or change.',
@@ -166,7 +166,7 @@ export const Palette = ({ active, onStart, mode, rail, onToggleRail }: Props) =>
         </section>
       ))}
       {mode === 'graph' && <p className="palette-foot">
-        Drag a node onto the spine or a lane, or above the spine for a branch. Drag from a node's gold ring to connect it.
+        Drag a node onto the spine or a lane, or above the lanes for a branch. Drag from a node's gold ring to connect it.
       </p>}
       {mode === 'scene' && <p className="palette-foot">Drag an element anywhere into the scene. It files itself under its category.</p>}
     </aside>

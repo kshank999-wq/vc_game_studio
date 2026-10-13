@@ -1,6 +1,6 @@
 import { CommentsHistory } from '../collab/lazy';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { laneRows, laneSequence, nodeBox, nodeSize, spanRange, spineSequence, type Box, type LaneRow } from '../../model/layout';
+import { laneRows, laneSequence, nodeBox, nodeSize, spineSequence, type Box, type LaneRow } from '../../model/layout';
 import {
   canPlace,
   connect,
@@ -11,11 +11,11 @@ import {
   placeNew,
   relabelConnection,
   setConnectionRules,
+  moveLane,
   removeLane,
   renameObject,
   setOutcome,
   setPolarity,
-  setSpanEdge,
   updateLane,
 } from '../../model/project';
 import { SCENE_ONLY, TYPE_LABEL } from '../../model/semantics';
@@ -23,7 +23,7 @@ import { categoryCounts } from '../../model/scene';
 import type { Connection, Lane, ObjectType, Project } from '../../model/types';
 import { useWheelPanZoom } from '../../use-pan-zoom';
 import { HEADER_W, type View } from '../../view';
-import { connectionCurve, draftCurve, subplotPath, type Point } from './geometry';
+import { connectionCurve, draftCurve, type Point } from './geometry';
 import { EffectsEditor, OptionBehaviourEditor, RuleEditor } from '../rules/RuleEditor';
 import { Minimap } from './Minimap';
 import { usePreferences } from '../../preferences';
@@ -31,7 +31,7 @@ import { useNav } from '../../nav';
 import { scenePreview } from '../../model/scene-preview';
 import { NodeView, type PortState } from './NodeView';
 import { implementationStatuses } from '../../model/implementation';
-import { LevelBands, SubplotBand, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
+import { LevelBands, TrackBand, TrackHeader, type LaneControls, type LaneField } from './Tracks';
 import { addLevelBand, nearestStop, removeBand, renameBand, setBandEdge } from '../../model/level-lane';
 
 /** A node being dragged in from the palette (or placed with a click). */
@@ -91,8 +91,8 @@ type Target = { ok: true; laneId: string | null; x: number; y: number } | { ok: 
 type Gesture =
   | { kind: 'pan'; startX: number; startY: number; panX: number; panY: number; moved: boolean }
   | { kind: 'node'; id: string; startX: number; startY: number; x0: number; y0: number; moved: boolean }
-  | { kind: 'span'; laneId: string; edge: 'start' | 'end' }
   | { kind: 'level'; bandId: string; edge: 'start' | 'end' }
+  | { kind: 'lane'; laneId: string }
   | { kind: 'link'; sourceId: string };
 
 interface Link {
@@ -106,24 +106,26 @@ type Menu = { kind: 'node' | 'connection'; id: string; sx: number; sy: number };
 
 const REFUSAL: Record<Lane['kind'], string> = {
   spine: 'The spine takes plot points, scenes, cinematics and choices',
-  subplot: 'Subplots take plot points, choices and scenes',
+  subplot: 'Subplot lanes take plot points, choices and scenes',
   character: 'Character lanes take arc events',
   level: 'The Level lane takes levels: use + Level, then stretch it between plot points',
 };
 
-/** How far past a subplot band's ends a drop still counts as dropping into it. */
-const BAND_REACH = { before: 80, after: 240 };
-
 /** Half the size of the connector layer; it is centred on the world origin. */
 const LAYER = 20000;
 
-const rowAt = (project: Project, rows: LaneRow[], x: number, y: number): LaneRow | undefined =>
-  rows.find((r) => {
-    if (y < r.top || y > r.top + r.height) return false;
-    if (r.lane.kind !== 'subplot') return true;
-    const range = spanRange(project, r.lane);
-    return !!range && x >= range.from - BAND_REACH.before && x <= range.to + BAND_REACH.after;
-  });
+const rowAt = (rows: LaneRow[], y: number): LaneRow | undefined => rows.find((r) => y >= r.top && y <= r.top + r.height);
+
+/**
+ * Where a dragged lane goes: before the first other lane whose middle is
+ * below the pointer, as a place in the whole stack (hidden lanes included).
+ */
+const laneDropIndex = (project: Project, laneId: string, y: number): number => {
+  const others = laneRows(project).filter((r) => r.lane.id !== laneId);
+  const before = others.find((r) => y < r.top + r.height / 2)?.lane;
+  const stack = [...project.lanes].sort((a, b) => a.order - b.order).filter((l) => l.id !== laneId);
+  return before ? stack.indexOf(before) : stack.length;
+};
 
 const nodeAt = (project: Project, rows: LaneRow[], p: Point, except?: string): string | null => {
   const slop = 6;
@@ -192,7 +194,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
     if (SCENE_ONLY.includes(drag.type)) return { ok: false, reason: `${TYPE_LABEL[drag.type]} goes inside a scene` };
     const { x, y } = toWorld(drag.clientX, drag.clientY);
     const rows = laneRows(project);
-    const row = rowAt(project, rows, x, y);
+    const row = rowAt(rows, y);
     if (row) {
       if (row.lane.locked && row.lane.kind !== 'spine') return { ok: false, reason: 'This lane is locked' };
       if (!canPlace(project, drag.type, row.lane.id)) return { ok: false, reason: REFUSAL[row.lane.kind] };
@@ -203,7 +205,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
       const size = nodeSize(drag.type);
       return { ok: true, laneId: null, x: x - size.w / 2, y: y - size.h / 2 };
     }
-    return { ok: false, reason: 'Drop on the spine or a lane, or above the spine for a branch' };
+    return { ok: false, reason: 'Drop on the spine or a lane, or above the lanes for a branch' };
   };
 
   const target = paletteDrag && (paletteDrag.moved || paletteDrag.placing) ? targetAt(paletteDrag) : null;
@@ -275,9 +277,8 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
       const dy = (e.clientY - g.startY) / v.zoom;
       if (Math.hypot(dx, dy) * v.zoom > 3) g.moved = true;
       if (g.moved) setPreview(moveNode(current, g.id, g.x0 + dx, g.y0 + dy));
-    } else if (g.kind === 'span') {
-      const ref = nearestSpineNode(toWorld(e.clientX, e.clientY, v).x);
-      if (ref) setPreview(setSpanEdge(current, g.laneId, g.edge, ref));
+    } else if (g.kind === 'lane') {
+      setPreview(moveLane(current, g.laneId, laneDropIndex(current, g.laneId, toWorld(e.clientX, e.clientY, v).y)));
     } else if (g.kind === 'level') {
       const ref = nearestStop(current, toWorld(e.clientX, e.clientY, v).x);
       if (ref) setPreview(setBandEdge(current, g.bandId, g.edge, ref));
@@ -303,7 +304,7 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
     if (!g) return;
     const { project: current, preview: pending, link: pendingLink } = latest.current;
     if (g.kind === 'pan' && !g.moved) props.onSelect(null);
-    if ((g.kind === 'node' && g.moved) || g.kind === 'span' || g.kind === 'level') {
+    if ((g.kind === 'node' && g.moved) || g.kind === 'level' || g.kind === 'lane') {
       if (pending && pending !== current) props.onCommit(pending);
     }
     if (g.kind === 'link' && pendingLink?.targetId) {
@@ -362,11 +363,6 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
     begin({ kind: 'link', sourceId: id });
   };
 
-  const onHandleDown = (e: React.PointerEvent, laneId: string, edge: 'start' | 'end') => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    begin({ kind: 'span', laneId, edge });
-  };
 
   // ------------------------------------------------------------ levels
 
@@ -437,7 +433,21 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
       setLaneMenu(laneMenu === lane.id ? null : lane.id);
     },
     onDelete: () => deleteLane(lane),
+    onGrip: (e) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      e.preventDefault();
+      closeMenus();
+      begin({ kind: 'lane', laneId: lane.id });
+    },
+    canMoveUp: stackIndex(lane) > 0,
+    canMoveDown: stackIndex(lane) < project.lanes.length - 1,
+    onMoveBy: (by) => {
+      setLaneMenu(null);
+      props.onCommit(moveLane(project, lane.id, stackIndex(lane) + by));
+    },
   });
+  const stackIndex = (lane: Lane) => [...project.lanes].sort((a, b) => a.order - b.order).findIndex((l) => l.id === lane.id);
 
   // ------------------------------------------------------------ render
 
@@ -466,17 +476,15 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
       onMouseDown={(e) => e.button === 1 && e.preventDefault()}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* The spine and character arcs run the whole story: full-width bands at every pan. */}
-      {rows.map((row) =>
-        row.lane.kind === 'subplot' ? null : (
-          <TrackBand key={row.lane.id} row={row} top={screenY(row.top)} height={row.height * view.zoom} empty={laneSequence(shown, row.lane.id).length === 0} />
-        ),
-      )}
+      {/* Every lane runs the whole story: full-width bands at every pan. */}
+      {rows.map((row) => (
+        <TrackBand key={row.lane.id} row={row} top={screenY(row.top)} height={row.height * view.zoom} empty={laneSequence(shown, row.lane.id).length === 0} />
+      ))}
 
       <div className="world" style={{ transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})` }}>
         {!hasBranches && firstBox && (
           <div className="branch-hint" style={{ left: firstBox.x, top: -96 }}>
-            Branches and alternate routes float up here. Drop a scene or choice above the spine, then drag from a gold ring to connect.
+            Branches, alternate routes and the mind map float up here, above the lanes. Drop a scene or choice here, then drag from a gold ring to connect.
           </div>
         )}
 
@@ -495,19 +503,6 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
               onHandleDown={onLevelHandleDown}
               onOpen={(band) => nav.openLevels?.(band.mapId)}
               onDelete={(band) => props.onCommit(removeBand(project, band.id))}
-            />
-          ) : null,
-        )}
-
-        {rows.map((row) =>
-          row.lane.kind === 'subplot' ? (
-            <SubplotBand
-              key={row.lane.id}
-              project={shown}
-              row={row}
-              empty={laneSequence(shown, row.lane.id).length === 0}
-              controls={laneControls(row.lane)}
-              onHandleDown={onHandleDown}
             />
           ) : null,
         )}
@@ -599,11 +594,9 @@ export const StoryCanvas = forwardRef<CanvasApi, Props>(function StoryCanvas(pro
       </div>
 
       {/* Sticky headers for the tracks that run the whole story. */}
-      {rows.map((row) =>
-        row.lane.kind === 'subplot' ? null : (
-          <TrackHeader key={row.lane.id} lane={row.lane} top={screenY(row.top)} height={row.height * view.zoom} controls={laneControls(row.lane)} onAddLevel={addLevel} />
-        ),
-      )}
+      {rows.map((row) => (
+        <TrackHeader key={row.lane.id} lane={row.lane} top={screenY(row.top)} height={row.height * view.zoom} controls={laneControls(row.lane)} onAddLevel={addLevel} />
+      ))}
 
       <div className="continues" style={{ top: screenY(0), height: Math.max(0, tracksBottom - screenY(0)) }} aria-hidden="true">
         <span className="continues-mark" style={{ top: 6 * Math.min(1, view.zoom) }}>
@@ -739,19 +732,8 @@ const Connectors = ({ project, rows, selection, link, onSelect, onEditLabel, onM
     <svg className="connectors" style={{ left: -LAYER, top: -LAYER }} width={LAYER * 2} height={LAYER * 2} aria-hidden="true">
       <g transform={`translate(${LAYER} ${LAYER})`}>
         {rows.map((row) => {
-          if (row.lane.kind === 'subplot') {
-            const path = subplotPath(project, row, rows);
-            if (!path) return null;
-            return (
-              <g key={row.lane.id} className="subplot-path" style={{ stroke: path.color }}>
-                <path className="subplot-leg" d={path.branchOff} />
-                <path className="subplot-leg" d={path.rejoin} />
-                <path className={`subplot-through${path.empty ? ' empty' : ''}`} d={path.through} />
-              </g>
-            );
-          }
           const d = flowPath(project, row, rows);
-          return d ? <path key={row.lane.id} className={`flow flow-${row.lane.kind}`} style={{ stroke: row.lane.kind === 'character' ? row.lane.color : undefined }} d={d} /> : null;
+          return d ? <path key={row.lane.id} className={`flow flow-${row.lane.kind}`} style={{ stroke: row.lane.kind === 'spine' ? undefined : row.lane.color }} d={d} /> : null;
         })}
 
         {project.connections.map((c: Connection) => {

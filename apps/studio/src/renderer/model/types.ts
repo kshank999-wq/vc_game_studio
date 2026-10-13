@@ -82,7 +82,7 @@ export interface Lane {
   characterId?: string;
   /** The Player Lane (Note Sorter spec §9): the player's progression beats, Beginning to Ending. */
   role?: 'player';
-  /** The Level lane above the spine: the game's levels, each stretched between two spine plot points. */
+  /** The Level lane: the game's levels, each stretched between two spine plot points. */
   levels?: LevelBand[];
 }
 

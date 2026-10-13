@@ -370,7 +370,7 @@ export const whereUsed = (project: Project, id: string): Usage[] => {
   const placement = project.placements[id];
   if (placement) {
     const lane = project.lanes.find((l) => l.id === placement.laneId);
-    const where = lane ? (lane.kind === 'spine' ? 'on the spine' : `on ${lane.kind === 'subplot' ? 'the subplot' : 'the arc'} “${lane.name}”`) : 'a branch above the spine';
+    const where = lane ? (lane.kind === 'spine' ? 'on the spine' : `on ${lane.kind === 'subplot' ? 'the subplot' : 'the arc'} “${lane.name}”`) : 'a branch above the lanes';
     let at = '';
     if (lane?.kind === 'spine') at = ` · ${spineSequence(project).indexOf(id) + 1} of ${spineSequence(project).length}`;
     if (lane?.kind === 'subplot') at = ` · beat ${laneSequence(project, lane.id).indexOf(id) + 1}`;

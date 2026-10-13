@@ -12,10 +12,8 @@ export const LANE_HEIGHT: Record<Lane['kind'], number> = { spine: SPINE_HEIGHT, 
 /** The gap packing keeps between neighbours on a track. */
 export const NODE_GAP = 20;
 
-/** Room a subplot band keeps between its ends and its first and last beat. */
+/** Room kept before the first beat on an empty subplot lane. */
 export const SPAN_PAD = 28;
-/** The shortest a subplot band gets, so an empty one can still be dropped into. */
-export const MIN_SPAN = 180;
 
 /** Branch nodes stay at least this far above the spine. */
 export const BRANCH_CLEARANCE = 24;
@@ -47,16 +45,16 @@ export interface LaneRow {
   height: number;
 }
 
-/** Where each kind of lane sits: the Level lane on top, the spine under it, then the rest by order. */
-const LANE_RANK: Record<Lane['kind'], number> = { level: 0, spine: 1, subplot: 2, character: 2 };
+/** Which kind goes first when two lanes share an order. */
+const LANE_RANK: Record<Lane['kind'], number> = { spine: 0, subplot: 1, character: 1, level: 2 };
 
-/** Visible tracks top to bottom: the Level lane, the spine, then lanes by order. */
+/** Visible tracks top to bottom, in the order they have been arranged in (they can be dragged). */
 export const laneRows = (project: Project): LaneRow[] => {
   const rows: LaneRow[] = [];
   let top = 0;
   const lanes = [...project.lanes]
     .filter((lane) => lane.visible || lane.kind === 'spine' || lane.kind === 'level')
-    .sort((a, b) => LANE_RANK[a.kind] - LANE_RANK[b.kind] || a.order - b.order);
+    .sort((a, b) => a.order - b.order || LANE_RANK[a.kind] - LANE_RANK[b.kind]);
   for (const lane of lanes) {
     const height = LANE_HEIGHT[lane.kind];
     rows.push({ lane, top, height });
@@ -115,6 +113,23 @@ export const spanRange = (project: Project, lane: Lane): { from: number; to: num
   const from = centre(lane.span.startRef);
   const to = centre(lane.span.endRef);
   return from === null || to === null ? null : { from, to };
+};
+
+/**
+ * The stretch of the spine a subplot runs alongside: the spine node at or
+ * before its first beat to the one at or after its last. Null with no beats.
+ */
+export const subplotReach = (project: Project, lane: Lane): { startRef: string; endRef: string } | null => {
+  if (lane.span) return lane.span;
+  const beats = laneSequence(project, lane.id);
+  const spine = spineSequence(project).filter((id) => project.objects[id]?.data.opening !== true);
+  if (!beats.length || !spine.length) return null;
+  const centre = (id: string, kind: Lane['kind']) => project.placements[id]!.x + nodeSize(project.objects[id]!.type, kind).w / 2;
+  const first = centre(beats[0]!, 'subplot');
+  const last = centre(beats[beats.length - 1]!, 'subplot');
+  const before = [...spine].reverse().find((id) => centre(id, 'spine') <= first) ?? spine[0]!;
+  const after = spine.find((id) => centre(id, 'spine') >= last) ?? spine[spine.length - 1]!;
+  return { startRef: before, endRef: after };
 };
 
 /** Everything placed, for fitting the view. */

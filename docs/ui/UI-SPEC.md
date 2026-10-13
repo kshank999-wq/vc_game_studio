@@ -40,10 +40,14 @@ Core hierarchy: MAIN GRAPH → SCENE → SCENE DETAIL / TIMELINE → ELEMENT DET
 - The spine remains readable even when surrounding material is expanded.
 
 ## 6. Subplot Lanes
-- A subplot lane is a partial secondary spine that can begin and end anywhere.
-- The user drags it onto the canvas and resizes its start/end extent.
-- It accepts plot points, choices and scene connections.
-- It can reconnect to the main spine or another valid narrative point.
+- A subplot lane runs the whole story, like the spine and the Level lane. Add as many as needed; each new one goes in above the Level lane.
+- Its beats (plot points, choices and scenes) go anywhere along it, lined up with the moment on the spine they happen at. They are not tied to the spine; connections can still link them.
+- The engines get the stretch of spine a subplot runs alongside, from its first beat to its last.
+
+### 6.1 Arranging lanes
+- Every lane (the spine, subplots, character arcs and the Level lane) has a grip (⠿) in its header: drag it up or down to put the lane above or below the others. A lane's menu also has Move up and Move down.
+- A new project stacks the spine, the Player Lane, then the Level lane at the bottom.
+- The open area above the top lane is for branches, alternate scenes and the mind map.
 
 ## 7. Character Arc Lanes
 - A character arc is a persistent full-story lane with its own consistent color.

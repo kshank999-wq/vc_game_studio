@@ -1,6 +1,6 @@
 import { addInteraction, interactionsOf, setField, setNotes, setSceneUse, setStates, setValue, toggleTag, updateInteraction } from './details';
 import { spineLane } from './layout';
-import { addLane, connect, createProject, makeObject, newId, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, setSpanEdge, updateLane } from './project';
+import { addLane, connect, createProject, makeObject, newId, nextCode, codeFormatFor, placeNew, relabelConnection, renameObject, setOutcome, setPolarity, updateLane } from './project';
 import { sampleLevel } from './level/sample-level';
 import { addPath, pathOf, playBy } from './paths';
 import type { Who } from './collab';
@@ -75,15 +75,15 @@ export const sunkenVault = (): Project => {
     p = setSceneData(p, scene, { summary });
   }
 
-  // A subplot from The Key to the cinematic, and two character arcs.
+  // A subplot running alongside The Key to the cinematic, and two character arcs.
   const sub = addLane(p, 'subplot');
   p = updateLane(sub.project, sub.laneId, { name: 'The Lost Expedition' });
-  p = setSpanEdge(p, sub.laneId, 'start', theKey);
-  p = setSpanEdge(p, sub.laneId, 'end', vaultOpens);
-  for (const beat of ['Brother’s journal', 'Camp found']) {
-    const placed = placeNew(p, 'plotPoint', sub.laneId, 99999)!;
+  const from = p.placements[theKey]!.x;
+  const to = p.placements[vaultOpens]!.x;
+  ['Brother’s journal', 'Camp found'].forEach((beat, i) => {
+    const placed = placeNew(p, 'plotPoint', sub.laneId, from + 40 + ((to - from) / 2) * i)!;
     p = renameObject(placed.project, placed.id, beat);
-  }
+  });
   const maraLane = addLane(p, 'character');
   p = updateLane(maraLane.project, maraLane.laneId, { name: 'Mara', subtitle: 'Guarded → trusting' });
   const mara = p.lanes.find((l) => l.id === maraLane.laneId)!.characterId!;

@@ -68,17 +68,23 @@ describe('the story graph', () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText('+ Add subplot lane'));
     fireEvent.click(screen.getByText('+ Add character lane'));
-    // The spine and the character arc run the whole story; the subplot is a
-    // band between two spine nodes, like the Player Lane a new project has.
-    // With the Level lane above the spine.
-    expect(container.querySelectorAll('.track')).toHaveLength(3);
-    expect(container.querySelectorAll('.subplot-band')).toHaveLength(2);
-    expect(container.querySelectorAll('.span-handle')).toHaveLength(4);
+    // Every lane runs the whole story: the spine, the Player Lane and the new
+    // subplot, the character arc, and the Level lane at the bottom.
+    expect(container.querySelectorAll('.track')).toHaveLength(5);
+    expect(container.querySelectorAll('.track-subplot')).toHaveLength(2);
+    expect(container.querySelectorAll('.span-handle')).toHaveLength(0);
+    expect([...container.querySelectorAll('.track-header')].map((h) => h.className.split(' ')[1])).toEqual([
+      'header-spine',
+      'header-subplot',
+      'header-subplot',
+      'header-character',
+      'header-level',
+    ]);
     act(() => {
       fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
     });
-    expect(container.querySelectorAll('.track')).toHaveLength(2);
-    expect(container.querySelectorAll('.subplot-band')).toHaveLength(2);
+    expect(container.querySelectorAll('.track')).toHaveLength(4);
+    expect(container.querySelectorAll('.track-subplot')).toHaveLength(2);
   });
 
   it('hides a lane from its chip and shows it again', () => {
@@ -86,9 +92,9 @@ describe('the story graph', () => {
     fireEvent.click(screen.getByText('+ Add character lane'));
     const chip = screen.getByRole('button', { name: 'Character 1' });
     fireEvent.click(chip);
-    expect(container.querySelectorAll('.track')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Character 1 · hidden' }));
     expect(container.querySelectorAll('.track')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: 'Character 1 · hidden' }));
+    expect(container.querySelectorAll('.track')).toHaveLength(4);
   });
 });
 
@@ -99,22 +105,28 @@ describe('deleting', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More for Subplot 1' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete lane' }));
     // An empty lane goes straight away; the Player Lane stays.
-    expect(container.querySelectorAll('.subplot-band')).toHaveLength(1);
+    expect(container.querySelectorAll('.track-subplot')).toHaveLength(1);
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
-  it('warns before deleting a spine node a subplot starts on, then moves the span', () => {
+  it('moves a lane up or down from its menu, above the spine if wanted, and every lane has a grip to drag it', () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByText('+ Add subplot lane'));
-    const plotPoint = container.querySelector('[data-type="plotPoint"]')!;
-    fireEvent.pointerDown(plotPoint, { button: 0 });
-    fireEvent.pointerUp(window);
-    fireEvent.keyDown(window, { key: 'Delete' });
-    const dialog = screen.getByRole('alertdialog');
-    expect(dialog.textContent).toContain('“Subplot 1” will branch off or rejoin at the neighbouring spine node.');
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-    expect(container.querySelector('[data-type="plotPoint"]')).toBeNull();
-    expect(container.querySelectorAll('.span-handle')).toHaveLength(4);
+    const order = () => [...container.querySelectorAll('.track-header')].map((h) => [h.querySelector('b')!.textContent, h.querySelector('.header-lane-name')?.textContent].filter(Boolean).join(' · '));
+    expect(order()).toEqual(['SPINE', 'PLAYER · Player Lane', 'SUBPLOT · Subplot 1', 'LEVELS']);
+    for (let i = 0; i < 2; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'More for Subplot 1' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Move up' }));
+    }
+    expect(order()).toEqual(['SUBPLOT · Subplot 1', 'SPINE', 'PLAYER · Player Lane', 'LEVELS']);
+    fireEvent.click(screen.getByRole('button', { name: 'More for Subplot 1' }));
+    expect((screen.getByRole('menuitem', { name: 'Move up' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getAllByRole('button', { name: /up or down$/ })).toHaveLength(4);
+    // Undo puts it back.
+    act(() => {
+      fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    });
+    expect(order()[1]).toBe('SUBPLOT · Subplot 1');
   });
 });
 

@@ -190,8 +190,10 @@ const onLane = (project: Project, objectId: string, laneId: string, after?: stri
   const ids = laneSequence(project, laneId).filter((id) => id !== objectId);
   const anchor = after && ids.includes(after) ? after : lane.kind === 'spine' ? ids[ids.length - 2] : ids[ids.length - 1];
   const at = anchor ? project.placements[anchor]! : undefined;
-  const range = lane.kind === 'subplot' ? spanRange(project, lane) : null;
-  const x = at ? at.x + 1 : (range?.from ?? 0) + SPAN_PAD;
+  // An empty lane starts under Beginning.
+  const begin = spineSequence(project).find((id) => project.objects[id]?.type === 'begin');
+  const start = lane.kind === 'subplot' ? (spanRange(project, lane)?.from ?? (begin ? project.placements[begin]!.x : 0)) : 0;
+  const x = at ? at.x + 1 : start + SPAN_PAD;
   const placed = { ...project, placements: { ...project.placements, [objectId]: { laneId, x, y: 0 } } };
   return settle(packLane(placed, laneId));
 };

@@ -1,9 +1,9 @@
 import { bandRange } from '../../model/level-lane';
-import { spanRange, type LaneRow } from '../../model/layout';
+import type { LaneRow } from '../../model/layout';
 import type { Lane, LevelBand, Project } from '../../model/types';
 import { EyeIcon, LockIcon, UnlockIcon } from '../Symbol';
 
-/** Full-width bands for the spine and character arcs: they run the whole story, at every pan. */
+/** Full-width bands for every lane: they run the whole story, at every pan. */
 export const TrackBand = ({ row, top, height, empty }: { row: LaneRow; top: number; height: number; empty: boolean }) => {
   const { lane } = row;
   return (
@@ -11,6 +11,11 @@ export const TrackBand = ({ row, top, height, empty }: { row: LaneRow; top: numb
       {empty && lane.kind === 'character' && height > 40 && (
         <span className="track-hint" style={{ color: lane.color }}>
           {lane.name}’s arc runs the whole story. Drop arc events here; each ties to the moment above it.
+        </span>
+      )}
+      {empty && lane.kind === 'subplot' && height > 40 && (
+        <span className="track-hint" style={{ color: lane.color }}>
+          {lane.role === 'player' ? 'The player’s progression' : lane.name} runs the whole story. Drop plot points, scenes and choices anywhere along it.
         </span>
       )}
     </div>
@@ -28,7 +33,26 @@ export interface LaneControls {
   onToggleLock: () => void;
   onMenu: () => void;
   onDelete: () => void;
+  /** Start dragging the lane up or down the stack. */
+  onGrip: (e: React.PointerEvent) => void;
+  /** Move the lane one place up (-1) or down (1); null where it can't go. */
+  onMoveBy: ((by: -1 | 1) => void) | null;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }
+
+/** The handle that drags a lane above or below the others. */
+const Grip = ({ lane, controls }: { lane: Lane; controls: LaneControls }) => (
+  <span
+    className="lane-grip"
+    role="button"
+    aria-label={`Drag ${lane.kind === 'spine' ? 'the spine' : lane.name} up or down`}
+    title="Drag to move this lane up or down"
+    onPointerDown={controls.onGrip}
+  >
+    ⠿
+  </span>
+);
 
 const Field = ({ value, field, placeholder, className, controls }: {
   value: string;
@@ -85,6 +109,12 @@ const LaneMenu = ({ controls }: { controls: LaneControls }) =>
       <button role="menuitem" onClick={() => controls.onEdit('name')}>
         Rename
       </button>
+      <button role="menuitem" disabled={!controls.canMoveUp} onClick={() => controls.onMoveBy?.(-1)}>
+        Move up
+      </button>
+      <button role="menuitem" disabled={!controls.canMoveDown} onClick={() => controls.onMoveBy?.(1)}>
+        Move down
+      </button>
       <button role="menuitem" onClick={controls.onToggleVisible}>
         Hide
       </button>
@@ -105,7 +135,10 @@ export const TrackHeader = ({ lane, top, height, controls, onAddLevel }: { lane:
         style={{ top: top + inset, height: Math.max(0, height - inset * 2), '--lane': lane.color } as React.CSSProperties}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <b>LEVELS</b>
+        <span className="header-row">
+          <Grip lane={lane} controls={controls} />
+          <b>LEVELS</b>
+        </span>
         {height >= 28 && (
           <button className="header-add" title="Add a level after the last one, between the next two plot points" onClick={onAddLevel}>
             + Level
@@ -122,7 +155,10 @@ export const TrackHeader = ({ lane, top, height, controls, onAddLevel }: { lane:
     >
       {lane.kind === 'spine' ? (
         <>
-          <b>SPINE</b>
+          <span className="header-row">
+            <Grip lane={lane} controls={controls} />
+            <b>SPINE</b>
+          </span>
           {roomy && <span className="header-sub">Main plot · locked lane</span>}
           {roomy && (
             <span className="header-icons" title="The spine is locked in place">
@@ -130,63 +166,32 @@ export const TrackHeader = ({ lane, top, height, controls, onAddLevel }: { lane:
             </span>
           )}
         </>
+      ) : lane.kind === 'subplot' ? (
+        <>
+          {/* The kind on top, the name on a line of its own so it isn't cut short. */}
+          <span className="header-row">
+            <Grip lane={lane} controls={controls} />
+            <b>{lane.role === 'player' ? 'PLAYER' : 'SUBPLOT'}</b>
+          </span>
+          <Field value={lane.name} field="name" placeholder="Name this subplot…" className="header-lane-name" controls={controls} />
+          {height >= 96 && <Field value={lane.subtitle} field="subtitle" placeholder="What it’s about" className="header-sub" controls={controls} />}
+          {height >= 66 && <LaneIcons lane={lane} controls={controls} />}
+          <LaneMenu controls={controls} />
+        </>
       ) : (
         <>
-          <b className="header-arc">
-            ARC · <Field value={lane.name} field="name" placeholder="Character" className="header-arc-name" controls={controls} />
-          </b>
+          <span className="header-row">
+            <Grip lane={lane} controls={controls} />
+            <b className="header-arc">
+              ARC · <Field value={lane.name} field="name" placeholder="Character" className="header-arc-name" controls={controls} />
+            </b>
+          </span>
           {roomy && <Field value={lane.subtitle} field="subtitle" placeholder="from → to" className="header-sub" controls={controls} />}
           {roomy && <LaneIcons lane={lane} controls={controls} />}
           <LaneMenu controls={controls} />
         </>
       )}
     </div>
-  );
-};
-
-/**
- * A subplot is a short band of its own, below the spine, between the node it
- * branches off and the node it rejoins. Its ends are handles; beats dropped
- * into it make it longer.
- */
-export const SubplotBand = ({ project, row, empty, controls, onHandleDown }: {
-  project: Project;
-  row: LaneRow;
-  empty: boolean;
-  controls: LaneControls;
-  onHandleDown: (e: React.PointerEvent, laneId: string, edge: 'start' | 'end') => void;
-}) => {
-  const range = spanRange(project, row.lane);
-  if (!range) return null;
-  const { lane } = row;
-  const handle = (edge: 'start' | 'end', x: number) => (
-    <div
-      className={`span-handle${lane.locked ? ' locked' : ''}`}
-      role="slider"
-      aria-label={`${lane.name}: where it ${edge === 'start' ? 'branches off' : 'rejoins the spine'}`}
-      aria-valuenow={Math.round(x)}
-      title={lane.locked ? 'Lane is locked' : edge === 'start' ? 'Drag to the spine node it branches off' : 'Drag to the spine node it rejoins'}
-      style={{ left: x - 4, top: row.top + 10, height: row.height - 20 }}
-      onPointerDown={(e) => (lane.locked ? e.stopPropagation() : onHandleDown(e, lane.id, edge))}
-    />
-  );
-  return (
-    <>
-      <div
-        className={`subplot-band${empty ? ' empty' : ''}${lane.locked ? ' locked' : ''}`}
-        style={{ left: range.from, width: range.to - range.from, top: row.top, height: row.height }}
-      >
-        <div className="subplot-tab" onPointerDown={(e) => e.stopPropagation()}>
-          <b>SUBPLOT</b>
-          <Field value={lane.name} field="name" placeholder="Name this subplot…" className="subplot-name" controls={controls} />
-          <LaneIcons lane={lane} controls={controls} />
-          <LaneMenu controls={controls} />
-        </div>
-        {empty && <span className="band-hint">Drop beats here · it grows to fit</span>}
-      </div>
-      {handle('start', range.from)}
-      {handle('end', range.to)}
-    </>
   );
 };
 

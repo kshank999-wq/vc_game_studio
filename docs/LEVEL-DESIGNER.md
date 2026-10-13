@@ -24,8 +24,10 @@ adds the scale above a level: worlds, regions and the maps inside them. See
 
 ## The Level lane on the story graph
 
-Above the spine is the **Level lane**: the game's levels, in the order the
-player meets them. It is always there and can't be hidden.
+At the bottom of the story graph is the **Level lane**: the game's levels,
+in the order the player meets them. It is always there and can't be hidden.
+Drag it by the grip (⠿) in its header to put it anywhere in the stack of
+lanes, above the spine or below it.
 
 - **+ Level** (in the lane's header) adds a level from where the last one
   ends, or from Beginning, to the next plot point, and makes its map in the
