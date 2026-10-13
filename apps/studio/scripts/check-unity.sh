@@ -38,3 +38,10 @@ cp "$here/unity-check/UnityStubs.cs" "$here/unity-rooms-check/"* "$rooms/"
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$rooms" unity rooms > /dev/null)
 cd "$rooms"
 dotnet run --nologo -v q
+# The Character Creator's cast (character spec §10): the sample cast, a group area and a placed Orc Sentry.
+cast="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast"' EXIT
+cp "$here/unity-check/UnityStubs.cs" "$here/unity-cast-check/"* "$cast/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$cast" unity cast > /dev/null)
+cd "$cast"
+dotnet run --nologo -v q

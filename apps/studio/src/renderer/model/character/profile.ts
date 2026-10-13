@@ -150,6 +150,30 @@ export interface InventoryProfile {
   persists: boolean;
 }
 
+/**
+ * Final art bound in the engine (spec §10, §11 AssetBinding): the model that
+ * replaces the placeholder, its rig, the animations it has (ability cues
+ * should be among them), where props attach, and its sounds. Changing it
+ * never changes the character's id, inventory, dialogue or logic.
+ */
+export interface AssetBinding {
+  /** An engine path: res://art/orc.glb, Assets/Art/Orc.fbx, /Game/Art/SK_Orc. Empty: the placeholder stands in. */
+  finalModel: string;
+  rig: 'none' | 'humanoid' | 'generic' | 'quadruped';
+  animations: string[];
+  sockets: { hand: string; offHand: string; head: string };
+  audio: { key: string; file: string }[];
+}
+
+export const RIGS: { id: AssetBinding['rig']; label: string }[] = [
+  { id: 'none', label: 'No rig (static)' },
+  { id: 'humanoid', label: 'Humanoid' },
+  { id: 'generic', label: 'Generic' },
+  { id: 'quadruped', label: 'Four-legged' },
+];
+
+const DEFAULT_BINDING: AssetBinding = { finalModel: '', rig: 'humanoid', animations: [], sockets: { hand: 'hand_r', offHand: 'hand_l', head: 'head' }, audio: [] };
+
 export interface CharacterProfile {
   roles: CharacterRole[];
   /** The internal slug: lower-case, unique, kept on rename (spec §3). */
@@ -176,6 +200,7 @@ export interface CharacterProfile {
   /** Escalating enemy variants of this character, and the guardrails they keep to. */
   variants: EnemyVariant[];
   variantRules: VariantRules;
+  binding: AssetBinding;
 }
 
 // ---------------------------------------------------------------- archetypes
@@ -278,6 +303,7 @@ export const profileOf = (o: StoryObject): CharacterProfile => {
     ai: normalizeAI(p.ai),
     variants: Array.isArray(p.variants) ? p.variants : [],
     variantRules: { ...defaultVariantRules(), ...(p.variantRules ?? {}) },
+    binding: { ...DEFAULT_BINDING, ...(p.binding ?? {}), sockets: { ...DEFAULT_BINDING.sockets, ...(p.binding?.sockets ?? {}) } },
   };
 };
 
@@ -358,6 +384,7 @@ export const createCharacter = (project: Project, spec: NewCharacter, now = new 
     ai: normalizeAI(undefined),
     variants: [],
     variantRules: defaultVariantRules(),
+    binding: { ...DEFAULT_BINDING, rig: placeholder.silhouette === 'beast' ? 'quadruped' : 'humanoid' },
   };
   const role = profile.roles.includes('player') ? 'Player character' : profile.roles.length ? 'NPC' : undefined;
   const object = makeObject('character', name, now, { code, color: placeholder.tint, ...(role ? { role } : {}), profile });
@@ -628,6 +655,25 @@ export const characterIssues = (project: Project, id: string): CharacterIssue[] 
   if (p.variants.length && !p.roles.includes('enemy')) say('warning', 'variants', 'It has enemy variants but isn’t an enemy NPC.');
   for (const v of p.variants) for (const x of variantProblems(project, p, v, p.variants)) say(x.severity, 'variants', x.text, v.id);
 
+  // Final art (spec §8: report rig mismatch and missing animation events instead of failing quietly).
+  const b = p.binding;
+  if (b.finalModel.trim()) {
+    const fourLegged = p.art.placeholder.silhouette === 'beast';
+    if (b.rig === 'none' && p.stats.movement !== 'static') say('warning', 'art', `${b.finalModel} has no rig, but the character moves: it will slide, not walk.`);
+    if (b.rig === 'humanoid' && fourLegged) say('warning', 'art', 'A humanoid rig on a four-legged character: check the model’s rig.');
+    if (b.rig === 'quadruped' && !fourLegged && p.art.placeholder.silhouette !== 'flyer') say('warning', 'art', 'A four-legged rig on a two-legged placeholder: check the model’s rig.');
+    if (p.art.placeholder.prop !== 'none' && !b.sockets.hand.trim()) say('warning', 'art', `The ${p.art.placeholder.prop} has no hand socket to attach to.`);
+    const have = new Set(b.animations.map((a) => a.trim().toLowerCase()).filter(Boolean));
+    if (have.size) {
+      for (const a of p.abilities) {
+        const cue = paramsOf(a).cue.trim();
+        if (a.enabled && cue && !have.has(cue.toLowerCase())) say('warning', 'art', `${a.name} plays “${cue}”, which ${b.finalModel} has no animation for.`, a.id);
+      }
+      for (const need of p.stats.movement === 'static' ? [] : ['idle', p.stats.movement === 'fly' ? 'fly' : p.stats.movement === 'swim' ? 'swim' : 'walk']) if (!have.has(need)) say('warning', 'art', `${b.finalModel} has no “${need}” animation.`);
+    } else if (b.rig !== 'none') say('info', 'art', `No animations listed for ${b.finalModel}: list them so missing ability cues are caught.`);
+    for (const a of b.audio) if (!a.key.trim() || !a.file.trim()) say('warning', 'art', 'A sound binding needs a key and a file.');
+  }
+
   if (p.art.use === 'placeholder') say('info', 'art', 'Uses placeholder art: a dummy that keeps its collider and props when final art is bound.');
   else if (!p.art.refs.some((r) => r.id === p.art.use)) say('error', 'art', 'The art it uses has been removed.');
   return out;
@@ -775,3 +821,5 @@ export const replaceCharacter = (project: Project, from: string, to: string): Pr
   };
   return removeObject(moved, from);
 };
+
+export const patchBinding = (project: Project, id: string, patch: Partial<AssetBinding>): Project => updateProfile(project, id, (p) => ({ ...p, binding: { ...p.binding, ...patch, sockets: { ...p.binding.sockets, ...(patch.sockets ?? {}) } } }));

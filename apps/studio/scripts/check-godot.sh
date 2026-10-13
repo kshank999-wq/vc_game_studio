@@ -38,3 +38,10 @@ cp "$here/godot-check/project.godot" "$here/godot-check/check_rooms.gd" "$rooms/
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$rooms" godot rooms > /dev/null)
 "$GODOT" --headless --path "$rooms" --import > /dev/null 2>&1 || true
 "$GODOT" --headless --path "$rooms" -s check_rooms.gd
+# The Character Creator's cast (character spec §10): the sample cast, a group area and a placed Orc Sentry.
+cast="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast"' EXIT
+cp "$here/godot-check/project.godot" "$here/godot-check/check_cast.gd" "$cast/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$cast" godot cast > /dev/null)
+"$GODOT" --headless --path "$cast" --import > /dev/null 2>&1 || true
+"$GODOT" --headless --path "$cast" -s check_cast.gd

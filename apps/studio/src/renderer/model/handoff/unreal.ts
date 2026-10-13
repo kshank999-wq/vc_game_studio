@@ -5,6 +5,8 @@ import { fingerprint } from './engines';
 import { DESIGN_LISTS, type HandoffIR, type Ident } from './ir';
 import { JSON_FORMAT } from './json';
 import { VCGS_CORE_H } from './unreal-core';
+import { CHARACTER_PLUGIN_FILES } from './unreal-characters';
+import { castFiles } from './cast-files';
 import { buildLevelScript, LEVEL_PLUGIN_FILES, levelJsonUnreal } from './unreal-levels';
 import { markupInline } from '../inline';
 
@@ -1783,6 +1785,13 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
     'generated',
   );
   row({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'TASKS.md · TODO(VCGS) in VcgsStoryKeys.h', files: [tasksPath] }, ir.notes);
+  // The Character Creator's cast (character spec §10): characters.json, its manifests and the starter classes.
+  const cast = castFiles(ir.cast, root, 'unreal', 'Unreal', VERSION);
+  if (cast.files.length) {
+    for (const [name, content] of Object.entries(CHARACTER_PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
+    for (const f of cast.files) put(f.path, f.content, f.kind);
+    elements.push(...cast.elements);
+  }
   return { files: withCodeNotes(files, ir), elements };
 };
 

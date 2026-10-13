@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { addArt, patchPlaceholder, profileOf, removeArt, SILHOUETTES, useArt, type ArtRef, type Placeholder, type Silhouette } from '../../model/character/profile';
+import { addArt, characterIssues, patchBinding, patchPlaceholder, profileOf, removeArt, RIGS, SILHOUETTES, useArt, type ArtRef, type AssetBinding, type Placeholder, type Silhouette } from '../../model/character/profile';
 import type { Project, StoryObject } from '../../model/types';
 import { Figure } from './Figure';
 
@@ -183,6 +183,111 @@ export const ArtPane = ({ project, character, onCommit, onSay }: { project: Proj
         </label>
       </div>
       <p className="pref-hint">The tint is the character’s colour everywhere: cues in the script, the Bible, the map.</p>
+      <BindingEditor project={project} character={character} onCommit={onCommit} />
     </section>
+  );
+};
+
+/** A text field that commits on blur or Enter. */
+const Blur = ({ label, value, placeholder, onDone }: { label: string; value: string; placeholder?: string; onDone: (v: string) => void }) => (
+  <input
+    key={value}
+    className="inp small"
+    aria-label={label}
+    placeholder={placeholder}
+    defaultValue={value}
+    onBlur={(e) => e.currentTarget.value !== value && onDone(e.currentTarget.value)}
+    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+  />
+);
+
+const listOf = (text: string): string[] =>
+  text
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+const audioOf = (text: string): AssetBinding['audio'] =>
+  text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const at = l.indexOf('=');
+      return at < 0 ? { key: l, file: '' } : { key: l.slice(0, at).trim(), file: l.slice(at + 1).trim() };
+    });
+
+/**
+ * Final art (spec §10, §11): the engine model that replaces the placeholder,
+ * its rig, the animations it has, where props attach and its sounds. The
+ * export binds them; rig mismatches and ability cues with no animation are
+ * listed here and in the export report. Swapping art never changes the id,
+ * inventory, dialogue or logic.
+ */
+export const BindingEditor = ({ project, character, onCommit }: { project: Project; character: StoryObject; onCommit: (p: Project) => void }) => {
+  const b = profileOf(character).binding;
+  const set = (patch: Partial<AssetBinding>) => onCommit(patchBinding(project, character.id, patch));
+  const issues = characterIssues(project, character.id).filter((i) => i.area === 'art' && i.severity !== 'info' && b.finalModel.trim());
+  return (
+    <div className="cc-binding" role="group" aria-label="Final art binding">
+      <span className="pz-label">Final art in the engine</span>
+      <div className="cc-ph">
+        <label className="pz-field cc-wide">
+          <span className="pz-label">Model</span>
+          <Blur label="Final model" value={b.finalModel} placeholder="res://art/orc.glb · Assets/Art/Orc.fbx · /Game/Art/SK_Orc" onDone={(v) => set({ finalModel: v.trim() })} />
+        </label>
+        <label className="pz-field">
+          <span className="pz-label">Rig</span>
+          <select className="inp small" aria-label="Rig" value={b.rig} onChange={(e) => set({ rig: e.target.value as AssetBinding['rig'] })}>
+            {RIGS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="pz-field cc-wide">
+          <span className="pz-label">Animations</span>
+          <Blur label="Animations" value={b.animations.join(', ')} placeholder="idle, walk, attack…" onDone={(v) => set({ animations: listOf(v) })} />
+        </label>
+        <label className="pz-field">
+          <span className="pz-label">Hand socket</span>
+          <Blur label="Hand socket" value={b.sockets.hand} onDone={(v) => set({ sockets: { ...b.sockets, hand: v.trim() } })} />
+        </label>
+        <label className="pz-field">
+          <span className="pz-label">Off-hand socket</span>
+          <Blur label="Off-hand socket" value={b.sockets.offHand} onDone={(v) => set({ sockets: { ...b.sockets, offHand: v.trim() } })} />
+        </label>
+        <label className="pz-field">
+          <span className="pz-label">Head socket</span>
+          <Blur label="Head socket" value={b.sockets.head} onDone={(v) => set({ sockets: { ...b.sockets, head: v.trim() } })} />
+        </label>
+        <label className="pz-field cc-wide">
+          <span className="pz-label">Sounds (key = file, one a line)</span>
+          <textarea
+            key={JSON.stringify(b.audio)}
+            className="inp small"
+            aria-label="Sounds"
+            rows={2}
+            placeholder="footstep = res://audio/orc_step.ogg"
+            defaultValue={b.audio.map((a) => `${a.key} = ${a.file}`).join('\n')}
+            onBlur={(e) => {
+              const next = audioOf(e.currentTarget.value);
+              if (JSON.stringify(next) !== JSON.stringify(b.audio)) set({ audio: next });
+            }}
+          />
+        </label>
+      </div>
+      {issues.length > 0 && (
+        <ul className="pz-issues" aria-label="Art binding problems">
+          {issues.map((i, n) => (
+            <li key={n} className={`pz-issue ${i.severity}`}>
+              {i.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="pref-hint">{b.finalModel.trim() ? 'The export puts this model in place of the placeholder, under the same id: inventory, dialogue and logic stay as they are.' : 'Empty: the engine gets the placeholder figure, with its collider and hand socket.'}</p>
+    </div>
   );
 };

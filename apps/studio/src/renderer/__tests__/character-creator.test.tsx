@@ -181,3 +181,27 @@ describe('the Character Creator, phase 3 (character spec §7, §8)', () => {
     expect(screen.getByText(/Not in a level yet/)).toBeTruthy();
   });
 });
+
+describe('the Character Creator, phase 4 (character spec §10, §11)', () => {
+  it('binds final art: model, rig, animations, and says what is missing', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Characters' }));
+    await opened();
+    const registry = screen.getByRole('listbox', { name: 'Character registry' });
+    fireEvent.click(within(registry).getByRole('option', { name: /The Explorer/ }));
+    const binding = screen.getByRole('group', { name: 'Final art binding' });
+    expect(within(binding).getByText(/Empty: the engine gets the placeholder figure/)).toBeTruthy();
+    const model = within(binding).getByRole('textbox', { name: 'Final model' });
+    fireEvent.change(model, { target: { value: 'res://art/explorer.glb' } });
+    fireEvent.blur(model);
+    const after = screen.getByRole('group', { name: 'Final art binding' });
+    expect(within(after).getByText(/puts this model in place of the placeholder, under the same id/)).toBeTruthy();
+    const anims = within(after).getByRole('textbox', { name: 'Animations' });
+    fireEvent.change(anims, { target: { value: 'run, jump' } });
+    fireEvent.blur(anims);
+    const problems = within(screen.getByRole('group', { name: 'Final art binding' })).getByRole('list', { name: 'Art binding problems' });
+    expect(problems.textContent).toContain('no “idle” animation');
+    expect(problems.textContent).toContain('no “walk” animation');
+  });
+});

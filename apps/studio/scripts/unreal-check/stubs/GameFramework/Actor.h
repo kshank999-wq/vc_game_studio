@@ -2,9 +2,11 @@
 #include "CoreMinimal.h"
 class UWorld;
 class USceneComponent;
+class UClass {};
 class AActor : public UObject
 {
 public:
+    static UClass* StaticClass() { static UClass c; return &c; }
     using Super = AActor;
     USceneComponent* RootComponent = nullptr;
     struct { bool bCanEverTick = false; } PrimaryActorTick;

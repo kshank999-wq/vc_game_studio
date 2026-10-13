@@ -1,4 +1,5 @@
 import { tasksMarkdown } from './notes';
+import { castFiles } from './cast-files';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
 import { fingerprint } from './engines';
 import { DESIGN_LISTS, type HandoffIR } from './ir';
@@ -584,7 +585,9 @@ the parts it plays in puzzles.
 
 const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
   const root = outputPath.replace(/\/+$/, '') || 'vcgs';
-  const story = { $schema: './story.schema.json', ...JSON_FORMAT, generator: 'VC Game Studio', ...ir };
+  // The cast is characters.json's (with its own schema), not story.json's.
+  const { cast: _cast, ...rest } = ir;
+  const story = { $schema: './story.schema.json', ...JSON_FORMAT, generator: 'VC Game Studio', ...rest };
   const files: GeneratedFile[] = [
     { path: `${root}/story.json`, content: `${JSON.stringify(story, null, 2)}\n`, kind: 'generated' },
     { path: `${root}/story.schema.json`, content: `${JSON.stringify(storySchema(), null, 2)}\n`, kind: 'runtime' },
@@ -609,6 +612,9 @@ const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
   for (const t of ir.triggers) row({ id: t.id, label: t.name, symbol: t.kind, group: 'Logic', generates: t.rule ? 'triggers[] · by rule' : 'triggers[]' }, t);
   for (const l of ir.levels) row({ id: l.guid, label: l.name, symbol: 'environment', group: 'World', generates: `levels[] · ${l.items.length} items (${l.export_name})` }, l);
   elements.push({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'notes[] · TASKS.md', files: [storyPath, `${root}/TASKS.md`], fingerprint: fingerprint(`${VERSION}:${JSON.stringify(ir.notes)}`) });
+  const cast = castFiles(ir.cast, root, 'custom', 'your engine', VERSION);
+  files.push(...cast.files);
+  elements.push(...cast.elements);
   return { files, elements };
 };
 

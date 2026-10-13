@@ -69,7 +69,12 @@ export const tasksMarkdown = (ir: HandoffIR, engine: string, where: (n: IrNote) 
 };
 
 /** The IR without its notes: what story data and fingerprints are made from, so a comment changes only TASKS.md and its TODO lines. */
-export const withoutNotes = (ir: HandoffIR): HandoffIR => ({ ...ir, notes: [] });
+/** The IR for story.json: without the notes (TASKS.md has them) and the cast (characters.json has it). */
+export const withoutNotes = (ir: HandoffIR): HandoffIR => {
+  const { cast: _cast, ...rest } = ir;
+  void _cast;
+  return { ...rest, notes: [] };
+};
 
 /** How a file type writes a line comment, or null for types that take none (JSON, CSV). */
 const commentFor = (path: string): string | null => {

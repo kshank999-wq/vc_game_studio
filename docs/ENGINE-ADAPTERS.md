@@ -722,6 +722,34 @@ Escape). Each says when
 it is over (`Transition.Finished`, `OnTransitionFinished`), and
 `TransitionOf` names the levels a cinematic joins.
 
+## Characters
+
+With Character Creator profiles in the project, every adapter writes
+`characters.json` (schema `vcgs-characters` v1) and `characters.schema.json`.
+It also writes a manifest per character and group, and `CHARACTERS.md`, the
+export report with its TODOs. Godot, Unity and Unreal also get a starter
+runtime:
+
+- **Godot:** `addons/vcgs_runtime/characters/`
+- **Unity:** `Assets/VCGS/Runtime/Characters/`
+- **Unreal:** `VcgsCast.h`, `VcgsActorComponents`, `VcgsCharacterActor` and `VcgsSpawnGroup` in the plugin
+
+The runtime plays the studio's AI machine exactly, and handles inventory
+capacity, ability costs and cooldowns, placeholders and spawn groups.
+[CHARACTER-CREATOR.md](CHARACTER-CREATOR.md#in-the-engines-spec-10-11-14)
+maps each spec component to its class.
+
+The checks export the sample with the sample cast (`export-sample.ts <dir>
+<engine> cast`). The export writes `cast_expect.json`: the studio's `aiStep`
+run on five scenarios. Each engine must reproduce every transition and
+reason, and every final state:
+
+- `check_cast.gd` in Godot 4.3;
+- `unity-cast-check` with dotnet;
+- `cast_check.cpp` with g++.
+
+The checks also spawn the market group and a placed Orc Sentry.
+
 ## What each engine gets
 
 The handoff screen's *What … gets* table (spec §14, the capability matrix)

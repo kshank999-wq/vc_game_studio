@@ -10090,6 +10090,24 @@ button.bible-dual-col:hover {
   gap: 6px;
 }
 
+.cc-ph .cc-wide {
+  grid-column: 1 / -1;
+}
+
+.cc-binding {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.cc-binding textarea {
+  resize: vertical;
+  font: inherit;
+}
+
 .cc-color {
   width: 100%;
   padding: 2px;

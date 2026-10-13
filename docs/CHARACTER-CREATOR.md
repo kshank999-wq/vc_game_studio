@@ -16,15 +16,12 @@ lives in the element under `data.profile`, and each change bumps the
 profile's **revision**. The project's edit history records what changed, and
 undo works as everywhere else.
 
-Phases 1 to 3 are built (spec §15):
+All four phases are built (spec §15):
 
 - **Phase 1:** the registry, art, abilities and inventory.
 - **Phase 2:** role settings, dialogue and knowledge, the AI profile and state machine, and enemy variants.
 - **Phase 3:** groups and the population generator, placing characters and groups in levels, 2D overlays, and placeholder characters that behave in the 3D graybox and Play Mode.
-
-**Phase 4**, the engine handoff of characters, comes later. Until then the
-engines get group areas and placed actors as they already did: areas and
-markers.
+- **Phase 4:** the engine handoff of characters, variants, groups, abilities, inventory and AI, with final-art bindings (see [In the engines](#in-the-engines-spec-10-11-14)).
 
 ## The screen (spec §2)
 
@@ -438,6 +435,75 @@ Adding the sample cast twice adds nothing.
 - The internal id and the code are made unique.
 - Items and skills are matched by id, then by name. Anything that can't be matched is left out and reported.
 
+## Final art (spec §10, §11)
+
+Under the placeholder settings, **Final art in the engine** binds the
+finished model:
+
+- **Model:** the engine path (`res://art/orc.glb`, `Assets/Art/Orc.fbx`, `/Game/Art/SK_Orc`). Empty means the placeholder figure stands in.
+- **Rig:** none (static), humanoid, generic or four-legged.
+- **Animations:** the clips the model has, comma-separated.
+- **Sockets:** hand, off-hand and head. Props attach at the hand socket.
+- **Sounds:** `key = file`, one a line.
+
+The binding is the only thing that changes when the art does. The id, the
+key, the inventory, the dialogue and the logic stay as they are, and the
+export says so.
+
+With a model set, the pane lists what doesn't fit instead of failing quietly:
+
+- a humanoid rig on a four-legged character, or the other way round;
+- no rig on a character that moves;
+- a prop with no hand socket;
+- an ability cue with no animation of that name;
+- no idle, or no walk (fly, swim) animation;
+- a sound with no key or no file.
+
+## In the engines (spec §10, §11, §14)
+
+Every export with Character Creator profiles writes, next to the story:
+
+- `characters.json` (schema `vcgs-characters` v1), and `characters.schema.json` (JSON Schema 2020-12) to check it against. It holds:
+  - every character, with its stats, placeholder, art binding, abilities, inventory, hit points and AI;
+  - its role settings (player, NPC topics with their story line ids, ally, extra);
+  - its variants, each with its differences and the whole resolved character;
+  - the groups;
+  - the placements: each group area's people, and each placed AI actor, where the studio put them in the level;
+  - `ids`: studio id → engine key.
+- `characters/<key>.json` and `groups/<key>.json`: one manifest per character and group.
+- `CHARACTERS.md`, the export report. It says what the starter runtime does, and lists as TODOs what is the engine team's: navigation, animation, effects, stub abilities, scheduled groups, shops.
+
+**Stable ids.** A character's key is its internal id (the slug), which is
+kept on rename, so the engine's id doesn't move when the name does.
+`story_key` is its key in the story's own files, which follows the name.
+A placed actor's id is its level item's GUID. A group member's id is
+`<area GUID>#<n>`, the same for the same group, seed and area.
+
+**The starter runtime**, the same in each engine:
+
+| Spec component | Godot | Unity | Unreal |
+|---|---|---|---|
+| ActorController | `VCGSActor` | `VcgsActor` | `AVcgsCharacterActor` |
+| PerceptionComponent | `VCGSActorPerception` | `VcgsActorPerception` | `UVcgsActorPerception` |
+| BehaviorController | `VCGSActorBehavior` | `VcgsActorBehavior` | `UVcgsActorBehavior` |
+| AbilityComponent | `VCGSActorAbilities` | `VcgsActorAbilities` | `UVcgsActorAbilities` |
+| InventoryComponent | `VCGSActorInventory` | `VcgsActorInventory` | `UVcgsActorInventory` |
+| EquipmentComponent | `VCGSActorEquipment` | `VcgsActorEquipment` | `UVcgsActorEquipment` |
+| DialogueComponent | `VCGSActorDialogue` | `VcgsActorDialogue` | `UVcgsActorDialogue` |
+| SpawnGroupController | `VCGSSpawnGroup` | `VcgsSpawnGroup` | `AVcgsSpawnGroup` |
+| The core | `VCGSCast` | `VcgsCast` | `vcgs::Cast` (`VcgsCast.h`) |
+
+Each engine does the following:
+
+- **The core** plays the AI state machine exactly as the studio's preview does. The engine checks replay the studio's own scenarios step for step, reasons included: seeing, reacting, chasing, attacking, disengaging, hearing, a wall in the way and proximity.
+- **Inventory** works out capacity and overflow.
+- **Abilities** check cost and cooldown. Damage, heal, stun and set-flag actions run. Other effects, and each ability's cue, VFX and SFX, are sent as events.
+- **The actor** builds the placeholder (its height, radius and a hand socket with its prop) until a final model is bound.
+- **Movement** is in straight lines. Pathfinding, animation and effects are the engine's, and `CHARACTERS.md` names where to hook them.
+
+The JSON adapter writes the data and the report, with no runtime. Its report
+says so.
+
 ## In the code
 
 - `apps/studio/src/renderer/model/character/abilities.ts` holds the library, the graybox states and the typed custom actions.
@@ -447,6 +513,9 @@ Adding the sample cast twice adds nothing.
 - `apps/studio/src/renderer/model/character/groups.ts` holds groups and the seeded population generator.
 - `apps/studio/src/renderer/model/character/crowd.ts` holds a level's characters and how they move and fight in play.
 - `apps/studio/src/renderer/model/character/samples.ts` holds the sample cast.
+- `apps/studio/src/renderer/model/handoff/cast.ts` builds the cast for the engines (`buildCast`), the export report (`castReport`) and the AI scenarios the engine checks replay (`runScenario`).
+- `apps/studio/src/renderer/model/handoff/cast-files.ts` writes `characters.json`, its schema, the manifests and the rows.
+- The runtimes are in `godot-characters.ts`, `unity-characters.ts` and `unreal-characters.ts`, in the same folder.
 - `apps/studio/src/renderer/components/level/figure3d.ts` builds the 3D placeholder.
 - `apps/studio/src/renderer/model/character/profile.ts` holds:
   - the profile and its defaults;
@@ -461,4 +530,5 @@ Adding the sample cast twice adds nothing.
   - `model/__tests__/character.test.ts`
   - `model/__tests__/character-phase2.test.ts`
   - `model/__tests__/character-phase3.test.ts`
+  - `model/__tests__/character-phase4.test.ts`
   - `__tests__/character-creator.test.tsx`

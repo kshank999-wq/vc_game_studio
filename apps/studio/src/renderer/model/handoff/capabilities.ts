@@ -119,6 +119,24 @@ export const CAPABILITIES: readonly Capability[] = [
     },
   },
   {
+    feature: 'Characters: profiles, variants, groups, abilities, inventory and AI',
+    engines: {
+      godot: all('auto', 'characters.json; VCGSActor and VCGSSpawnGroup run the studio’s AI machine, inventory and ability costs (CHARACTERS.md lists the TODOs)'),
+      unity: all('auto', 'characters.json; VcgsActor and VcgsSpawnGroup run the studio’s AI machine, inventory and ability costs (CHARACTERS.md lists the TODOs)'),
+      unreal: all('auto', 'characters.json; AVcgsCharacterActor and AVcgsSpawnGroup run the studio’s AI machine, inventory and ability costs (CHARACTERS.md lists the TODOs)'),
+      custom: all('binding', 'characters.json and its schema; your runtime reads it'),
+    },
+  },
+  {
+    feature: 'Characters: navigation, animation and effects',
+    engines: {
+      godot: all('binding', 'Straight-line movement; drive NavigationAgent3D and the AnimationPlayer from the behaviour’s events'),
+      unity: all('binding', 'Straight-line movement; drive a NavMeshAgent and the Animator from the behaviour’s events'),
+      unreal: all('binding', 'Straight-line movement; drive an AIController and the Animation Blueprint from OnHappened'),
+      custom: all('none'),
+    },
+  },
+  {
     feature: 'Saved games (one format for every engine)',
     engines: { godot: all('auto'), unity: all('auto'), unreal: all('auto'), custom: json },
   },

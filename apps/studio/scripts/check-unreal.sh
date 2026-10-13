@@ -47,6 +47,21 @@ trap 'rm -rf "$work" "$puzzles" "$rooms"' EXIT
 "$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$rooms/Plugins/VCGS/Source/VCGS/Public" -o "$rooms/rooms_check" "$here/unreal-check/rooms_check.cpp"
 (cd "$rooms" && ./rooms_check)
 
+# The Character Creator's cast (character spec §10): the sample cast, a group area and a placed Orc Sentry.
+cast="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast"' EXIT
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$cast" unreal cast > /dev/null)
+castpublic="$cast/Plugins/VCGS/Source/VCGS/Public"
+"$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$castpublic" -o "$cast/cast_check" "$here/unreal-check/cast_check.cpp"
+(cd "$cast" && ./cast_check)
+# Its classes compile against the stubs too.
+mkdir -p "$cast/generated"
+for header in "$castpublic"/*.h; do : > "$cast/generated/$(basename "${header%.h}").generated.h"; done
+for source in "$cast"/Plugins/VCGS/Source/VCGS/Private/VcgsActorComponents.cpp "$cast"/Plugins/VCGS/Source/VCGS/Private/VcgsCharacterActor.cpp "$cast"/Plugins/VCGS/Source/VCGS/Private/VcgsSpawnGroup.cpp; do
+  "$cxx" "${flags[@]}" -Wno-unused-parameter -fsyntax-only -I "$here/unreal-check/stubs" -I "$cast/generated" -I "$castpublic" "$source"
+done
+echo "cast classes compile against the stubs"
+
 # Unreal Header Tool writes the .generated.h files; for the check they are empty.
 mkdir -p "$work/generated"
 for header in "$public"/*.h; do : > "$work/generated/$(basename "${header%.h}").generated.h"; done

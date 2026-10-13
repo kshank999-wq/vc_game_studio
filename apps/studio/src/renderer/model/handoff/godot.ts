@@ -1,4 +1,6 @@
 import { puzzleRuntimeGd } from './godot-puzzles';
+import { characterRuntimeGd } from './godot-characters';
+import { castFiles } from './cast-files';
 import { tasksMarkdown, withCodeNotes } from './notes';
 import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GenerateOptions, GeneratedFile } from './engines';
@@ -2017,6 +2019,12 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
     ),
   );
   row({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'TASKS.md · TODO(VCGS) beside what each is about', files: [tasks] }, ir.notes);
+  // The Character Creator's cast (character spec §10): characters.json, its schema and manifests, CHARACTERS.md, and the components.
+  const cast = castFiles(ir.cast, root, 'godot', 'Godot', VERSION);
+  if (cast.files.length) {
+    files.push(...characterRuntimeGd().map((f) => ({ path: `${RUNTIME}/${f.name}`, content: `${f.lines.join('\n')}\n`, kind: 'runtime' as const })), ...cast.files);
+    elements.push(...cast.elements);
+  }
   return { files: withCodeNotes(files, ir), elements };
 };
 

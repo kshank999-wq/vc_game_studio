@@ -6,6 +6,8 @@ import { DESIGN_LISTS, type HandoffIR, type IrThing, type Ident } from './ir';
 import { JSON_FORMAT } from './json';
 import { ASMDEF, RUNTIME_FILES } from './unity-runtime';
 import { EDITOR_ASMDEF, LEVEL_EDITOR_FILES, LEVEL_RUNTIME_FILES, levelJson } from './unity-levels';
+import { CHARACTER_FILES } from './unity-characters';
+import { castFiles } from './cast-files';
 import { markupInline } from '../inline';
 
 /**
@@ -306,6 +308,13 @@ export const generateUnity = (ir: HandoffIR, outputPath: string): EngineOutput =
     'text',
   );
 
+  // The Character Creator's cast (character spec §10): characters.json, its manifests and the starter components.
+  const cast = castFiles(ir.cast, root, 'unity', 'Unity', VERSION);
+  if (cast.files.length) {
+    for (const [name, source] of Object.entries(CHARACTER_FILES)) put(`${RUNTIME}/Characters/${name}`, source, 'runtime', 'script');
+    for (const f of cast.files) put(f.path, f.content, f.kind, 'text');
+    elements.push(...cast.elements);
+  }
   for (const folder of [...folders].sort()) files.push({ path: `${folder}.meta`, content: meta(folder, IMPORTERS.folder), kind: folder.startsWith(RUNTIME) || RUNTIME.startsWith(folder) || folder.startsWith(EDITOR) ? 'runtime' : 'generated' });
   // Open comments and tasks (spec §16), for the Unity team.
   const tasksPath = put(

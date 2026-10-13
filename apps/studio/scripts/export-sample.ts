@@ -12,6 +12,14 @@ import { BUILT_IN_TEMPLATES, puzzleFromTemplate } from '../src/renderer/model/pu
 import { nodesOf, updateNode } from '../src/renderer/model/puzzle/design';
 import type { Project } from '../src/renderer/model/types';
 import { addSubScene } from '../src/renderer/model/subscene';
+import { addSampleCast } from '../src/renderer/model/character/samples';
+import { groupsOf } from '../src/renderer/model/character/groups';
+import { characters, profileOf, updateProfile } from '../src/renderer/model/character/profile';
+import { generateVariants } from '../src/renderer/model/character/variants';
+import { frameOf } from '../src/renderer/model/level/geometry';
+import { levelsOf, placeAsset, resizeItem, setParam } from '../src/renderer/model/level/level';
+import { buildIR } from '../src/renderer/model/handoff/ir';
+import { runScenario } from '../src/renderer/model/handoff/cast';
 
 /**
  * With "puzzles": the sample and the built-in puzzle templates (puzzle spec
@@ -46,10 +54,58 @@ const withRooms = (project: Project): Project => {
   return addTransition(rooms, levelBands(rooms)[0]!.id)!.project;
 };
 
+/**
+ * With "cast": the sample with the Character Creator's sample cast (character
+ * spec §8): Village Market spread over The Cave Mouth, and an Orc Sentry on a
+ * patrol beside it; and cast_expect.json, the studio's own AI machine run on
+ * set scenarios, for each engine's port to match line for line.
+ */
+const withCast = (project: Project): Project => {
+  let p = addSampleCast(project).project;
+  const set = levelsOf(p);
+  const level = set.levels[0]!;
+  const floor = level.floors[0]!.id;
+  const cave = set.items.find((i) => i.levelId === level.id && i.name === 'Cave Mouth') ?? set.items.find((i) => i.levelId === level.id)!;
+  const f = frameOf(set, cave);
+  const area = placeAsset(p, level.id, floor, 'actor.group', { x: f.x, y: f.y });
+  p = setParam(area.project, area.ids[0]!, 'group', groupsOf(area.project).find((g) => g.name === 'Village Market')!.id);
+  p = resizeItem(p, area.ids[0]!, { w: 10, d: 10 });
+  const orc = placeAsset(p, level.id, floor, 'actor.enemy', { x: f.x + 3, y: f.y + 3 });
+  p = setParam(orc.project, orc.ids[0]!, 'character', characters(orc.project).find((c) => c.name === 'Orc Sentry')!.id);
+  p = setParam(p, orc.ids[0]!, 'patrol', 'Yard');
+  for (const [i, at] of [{ x: f.x + 3, y: f.y + 3 }, { x: f.x + 3, y: f.y - 2 }].entries()) {
+    const node = placeAsset(p, level.id, floor, 'actor.patrol', at);
+    p = setParam(node.project, node.ids[0]!, 'path', 'Yard');
+    p = setParam(p, node.ids[0]!, 'order', i + 1);
+  }
+  // Two variants of the Orc Sentry (an Elite and a Champion), resolved as whole characters in characters.json.
+  const sentry = characters(p).find((c) => c.name === 'Orc Sentry')!;
+  p = updateProfile(p, sentry.id, (prof) => ({ ...prof, variants: generateVariants(p, profileOf(sentry), 'Orc Sentry', 2) }));
+  return p;
+};
+
+const scenarios = (project: Project) => {
+  const cast = buildIR(project).cast!;
+  const orc = cast.characters.find((c) => c.name === 'Orc Sentry')!;
+  const lurker = cast.characters.find((c) => c.name === 'Lurking Orc')!;
+  const base = { patrol: [[0, 0], [10, 0]] as [number, number][], walls: [] as [[number, number], [number, number]][], dt: 0.1 };
+  return [
+    runScenario(orc, { ...base, name: 'sees, reacts, chases, attacks', target: { x: 8, y: 0, vx: 0, vy: 0, noisy: false }, steps: 60 }),
+    runScenario(orc, { ...base, name: 'disengages when outrun', target: { x: 8, y: 0, vx: 0.75, vy: 0, noisy: false }, steps: 300 }),
+    runScenario(orc, { ...base, name: 'hears behind it, investigates', target: { x: -5, y: 0, vx: 0, vy: 0, noisy: true }, steps: 80 }),
+    runScenario(orc, { ...base, name: 'blind behind a wall', walls: [[[4, -3], [4, 3]]], target: { x: 8, y: 0, vx: 0, vy: 0, noisy: false }, steps: 30 }),
+    runScenario(lurker, { ...base, name: 'proximity aggro', target: { x: -1.5, y: 1, vx: 0, vy: 0, noisy: false }, steps: 40 }),
+  ];
+};
+
 const dir = process.argv[2];
 if (!dir) throw new Error('Usage: export-sample.ts <godot project folder>');
 const engine = (process.argv[3] ?? 'godot') as EngineId;
-const base = process.argv[4] === 'puzzles' ? withPuzzles(sunkenVault()) : process.argv[4] === 'rooms' ? withRooms(sunkenVault()) : sunkenVault();
+const base = process.argv[4] === 'puzzles' ? withPuzzles(sunkenVault()) : process.argv[4] === 'rooms' ? withRooms(sunkenVault()) : process.argv[4] === 'cast' ? withCast(sunkenVault()) : sunkenVault();
+if (process.argv[4] === 'cast') {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'cast_expect.json'), JSON.stringify({ scenarios: scenarios(base) }, null, 2));
+}
 const plan = planHandoff(setTarget(base, { engine }));
 for (const file of plan.output!.files) {
   const path = join(dir, file.path);

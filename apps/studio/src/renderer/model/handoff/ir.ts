@@ -1,3 +1,4 @@
+import { buildCast, type IrCast } from './cast';
 import { recipeOf } from '../crafting';
 import { creditLine, creditsOf } from '../credits';
 import { levelOf, transitionLevels } from '../level-lane';
@@ -482,6 +483,8 @@ export interface HandoffIR {
   levels: IrLevel[];
   /** Open comments and tasks (spec §16), for the engine team: each engine lists them in TASKS.md and beside what they are about. */
   notes: IrNote[];
+  /** The Character Creator's characters, groups and placements (character spec §10), written to characters.json, not story.json. */
+  cast?: IrCast;
 }
 
 /** An open comment or task, and what it is about in the engine's terms. */
@@ -626,6 +629,9 @@ export const buildIR = (given: Project): HandoffIR => {
     return !!full && !full.hidden && paramOf(set!, full, 'export') !== false;
   };
   const levels = buildLevels(project, { key, rule, effects, toKey });
+  // The Character Creator's cast (character spec §10): its own manifest, characters.json; script lines by their export ids.
+  const lineIds = new Map(project.lines.filter((l) => l.kind === 'dialogue' && project.objects[l.sceneId]).map((l) => [l.id, lineId(project.objects[l.sceneId]!.data.code ?? '', l.order)]));
+  const cast = buildCast(given, { key, rule, effects, toKey, line: (id) => lineIds.get(id) ?? null });
   const scenes: IrScene[] = of('scene').map((s) => {
     const tracks = sceneTimeline(project, s.id);
     const code = s.data.code ?? '';
@@ -914,6 +920,7 @@ export const buildIR = (given: Project): HandoffIR => {
       .sort((a, b) => a.id.localeCompare(b.id)),
     levels,
     notes: notesOf(project, ids, levels),
+    cast,
   };
 };
 
