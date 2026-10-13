@@ -3,6 +3,7 @@ import { BottomBar } from './components/BottomBar';
 import { Palette } from './components/Palette';
 import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } from './components/canvas/StoryCanvas';
 import { Symbol } from './components/Symbol';
+import { WorkspaceBar, type Workspace } from './components/WorkspaceBar';
 import { TopBar, type Crumb } from './components/TopBar';
 import { ExplodedScene } from './components/scene/ExplodedScene';
 import { SceneWorkspace, type SceneSurface } from './components/scene/SceneWorkspace';
@@ -972,21 +973,25 @@ export const App = () => {
           onUndo={studio.undo}
           onRedo={studio.redo}
           onFit={route.view === 'graph' ? fit : route.view === 'scene' && route.mode !== 'open' ? () => surface.current?.fit?.() : undefined}
-          onBible={() => (route.view === 'bible' ? setRoute(route.back) : openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : route.view === 'graph' ? (selection ?? undefined) : undefined))}
-          onEngine={() => (route.view === 'engine' ? setRoute(route.back) : openEngine())}
-          onLevels={() => (route.view === 'level' ? setRoute(route.back) : openLevels(route.view === 'scene' ? route.sceneId : route.view === 'graph' ? (selection ?? undefined) : undefined))}
-          levelsOn={route.view === 'level'}
-          onNotes={() => (route.view === 'notes' ? setRoute(route.back) : openNotes())}
-          onPuzzles={() => (route.view === 'puzzles' ? setRoute(route.back) : openPuzzles())}
-          puzzlesOn={route.view === 'puzzles'}
           onComments={() => setDialog(dialog === 'comments' ? null : 'comments')}
           openComments={(project.comments ?? []).filter((c) => !c.done).length}
-          notesOn={route.view === 'notes'}
           saveState={studio.saveState}
           issueCount={route.view === 'graph' ? issues.length : 0}
           onIssues={showNextIssue}
           onSearch={() => setSearching(true)}
-          onPlay={() => (route.view === 'play' ? setRoute(route.back) : openPlay())}
+        />
+        <WorkspaceBar
+          current={route.view === 'scene' || route.view === 'cinematic' ? 'graph' : (route.view as Workspace)}
+          onOpen={(part) => {
+            if (part === route.view) return;
+            if (part === 'graph') setRoute({ view: 'graph' });
+            else if (part === 'bible') openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : route.view === 'graph' ? (selection ?? undefined) : undefined);
+            else if (part === 'notes') openNotes();
+            else if (part === 'puzzles') openPuzzles();
+            else if (part === 'level') openLevels(route.view === 'scene' ? route.sceneId : route.view === 'graph' ? (selection ?? undefined) : undefined);
+            else if (part === 'engine') openEngine();
+            else openPlay();
+          }}
         />
         {!isAside(route) && <Palette
           active={drag?.placing ? drag.type : null}

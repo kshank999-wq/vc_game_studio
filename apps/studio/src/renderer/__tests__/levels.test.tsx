@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 const openLevels = async () => {
-  fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
   await opened();
 };
 
@@ -221,7 +221,7 @@ describe('the Level Designer', () => {
   it('goes from a Bible entry to its place in the level, and from the level back to the scene', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Game Bible' }));
     await opened();
     fireEvent.click(screen.getAllByText('Vault Key')[0]!);
     const uses = container.querySelector('.level-uses')!;

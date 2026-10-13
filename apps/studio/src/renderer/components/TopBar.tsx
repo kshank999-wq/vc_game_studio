@@ -30,23 +30,13 @@ interface Props {
   onUndo: () => void;
   onRedo: () => void;
   onFit?: () => void;
-  onBible: () => void;
-  onEngine: () => void;
-  onLevels: () => void;
-  levelsOn?: boolean;
-  /** The Note Sorter: raw notes into the game. */
-  onNotes?: () => void;
-  onPuzzles?: () => void;
-  puzzlesOn?: boolean;
   /** Comments and changes (spec §16), with how many comments and tasks are open. */
   onComments?: () => void;
   openComments?: number;
-  notesOn?: boolean;
   saveState: SaveState;
   issueCount: number;
   onIssues: () => void;
   onSearch: () => void;
-  onPlay: () => void;
   /** Desktop without a license: open License and account instead of the store. */
   onActivate?: () => void;
 }
@@ -185,28 +175,6 @@ export const TopBar = (props: Props) => {
           {!!props.openComments && <span className="comments-count">{props.openComments}</span>}
         </button>
       )}
-      <button className="bible-btn" onClick={props.onBible}>
-        GAME BIBLE
-      </button>
-      {props.onNotes && (
-        <button className={`tb-btn levels-btn${props.notesOn ? ' on' : ''}`} title="Sort raw notes into the game: lore, characters, mechanics, scenes, levels" onClick={props.onNotes}>
-          NOTES
-        </button>
-      )}
-      {props.onPuzzles && (
-        <button className={`tb-btn levels-btn${props.puzzlesOn ? ' on' : ''}`} title="Write puzzles, then build their steps: goals, requirements, clues, interactions" onClick={props.onPuzzles}>
-          PUZZLES
-        </button>
-      )}
-      <button className={`tb-btn levels-btn${props.levelsOn ? ' on' : ''}`} title="Lay out levels: rooms, doors, pickups, triggers (Ctrl+L)" onClick={props.onLevels}>
-        LEVELS
-      </button>
-      <button className="tb-btn" aria-label="Play" title="Play the story through (F5)" onClick={props.onPlay}>
-        ▶<span className="tb-label"> Play</span>
-      </button>
-      <button className="tb-btn" onClick={props.onEngine}>
-        Engine ▸
-      </button>
     </header>
   );
 };

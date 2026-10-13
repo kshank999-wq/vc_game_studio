@@ -28,7 +28,7 @@ describe('comments, tasks and history (spec §16)', () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
     setPreferences({ authorName: 'Ana', authorRole: 'writer' });
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Game Bible' }));
     fireEvent.change(await screen.findByLabelText('Search the Bible', {}, { timeout: 5000 }), { target: { value: 'Vault Key' } });
     fireEvent.click([...document.querySelectorAll('.bible-row')].find((r) => r.textContent!.includes('Vault Key'))!);
     const detail = screen.getByRole('complementary', { name: 'Vault Key detail' });

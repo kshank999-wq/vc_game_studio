@@ -165,7 +165,7 @@ describe('deleting from the Bible', () => {
     render(<App />);
     openMenu('File');
     await openSample();
-    fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Game Bible' }));
     await opened();
     fireEvent.click(screen.getAllByText('Mara')[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Delete…' }));
@@ -397,7 +397,7 @@ describe('the shot list', () => {
     const { container } = render(<App />);
     openMenu('File');
     await openSample();
-    fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Game Bible' }));
     await opened();
     fireEvent.click(screen.getAllByText('Door in the dark')[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Open the shot list' }));

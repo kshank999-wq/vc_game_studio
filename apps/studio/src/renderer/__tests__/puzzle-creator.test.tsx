@@ -34,7 +34,7 @@ describe('the Puzzle Creator (puzzle spec)', () => {
   it('opens on the sample’s puzzle, its steps deciding when it is solved', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Puzzles' }));
     await opened();
     const library = screen.getByRole('listbox', { name: 'Puzzle library' });
     expect(within(library).getByRole('option', { name: /The Vault Door/ }).getAttribute('aria-selected')).toBe('true');
@@ -58,7 +58,7 @@ describe('the Puzzle Creator (puzzle spec)', () => {
   it('writes a new puzzle, turns its discoveries into steps, and makes what a step needs', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Puzzles' }));
     await opened();
     fireEvent.change(screen.getByRole('textbox', { name: 'New puzzle name' }), { target: { value: 'The Safe' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'New puzzle scale' }), { target: { value: 'object' } });
@@ -99,7 +99,7 @@ describe('the Puzzle Creator (puzzle spec)', () => {
   it('draws the steps as a graph, links one to need another first, and sets sequence, time and wrong moves', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Puzzles' }));
     await opened();
     fireEvent.click(screen.getByRole('tab', { name: 'Graph' }));
     const graph = screen.getByRole('group', { name: 'Puzzle graph' });
@@ -137,7 +137,7 @@ describe('the Puzzle Creator (puzzle spec)', () => {
   it('makes the safe-code puzzle from a template, adds an element and a step from it, traces the clues and keeps it as a template', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Puzzles' }));
     await opened();
     fireEvent.change(screen.getByRole('combobox', { name: 'Template' }), { target: { value: 'builtin.safe' } });
     fireEvent.click(screen.getByRole('button', { name: '+ From template' }));
@@ -185,7 +185,7 @@ describe('the Puzzle Creator (puzzle spec)', () => {
   it('designs a screen puzzle and plays it beside the design: the safe’s keypad, then a new one', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Puzzles' }));
     await opened();
     fireEvent.change(screen.getByRole('combobox', { name: 'Template' }), { target: { value: 'builtin.safe' } });
     fireEvent.click(screen.getByRole('button', { name: '+ From template' }));
@@ -217,7 +217,7 @@ describe('the Puzzle Creator (puzzle spec)', () => {
   it('tests a puzzle: marks clues found, does what opens up, and asks whether the player can solve it', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'PUZZLES' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Puzzles' }));
     await opened();
     fireEvent.change(screen.getByRole('combobox', { name: 'Template' }), { target: { value: 'builtin.safe' } });
     fireEvent.click(screen.getByRole('button', { name: '+ From template' }));

@@ -24,7 +24,7 @@ afterEach(() => {
 describe('worlds, regions and child maps in the Level Designer (spec V2)', () => {
   it('starts a world from a preset, places a zone, opens it as a region and comes back', async () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
     await opened();
     fireEvent.click(screen.getByRole('button', { name: '+ Start with a world' }));
     const dialog = screen.getByRole('dialog', { name: 'New world' });
@@ -68,7 +68,7 @@ describe('worlds, regions and child maps in the Level Designer (spec V2)', () =>
 
   it('draws a road between two places on the world map, and locks it until a rule holds', async () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
     await opened();
     fireEvent.click(screen.getByRole('button', { name: '+ Start with a world' }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'New world' })).getByRole('button', { name: 'Create world' }));
@@ -103,7 +103,7 @@ describe('worlds, regions and child maps in the Level Designer (spec V2)', () =>
     const { sunkenVault } = await import('../model/sample');
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
     await opened();
     // Double-click the room in the navigator.
     fireEvent.doubleClick(screen.getByRole('button', { name: 'Vault Chamber, room' }));

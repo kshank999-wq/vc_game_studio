@@ -44,9 +44,10 @@ a:hover {
   height: 100%;
   display: grid;
   grid-template-columns: var(--palette-w) 1fr;
-  grid-template-rows: var(--topbar-h) 1fr;
+  grid-template-rows: var(--topbar-h) var(--wsbar-h) 1fr;
   grid-template-areas:
     'top top'
+    'ws ws'
     'palette main';
 }
 
@@ -6486,7 +6487,7 @@ kbd {
 
 .lvl-issues {
   position: fixed;
-  top: calc(var(--topbar-h) + 46px);
+  top: calc(var(--topbar-h) + var(--wsbar-h) + 46px);
   right: 12px;
   width: 360px;
   max-height: 60vh;
@@ -11047,4 +11048,41 @@ button.bible-dual-col:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The workspace bar: a big button for each part of the studio, under the menu bar. */
+.workspace-bar {
+  grid-area: ws;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ws-btn {
+  flex: none;
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--node);
+  color: var(--text-soft);
+  font-family: var(--font-label);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ws-btn:hover {
+  color: var(--gold-hi);
+  border-color: var(--gold-lo);
+}
+.ws-btn.on {
+  color: var(--ground);
+  background: var(--gold-gradient);
+  border-color: var(--gold);
 }

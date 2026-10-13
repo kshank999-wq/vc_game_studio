@@ -32,7 +32,7 @@ const OBJ = ['v -50 0 -25', 'v 50 0 -25', 'v 50 0 25', 'v -50 0 25', 'v -50 90 -
 describe('importing into the Level Designer (spec V2 §10)', () => {
   it('lays a reference image under a world, sized to it, and changes its scale', async () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
     await opened();
     fireEvent.click(screen.getByRole('button', { name: '+ Start with a world' }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'New world' })).getByRole('button', { name: 'Create world' }));
@@ -62,7 +62,7 @@ describe('importing into the Level Designer (spec V2 §10)', () => {
 
   it('imports a model in the units it was made in and places it from Personal assets', async () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
     await opened();
     fireEvent.click(screen.getByRole('button', { name: '+ Start with a world' }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'New world' })).getByRole('button', { name: 'Create world' }));

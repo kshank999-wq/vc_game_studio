@@ -31,7 +31,7 @@ describe('puzzles on the level map (spec V2 §14)', () => {
   it('lists the map’s puzzle, shows its parts on the map, and binds an item to it', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
     await opened();
 
     // Nothing selected: the map's puzzles, by part.
@@ -62,7 +62,7 @@ describe('puzzles on the level map (spec V2 §14)', () => {
   it('badges puzzle items, makes a puzzle from a door, tests it, and finds the door again from its step (puzzle spec §12, §13)', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'LEVELS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
     await opened();
     // Every item that is part of the puzzle carries a badge.
     const badged = () => [...container.querySelectorAll('.lvl-puzzle-badge')].map((b) => b.querySelector('title')!.textContent);

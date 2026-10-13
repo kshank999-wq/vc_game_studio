@@ -55,7 +55,7 @@ describe('the story graph', () => {
     const { container } = render(<App />);
     fireEvent.doubleClick(container.querySelector('[data-type="plotPoint"]')!);
     expect(await screen.findByRole('tab', { name: 'Script' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Story Graph' }));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Workspaces' })).getByRole('button', { name: 'Story Graph' }));
     fireEvent.doubleClick(container.querySelector('[data-type="cinematic"]')!);
     await opened();
     expect(await screen.findByRole('region', { name: 'Opening credits' })).toBeTruthy();
@@ -175,7 +175,7 @@ describe('a scene', () => {
     expect(container.querySelectorAll('.exploded-scene .port')).toHaveLength(8);
     expect([...container.querySelectorAll('.element-box')].map((b) => b.textContent)).toEqual([expect.stringContaining('Mara')]);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Story Graph' }));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Workspaces' })).getByRole('button', { name: 'Story Graph' }));
     expect(container.querySelector('.canvas')).toBeTruthy();
     // The scene is still selected on the way back.
     expect(container.querySelector('[data-type="scene"].selected')).toBeTruthy();
@@ -265,7 +265,7 @@ describe('the Game Bible', () => {
     const card = container.querySelector('[data-type="scene"]')!;
     fireEvent.pointerDown(card, { button: 0 });
     fireEvent.pointerUp(window);
-    fireEvent.click(screen.getByRole('button', { name: 'GAME BIBLE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Game Bible' }));
     await opened();
 
     // Opened on the selected scene, in the Scenes view.
