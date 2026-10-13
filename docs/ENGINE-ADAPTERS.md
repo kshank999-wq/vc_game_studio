@@ -708,7 +708,9 @@ engines as the cinematic on the spine just after the plot point where two
 levels meet, with `transition: { from, to }` on its graph node (and the
 field `transition` on the cinematic). It plays straight after the level
 change: Godot's story player shows it as "[Transition] <from> → <to>" with
-its shots. Unity and Unreal play it on their own as the player crosses
+its shots, for its length (3 seconds with no shots), then goes on by itself;
+**Skip** (or Enter) goes on at once (`finish_transition()`,
+`transition_finished`). Unity and Unreal play it on their own as the player crosses
 too: VcgsGame (`playTransitions`) and `UVcgsSubsystem` (`bPlayTransitions`)
 find the crossing's transition and play it. Handle `TransitionRequested`
 (Unity) or bind `OnTransitionRequested` (Unreal) to play your own cut, a

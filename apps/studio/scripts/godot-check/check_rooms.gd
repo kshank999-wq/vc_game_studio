@@ -123,7 +123,15 @@ func _initialize() -> void:
 	player.press(0)
 	if not player.text().begins_with("[Transition] The Flooded Cave → The Sunken Vault\n[Cinematic] The Flooded Cave → The Sunken Vault"):
 		fail("the transition cinematic should play next, got " + player.text())
-	print("transition: ", player.text().split("\n")[0])
+	# It plays for its length (3 s: no shots yet) and goes on by itself; Skip goes on at once.
+	if player.labels() != ["Skip"] or player.transition_playing != transition or player.transition_seconds(transition) != 3.0:
+		fail("the transition should offer Skip and run 3 s, got " + str(player.labels()) + " " + str(player.transition_seconds(transition)))
+	var skipped: Array = []
+	player.transition_finished.connect(func(k: String) -> void: skipped.append(k))
+	player.press(0)
+	if player.transition_playing != "" or skipped != [transition] or player.text().begins_with("[Transition]"):
+		fail("Skip should end the transition and go on with the story, got " + player.text())
+	print("transition: ", transition, " skipped to ", player.text().split("\n")[0])
 	if failures > 0:
 		quit(1)
 		return
