@@ -11535,3 +11535,14 @@ button.bible-dual-col:hover {
 .level-end-btn:hover {
   background: color-mix(in srgb, var(--c-environment) 25%, transparent);
 }
+
+/* A level transition in the play-through: it runs its length, Skip goes on at once. */
+.play-transition {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.play-transition .play-countdown {
+  align-self: stretch;
+}

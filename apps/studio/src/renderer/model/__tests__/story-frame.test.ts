@@ -4,7 +4,7 @@ import { buildIR } from '../handoff/ir';
 import { columnEndings, spineLane, spineSequence } from '../layout';
 import { levelsOf } from '../level/level';
 import { addLevelBand, addTransition, inLevel, levelBands, levelOf, removeBand, renameBand, setBandEdge, transitionOf } from '../level-lane';
-import { advance, startPlay } from '../play';
+import { advance, promptOf, startPlay } from '../play';
 import { addEnding, connect, createProject, makeObject, endingToSpine, isOpening, setConnectionRules, placeNew, plotStops, removeObject, withStoryFrame } from '../project';
 import { addLine, updateLine } from '../scene';
 import { readProject } from '../storage';
@@ -259,6 +259,11 @@ describe('level transitions on the spine', () => {
     expect(ir.graph.find((n) => n.key === ir.graph.find((g) => g.name === 'Age of Wonder → Age of Iron')!.key)!.transition).toEqual({ from: 'Age of Wonder', to: 'Age of Iron' });
     expect(ir.cinematics.find((c) => c.name === 'Age of Wonder → Age of Iron')!.fields).toMatchObject({ transition: 'Age of Wonder → Age of Iron', level: 'Age of Iron' });
     expect(ir.cinematics.find((c) => c.name === 'Age of Wonder → Age of Iron')!.fields.transitionOf).toBeUndefined();
+    // In the play-through it runs its length (3 s with no shots) and can be skipped.
+    let at = startPlay(p);
+    for (let i = 0; i < 16 && !(promptOf(p, at).kind === 'continue' && (promptOf(p, at) as { transition?: unknown }).transition); i++) at = advance(p, at);
+    expect(promptOf(p, at)).toEqual({ kind: 'continue', transition: { title: '[Transition] Age of Wonder → Age of Iron', seconds: 3 } });
+    expect(promptOf(p, advance(p, at))).not.toMatchObject({ transition: expect.anything() });
     // Into the next level, then its transition plays.
     const crossing = play.log.findIndex((e) => e.kind === 'level' && e.text === 'Age of Iron');
     const cinematic = play.log.findIndex((e) => e.kind === 'cinematic' && e.text.endsWith('Age of Wonder → Age of Iron'));

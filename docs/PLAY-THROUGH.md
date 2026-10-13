@@ -174,6 +174,14 @@ monitor while you fix it on another.
 The engine is `apps/studio/src/renderer/model/play.ts`: pure functions over
 the project, tested in `model/__tests__/play.test.ts`.
 
+## Level transitions
+
+Crossing from one level of the Level lane into the next shows **End of
+<level> → LEVEL · <next>**. A transition cinematic between them (+ Transition
+on the level-end marker) then plays as **▶ [Transition] <level> → <next>**
+for its length, its shots' seconds (3 seconds with no shots yet), with a
+countdown, and goes on by itself; **Skip** (or Enter or Space) goes on at once.
+
 ## Deleting
 
 Deleting anything that other parts of the project depend on says so first:

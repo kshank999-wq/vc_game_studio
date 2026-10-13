@@ -867,7 +867,7 @@ const WorldPanel = ({ project, world, onChange, onLearn, onGear, onCraft }: { pr
 };
 
 /** A timed choice's clock: it runs down, then takes the option time running out picks. */
-const Countdown = ({ seconds, label, onDone }: { seconds: number; label: string; onDone: () => void }) => {
+const Countdown = ({ seconds, label, onDone, what = 'to answer' }: { seconds: number; label: string; onDone: () => void; what?: string }) => {
   const [left, setLeft] = useState(seconds);
   const done = useRef(onDone);
   done.current = onDone;
@@ -884,7 +884,7 @@ const Countdown = ({ seconds, label, onDone }: { seconds: number; label: string;
     return () => window.clearInterval(timer);
   }, [seconds]);
   return (
-    <div className="play-countdown" role="timer" aria-label={`${Math.ceil(left)} seconds to answer`}>
+    <div className="play-countdown" role="timer" aria-label={`${Math.ceil(left)} seconds ${what}`}>
       <div className="play-countdown-bar" style={{ width: `${(left / seconds) * 100}%` }} />
       <span>
         {Math.ceil(left)}s{label ? ` · then “${label}”` : ''}
@@ -1097,7 +1097,17 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
           ))}
         </div>
         <div className="play-prompt">
-          {prompt.kind === 'continue' && (
+          {prompt.kind === 'continue' && prompt.transition && (
+            // A level transition plays for its length and goes on by itself; Skip goes on at once.
+            <div className="play-transition" role="group" aria-label="Level transition">
+              <div className="play-choice-title">▶ {prompt.transition.title}</div>
+              <Countdown key={`transition:${play.log.length}`} seconds={prompt.transition.seconds} label="" what="of the transition left" onDone={() => push(advance(project, play))} />
+              <button className="tb-btn primary play-continue" autoFocus onClick={() => push(advance(project, play))}>
+                Skip <kbd>↵</kbd>
+              </button>
+            </div>
+          )}
+          {prompt.kind === 'continue' && !prompt.transition && (
             <button className="tb-btn primary play-continue" autoFocus onClick={() => push(advance(project, play))}>
               Continue <kbd>↵</kbd>
             </button>

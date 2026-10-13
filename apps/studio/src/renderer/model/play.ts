@@ -9,6 +9,7 @@ import { initialState, interactionsOf, statesOf } from './details';
 import { timeLimitOf, timeoutLabelOf, timeoutPick } from './timed';
 import { spineSequence } from './layout';
 import { levelOf } from './level-of';
+import { transitionLevels } from './level-lane';
 import { parentSceneOf, subScenesOf } from './subscene';
 import { apply, dropEquipped, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
 import { dualWith, elementsIn, spokenTogether } from './scene';
@@ -151,7 +152,8 @@ export interface PlayVerb {
 }
 
 export type Prompt =
-  | { kind: 'continue' }
+  /** Go on; a level transition cinematic says which levels it joins and how long it runs, to go on by itself (or be skipped). */
+  | { kind: 'continue'; transition?: { title: string; seconds: number } }
   /** A choice, or an encounter (`symbol` says which): its options are Win and Lose. */
   | {
       kind: 'choice';
@@ -1445,8 +1447,12 @@ const timed = (o: StoryObject | undefined, options: PlayOption[]): { timeLimit?:
 export const promptOf = (project: Project, play: Play): Prompt => {
   const c = play.cursor;
   switch (c.at) {
-    case 'wait':
-      return { kind: 'continue' };
+    case 'wait': {
+      const id = c.next.at === 'after' ? c.next.id : undefined;
+      const levels = id ? transitionLevels(project, id) : undefined;
+      if (!id || !levels) return { kind: 'continue' };
+      return { kind: 'continue', transition: { title: `[Transition] ${levels.from} → ${levels.to}`, seconds: cinematicTiming(project, id).seconds || 3 } };
+    }
     case 'end':
       return { kind: 'end', outcome: c.outcome, text: c.text };
     case 'graphChoice': {
