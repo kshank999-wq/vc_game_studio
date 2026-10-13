@@ -199,5 +199,8 @@ gives a scene with rooms a choice after it, “<scene>: where now?”, with an
 option into each room and one to leave; a room goes back to its scene's
 choice when it is done. They are ordinary choices and routes on the story
 graph, so every runtime plays them as it plays any other branch, and code
-that walks the graph sees them too. The engine checks walk it: into The
+that walks the graph sees them too. A room the player has been in reads
+“(been)” there as well: its option names the room, and each runtime's
+option label (`label` in Godot, `StoryWalker.OptionLabel` in Unity and
+Unreal) adds it once the room's scene has played. The engine checks walk it: into The
 Study, into The Closet and back, out, and on along the story.

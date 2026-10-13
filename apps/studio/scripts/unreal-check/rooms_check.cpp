@@ -50,6 +50,10 @@ int main()
     const std::string closet = vcgs::StoryWalker::Choose(game, studyWhere, 0);
     if (vcgs::StoryWalker::Onward(game, closet) != studyWhere) Fail("The Closet should lead back to The Study's question");
     if (vcgs::StoryWalker::Choose(game, studyWhere, 1) != where) Fail("Leave The Study should go back to The Cave Mouth's question");
+    // Rooms the player has been in read "(been)" (a scene marks itself visited as it plays).
+    if (vcgs::StoryWalker::OptionLabel(game, where, 0) != "Go into The Study") Fail("The Study should not read been before it is visited");
+    game.Visit(study);
+    if (Labels(game, where) != "Go into The Study (been),Leave The Cave Mouth") Fail("The Study should read been once visited, got " + Labels(game, where));
     const std::string onward = vcgs::StoryWalker::Choose(game, where, 1);
     if (onward.empty() || onward == where || !story.Graph.count(onward)) Fail("Leave The Cave Mouth should go on along the story, got " + onward);
     else std::printf("rooms: %s · %s · then %s\n", Labels(game, where).c_str(), Labels(game, studyWhere).c_str(), (*story.Graph.at(onward))["name"].Str().c_str());

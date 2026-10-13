@@ -362,7 +362,7 @@ export const storySchema = () => ({
       ['id', 'ident', 'code', 'name', 'kind', 'states', 'interactions', 'notes', 'fields'],
     ),
     trigger: obj({ id: str, ident, name: str, kind: { enum: ['trigger', 'gate'] }, condition: str, effect: str, sets: obj({ flag: str, value: str }), rule: ref('rule'), effects: ref('effects') }, ['id', 'ident', 'name', 'kind', 'condition', 'effect']),
-    option: obj({ key: str, label: str, to: { type: ['string', 'null'] }, when: ref('rule'), effects: ref('effects'), after: { enum: ['gone', 'locked'] }, hide: { type: 'boolean' } }, ['key', 'label', 'to']),
+    option: obj({ key: str, label: str, to: { type: ['string', 'null'] }, when: ref('rule'), effects: ref('effects'), after: { enum: ['gone', 'locked'] }, hide: { type: 'boolean' }, been: str }, ['key', 'label', 'to']),
     choice: obj({ id: str, ident, code: str, name: str, prompt: str, scene: { type: ['string', 'null'] }, options: { type: 'array', items: ref('option') }, available: ref('rule'), timeLimit: num, onTimeout: str }, ['id', 'ident', 'code', 'name', 'prompt', 'scene', 'options']),
     event: {
       ...obj(

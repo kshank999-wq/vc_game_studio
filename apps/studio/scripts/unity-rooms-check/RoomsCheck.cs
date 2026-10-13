@@ -42,6 +42,10 @@ static class RoomsCheck
         var closet = StoryWalker.Choose(game, studyWhere, 0);
         if (StoryWalker.Onward(game, closet) != studyWhere) Fail("The Closet should lead back to The Study's question");
         if (StoryWalker.Choose(game, studyWhere, 1) != where) Fail("Leave The Study should go back to The Cave Mouth's question");
+        // Rooms the player has been in read "(been)" (a scene marks itself visited as it plays).
+        if (StoryWalker.OptionLabel(game, where, 0) != "Go into The Study") Fail("The Study should not read been before it is visited");
+        game.Visit(study);
+        if (Labels(game, where) != "Go into The Study (been),Leave The Cave Mouth") Fail("The Study should read been once visited, got " + Labels(game, where));
         var onward = StoryWalker.Choose(game, where, 1);
         if (onward == "" || onward == where || !story.Graph.ContainsKey(onward)) Fail("Leave The Cave Mouth should go on along the story, got " + onward);
         Console.WriteLine("rooms: " + Labels(game, where) + " · " + Labels(game, studyWhere) + " · then " + D.Str(story.Graph[onward], "name"));

@@ -1202,7 +1202,7 @@ export const sceneRuntime = (): GeneratedFile[] => {
       '\t\t\tvar actions: Array = []',
       '\t\t\tfor i in choice_script.offered(game):',
       '\t\t\t\tvar pick: int = i',
-      '\t\t\t\tactions.append([str(choice_script.OPTIONS[i]["label"]), func() -> void: go_to(choice_script.choose(pick, game))])',
+      '\t\t\t\tactions.append([choice_script.label(i, game), func() -> void: go_to(choice_script.choose(pick, game))])',
       '\t\t\tvar prompt := str(choice_script.PROMPT)',
       '\t\t\t_show(title + (("\\n" + prompt) if prompt != "" else ""), actions)',
       '\t\t\treturn',

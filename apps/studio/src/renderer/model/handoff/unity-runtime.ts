@@ -1694,8 +1694,14 @@ namespace VCGS
             return list;
         }
 
-        public static string OptionLabel(GameState game, string choice, int option) =>
-            game.Story.Choices.TryGetValue(choice, out var c) && option >= 0 && option < D.List(c, "options").Count ? D.Str(D.Map(D.List(c, "options")[option]), "label") : "";
+        /// <summary>An option's words as the player sees them: a room already visited reads "(been)".</summary>
+        public static string OptionLabel(GameState game, string choice, int option)
+        {
+            if (!game.Story.Choices.TryGetValue(choice, out var c) || option < 0 || option >= D.List(c, "options").Count) return "";
+            var o = D.Map(D.List(c, "options")[option]);
+            var been = D.Str(o, "been");
+            return D.Str(o, "label") + (been != "" && game.Visited.Contains(been) ? " (been)" : "");
+        }
 
         /// <summary>Pick an option: records it, does what it does, and returns where it leads ("" if it can't be picked).</summary>
         public static string Choose(GameState game, string choice, int option)

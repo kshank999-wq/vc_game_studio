@@ -27,6 +27,8 @@ describe('rooms for the engines', () => {
       ['Leave New scene', onward.key],
     ]);
     expect(onward.name).toBe('Ending');
+    // The room option names the room, so the runtimes can mark it “(been)”; leaving does not.
+    expect(where.options.map((o) => o.been ?? null)).toEqual([node('The Study').key, null]);
     // The study has its own choice; the closet goes back to it; leaving the study goes back to the scene's.
     const study2 = ir.choices.find((c) => c.name === 'The Study: where now?')!;
     expect(study2.options.map((o) => o.label)).toEqual(['Go into The Closet', 'Leave The Study']);

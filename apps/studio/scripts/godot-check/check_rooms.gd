@@ -59,10 +59,16 @@ func _initialize() -> void:
 	# Leaving the study goes back out to the cave's question; leaving the cave goes on along the story.
 	if study_choice.choose(1, game) != cave_where:
 		fail("Leave The Study should go back to The Cave Mouth's question")
+	# Rooms the player has been in read "(been)" (a scene marks itself visited as it plays).
+	if where.label(0, game) != "Go into The Study":
+		fail("The Study should not read been before it is visited")
+	game.visit(study)
+	if where.label(0, game) != "Go into The Study (been)" or where.listed(game)[0]["label"] != "Go into The Study (been)":
+		fail("The Study should read been once visited, got " + where.label(0, game))
 	var onward: String = where.choose(1, game)
 	if onward == "" or onward == cave_where or not story.NODES.has(onward):
 		fail("Leave The Cave Mouth should go on along the story, got " + onward)
-	print("rooms: ", labels(where), " · ", labels(study_choice), " · then ", story.NODES[onward]["name"])
+	print("rooms: ", where.label(0, game), " · ", labels(where), " · ", labels(study_choice), " · then ", story.NODES[onward]["name"])
 	if failures > 0:
 		quit(1)
 		return

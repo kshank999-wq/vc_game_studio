@@ -421,7 +421,8 @@ export interface IrChoice {
   prompt: string;
   scene: string | null;
   /** `key` is stable for the option within its choice, for remembering picks. */
-  options: { key: string; label: string; to: string | null; when?: IrRule; effects?: IrEffect[]; after?: 'gone' | 'locked'; hide?: boolean }[];
+  /** `been`: a room it leads into; its label reads “(been)” once the player has visited it. */
+  options: { key: string; label: string; to: string | null; when?: IrRule; effects?: IrEffect[]; after?: 'gone' | 'locked'; hide?: boolean; been?: string }[];
   /** The choice is offered at all only when this holds. */
   available?: IrRule;
   /** A timed choice: seconds to answer, and the option taken when time runs out ('' for the first on offer). */
@@ -855,7 +856,14 @@ export const buildIR = (given: Project): HandoffIR => {
       const behaviour = (b: { after?: 'gone' | 'locked'; hideUnavailable?: boolean }) => ({ ...(b.after ? { after: b.after } : {}), ...(b.hideUnavailable ? { hide: true } : {}) });
       const graph = project.connections
         .filter((c) => c.kind === 'branch' && c.sourceId === o.id)
-        .map((c) => ({ label: c.label ?? '', to: key(c.targetId), ...ruled(rule(c.conditions), effects(c.effects)), ...behaviour(c) }));
+        .map((c) => ({
+          label: c.label ?? '',
+          to: key(c.targetId),
+          ...ruled(rule(c.conditions), effects(c.effects)),
+          ...behaviour(c),
+          // Into a room (rooms.ts): marked once been.
+          ...(o.data.roomsOf && project.objects[c.targetId]?.data.parentSceneId === o.data.roomsOf ? { been: key(c.targetId)! } : {}),
+        }));
       const inScene = project.events
         .filter((e) => e.refId === o.id && e.kind === 'choice')
         .flatMap((e) => [

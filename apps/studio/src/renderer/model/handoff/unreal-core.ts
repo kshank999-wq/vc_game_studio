@@ -2388,9 +2388,12 @@ ${UNREAL_PUZZLES}
             return list;
         }
 
+        /** An option's words as the player sees them: a room already visited reads "(been)". */
         inline std::string OptionLabel(const GameState& game, const std::string& choice, int option)
         {
-            return Story::Find(game.StoryData.Choices, choice)["options"][static_cast<size_t>(option)]["label"].Str();
+            const Value& o = Story::Find(game.StoryData.Choices, choice)["options"][static_cast<size_t>(option)];
+            const std::string been = o["been"].Str();
+            return o["label"].Str() + (!been.empty() && game.Visited.count(been) ? " (been)" : "");
         }
 
         /** Pick an option: records it, does what it does, and returns where it leads ("" if it can't be picked). */
