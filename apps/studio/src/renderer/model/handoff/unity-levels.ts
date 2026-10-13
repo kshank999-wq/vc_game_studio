@@ -1170,6 +1170,40 @@ namespace VCGS.EditorTools
             foreach (var line in report) Debug.Log(line);
         }
 
+        /// <summary>
+        /// Every level's map as a scene of its own (Assets/VCGS/Levels/&lt;map&gt;.unity), made
+        /// or updated from its data and put in Build Settings, so VcgsGame loads it on
+        /// the story's level transitions. Run it again after each export.
+        /// </summary>
+        [MenuItem("VCGS/Build each level as a scene")]
+        public static List<string> BuildLevelScenes()
+        {
+            var report = new List<string>();
+            const string from = "Assets/VCGS/Generated/Levels";
+            const string to = "Assets/VCGS/Levels";
+            if (!Directory.Exists(from)) return report;
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return report;
+            Directory.CreateDirectory(to);
+            var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            var files = Directory.GetFiles(from, "*.json");
+            System.Array.Sort(files, System.StringComparer.Ordinal);
+            foreach (var file in files)
+            {
+                var key = Path.GetFileNameWithoutExtension(file);
+                var scenePath = to + "/" + key + ".unity";
+                var scene = File.Exists(scenePath)
+                    ? EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single)
+                    : EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+                report.AddRange(Build(File.ReadAllText(file), from + "/" + key + ".json", false));
+                EditorSceneManager.SaveScene(scene, scenePath);
+                if (!scenes.Exists(x => x.path == scenePath)) scenes.Add(new EditorBuildSettingsScene(scenePath, true));
+                report.Add("Level scene " + scenePath + ".");
+            }
+            EditorBuildSettings.scenes = scenes.ToArray();
+            foreach (var line in report) Debug.Log(line);
+            return report;
+        }
+
         static string AssetPathOf(string path)
         {
             var at = path.Replace('\\', '/').IndexOf("/Assets/");

@@ -358,8 +358,10 @@ namespace VCGS
         public double Clock;
         /// <summary>The level of the Level lane the player is in, by name ("" before the first).</summary>
         public string Level = "";
-        /// <summary>Into another level of the Level lane: the one left ("" for the first), the one entered. Load its scene here.</summary>
-        public event Action<string, string> LevelEntered;
+        /// <summary>That level's map, by its key ("" when it has none): VcgsGame loads the Unity scene named after it.</summary>
+        public string LevelMap = "";
+        /// <summary>Into another level of the Level lane: the one left ("" for the first), the one entered, and its map's key ("" for none).</summary>
+        public event Action<string, string, string> LevelEntered;
 
         /// <summary>A puzzle step done, failed (a wrong move), expired (out of time) or reset (puzzle spec §6).</summary>
         public event Action<string, string, string> PuzzleStep;
@@ -430,7 +432,7 @@ namespace VCGS
             Loaded = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
             Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear(); Equipped.Clear(); Wear.Clear();
-            PuzzleSteps.Clear(); Hinted.Clear(); ScreenFails.Clear(); Clock = 0; Level = "";
+            PuzzleSteps.Clear(); Hinted.Clear(); ScreenFails.Clear(); Clock = 0; Level = ""; LevelMap = "";
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
             {
@@ -718,12 +720,13 @@ namespace VCGS
         /// LEVEL · &lt;new&gt;" ("LEVEL · &lt;new&gt;" for the first), or "" when the player is in it
         /// already or the node has no level.
         /// </summary>
-        public string EnterLevel(string level)
+        public string EnterLevel(string level, string map = "")
         {
             if (string.IsNullOrEmpty(level) || level == Level) return "";
             var from = Level;
             Level = level;
-            LevelEntered?.Invoke(from, level);
+            LevelMap = map ?? "";
+            LevelEntered?.Invoke(from, level, LevelMap);
             OnChanged();
             return from != "" ? "End of " + from + " → LEVEL · " + level : "LEVEL · " + level;
         }
@@ -862,7 +865,7 @@ namespace VCGS
                 ",\n  \"equipped\": " + Map(Equipped, Q) + ",\n  \"wear\": " + Map(Wear, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
                 ",\n  \"puzzles\": " + Map(PuzzleSteps, p => p.ToJson()) + ",\n  \"hinted\": " + Sorted(Hinted) + ",\n  \"screenFails\": " + Map(ScreenFails, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
                 ",\n  \"clock\": " + Clock.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
-                ",\n  \"level\": " + Q(Level);
+                ",\n  \"level\": " + Q(Level) + ",\n  \"levelMap\": " + Q(LevelMap);
         }
 
         /// <summary>Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it.</summary>
@@ -911,6 +914,7 @@ namespace VCGS
             foreach (var e in D.Map(data, "screenFails")) ScreenFails[e.Key] = (int)D.Num(e.Value, 0);
             Clock = D.Num(data, "clock");
             Level = D.Str(data, "level");
+            LevelMap = D.Str(data, "levelMap");
             foreach (var e in D.Map(data, "flags")) Flags[e.Key] = D.Str(data["flags"] as Dictionary<string, object>, e.Key);
             foreach (var e in D.Map(data, "objects")) ObjectStates[e.Key] = D.Str(data["objects"] as Dictionary<string, object>, e.Key);
             foreach (var e in D.Map(data, "chosen")) Chosen[e.Key] = D.Str(data["chosen"] as Dictionary<string, object>, e.Key);
@@ -1697,7 +1701,10 @@ namespace VCGS
         public static string LevelOf(GameState game, string node) => game.Story.Graph.TryGetValue(node, out var n) ? D.Str(n, "level") : "";
 
         /// <summary>Arriving at a node: the level transition to show ("" when it stays in the same level).</summary>
-        public static string Arrive(GameState game, string node) => game.EnterLevel(LevelOf(game, node));
+        public static string Arrive(GameState game, string node) => game.EnterLevel(LevelOf(game, node), LevelMapOf(game, node));
+
+        /// <summary>The key of the map of the level a node happens in ("" for none).</summary>
+        public static string LevelMapOf(GameState game, string node) => game.Story.Graph.TryGetValue(node, out var n) ? D.Str(n, "level_map") : "";
 
         public static string KindOf(GameState game, string node) => game.Story.Graph.TryGetValue(node, out var n) ? D.Str(n, "kind") : "";
 
@@ -2603,6 +2610,32 @@ namespace VCGS
     /// it the generated story.json. It stays loaded between scenes.
     /// </summary>
     [DefaultExecutionOrder(-100)]
+    /// <summary>
+    /// The level maps as Unity scenes: on a level transition the level's scene
+    /// (named after its map's key, in Build Settings) loads additively in place
+    /// of the last level's, beside the story's own scenes.
+    /// </summary>
+    public static class VcgsLevelScenes
+    {
+        /// <summary>The level scene loaded now ("" for none).</summary>
+        public static string Shown { get; private set; } = "";
+
+        /// <summary>Load a level map's scene in place of the one shown. False when there is no such scene in Build Settings.</summary>
+        public static bool Show(string map)
+        {
+            if (string.IsNullOrEmpty(map) || map == Shown) return !string.IsNullOrEmpty(map);
+            if (!Application.CanStreamedLevelBeLoaded(map)) return false;
+            if (Shown != "")
+            {
+                var last = UnityEngine.SceneManagement.SceneManager.GetSceneByName(Shown);
+                if (last.isLoaded) UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(last);
+            }
+            UnityEngine.SceneManagement.SceneManager.LoadSceneAsync(map, UnityEngine.SceneManagement.LoadSceneMode.Additive);
+            Shown = map;
+            return true;
+        }
+    }
+
     public sealed class VcgsGame : MonoBehaviour
     {
         [Tooltip("The generated story.json (Assets/VCGS/Generated/story.json).")]
@@ -2623,7 +2656,11 @@ namespace VCGS
             DontDestroyOnLoad(gameObject);
             Story = Story.FromJson(story != null ? story.text : "{}");
             State = new GameState(Story);
+            State.LevelEntered += (from, to, map) => { if (loadLevelScenes) VcgsLevelScenes.Show(map); };
         }
+
+        [Tooltip("On a level transition, load the level's map scene (Assets/VCGS/Levels/<map>.unity, made by VCGS › Build each level as a scene) in place of the last one.")]
+        public bool loadLevelScenes = true;
 
         /// <summary>The play clock runs while the game does (timed puzzle steps).</summary>
         void Update() => State?.AdvanceClock(Time.deltaTime);

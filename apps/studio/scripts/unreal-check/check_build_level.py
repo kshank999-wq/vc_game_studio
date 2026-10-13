@@ -164,5 +164,14 @@ if any("no longer in the level" in line for line in again) or len([a for a in fa
     fail("building the world again should touch only its own items and links, got %s" % again)
 print("world: %s / %s" % (world_report[-1], next((line for line in quarter_report if "inside" in line), "?")))
 
+# Each level map the story's Level lane uses becomes an Unreal level of its own, made once, opened after.
+maps_report = build_level.build_level_maps()
+if fake_unreal.LevelEditorSubsystem.made != ["/Game/VCGS/Levels/sunken_vault"] or not any("Level map /Game/VCGS/Levels/sunken_vault." == line for line in maps_report):
+    fail("the vault's map should be made as /Game/VCGS/Levels/sunken_vault, got %r" % fake_unreal.LevelEditorSubsystem.made)
+build_level.build_level_maps()
+if fake_unreal.LevelEditorSubsystem.opened != ["/Game/VCGS/Levels/sunken_vault"] or len(fake_unreal.LevelEditorSubsystem.saved) != 2:
+    fail("building the maps again should open and save the one already made")
+print("level maps: %s" % ", ".join(fake_unreal.LevelEditorSubsystem.made))
+
 print("build_level.py OK" if not failures else "%d FAILED" % len(failures))
 sys.exit(1 if failures else 0)

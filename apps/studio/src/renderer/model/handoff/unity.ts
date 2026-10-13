@@ -146,9 +146,12 @@ project.
    \`StoryWalker\` follows the graph between scenes. Call
    \`StoryWalker.Arrive(State, node)\` at each node you go to: crossing into
    another level of the Level lane it returns the transition to show ("End of
-   The Flooded Cave → LEVEL · The Sunken Vault") and fires \`LevelEntered\`
-   (load the level's scene there); \`State.Level\` is the level the player is
-   in, kept in saves.
+   The Flooded Cave → LEVEL · The Sunken Vault") and fires \`LevelEntered\`;
+   \`State.Level\` is the level the player is in, kept in saves. Run
+   **VCGS › Build each level as a scene** once after each export: each level
+   map becomes \`Assets/VCGS/Levels/<map>.unity\` in Build Settings, and
+   VcgsGame loads the level's scene additively on each transition, in place
+   of the last one (\`loadLevelScenes\`, on by default).
 5. **Puzzles** built in the Puzzle Creator play their steps as the studio does
    (order, links, time limits on \`State.Clock\`, which VcgsGame advances,
    rewards, wrong moves, resets): \`PuzzleStep\`, \`StepDone\`, \`HintGiven\` and

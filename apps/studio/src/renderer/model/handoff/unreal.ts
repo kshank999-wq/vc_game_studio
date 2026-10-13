@@ -193,7 +193,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsQuestSignature, const FString&,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsSceneSignature, const FString&, Scene);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsSkillSignature, const FString&, Skill, int32, Rank);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsGearSignature, const FString&, Item, const FString&, Slot);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsLevelSignature, const FString&, From, const FString&, To);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FVcgsLevelSignature, const FString&, From, const FString&, To, const FString&, Map);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FVcgsPuzzleStepSignature, const FString&, Puzzle, const FString&, Step, const FString&, What);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsHintSignature, const FString&, Puzzle, const FString&, Text);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVcgsCueSignature, const FString&, Puzzle, const FString&, Kind, const FString&, Text, const FString&, Ref);
@@ -281,8 +281,14 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestStarted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnQuestCompleted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsQuestSignature OnLoreDiscovered;
-    /** Into another level of the Level lane (From is "" for the first): load its map here. */
+    /** Into another level of the Level lane (From is "" for the first; Map is its map's key, "" for none). */
     UPROPERTY(BlueprintAssignable, Category = "VCGS|State") FVcgsLevelSignature OnLevelEntered;
+    /** On a level transition, stream in the level's map (/Game/VCGS/Levels/<Map>, made by build_level.py's BUILD_EACH_AS_MAP) in place of the last one. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS|Story") bool bLoadLevelMaps = true;
+    /** Stream in a level map (/Game/VCGS/Levels/<Map>) in place of the one shown; false when there is no such map. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Story") bool ShowLevelMap(const FString& Map);
+    /** The level map streamed in now ("" for none). */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetShownLevelMap() const { return ShownLevelMap; }
 
     /**
      * Save the game (Saved/SaveGame.json when Path is empty): as the scene being
@@ -423,6 +429,9 @@ public:
 private:
     std::unique_ptr<vcgs::Story> StoryData;
     std::unique_ptr<vcgs::GameState> Game;
+    /** The level map streamed in for the level the player is in. */
+    UPROPERTY() class ULevelStreamingDynamic* ShownLevel = nullptr;
+    FString ShownLevelMap;
     std::unique_ptr<vcgs::Codex> CodexData;
 };
 `,
@@ -433,7 +442,11 @@ private:
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/FileHelper.h"
+#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "Engine/GameInstance.h"
+#include "Engine/LevelStreamingDynamic.h"
+#include "Engine/World.h"
 
 using VcgsConvert::ToF;
 using VcgsConvert::ToStd;
@@ -482,7 +495,11 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     Game->OnQuestStarted = [this](const std::string& Quest) { OnQuestStarted.Broadcast(ToF(Quest)); };
     Game->OnQuestCompleted = [this](const std::string& Quest) { OnQuestCompleted.Broadcast(ToF(Quest)); };
     Game->OnLoreDiscovered = [this](const std::string& Lore) { OnLoreDiscovered.Broadcast(ToF(Lore)); };
-    Game->OnLevelEntered = [this](const std::string& From, const std::string& To) { OnLevelEntered.Broadcast(ToF(From), ToF(To)); };
+    Game->OnLevelEntered = [this](const std::string& From, const std::string& To, const std::string& Map)
+    {
+        if (bLoadLevelMaps && !Map.empty()) ShowLevelMap(ToF(Map));
+        OnLevelEntered.Broadcast(ToF(From), ToF(To), ToF(Map));
+    };
     Game->OnMechanicAvailable = [this](const std::string& Mechanic) { OnMechanicAvailable.Broadcast(ToF(Mechanic)); };
     Game->OnSkillLearned = [this](const std::string& Skill, int Rank) { OnSkillLearned.Broadcast(ToF(Skill), Rank); };
     Game->OnItemEquipped = [this](const std::string& Item, const std::string& Slot) { OnItemEquipped.Broadcast(ToF(Item), ToF(Slot)); };
@@ -749,6 +766,26 @@ FString UVcgsSubsystem::GetCraftCheck(const FString& Item) const { return Game ?
 FString UVcgsSubsystem::Onward(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Onward(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::Arrive(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Arrive(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::GetLevel() const { return Game ? ToF(Game->Level) : FString(); }
+
+bool UVcgsSubsystem::ShowLevelMap(const FString& Map)
+{
+    if (Map.IsEmpty()) return false;
+    if (Map == ShownLevelMap && ShownLevel) return true;
+    const FString Package = TEXT("/Game/VCGS/Levels/") + Map;
+    UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+    if (!World || !FPackageName::DoesPackageExist(Package)) return false;
+    if (ShownLevel)
+    {
+        ShownLevel->SetShouldBeLoaded(false);
+        ShownLevel->SetShouldBeVisible(false);
+        ShownLevel->SetIsRequestingUnloadAndRemoval(true);
+        ShownLevel = nullptr;
+    }
+    bool bLoaded = false;
+    ShownLevel = ULevelStreamingDynamic::LoadLevelInstance(World, Package, FVector::ZeroVector, FRotator::ZeroRotator, bLoaded);
+    ShownLevelMap = bLoaded ? Map : FString();
+    return bLoaded;
+}
 FString UVcgsSubsystem::NodeKind(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::KindOf(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::NodeOutcome(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::OutcomeOf(*Game, ToStd(Node))) : FString(); }
 
@@ -1531,8 +1568,12 @@ all Blueprint-callable). Quests start and complete by their rules (\`OnQuestStar
 conditions come true; \`Onward\` and \`ChooseOnGraph\` follow the graph between
 scenes. Call \`Arrive(Node)\` at each node you go to: crossing into another level of
 the Level lane it returns the transition to show ("End of The Flooded Cave → LEVEL ·
-The Sunken Vault") and broadcasts \`OnLevelEntered\` (open the level's map there);
-\`GetLevel\` is the level the player is in, kept in saves.
+The Sunken Vault") and broadcasts \`OnLevelEntered\`; \`GetLevel\` is the level the
+player is in, kept in saves. To have the level maps load on those transitions, set
+\`BUILD_EACH_AS_MAP = True\` in \`Content/VCGS/Generated/Levels/build_level.py\` and run it
+once after each export: each level map the story uses becomes \`/Game/VCGS/Levels/<map>\`,
+and the subsystem streams it in on each transition in place of the last one
+(\`bLoadLevelMaps\`, on by default; \`ShowLevelMap\` does it by hand).
 
 **Puzzles** built in the Puzzle Creator play their steps as the studio does
 (order, links, time limits on the play clock, which the level director advances

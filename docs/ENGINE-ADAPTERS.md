@@ -681,14 +681,27 @@ The Flooded Cave" for the first). The level the player is in is kept in the
 shared save as `level`, so a save from one engine resumes in the same level
 in another.
 
-- **Godot:** the story player shows the transition above what plays next;
-  `GameState.enter_level(name)` returns it and `GameState.level` is the level.
-- **Unity:** `StoryWalker.Arrive(State, node)` returns the transition and
-  fires `State.LevelEntered(from, to)`, the place to load the level's scene;
-  `State.Level` is the level.
-- **Unreal:** `UVcgsSubsystem::Arrive(Node)` returns it and broadcasts
-  `OnLevelEntered(From, To)`, the place to open the level's map;
-  `GetLevel()` is the level.
+A level with a map in the Level Designer also gives its nodes \`level_map\`
+(the map's key in \`levels\`), and each engine **loads that map on the
+transition**, in place of the last level's:
+
+- **Godot:** the story player shows the transition above what plays next and
+  loads \`levels/<map>.tscn\` under the tree's root, so it stays while story
+  scenes come and go (\`GameState.show_level_map(path)\`; the
+  \`level_entered(from, to, map_key)\` signal; \`GameState.level\`,
+  \`GameState.level_map\`).
+- **Unity:** run **VCGS › Build each level as a scene** after each export:
+  each level map becomes \`Assets/VCGS/Levels/<map>.unity\`, in Build
+  Settings. \`StoryWalker.Arrive(State, node)\` returns the transition and
+  fires \`State.LevelEntered(from, to, map)\`; VcgsGame loads the level's
+  scene additively and unloads the last one (\`loadLevelScenes\`, on by
+  default; \`VcgsLevelScenes.Show(map)\` by hand).
+- **Unreal:** set \`BUILD_EACH_AS_MAP = True\` in
+  \`Content/VCGS/Generated/Levels/build_level.py\` and run it after each
+  export: each level map the story uses becomes \`/Game/VCGS/Levels/<map>\`.
+  \`UVcgsSubsystem::Arrive(Node)\` returns the transition, streams the map in
+  (\`bLoadLevelMaps\`, on by default; \`ShowLevelMap\` by hand) and
+  broadcasts \`OnLevelEntered(From, To, Map)\`.
 
 ## What each engine gets
 

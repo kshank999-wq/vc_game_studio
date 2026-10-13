@@ -4,4 +4,5 @@ class UGameInstance : public UObject
 {
 public:
     template <typename T> T* GetSubsystem() const { return nullptr; }
+    class UWorld* GetWorld() const { return nullptr; }
 };

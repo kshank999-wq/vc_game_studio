@@ -87,7 +87,25 @@ func _initialize() -> void:
 	game.load_text(saved)
 	if game.level != "The Sunken Vault":
 		fail("a save should keep the level, got " + game.level)
-	print("levels: ", first, " · ", crossing)
+	# The Sunken Vault has a map, The Flooded Cave none: the vault's map loads on the crossing.
+	var vault_map := str(story.NODES[key_node].get("level_map", ""))
+	if vault_map == "" or story.NODES[cave_key].has("level_map"):
+		fail("only The Sunken Vault's nodes should carry its map, got [%s] [%s]" % [vault_map, str(story.NODES[cave_key].get("level_map", ""))])
+	var heard: Array = []
+	game.level_entered.connect(func(from: String, to: String, map_key: String) -> void: heard.append([from, to, map_key]))
+	game.level = ""
+	game.enter_level("The Flooded Cave", "")
+	game.enter_level("The Sunken Vault", vault_map)
+	if heard != [["", "The Flooded Cave", ""], ["The Flooded Cave", "The Sunken Vault", vault_map]] or game.level_map != vault_map:
+		fail("level_entered should say each crossing and its map, got " + str(heard))
+	var shown: Node = game.show_level_map("res://vcgs/generated/levels/%s.tscn" % vault_map)
+	if shown == null or not (shown is VCGSLevel):
+		fail("the vault's map should load as a VCGSLevel")
+	elif game.show_level_map("res://vcgs/generated/levels/%s.tscn" % vault_map) != shown:
+		fail("showing the same map again should keep it")
+	if game.show_level_map("res://vcgs/generated/levels/no_such_map.tscn") != null:
+		fail("a map that is not there should load nothing")
+	print("levels: ", first, " · ", crossing, " · map ", vault_map)
 	if failures > 0:
 		quit(1)
 		return

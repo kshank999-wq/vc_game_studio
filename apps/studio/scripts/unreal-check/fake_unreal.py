@@ -248,3 +248,32 @@ class GameplayStatics:
 
 def log(message):
     print(message)
+
+
+class LevelEditorSubsystem:
+    """The editor's levels: which were made, opened and saved, for the check."""
+    made = []
+    opened = []
+    saved = []
+
+    def new_level(self, path):
+        LevelEditorSubsystem.made.append(path)
+        _assets[path] = path
+        return True
+
+    def load_level(self, path):
+        LevelEditorSubsystem.opened.append(path)
+        return True
+
+    def save_current_level(self):
+        LevelEditorSubsystem.saved.append(len(LevelEditorSubsystem.made) + len(LevelEditorSubsystem.opened))
+        return True
+
+
+_subsystems = {}
+
+
+def get_editor_subsystem(cls):
+    if cls not in _subsystems:
+        _subsystems[cls] = cls()
+    return _subsystems[cls]

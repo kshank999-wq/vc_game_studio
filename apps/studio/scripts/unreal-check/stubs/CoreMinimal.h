@@ -28,6 +28,7 @@ public:
     bool operator==(const FString& o) const { return data == o.data; }
     bool operator!=(const FString& o) const { return data != o.data; }
     friend FString operator/(const FString& a, const FString& b) { return FString((a.data + "/" + b.data).c_str()); }
+    friend FString operator+(const FString& a, const FString& b) { return FString((a.data + b.data).c_str()); }
 private:
     std::string data;
 };
@@ -113,14 +114,18 @@ struct FVector
     bool IsNearlyZero() const { return Size() < 1e-8; }
     FVector GetSafeNormal() const { return *this; }
     static double DotProduct(const FVector& a, const FVector& b) { return a.X * b.X + a.Y * b.Y + a.Z * b.Z; }
+    static const FVector ZeroVector;
 };
+inline const FVector FVector::ZeroVector = FVector();
 
 struct FRotator
 {
     double Pitch = 0, Yaw = 0, Roll = 0;
     FRotator() {}
     FRotator(double p, double y, double r) : Pitch(p), Yaw(y), Roll(r) {}
+    static const FRotator ZeroRotator;
 };
+inline const FRotator FRotator::ZeroRotator = FRotator();
 
 struct FHitResult {};
 struct FName

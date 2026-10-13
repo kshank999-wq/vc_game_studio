@@ -1518,6 +1518,10 @@ import unreal
 LEVELS = os.path.join(unreal.Paths.project_content_dir(), "${root.replace(/^Content\/?/, '')}/Levels")
 LEVEL = ""  # The level's key (its file name); empty builds the only one, or asks.
 VCGS_WINS = False
+# True builds each level map the story's Level lane uses as an Unreal level of its own
+# (/Game/VCGS/Levels/<map>), saved, for UVcgsSubsystem to stream in on each level transition.
+BUILD_EACH_AS_MAP = False
+MAPS = "/Game/VCGS/Levels"
 SHAPES = {"box": "/Engine/BasicShapes/Cube.Cube", "cylinder": "/Engine/BasicShapes/Cylinder.Cylinder", "sphere": "/Engine/BasicShapes/Sphere.Sphere", "cone": "/Engine/BasicShapes/Cone.Cone", "wedge": "/Engine/BasicShapes/Cube.Cube"}
 
 
@@ -1827,8 +1831,48 @@ def build():
     return report
 
 
+def story_maps():
+    """The level maps the story's levels use, in the order the story reaches them."""
+    path = os.path.join(LEVELS, os.pardir, "story.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        story = json.load(f)
+    out = []
+    for node in story.get("graph", []):
+        key = node.get("level_map", "")
+        if key and key not in out and os.path.exists(os.path.join(LEVELS, key + ".json")):
+            out.append(key)
+    return out
+
+
+def build_level_maps():
+    """Each level map the story uses as an Unreal level of its own (MAPS/<map>): made or opened,
+    built from its data, and saved. Run it again after each export."""
+    global LEVEL
+    levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+    report = []
+    for key in story_maps():
+        path = MAPS + "/" + key
+        if unreal.EditorAssetLibrary.does_asset_exist(path):
+            levels.load_level(path)
+        else:
+            levels.new_level(path)
+        LEVEL = key
+        report.extend(build())
+        levels.save_current_level()
+        report.append("Level map " + path + ".")
+    LEVEL = ""
+    for line in report[-1:]:
+        unreal.log(line)
+    return report
+
+
 if __name__ == "__main__":
-    build()
+    if BUILD_EACH_AS_MAP:
+        build_level_maps()
+    else:
+        build()
 `;
 
 /** The level's data for Unreal, with names for the story keys it mentions. */

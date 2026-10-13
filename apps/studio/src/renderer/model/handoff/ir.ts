@@ -445,6 +445,8 @@ export interface IrGraphNode extends IrStoryNode {
   outcome?: 'ending' | 'gameOver';
   /** The level of the Level lane it happens in, by name: arriving at a node in another level is a level transition. */
   level?: string;
+  /** That level's map (its key in \`levels\`), when it has one: what to load on the transition. */
+  level_map?: string;
 }
 
 export interface HandoffIR {
@@ -697,6 +699,9 @@ export const buildIR = (given: Project): HandoffIR => {
             .map((c) => ({ to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
           ...(outcome ? { outcome } : {}),
           ...(levelOf(project, id) ? { level: levelOf(project, id)!.name } : {}),
+          ...(levelOf(project, id)?.mapId && levels.some((l) => l.guid === levelOf(project, id)!.mapId)
+            ? { level_map: levels.find((l) => l.guid === levelOf(project, id)!.mapId)!.key }
+            : {}),
         };
       }),
     branches: project.connections

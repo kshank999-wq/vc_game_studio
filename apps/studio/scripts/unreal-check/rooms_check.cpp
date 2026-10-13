@@ -62,14 +62,16 @@ int main()
     if (vcgs::StoryWalker::LevelOf(game, cave) != "The Flooded Cave" || vcgs::StoryWalker::LevelOf(game, key) != "The Sunken Vault")
         Fail("the graph should carry each node's level, got " + vcgs::StoryWalker::LevelOf(game, cave) + " / " + vcgs::StoryWalker::LevelOf(game, key));
     std::string entered;
-    game.OnLevelEntered = [&](const std::string& from, const std::string& to) { entered += (entered.empty() ? "" : ",") + from + ">" + to; };
+    game.OnLevelEntered = [&](const std::string& from, const std::string& to, const std::string& map) { entered += (entered.empty() ? "" : ",") + from + ">" + to + (map.empty() ? "" : "@" + map); };
     game.Level.clear();
     const std::string first = vcgs::StoryWalker::Arrive(game, cave);
     const std::string again = vcgs::StoryWalker::Arrive(game, cave);
     const std::string crossing = vcgs::StoryWalker::Arrive(game, key);
     if (first != "LEVEL · The Flooded Cave" || !again.empty() || crossing != "End of The Flooded Cave → LEVEL · The Sunken Vault")
         Fail("level transitions are wrong: [" + first + "] [" + again + "] [" + crossing + "]");
-    if (entered != ">The Flooded Cave,The Flooded Cave>The Sunken Vault") Fail("OnLevelEntered should fire on each crossing, got " + entered);
+    const std::string vaultMap = vcgs::StoryWalker::LevelMapOf(game, key);
+    if (vaultMap.empty() || !vcgs::StoryWalker::LevelMapOf(game, cave).empty()) Fail("only The Sunken Vault's nodes should carry its map, got [" + vaultMap + "]");
+    if (entered != ">The Flooded Cave,The Flooded Cave>The Sunken Vault@" + vaultMap || game.LevelMap != vaultMap) Fail("OnLevelEntered should fire on each crossing with its map, got " + entered);
     // The level the player is in is kept in a save.
     game.Checkpoint(key);
     const std::string saved = game.SaveText("check");

@@ -320,7 +320,12 @@ namespace UnityEngine
         public static string persistentDataPath = System.IO.Path.GetTempPath();
         public static readonly List<string> opened = new();
         public static void OpenURL(string url) => opened.Add(url);
+        /// <summary>The scenes in Build Settings, for the checks.</summary>
+        public static readonly HashSet<string> scenesInBuild = new();
+        public static bool CanStreamedLevelBeLoaded(string name) => scenesInBuild.Contains(name);
     }
+
+    public class AsyncOperation { }
 
     public static class Screen
     {
@@ -418,8 +423,12 @@ namespace UnityEngine
 
 namespace UnityEngine.SceneManagement
 {
+    public enum LoadSceneMode { Single, Additive }
+
     public struct Scene
     {
+        public string name;
+        public bool isLoaded;
         /// <summary>Every GameObject with no parent: the stubs keep one scene.</summary>
         public GameObject[] GetRootGameObjects() => GameObject.all.FindAll(g => g.transform.parent == null && !g.destroyed).ToArray();
     }
@@ -427,6 +436,21 @@ namespace UnityEngine.SceneManagement
     public static class SceneManager
     {
         public static Scene GetActiveScene() => default;
+        /// <summary>The scenes loaded, in order, and unloaded, for the checks.</summary>
+        public static readonly List<string> loaded = new();
+        public static readonly List<string> unloaded = new();
+        public static Scene GetSceneByName(string name) => new Scene { name = name, isLoaded = loaded.Contains(name) && !unloaded.Contains(name) };
+        public static AsyncOperation LoadSceneAsync(string name, LoadSceneMode mode)
+        {
+            loaded.Add(name);
+            unloaded.Remove(name);
+            return new AsyncOperation();
+        }
+        public static AsyncOperation UnloadSceneAsync(Scene scene)
+        {
+            unloaded.Add(scene.name);
+            return new AsyncOperation();
+        }
     }
 }
 
@@ -464,6 +488,18 @@ namespace UnityEditor
         public static Object InstantiatePrefab(Object prefab) => new GameObject(prefab.name);
     }
 
+    public sealed class EditorBuildSettingsScene
+    {
+        public string path;
+        public bool enabled;
+        public EditorBuildSettingsScene(string path, bool enabled) { this.path = path; this.enabled = enabled; }
+    }
+
+    public static class EditorBuildSettings
+    {
+        public static EditorBuildSettingsScene[] scenes = new EditorBuildSettingsScene[0];
+    }
+
     public static class Undo
     {
         public static void RegisterCreatedObjectUndo(Object o, string name) { }
@@ -475,5 +511,18 @@ namespace UnityEditor.SceneManagement
     public static class EditorSceneManager
     {
         public static bool MarkSceneDirty(UnityEngine.SceneManagement.Scene scene) => true;
+        public static readonly List<string> saved = new();
+        public static bool SaveCurrentModifiedScenesIfUserWantsTo() => true;
+        public static UnityEngine.SceneManagement.Scene OpenScene(string path, OpenSceneMode mode) => new UnityEngine.SceneManagement.Scene { name = System.IO.Path.GetFileNameWithoutExtension(path), isLoaded = true };
+        public static UnityEngine.SceneManagement.Scene NewScene(NewSceneSetup setup, NewSceneMode mode) => new UnityEngine.SceneManagement.Scene { isLoaded = true };
+        public static bool SaveScene(UnityEngine.SceneManagement.Scene scene, string path)
+        {
+            saved.Add(path);
+            return true;
+        }
     }
+
+    public enum OpenSceneMode { Single, Additive }
+    public enum NewSceneSetup { EmptyScene, DefaultGameObjects }
+    public enum NewSceneMode { Single, Additive }
 }
