@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export type GuidePlace = 'graph' | 'bible' | 'notes' | 'level' | 'puzzles' | 'play' | 'engine';
+export type GuidePlace = 'graph' | 'bible' | 'notes' | 'characters' | 'level' | 'puzzles' | 'play' | 'engine';
 
 interface Step {
   title: string;
@@ -45,6 +45,14 @@ export const STEPS: readonly Step[] = [
       'States hold what has happened: a list of values, a number or text. Conditions read them; effects change them.',
       'Triggers fire when their rule holds, gates hold the story back, and options can be hidden, locked or timed until their conditions hold.',
     ],
+  },
+  {
+    title: 'Characters',
+    body: [
+      'The Character Creator keeps every player character, enemy, NPC, ally and ambient extra in one registry: roles, art or a placeholder dummy, skills and powers, and inventory.',
+      'Each is the story’s own character, so it is a dialogue speaker, a Bible entry and a level actor’s character at once; a rename never breaks a link.',
+    ],
+    go: { place: 'characters', label: 'Open the Character Creator' },
   },
   {
     title: 'Levels and puzzles',

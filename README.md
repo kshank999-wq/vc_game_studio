@@ -18,10 +18,12 @@ handoff that generates engine code for Unity, Unreal, Godot or a custom engine.
   [`docs/specs/vc-game-studio-spec.md`](docs/specs/vc-game-studio-spec.md),
   [`docs/specs/level-designer-spec.md`](docs/specs/level-designer-spec.md),
   [`docs/specs/note-sorter-spec.md`](docs/specs/note-sorter-spec.md),
-  [`docs/specs/puzzle-creator-spec.md`](docs/specs/puzzle-creator-spec.md)
+  [`docs/specs/puzzle-creator-spec.md`](docs/specs/puzzle-creator-spec.md),
+  [`docs/specs/character-creator-spec.md`](docs/specs/character-creator-spec.md)
 - Level Designer: [`docs/LEVEL-DESIGNER.md`](docs/LEVEL-DESIGNER.md)
 - Note Sorter: [`docs/NOTE-SORTER.md`](docs/NOTE-SORTER.md)
 - Puzzle Creator: [`docs/PUZZLE-CREATOR.md`](docs/PUZZLE-CREATOR.md)
+- Character Creator: [`docs/CHARACTER-CREATOR.md`](docs/CHARACTER-CREATOR.md)
 - Comments, tasks and history: [`docs/COLLABORATION.md`](docs/COLLABORATION.md)
 - Selling it (vc-gamestudio.com, subscriptions, licenses, installers): [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Plan and status: [`docs/ROADMAP.md`](docs/ROADMAP.md)

@@ -7,6 +7,8 @@ export interface Nav {
   openLevels?: (focus?: string) => void;
   /** The Puzzle Creator, on a puzzle. */
   openPuzzles?: (puzzleId?: string) => void;
+  /** The Character Creator, on a character. */
+  openCharacters?: (characterId?: string) => void;
 }
 
 export const NavContext = createContext<Nav>({});

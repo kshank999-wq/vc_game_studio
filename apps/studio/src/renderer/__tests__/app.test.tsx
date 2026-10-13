@@ -167,7 +167,7 @@ describe('a scene', () => {
 
     expect(container.querySelector('.scene-box')).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toContain('SC-01 New scene');
-    expect(screen.getByRole('button', { name: /Characters/ }).textContent).toContain('1');
+    expect(screen.getByRole('button', { name: /^Characters \(/ }).textContent).toContain('1');
 
     fireEvent.click(screen.getByRole('button', { name: /Expand all/ }));
     // A port per category; dialogue hangs off the characters who speak it.

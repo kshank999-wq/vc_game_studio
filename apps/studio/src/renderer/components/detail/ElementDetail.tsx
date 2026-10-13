@@ -463,6 +463,11 @@ export const ElementDetail = ({ project, id, sceneId, onCommit, onClose, onOpenB
               <Text key={f.key} spec={f} value={String(object.data[f.key] ?? '')} onSave={(v) => onCommit(setField(project, id, f.key, v))} />
             ))}
           </div>
+          {object.type === 'character' && nav.openCharacters && (
+            <button className="chip-add small" onClick={() => nav.openCharacters?.(id)}>
+              Art, abilities and inventory in the Character Creator ↗
+            </button>
+          )}
         </section>
       )}
 

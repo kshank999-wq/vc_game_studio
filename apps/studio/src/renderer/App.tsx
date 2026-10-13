@@ -34,7 +34,7 @@ import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './
 import { LicenseDialog } from './components/license/lazy';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
-import { EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShotList } from './views';
+import { CharacterCreator, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShotList } from './views';
 import type { LevelMode } from './components/level/LevelDesigner';
 import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
@@ -55,7 +55,8 @@ export type Route =
   | { view: 'cinematic'; id: string; back: PlaceRoute }
   | { view: 'level'; focus?: string; mode?: LevelMode; back: PlaceRoute }
   | { view: 'notes'; back: PlaceRoute }
-  | { view: 'puzzles'; focus?: string; back: PlaceRoute };
+  | { view: 'puzzles'; focus?: string; back: PlaceRoute }
+  | { view: 'characters'; focus?: string; back: PlaceRoute };
 
 /** Views that stand aside from the graph and scenes, with a way back to where they were opened. */
 const isAside = (r: Route): r is Extract<Route, { back: PlaceRoute }> => 'back' in r;
@@ -159,7 +160,8 @@ export const App = () => {
   const openShots = (id: string) => setRoute((r) => ({ view: 'cinematic', id, back: placeOf(r) }));
   const openLevels = (focus?: string, mode?: LevelMode) => setRoute((r) => ({ view: 'level', focus, mode, back: placeOf(r) }));
   const openPuzzles = (focus?: string) => setRoute((r) => ({ view: 'puzzles', focus, back: placeOf(r) }));
-  const nav = useMemo(() => ({ openShots, openLevels, openPuzzles }), []);
+  const openCharacters = (focus?: string) => setRoute((r) => ({ view: 'characters', focus, back: placeOf(r) }));
+  const nav = useMemo(() => ({ openShots, openLevels, openPuzzles, openCharacters }), []);
   const openPlay = (from?: string) => setRoute((r) => ({ view: 'play', from, back: placeOf(r) }));
   const openBible = (focus?: string, report?: ReportKey) => setRoute((r) => ({ view: 'bible', focus, report, back: placeOf(r) }));
   const openEngine = (focus?: string) => setRoute((r) => ({ view: 'engine', focus, back: placeOf(r) }));
@@ -769,6 +771,7 @@ export const App = () => {
         { label: 'Game Bible', shortcut: 'Mod+B', checked: route.view === 'bible', onClick: () => openBible() },
         { label: 'Levels', shortcut: 'Mod+L', checked: route.view === 'level', onClick: () => openLevels() },
         { label: 'Note Sorter', checked: route.view === 'notes', onClick: () => (route.view === 'notes' ? setRoute(route.back) : openNotes()) },
+        { label: 'Character Creator', checked: route.view === 'characters', onClick: () => (route.view === 'characters' ? setRoute(route.back) : openCharacters()) },
         { label: 'Puzzle Creator', checked: route.view === 'puzzles', onClick: () => (route.view === 'puzzles' ? setRoute(route.back) : openPuzzles()) },
         { label: 'Engine handoff', shortcut: 'Mod+E', checked: route.view === 'engine', onClick: () => openEngine() },
         { label: 'Comments and changes', checked: dialog === 'comments', onClick: () => setDialog('comments') },
@@ -938,6 +941,8 @@ export const App = () => {
           ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Note Sorter' }]
         : route.view === 'puzzles'
           ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Puzzle Creator' }]
+        : route.view === 'characters'
+          ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Character Creator' }]
           : route.view === 'cinematic'
             ? [
                 { label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) },
@@ -991,6 +996,7 @@ export const App = () => {
             else if (part === 'bible') openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : route.view === 'graph' ? (selection ?? undefined) : undefined);
             else if (part === 'notes') openNotes();
             else if (part === 'puzzles') openPuzzles();
+            else if (part === 'characters') openCharacters(route.view === 'scene' && sceneSelection && project.objects[sceneSelection]?.type === 'character' ? sceneSelection : route.view === 'graph' && selection && project.objects[selection]?.type === 'character' ? selection : undefined);
             else if (part === 'level') openLevels(route.view === 'scene' ? route.sceneId : route.view === 'graph' ? (selection ?? undefined) : undefined);
             else if (part === 'engine') openEngine();
             else openPlay();
@@ -1096,6 +1102,9 @@ export const App = () => {
             )}
             {route.view === 'puzzles' && (
               <PuzzleCreator key={route.focus ?? 'puzzles'} project={project} onCommit={commit} onOpenBible={openBible} onOpenLevels={(id) => openLevels(id)} onSay={say} focus={route.focus} />
+            )}
+            {route.view === 'characters' && (
+              <CharacterCreator key={route.focus ?? 'characters'} project={project} onCommit={commit} onOpenBible={openBible} onOpenLevels={(id) => openLevels(id)} onSay={say} focus={route.focus} />
             )}
             {route.view === 'play' && <PlayView key={route.from ?? 'start'} project={project} from={route.from} onNavigate={navigate} onCommit={commit} />}
             {route.view === 'level' && (
@@ -1239,6 +1248,7 @@ export const App = () => {
               else if (place === 'notes') openNotes();
               else if (place === 'level') openLevels();
               else if (place === 'puzzles') openPuzzles();
+              else if (place === 'characters') openCharacters();
               else if (place === 'play') openPlay();
               else openEngine();
             }}
