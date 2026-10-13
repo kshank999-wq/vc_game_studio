@@ -1,5 +1,6 @@
 import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { SceneOverview } from './SceneOverview';
+import { addSubScene, subScenesOf } from '../../model/subscene';
 
 /** The scene's area on the 2D map: loaded when the Map tab opens, with the Level Designer's map. */
 const SceneMap = lazy(() => import('./SceneMap').then((m) => ({ default: m.SceneMap })));
@@ -154,6 +155,33 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   };
 
   const openCategory = (key: string) => setExpanded((e) => ({ ...e, [key]: true }));
+
+  // Rooms: sub-scenes, each a scene of its own in a room inside this scene's area.
+  const rooms = subScenesOf(project, sceneId);
+  const roomsOpen = expanded.rooms ?? true;
+  // A room's map keeps its name while the two agree.
+  const renameRoom = (p: Project, id: string, value: string): Project => {
+    const before = p.objects[id]?.name;
+    const next = renameObject(p, id, value);
+    const mapId = next.objects[id]?.data.mapId;
+    const after = next.objects[id]?.name;
+    if (!next.levels || typeof mapId !== 'string' || !after) return next;
+    return { ...next, levels: { ...next.levels, levels: next.levels.levels.map((l) => (l.id === mapId && l.name === before ? { ...l, name: after } : l)) } };
+  };
+  const openRoom = (id: string) => props.onNavigate?.({ kind: 'scene', sceneId: id, mode: 'open' });
+  const addRoom = async () => {
+    const made = addSubScene(project, sceneId);
+    if (!made) return;
+    let next = made.project;
+    const mapId = scene.data.mapId;
+    // Its room is a map inside this scene's area (loaded with the map code, only now).
+    if (typeof mapId === 'string' && project.levels?.levels.some((l) => l.id === mapId)) {
+      const { newSceneArea } = await import('../../model/level/scene-area');
+      next = newSceneArea(next, made.id, mapId, 'interior', next.objects[made.id]!.name).project;
+    }
+    props.onCommit(next);
+    setEditing(made.id);
+  };
 
   const added = (next: Project, id: string, fresh: boolean, key: string) => {
     props.onCommit(next);
@@ -319,6 +347,58 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
             <div className="side-head">
               IN THIS SCENE
               <span className="side-hint">Double-click one to open it</span>
+            </div>
+            <div className={`side-cat${roomsOpen ? ' open' : ''}`} style={{ '--cat': 'var(--c-scene)' } as React.CSSProperties}>
+              <button className="side-cat-head" aria-label={`Rooms (${rooms.length})`} aria-expanded={roomsOpen} onClick={() => setExpanded((x) => ({ ...x, rooms: !roomsOpen }))}>
+                <span className="side-caret" aria-hidden="true">{roomsOpen ? '▾' : '▸'}</span>
+                <Symbol type="scene" />
+                <span className="side-cat-name">Rooms · sub-scenes</span>
+                <span className="cnt">{rooms.length}</span>
+              </button>
+              {roomsOpen && (
+                <div className="side-items" role="list" aria-label="Rooms">
+                  {rooms.map((room) => (
+                    <div key={room.id} role="listitem">
+                      <div
+                        className="side-item"
+                        tabIndex={0}
+                        title="Double-click to go into it · F2 renames"
+                        onDoubleClick={() => editing !== room.id && openRoom(room.id)}
+                        onKeyDown={(e) => {
+                          if (editing === room.id) return;
+                          if (e.key === 'Enter') openRoom(room.id);
+                          if (e.key === 'F2') setEditing(room.id);
+                        }}
+                      >
+                        <Symbol type="scene" size={13} />
+                        {editing === room.id ? (
+                          <NameEdit
+                            value={room.name}
+                            onDone={(value) => {
+                              setEditing(null);
+                              if (value !== null) props.onCommit(renameRoom(project, room.id, value));
+                            }}
+                          />
+                        ) : (
+                          <span className="chip-name">{room.name}</span>
+                        )}
+                        {room.data.code && editing !== room.id && <span className="chip-code mono">{room.data.code}</span>}
+                        {editing !== room.id && props.onNavigate && (
+                          <button className="side-open" aria-label={`Go into ${room.name}`} title="Go into it" onClick={(e) => { e.stopPropagation(); openRoom(room.id); }}>
+                            ›
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {rooms.length === 0 && <div className="side-empty">A room or smaller moment inside this scene, with its own puzzles, objects and map.</div>}
+                  <div className="side-add">
+                    <button className="chip-add" onClick={() => void addRoom()}>
+                      + Add room
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             {SIDE_CATEGORIES.map((c) => {
               const open = isOpen(c);

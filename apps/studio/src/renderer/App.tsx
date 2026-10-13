@@ -4,6 +4,7 @@ import { Palette } from './components/Palette';
 import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } from './components/canvas/StoryCanvas';
 import { Symbol } from './components/Symbol';
 import { WorkspaceBar, type Workspace } from './components/WorkspaceBar';
+import { sceneTrail } from './model/subscene';
 import { TopBar, type Crumb } from './components/TopBar';
 import { ExplodedScene } from './components/scene/ExplodedScene';
 import { SceneWorkspace, type SceneSurface } from './components/scene/SceneWorkspace';
@@ -878,6 +879,8 @@ export const App = () => {
     route.view === 'scene' && scene
       ? [
           { label: 'Story Graph', onClick: backToGraph },
+          // A sub-scene's scenes, outermost first, each a step back.
+          ...sceneTrail(project, route.sceneId).map((p) => ({ label: `${p.data.code ?? ''} ${p.name}`.trim(), symbol: 'scene' as const, onClick: () => openScene(p.id, 'open') })),
           ...(route.mode !== 'open'
             ? [
                 { label: `${scene.data.code ?? ''} ${scene.name}`.trim(), symbol: 'scene' as const, onClick: () => openScene(route.sceneId, 'open') },

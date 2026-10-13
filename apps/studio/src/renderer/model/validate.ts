@@ -1,3 +1,4 @@
+import { parentSceneOf } from './subscene';
 import { laneSequence, spineSequence } from './layout';
 import { setterNames } from './details';
 import { brokenReferences } from './rules';
@@ -92,7 +93,8 @@ export const findIssues = (project: Project): Issue[] => {
   // Scenes (spec §25: orphaned or incomplete scene).
   for (const scene of Object.values(project.objects)) {
     if (scene.type !== 'scene') continue;
-    if (!project.placements[scene.id]) {
+    // A sub-scene (a room inside a scene) belongs to its scene, not the story graph.
+    if (!project.placements[scene.id] && !parentSceneOf(project, scene.id)) {
       issues.push({ id: scene.id, message: 'Not on the story graph: drag it onto the spine or a branch.' });
       continue;
     }

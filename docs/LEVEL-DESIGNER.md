@@ -435,3 +435,14 @@ scene's own area, then what is in it.
   is a marker linked to its element and to the scene, the same item the Level
   Designer shows; select it to open the element in the scene's panel.
 - **Open in Levels ↗** opens the same map in the Level Designer with every tool.
+
+### Rooms: scenes inside a scene
+
+A scene's panel starts with **Rooms · sub-scenes**. **+ Add room** makes a
+sub-scene: a scene of its own (its own characters, objects, puzzles, logic,
+dialogue and map) that belongs to the scene instead of standing on the story
+graph. When the scene has an area, the room gets a 16 m × 16 m room map
+inside it, and its pin goes on the scene's map. Double-click a room (or its
+**›**) to go into it; the breadcrumbs step back out. Renaming a room renames
+its map. The engines get each room's scene as the field `part_of` and each
+scene's area as `area`.

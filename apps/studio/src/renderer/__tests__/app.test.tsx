@@ -209,6 +209,18 @@ describe('the scene box', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(screen.getByRole('region', { name: 'Where it happens' }).textContent).toContain('Aldermoor › Northern Forest');
     expect(screen.getByRole('region', { name: 'What is in it' }).textContent).toContain('Mara');
+    // A room inside it: a sub-scene with its own room map inside the scene's area.
+    const panel = screen.getByRole('complementary', { name: 'In this scene' });
+    fireEvent.click(within(panel).getByRole('button', { name: '+ Add room' }));
+    const name = await within(panel).findByLabelText('Name');
+    fireEvent.change(name, { target: { value: 'The Study' } });
+    fireEvent.blur(name);
+    expect(screen.getByRole('region', { name: 'Rooms' }).textContent).toContain('The Study');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Go into The Study' }));
+    // Inside the room: the scene it is part of is a step back, and it already has its place.
+    expect(screen.getByRole('region', { name: 'Part of' }).textContent).toContain('New scene');
+    expect(screen.getByRole('region', { name: 'Where it happens' }).textContent).toContain('Aldermoor › Northern Forest › The Study');
+    expect(container.querySelector('.crumbs, .topbar')!.textContent).toContain('New scene');
   });
 
   it('lists what is in the scene down the right, opens one on a double-click, and adds a trigger from Logic', () => {

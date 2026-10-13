@@ -1,6 +1,7 @@
 import { PERIMETER, elementsIn, sceneLines, setSceneData } from '../../model/scene';
 import type { Project } from '../../model/types';
 import { Symbol } from '../Symbol';
+import { parentSceneOf, subScenesOf } from '../../model/subscene';
 
 interface Props {
   project: Project;
@@ -40,6 +41,8 @@ export const SceneOverview = ({ project, sceneId, onCommit, onTab, onOpenElement
   const exits = project.connections
     .filter((c) => (c.sourceId === sceneId || choices.includes(c.sourceId)) && ['spine', 'branch', 'gate'].includes(c.kind) && project.objects[c.targetId] && c.targetId !== sceneId)
     .map((c) => ({ id: c.id, to: c.targetId, label: c.label, via: c.sourceId === sceneId ? undefined : project.objects[c.sourceId]?.name }));
+  const parent = parentSceneOf(project, sceneId);
+  const rooms = subScenesOf(project, sceneId);
   const field = (key: 'summary' | 'purpose', label: string, placeholder: string) => (
     <label className="ov-field">
       <span>{label}</span>
@@ -67,6 +70,15 @@ export const SceneOverview = ({ project, sceneId, onCommit, onTab, onOpenElement
         </button>
       </section>
 
+      {parent && (
+        <section className="ov-section" aria-label="Part of">
+          <span className="ov-label">PART OF</span>
+          <button className="ov-item" disabled={!onOpenScene} onClick={() => onOpenScene?.(parent.id)}>
+            {`${parent.data.code ?? ''} ${parent.name}`.trim()}
+          </button>
+        </section>
+      )}
+
       {field('summary', 'What happens', 'What happens in this scene, in a sentence or two. It shows on the story graph.')}
       {field('purpose', 'Why it is in the game', 'What it changes for the player or the story.')}
 
@@ -92,6 +104,21 @@ export const SceneOverview = ({ project, sceneId, onCommit, onTab, onOpenElement
           })}
           {PERIMETER.every((c) => !elementsIn(project, sceneId, c.key).length) && <span className="muted">Nothing yet: add characters, objects, choices and puzzles in the panel on the right.</span>}
         </div>
+      </section>
+
+      <section className="ov-section" aria-label="Rooms">
+        <span className="ov-label">ROOMS</span>
+        {rooms.length ? (
+          <div className="ov-exits">
+            {rooms.map((r) => (
+              <button key={r.id} className="ov-item" disabled={!onOpenScene} onClick={() => onOpenScene?.(r.id)}>
+                {r.name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="muted">None: add a room in the panel for a smaller moment inside this scene, with its own puzzles and map.</span>
+        )}
       </section>
 
       <section className="ov-section" aria-label="Dialogue">
