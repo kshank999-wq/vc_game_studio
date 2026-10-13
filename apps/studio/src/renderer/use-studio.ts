@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { desktop } from './desktop';
-import { canWriteBack, parse, rememberRecent, saveProjectFile, serialize, type ProjectFile } from './files';
+import { canWriteBack, parse, rememberRecent, saveProjectFile, serialize, type AskName, type ProjectFile } from './files';
 import { commit, redo, startHistory, undo, type History } from './model/history';
 import { createProject } from './model/project';
 import { canSave, loadProject, saveProject } from './model/storage';
@@ -127,11 +127,11 @@ const useMainStudio = () => {
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
-  const writeTo = useCallback(async (project: Project, target: ProjectFile | null, as: boolean): Promise<boolean> => {
+  const writeTo = useCallback(async (project: Project, target: ProjectFile | null, as: boolean, askName?: AskName): Promise<boolean> => {
     if (!canSave()) return false;
     setBusy('saving');
     try {
-      const written = await saveProjectFile(project, target, as);
+      const written = await saveProjectFile(project, target, as, askName);
       if (!written) {
         setBusy(null);
         return false;
@@ -207,8 +207,9 @@ const useMainStudio = () => {
       if (from) rememberRecent(from);
       setBusy(null);
     }, []),
-    save: useCallback(() => writeTo(present, file, false), [present, file, writeTo]),
-    saveAs: useCallback(() => writeTo(present, file, true), [present, file, writeTo]),
+    /** Save; `askName` names a downloaded copy where the browser can't ask where to save. */
+    save: useCallback((askName?: AskName) => writeTo(present, file, false, askName), [present, file, writeTo]),
+    saveAs: useCallback((askName?: AskName) => writeTo(present, file, true, askName), [present, file, writeTo]),
   };
 };
 
@@ -218,7 +219,7 @@ const useMainStudio = () => {
  */
 const usePanelStudio = (): ReturnType<typeof useMainStudio> => {
   const shared = useSyncExternalStore(subscribeShared, getShared, getShared)!;
-  const noFile = useCallback(async () => false, []);
+  const noFile = useCallback(async (_askName?: AskName) => false, []);
   return {
     isPanel: true,
     forward: (name: Command, arg?: string) => post({ t: 'command', name, arg }),

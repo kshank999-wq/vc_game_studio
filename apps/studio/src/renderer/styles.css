@@ -10762,3 +10762,36 @@ button.bible-dual-col:hover {
 .chip-item {
   cursor: pointer;
 }
+
+/* Naming a project file before it downloads (the online version). */
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.save-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.save-name input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--node);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+.save-name input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+.save-name .mono {
+  color: var(--text-soft);
+}

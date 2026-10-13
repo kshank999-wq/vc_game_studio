@@ -18,7 +18,7 @@ import type { ObjectType } from './model/types';
 import { useStudio, isBlank } from './use-studio';
 import { deletionImpact, removalImpact } from './model/impact';
 import type { Menu, MenuItem } from './components/menu/MenuBar';
-import { AboutDialog, PreferencesDialog, PreviewSaveDialog, ShortcutsDialog } from './components/menu/Dialogs';
+import { AboutDialog, PreferencesDialog, PreviewSaveDialog, SaveNameDialog, ShortcutsDialog } from './components/menu/Dialogs';
 import { CommentsPanel } from './components/collab/lazy';
 import type { Target } from './model/collab';
 import { openProjectFile, openRecent, recentFiles, clearRecent, type Opened, type Recent } from './files';
@@ -416,6 +416,19 @@ export const App = () => {
     if (!desktop()) say('Carry on in the main window.');
   };
 
+  // Where the browser can't open the save window, name the downloaded file here.
+  const [naming, setNaming] = useState<{ suggested: string; done: (name: string | null) => void } | null>(null);
+  const askName = (suggested: string) =>
+    new Promise<string | null>((resolve) =>
+      setNaming({
+        suggested,
+        done: (name) => {
+          setNaming(null);
+          resolve(name);
+        },
+      }),
+    );
+
   const save = async (as = false): Promise<boolean> => {
     if (studio.isPanel) {
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -430,9 +443,10 @@ export const App = () => {
     // A field being typed in saves when it loses focus: let it land first.
     (document.activeElement as HTMLElement | null)?.blur?.();
     await new Promise((r) => setTimeout(r, 0));
-    const ok = await (as ? latest.current.saveAs() : latest.current.save());
+    const ok = await (as ? latest.current.saveAs(askName) : latest.current.save(askName));
     setRecent(recentFiles());
-    if (ok) say(`Saved ${latest.current.file?.name ?? ''}`.trim());
+    const saved = latest.current.file;
+    if (ok) say(saved && !saved.path && !saved.handle ? `Downloaded ${saved.name}: it is in your downloads folder` : `Saved ${saved?.name ?? ''}`.trim());
     else if (latest.current.saveState === 'failed') say('That did not save. Try File › Save As.');
     return ok;
   };
@@ -1225,6 +1239,7 @@ export const App = () => {
         {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
         {dialog === 'comments' && <CommentsPanel project={project} onCommit={commit} onGo={goToTarget} onClose={() => setDialog(null)} />}
         {dialog === 'previewSave' && <PreviewSaveDialog onClose={() => setDialog(null)} />}
+        {naming && <SaveNameDialog suggested={naming.suggested} onDone={naming.done} />}
         {__LICENSING__ && dialog === 'license' && <LicenseDialog onClose={() => setDialog(null)} />}
         {remind && draft && (
           <div className="save-remind" role="alert">

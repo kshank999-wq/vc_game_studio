@@ -108,7 +108,16 @@ const pickWithInput = (): Promise<Opened> =>
  * Write the project. With a file that can be written back to, it saves in
  * place; otherwise (or with `as`) it asks where. Null when the user cancels.
  */
-export const saveProjectFile = async (project: Project, file: ProjectFile | null, as = false): Promise<ProjectFile | null> => {
+/** Ask what to call a downloaded copy; null when the person cancels. */
+export type AskName = (suggested: string) => Promise<string | null>;
+
+/** A typed name made into a project file name: no path characters, and the .vcgs ending. */
+export const asFileName = (typed: string): string => {
+  const base = typed.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\.vcgs$/i, '').trim();
+  return `${base || 'Untitled'}${EXTENSION}`;
+};
+
+export const saveProjectFile = async (project: Project, file: ProjectFile | null, as = false, askName?: AskName): Promise<ProjectFile | null> => {
   const content = serialize(project);
   const bridge = desktop();
   if (bridge?.saveProject) {
@@ -128,13 +137,22 @@ export const saveProjectFile = async (project: Project, file: ProjectFile | null
       // Refused (an embedded page, say): download a copy instead.
     }
   }
-  // No way to write back: download a copy each time.
-  const name = file?.name ?? fileNameFor(project);
+  // No way to write back (a page inside another site can't open the save
+  // window): download a copy each time, named by the person the first time
+  // and on Save As.
+  let name = file?.name ?? fileNameFor(project);
+  if (askName && (as || !file)) {
+    const typed = await askName(name);
+    if (typed === null) return null;
+    name = asFileName(typed);
+  }
   const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
   const a = document.createElement('a');
   a.href = url;
   a.download = name;
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return { name };
 };

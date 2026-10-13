@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { desktop } from '../../desktop';
 import { currentAccess, isPreview, PURCHASE_URL } from '../../edition';
 import { ROLES } from '../../model/collab';
@@ -291,3 +291,43 @@ export const PreviewSaveDialog = ({ onClose }: { onClose: () => void }) => (
     </div>
   </Modal>
 );
+
+/**
+ * Name the project file before it downloads: a page inside another site
+ * (the online version) can't open the computer's save window, so this asks
+ * for the name and the browser puts the file where it keeps downloads.
+ */
+export const SaveNameDialog = ({ suggested, onDone }: { suggested: string; onDone: (name: string | null) => void }) => {
+  const [name, setName] = useState(suggested.replace(/\.vcgs$/i, ''));
+  return (
+    <Modal title="Save the project" onClose={() => onDone(null)}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onDone(name);
+        }}
+      >
+        <label className="dialog-field">
+          <span>File name</span>
+          <span className="save-name">
+            <input aria-label="File name" value={name} autoFocus onFocus={(e) => e.currentTarget.select()} onChange={(e) => setName(e.target.value)} />
+            <span className="mono">.vcgs</span>
+          </span>
+        </label>
+        <p className="dialog-text">
+          The file goes where your browser keeps downloads. To pick the folder each time, turn on “Ask where to save each file” in your browser’s download settings, or use
+          the desktop app, which opens the usual Save window. Open it again with File › Open.
+        </p>
+        <div className="dialog-actions">
+          <button type="button" className="tb-btn" onClick={() => onDone(null)}>
+            Cancel
+          </button>
+          <div className="grow" />
+          <button type="submit" className="tb-btn primary" disabled={!name.trim()}>
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
