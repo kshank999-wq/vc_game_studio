@@ -31,3 +31,10 @@ cp "$here/godot-check/project.godot" "$here/godot-check/check_puzzles.gd" "$puzz
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$puzzles" godot puzzles > /dev/null)
 "$GODOT" --headless --path "$puzzles" --import > /dev/null 2>&1 || true
 "$GODOT" --headless --path "$puzzles" -s check_puzzles.gd
+# Rooms (sub-scenes): the sample with rooms in The Cave Mouth.
+rooms="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms"' EXIT
+cp "$here/godot-check/project.godot" "$here/godot-check/check_rooms.gd" "$rooms/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$rooms" godot rooms > /dev/null)
+"$GODOT" --headless --path "$rooms" --import > /dev/null 2>&1 || true
+"$GODOT" --headless --path "$rooms" -s check_rooms.gd

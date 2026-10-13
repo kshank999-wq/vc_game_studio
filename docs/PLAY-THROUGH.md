@@ -193,3 +193,11 @@ with the rooms already visited marked “(been)”. A room can have rooms of its
 own, and leaving it goes back out one level. **Leave** the scene and the story
 goes on from it as before: its routes out, else the next node on the spine.
 Each pick is a decision on the path, so paths and saves keep it.
+
+In the engines (Godot, Unity, Unreal) rooms play the same way. The handoff
+gives a scene with rooms a choice after it, “<scene>: where now?”, with an
+option into each room and one to leave; a room goes back to its scene's
+choice when it is done. They are ordinary choices and routes on the story
+graph, so every runtime plays them as it plays any other branch, and code
+that walks the graph sees them too. The engine checks walk it: into The
+Study, into The Closet and back, out, and on along the story.

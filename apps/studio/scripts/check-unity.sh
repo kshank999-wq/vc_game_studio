@@ -31,3 +31,10 @@ cp "$here/unity-check/UnityStubs.cs" "$here/unity-puzzle-check/"* "$puzzles/"
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$puzzles" unity puzzles > /dev/null)
 cd "$puzzles"
 dotnet run --nologo -v q
+# Rooms (sub-scenes): the sample with rooms in The Cave Mouth.
+rooms="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms"' EXIT
+cp "$here/unity-check/UnityStubs.cs" "$here/unity-rooms-check/"* "$rooms/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$rooms" unity rooms > /dev/null)
+cd "$rooms"
+dotnet run --nologo -v q

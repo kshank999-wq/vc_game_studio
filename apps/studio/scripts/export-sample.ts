@@ -10,6 +10,7 @@ import { sunkenVault } from '../src/renderer/model/sample';
 import { BUILT_IN_TEMPLATES, puzzleFromTemplate } from '../src/renderer/model/puzzle/templates';
 import { nodesOf, updateNode } from '../src/renderer/model/puzzle/design';
 import type { Project } from '../src/renderer/model/types';
+import { addSubScene } from '../src/renderer/model/subscene';
 
 /**
  * With "puzzles": the sample and the built-in puzzle templates (puzzle spec
@@ -30,10 +31,21 @@ const withPuzzles = (project: Project): Project => {
   return p;
 };
 
+/**
+ * With "rooms": the sample with rooms in SC-01 The Cave Mouth (The Study,
+ * and The Closet inside it), to check the runtimes play rooms: Where now?,
+ * into a room and back, and out.
+ */
+const withRooms = (project: Project): Project => {
+  const cave = Object.values(project.objects).find((o) => o.type === 'scene' && o.name === 'The Cave Mouth')!;
+  const study = addSubScene(project, cave.id, 'The Study')!;
+  return addSubScene(study.project, study.id, 'The Closet')!.project;
+};
+
 const dir = process.argv[2];
 if (!dir) throw new Error('Usage: export-sample.ts <godot project folder>');
 const engine = (process.argv[3] ?? 'godot') as EngineId;
-const base = process.argv[4] === 'puzzles' ? withPuzzles(sunkenVault()) : sunkenVault();
+const base = process.argv[4] === 'puzzles' ? withPuzzles(sunkenVault()) : process.argv[4] === 'rooms' ? withRooms(sunkenVault()) : sunkenVault();
 const plan = planHandoff(setTarget(base, { engine }));
 for (const file of plan.output!.files) {
   const path = join(dir, file.path);

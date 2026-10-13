@@ -6,6 +6,7 @@ import { costOf, ranksOf, requiresOf } from '../skills';
 import { describeTarget, whoLabel, type Who } from '../collab';
 import { customOf, interactionsOf, initialState, statesOf, varTypeOf, type VarType } from '../details';
 import { laneSequence, spineSequence, subplotReach } from '../layout';
+import { withRoomsAsChoices } from './rooms';
 import { CATEGORIES, dualWith, elementsIn, sceneLines } from '../scene';
 import { hasInline, plainInline } from '../inline';
 import { eventTitle, loseOf, sceneTimeline } from '../timeline';
@@ -535,7 +536,9 @@ const fieldsOf = (o: StoryObject, project?: Project): Record<string, string> => 
 const timedOf = (o: StoryObject | undefined): { timeLimit?: number; onTimeout?: string } =>
   timeLimitOf(o) > 0 ? { timeLimit: timeLimitOf(o), onTimeout: timeoutLabelOf(o) } : {};
 
-export const buildIR = (project: Project): HandoffIR => {
+export const buildIR = (given: Project): HandoffIR => {
+  // Rooms play as choices: into each room, or leave (see rooms.ts).
+  const project = withRoomsAsChoices(given);
   const ids = identifiers(project);
   const key = (id: string | undefined | null): string | null => (id && ids.get(id)?.key) || null;
   const all = Object.values(project.objects).sort((a, b) => (a.data.code ?? a.name).localeCompare(b.data.code ?? b.name, undefined, { numeric: true }));

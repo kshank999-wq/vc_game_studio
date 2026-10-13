@@ -40,6 +40,13 @@ trap 'rm -rf "$work" "$puzzles"' EXIT
 "$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$puzzles/Plugins/VCGS/Source/VCGS/Public" -o "$puzzles/puzzle_check" "$here/unreal-check/puzzle_check.cpp"
 (cd "$puzzles" && ./puzzle_check)
 
+# Rooms (sub-scenes): the sample with rooms in The Cave Mouth.
+rooms="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms"' EXIT
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$rooms" unreal rooms > /dev/null)
+"$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$rooms/Plugins/VCGS/Source/VCGS/Public" -o "$rooms/rooms_check" "$here/unreal-check/rooms_check.cpp"
+(cd "$rooms" && ./rooms_check)
+
 # Unreal Header Tool writes the .generated.h files; for the check they are empty.
 mkdir -p "$work/generated"
 for header in "$public"/*.h; do : > "$work/generated/$(basename "${header%.h}").generated.h"; done
