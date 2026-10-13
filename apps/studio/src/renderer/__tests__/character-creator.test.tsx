@@ -155,3 +155,29 @@ describe('the Character Creator, phase 2 (character spec §6)', () => {
     expect(screen.getByRole('button', { name: /New topic/ }).textContent).toContain('1 line');
   });
 });
+
+describe('the Character Creator, phase 3 (character spec §7, §8)', () => {
+  it('adds the sample cast, and previews Village Market as 20 people', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Characters' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: '+ Sample cast' }));
+    const registry = screen.getByRole('listbox', { name: 'Character registry' });
+    for (const name of ['Strolling Villager', 'Market Gossip', 'Patrol Guard', 'Lurking Orc', 'Orc Sentry', 'Loyal Hound']) expect(within(registry).getByRole('option', { name: new RegExp(name) })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Groups/ }));
+    const library = screen.getByRole('listbox', { name: 'Group library' });
+    expect(within(library).getByRole('option', { name: /Village Market/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('img', { name: 'Village Market: 20 people' })).toBeTruthy();
+    // Fewer strollers, fewer people.
+    const from = within(screen.getByRole('table', { name: 'Entries' })).getAllByRole('spinbutton', { name: 'From' })[0]!;
+    const to = within(screen.getByRole('table', { name: 'Entries' })).getAllByRole('spinbutton', { name: 'To' })[0]!;
+    fireEvent.change(from, { target: { value: '4' } });
+    fireEvent.blur(from);
+    fireEvent.change(to, { target: { value: '4' } });
+    fireEvent.blur(to);
+    expect(screen.getByRole('img', { name: 'Village Market: 10 people' })).toBeTruthy();
+    fireEvent.click(within(library).getByRole('option', { name: /Orc Patrol/ }));
+    expect(screen.getByText(/Not in a level yet/)).toBeTruthy();
+  });
+});

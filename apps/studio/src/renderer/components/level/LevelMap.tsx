@@ -1,4 +1,5 @@
 import { patrolStops } from '../../model/level/actors';
+import { levelCast } from '../../model/level/play';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { areaOf, assetOf, boundsOf, CATEGORY_COLOR, contains, corners, frameOf, INVALID_COLOR, meshesFor, num, outlineOf, paramOf, selfIntersects, toLocal, toPlan, triangulate, type Frame, type Point } from '../../model/level/geometry';
 import { insertCorner, levelsOf, mapGrid, moveCorner, pivotPoint, moveItems, placeAsset, placeAt, removeCorner, resizeItem, setOutline, snap, withGroups } from '../../model/level/level';
@@ -37,7 +38,7 @@ interface Props {
   view: View;
   setView: (update: (view: View) => View) => void;
   hidden: ReadonlySet<AssetCategory>;
-  overlays: { story: boolean; dims: boolean; ghost: boolean };
+  overlays: { story: boolean; dims: boolean; ghost: boolean; cast?: boolean };
   tool: MapTool;
   /** What the draw tool draws. */
   drawAsset: string;
@@ -542,6 +543,17 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   const selected = new Set(selection);
   const single = selection.length === 1 ? set.items.find((i) => i.id === selection[0]) : undefined;
 
+  // The Character Creator's people on this floor (character spec §7, §8): group members as dots facing their way, and how AI enemies see.
+  const castHere = useMemo(() => {
+    const here = new Set(items.map((i) => i.id));
+    return levelCast(shown, levelId, global).filter((c) => here.has(c.itemId));
+  }, [shown, levelId, global, items]);
+  const crowdCounts = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const c of castHere) if (!c.placed) n.set(c.itemId, (n.get(c.itemId) ?? 0) + 1);
+    return n;
+  }, [castHere]);
+
   // Patrols: each walked round its stops in order (spec §11), drawn as a closed dashed loop on this floor.
   const patrols = useMemo(() => {
     const here = new Set(items.map((i) => i.id));
@@ -1005,6 +1017,43 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
               </g>
             );
           })}
+          {castHere.map((c) => {
+            const r = Math.max(px(3), 0.3);
+            const nose = { x: c.home.x + Math.sin(c.yaw) * r * 1.9, y: c.home.y - Math.cos(c.yaw) * r * 1.9 };
+            const sees = c.ai && (props.overlays.cast || selected.has(c.itemId));
+            const cone = (() => {
+              if (!sees || !c.ai || c.ai.viewDistance <= 0) return null;
+              const R = c.ai.viewDistance;
+              if (c.ai.visionAngle >= 360) return <circle cx={c.home.x} cy={c.home.y} r={R} fill="#e2b451" fillOpacity={0.07} stroke="#e2b451" strokeOpacity={0.45} strokeWidth={px(1)} />;
+              const half = ((c.ai.visionAngle / 2) * Math.PI) / 180;
+              const at = (a: number) => `${c.home.x + Math.sin(a) * R} ${c.home.y - Math.cos(a) * R}`;
+              return <path d={`M ${c.home.x} ${c.home.y} L ${at(c.yaw - half)} A ${R} ${R} 0 ${c.ai.visionAngle > 180 ? 1 : 0} 1 ${at(c.yaw + half)} Z`} fill="#e2b451" fillOpacity={0.07} stroke="#e2b451" strokeOpacity={0.45} strokeWidth={px(1)} />;
+            })();
+            return (
+              <g key={`cast-${c.key}`} pointerEvents="none" className="lvl-cast">
+                {cone}
+                {sees && c.ai && c.ai.proximityRadius > 0 && <circle cx={c.home.x} cy={c.home.y} r={c.ai.proximityRadius} fill="none" stroke="#e07a5f" strokeOpacity={0.7} strokeWidth={px(1)} />}
+                {sees && c.ai && c.ai.hearingRadius > 0 && <circle cx={c.home.x} cy={c.home.y} r={c.ai.hearingRadius} fill="none" stroke="#7fa3c9" strokeOpacity={0.5} strokeWidth={px(1)} strokeDasharray={`${px(2)} ${px(3)}`} />}
+                {!c.placed && (
+                  <>
+                    <line x1={c.home.x} y1={c.home.y} x2={nose.x} y2={nose.y} stroke={c.placeholder.tint} strokeWidth={px(1.5)} />
+                    <circle cx={c.home.x} cy={c.home.y} r={r} fill={c.placeholder.tint} stroke="var(--ground)" strokeWidth={px(0.8)} />
+                  </>
+                )}
+              </g>
+            );
+          })}
+          {items
+            .filter((i) => crowdCounts.has(i.id) || assetOf(set, i, global).role === 'crowd')
+            .map((i) => {
+              const f = frameOf(set, i, global);
+              const g = (shown.characterGroups ?? []).find((x) => x.id === String(paramOf(set, i, 'group', global) ?? ''));
+              return (
+                <text key={`crowd-${i.id}`} x={f.x} y={f.y + f.d / 2 + px(14)} fontSize={px(11)} textAnchor="middle" fill="#8fc98a" pointerEvents="none" className="lvl-label">
+                  {g ? `${g.name} · ${crowdCounts.get(i.id) ?? 0}` : 'Character group: pick one'}
+                </text>
+              );
+            })}
           {patrols.map((pt) => (
             <g key={`patrol-${pt.name}`} pointerEvents="none" className="lvl-patrol">
               <polygon points={pointsAttr(pt.stops)} fill="none" stroke="#d9607a" strokeOpacity={0.7} strokeWidth={px(1.5)} strokeDasharray={`${px(6)} ${px(4)}`} />

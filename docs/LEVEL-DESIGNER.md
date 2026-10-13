@@ -238,6 +238,13 @@ the same effects, with triggers and puzzles settling after every change:
 - **Interaction points:** tied to a story object, they use it the way free play does.
 - **Volumes:** notice entering and leaving. Cinematic triggers play their cinematic (with its shot list, skippable); checkpoints set where you come back; portals lead to another level, carrying the story with them; hazards and damage volumes hurt.
 - **Patrols (spec §11):** an NPC, enemy or neutral actor whose **Patrol** names a patrol walks the **Patrol nodes** of that name (Actors) in their **Order**, at its **Speed**, waiting each node's **Wait** at it, round and round. They walk straight from stop to stop: there is no pathfinding, so lay a patrol out with a clear line between its stops. Talk to someone on a patrol where they are. The map draws each patrol as a dashed loop, its stops numbered, and the preflight warns of a Patrol that names no nodes.
+- **Characters and groups (Character Creator):**
+  - A **Character group** (Actors) spreads one of the Character Creator's groups over its area. Its people show as dots on the map and as placeholder figures in 3D, and they wander, chat, patrol and flee in Play Mode.
+  - An actor whose character is in the registry stands in as that character's placeholder.
+  - An Enemy whose character is an enemy runs its AI profile in Play Mode.
+  - **Senses** draws AI vision cones, proximity rings and hearing rings.
+
+  See [`CHARACTER-CREATOR.md`](CHARACTER-CREATOR.md).
 - **Crouching:** held, it lowers the player to 1.1 m, at under half pace, with no jumping. Let go under something low and the player stays down until there is room to stand. The preflight flags only doors lower than a crouching player.
 - **Darkness (spec §6):** a **Darkness** zone (Logic) darkens the view by its **Dark** percent while the player is in it. With **Needs light** on, what is in it can't be used in the dark: it says "Too dark to see", and what the light needs.
 - **The player's light:** the player start's **Light** names what lights it, a story item carried or a mechanic available; **Light fuel** is how many seconds it burns (0 for ever) and **Light range** how far it reaches. **L** turns it on, if the player has what lights it and fuel is left; the HUD shows the fuel, and the light goes out when it runs out or its source is gone. A rule's **Refill the light of** action fills it up again.

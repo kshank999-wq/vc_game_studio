@@ -281,6 +281,8 @@ export interface Project {
   setup?: import('./setup').GameSetup;
   /** Your own kinds of element and their fields (spec §6, custom node types). */
   customTypes?: import('./custom-types').CustomType[];
+  /** The Character Creator's groups: population recipes put in levels as Character group areas. */
+  characterGroups?: import('./character/groups').CharacterGroup[];
   /** Each element's, connection's, level's and level item's edit history, by target key (spec §16). */
   revisions?: Record<string, import('./collab').Revision[]>;
 }

@@ -350,7 +350,7 @@ const AIPreview = ({ profile }: { profile: CharacterProfile }) => {
           <li key={i}>{l}</li>
         ))}
       </ol>
-      <p className="pref-hint">A 2D check of the machine on a flat floor. The 3D graybox (phase 3) and the engines (phase 4) will run the same profile.</p>
+      <p className="pref-hint">A 2D check of the machine on a flat floor. The same profile runs in Play Mode for every placed Enemy (and group member) with this character, walls blocking its sight; the engines get it in phase 4.</p>
     </section>
   );
 };

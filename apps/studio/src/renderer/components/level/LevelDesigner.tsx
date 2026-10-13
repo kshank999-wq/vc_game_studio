@@ -109,7 +109,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   pickRef.current = pick;
   const [leftTab, setLeftTab] = useState<'library' | 'outliner'>('library');
   const [hidden, setHidden] = useState<ReadonlySet<AssetCategory>>(() => new Set());
-  const [overlays, setOverlays] = useState({ story: true, dims: true, ghost: true, puzzles: false });
+  const [overlays, setOverlays] = useState({ story: true, dims: true, ghost: true, puzzles: false, cast: false });
   // The puzzle shown on the map (spec V2 §14): one, or every puzzle with a part here ('').
   const [puzzleFocus, setPuzzleFocus] = useState('');
   const [view3d, setView3d] = useState<{ ceilings: boolean; allFloors: boolean; logic: boolean; collision: boolean; walkable: boolean; tool: Tool3d; axes: Axes }>({
@@ -720,6 +720,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             <label className="lvl-toggle"><input type="checkbox" checked={overlays.story} onChange={(e) => setOverlays((o) => ({ ...o, story: e.target.checked }))} /> Story</label>
             <label className="lvl-toggle"><input type="checkbox" checked={overlays.dims} onChange={(e) => setOverlays((o) => ({ ...o, dims: e.target.checked }))} /> Sizes</label>
             <label className="lvl-toggle"><input type="checkbox" checked={overlays.ghost} onChange={(e) => setOverlays((o) => ({ ...o, ghost: e.target.checked }))} /> Floor below</label>
+            <label className="lvl-toggle" title="How AI enemies see and hear: vision cones, proximity and hearing rings (always shown for what is selected)"><input type="checkbox" checked={overlays.cast} onChange={(e) => setOverlays((o) => ({ ...o, cast: e.target.checked }))} /> Senses</label>
             <label className="lvl-toggle" title="Where each puzzle’s parts are: entry, required objects, clues, gates and outputs"><input type="checkbox" checked={overlays.puzzles} onChange={(e) => setOverlays((o) => ({ ...o, puzzles: e.target.checked }))} /> Puzzles</label>
             {overlays.puzzles && (
               <select className="inp small lvl-puzzle-pick" aria-label="Puzzle shown" value={puzzleFocus} onChange={(e) => setPuzzleFocus(e.target.value)}>

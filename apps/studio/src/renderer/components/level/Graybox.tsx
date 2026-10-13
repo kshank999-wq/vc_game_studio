@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { frameOf, meshesFor, toLocal, type Point } from '../../model/level/geometry';
 import { buildPiece, disposePiece } from './three-pieces';
+import { placeholderFigure } from './figure3d';
+import { levelCast } from '../../model/level/play';
 import { extrude, levelsOf, mapGrid, moveItems, placeAt, setPivot, snap, withGroups } from '../../model/level/level';
 import { boundsOf as mapBounds } from '../../model/level/hierarchy';
 import { navigate } from '../../model/level/nav';
@@ -248,9 +250,18 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
         t.content.add(light);
       }
     }
+    // The Character Creator's people where they start (character spec §7): group members and placed AI enemies' characters.
+    for (const c of levelCast(shown, levelId, global)) {
+      if (c.placed) continue;
+      const g = placeholderFigure(c.placeholder, c.height);
+      g.position.set(c.home.x, c.z, c.home.y);
+      g.rotation.y = -c.yaw;
+      g.traverse((o) => (o.userData.itemId = c.itemId));
+      t.content.add(g);
+    }
     t.grid.position.y = floorElevation - 0.001;
     t.render();
-  }, [meshes, props.selection, floorElevation]);
+  }, [meshes, props.selection, floorElevation, shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The selected item's handles.
   const single = props.selection.length === 1 ? set.items.find((i) => i.id === props.selection[0]) : undefined;

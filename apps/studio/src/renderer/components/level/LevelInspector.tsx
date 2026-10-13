@@ -33,7 +33,10 @@ import {
 } from '../../model/level/level';
 import { exportNameOf, levelExportName, NAMING_LABEL } from '../../model/level/naming';
 import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelRule, NamingClass, ParamDef, PlayNote, PropertyGroup, TravelLink } from '../../model/level/types';
-import { removePreset, resolveNote } from '../../model/level/play';
+import { levelCast, removePreset, resolveNote } from '../../model/level/play';
+import { groupsOf } from '../../model/character/groups';
+import { profileOf } from '../../model/character/profile';
+import { useNav } from '../../nav';
 import { eventsAt } from '../../model/level/places';
 import { eventTitle } from '../../model/timeline';
 import { canSaveToAsset, migrateAll, migrateItem, migrationFor, outdatedItems, saveToAsset, type Change } from '../../model/level/migrate';
@@ -292,6 +295,14 @@ export const LevelInspector = (props: Props) => {
     const base = { label: p.label, hint: p.hint, overridden: isOverridden(item, p.key), onReset: () => onCommit(resetParam(project, item.id, p.key, global)) };
     if (p.type === 'boolean') return <BoolField key={p.key} {...base} value={value === true} onCommit={(v) => commitParam(p, v)} />;
     if (p.type === 'select') return <SelectField key={p.key} {...base} value={String(value)} options={p.options ?? []} onCommit={(v) => commitParam(p, v)} />;
+    // A Character group area picks one of the Character Creator's groups; an enemy, one of its character's variants.
+    if (def.role === 'crowd' && p.key === 'group')
+      return <SelectField key={p.key} {...base} value={String(value ?? '')} options={[{ value: '', label: '— none —' }, ...groupsOf(project).map((g) => ({ value: g.id, label: g.name }))]} onCommit={(v) => commitParam(p, v)} />;
+    if (p.key === 'variant') {
+      const who = project.objects[String(paramOf(set, item, 'character', global) ?? '')];
+      const variants = who?.type === 'character' ? profileOf(who).variants : [];
+      return <SelectField key={p.key} {...base} value={String(value ?? '')} options={[{ value: '', label: variants.length ? 'The base character' : 'No variants' }, ...variants.map((v) => ({ value: v.id, label: v.name }))]} onCommit={(v) => commitParam(p, v)} />;
+    }
     if (p.type === 'ref') return <RefField key={p.key} {...base} project={project} value={String(value ?? '')} types={p.refTypes ?? []} onCommit={(v) => commitParam(p, v)} />;
     if (p.type === 'number') return <NumberField key={p.key} {...base} value={num(value, 0)} unit={p.unit} units={units} step={p.step} min={p.min} max={p.max} onCommit={(v) => commitParam(p, v)} />;
     return <TextField key={p.key} {...base} value={String(value ?? '')} onCommit={(v) => commitParam(p, v)} />;
@@ -336,6 +347,7 @@ export const LevelInspector = (props: Props) => {
           )}
         </div>
         <LibraryUpdate key={item.id} project={project} item={item} global={global} name={def.name} onCommit={onCommit} />
+        <CastLinks project={project} item={item} role={def.role} groupId={String(paramOf(set, item, 'group', global) ?? '')} characterId={String(paramOf(set, item, 'character', global) ?? '')} levelId={levelId} global={global} />
         {itemIssues.filter((i) => !i.message.startsWith('Play note') && !i.message.includes('; the library is at v')).map((i) => (
           <p key={i.message} className={`lvl-issue ${i.severity}`}>
             {i.message} <span className="muted">{i.export}</span>
@@ -903,3 +915,31 @@ const RouteInspector = ({ project, link, global, onCommit, onDelete, onSelect }:
   );
 };
 
+
+/** What a Character group area or a placed character is, and the way to the Character Creator (character spec §9: double-click opens the profile). */
+const CastLinks = ({ project, item, role, groupId, characterId, levelId, global }: { project: Project; item: LevelItem; role: string; groupId: string; characterId: string; levelId: string; global: readonly AssetDefinition[] }) => {
+  const nav = useNav();
+  if (role === 'crowd') {
+    const g = groupsOf(project).find((x) => x.id === groupId);
+    const n = levelCast(project, levelId, global).filter((c) => c.itemId === item.id).length;
+    return (
+      <div className="lvl-cast-links">
+        <p className="pref-hint">{g ? `${g.name}: ${n} ${n === 1 ? 'person' : 'people'} here, from ${g.entries.length} ${g.entries.length === 1 ? 'kind' : 'kinds'}.` : groupsOf(project).length ? 'Pick a group under Spawn.' : 'No groups yet: make one in the Character Creator.'}</p>
+        {nav.openCharacters && (
+          <button className="tb-btn small" onClick={() => nav.openCharacters?.(g ? g.id : undefined)}>
+            {g ? `Edit ${g.name} in the Character Creator` : 'Open the Character Creator'}
+          </button>
+        )}
+      </div>
+    );
+  }
+  const who = project.objects[characterId];
+  if (who?.type !== 'character' || !nav.openCharacters) return null;
+  return (
+    <div className="lvl-cast-links">
+      <button className="tb-btn small" onClick={() => nav.openCharacters?.(who.id)}>
+        Open {who.name} in the Character Creator
+      </button>
+    </div>
+  );
+};

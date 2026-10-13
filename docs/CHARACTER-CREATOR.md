@@ -16,17 +16,21 @@ lives in the element under `data.profile`, and each change bumps the
 profile's **revision**. The project's edit history records what changed, and
 undo works as everywhere else.
 
-Phases 1 and 2 are built (spec §15): the registry, art, abilities and
-inventory, then role settings, dialogue and knowledge, the AI profile and
-state machine, and enemy variants. Phases 3 and 4 come later; the screen says
-where:
+Phases 1 to 3 are built (spec §15):
 
-- **Phase 3:** groups and the population generator, and 2D and 3D behaviours.
-- **Phase 4:** the engine handoff of characters.
+- **Phase 1:** the registry, art, abilities and inventory.
+- **Phase 2:** role settings, dialogue and knowledge, the AI profile and state machine, and enemy variants.
+- **Phase 3:** groups and the population generator, placing characters and groups in levels, 2D overlays, and placeholder characters that behave in the 3D graybox and Play Mode.
+
+**Phase 4**, the engine handoff of characters, comes later. Until then the
+engines get group areas and placed actors as they already did: areas and
+markers.
 
 ## The screen (spec §2)
 
 - **Toolbar:**
+  - **Characters | Groups** switches between the registry and the group library.
+  - **+ Sample cast** adds the packaged working samples (below).
   - **+ New character** opens the wizard.
   - **Duplicate**, **Import**, **Export**.
   - The **role selector**: Player, Enemy NPC, Interactive NPC, Ally, Ambient extra. A character can have several roles.
@@ -277,8 +281,9 @@ starter** restores the starter machine.
 - It shows the current state, what it senses and why, its health, attack cooldown, attacks and time in state, and a log of why each transition happened, for example *Chase → Return: 25.3 m from its post, past its 25 m disengage distance*.
 - Pick a variant to preview it.
 
-The same pure function (`aiStep`) is unit-tested. The 3D graybox (phase 3)
-and the engines (phase 4) will run the same profile.
+The same pure function (`aiStep`) is unit-tested. It runs in Play Mode for
+every placed Enemy and group member with an enemy character (see below). The
+engines get it in phase 4.
 
 ## Variants (spec §6.2)
 
@@ -326,6 +331,91 @@ ranges and references that no longer exist.
 **Difficulty points** add up health, speed, damage (by rank), sight and the
 average skill, so variants and encounters can be compared.
 
+## Groups (spec §7)
+
+A group is a reusable recipe for a crowd, such as Village Market, Orc Patrol
+or Temple Priests. Open **Groups** on the toolbar.
+
+**Who is in it.** A list of entries. Each entry is:
+
+- a character, or one of its enemy variants;
+- a count range, from and to;
+- a weight: when a density cap cuts people, lighter entries give up theirs first;
+- what it does: Wanders, Idles, Chats, Works, Patrols or Guards.
+
+**How they spread out:**
+
+- a formation: scattered, in clusters, in a line, in a column, in a ring, in rows;
+- spacing, the least distance between people;
+- a wander radius;
+- a density cap, people per 100 m²;
+- a route: the name of a patrol in the level, which patrolling entries walk;
+- when they are there: always, by day, by night;
+- a faction;
+- whether they stay as left when the player comes back;
+- a **seed**.
+
+**Preview.** The group is spread over a sample area of any size, exactly as a
+level will spread it. The same seed in the same place always gives the same
+people; **Reshuffle** picks another seed. It says what the density cap cut
+and who couldn't be fitted.
+
+**Also on the Groups view:** where the group is in the levels (click to open
+the Level Designer on it), and its problems:
+
+- characters gone or retired;
+- a variant gone;
+- a count from more to fewer;
+- patrolling with no route;
+- guarding with no AI.
+
+## In the levels (spec §7, §8, §9)
+
+- **Character group** (Actors in the Level Designer's library) is an area you drop on a square, street or room, or draw freeform. Pick its group in the inspector under Spawn. **Reshuffle** gives another spread of the same people.
+  - On the 2D map, its people show as dots in their tint, facing their way, with *Village Market · 20* under the area.
+  - In the 3D graybox, they stand as placeholder figures.
+  - In Play Mode, they behave:
+    - wanderers stroll within their wander radius and inside the area;
+    - idlers look about;
+    - chatters face each other;
+    - workers keep their spot;
+    - patrols walk the group's route in formation;
+    - extras flee from fights or the player, as their character says.
+  - People are never put inside walls or solids, and never closer than the spacing.
+- **Placed characters.** An NPC, Companion, Enemy or Neutral actor whose character is in the registry stands in as that character's placeholder: its tint, silhouette and height, with its sword, shield, bow or staff in hand. The inspector has **Open … in the Character Creator**. An Enemy can pick one of its character's **variants**.
+- **AI enemies in Play Mode.** A placed Enemy, or a group member, whose character is an enemy runs its AI profile:
+  - it patrols its patrol, or holds its post;
+  - it sees the player in its cone (walls and closed doors block sight), hears them, or senses them within its proximity radius;
+  - it reacts after its reaction time, chases and attacks;
+  - its blows hurt the player: the damage of its first combat ability, by rank and variant, scaled by its accuracy;
+  - no more of a kind attack at once than its variants' guardrail allows;
+  - it gives up past its disengage distance or after its chase timeout, searches, and goes back to its post.
+
+  Every transition is in the play log with its reason, for example *Orc Sentry: Chase → Return: 25.3 m from its post, past its 25 m disengage distance*.
+- **Senses** on the 2D map's toolbar draws each AI character's vision cone, proximity ring and hearing ring. They are always drawn for what is selected.
+
+**Load.** A hundred ambient placeholders step in well under a millisecond
+each frame. The load test (`character-phase3.test.ts`) runs 100 villagers at
+60 fps.
+
+## The sample cast (spec §8)
+
+**+ Sample cast** adds six characters, set up to work in the graybox:
+
+- **Strolling Villager:** an ambient extra that wanders and flees fights.
+- **Market Gossip:** an interactive NPC with a topic, who chats.
+- **Patrol Guard:** an enemy with a long, wide view.
+- **Lurking Orc:** an enemy that aggroes on proximity. It is half blind, but anything within 5 m sets it off.
+- **Orc Sentry:** an enemy that aggroes on sight, with an 18 m, 140° view and a sword.
+- **Loyal Hound:** a companion that follows and defends.
+
+It also adds two groups:
+
+- **Village Market:** 14 strollers and 6 gossips, in clusters.
+- **Orc Patrol:** 6 Orc Sentries in a column on a route named *Orc Route*.
+
+Adding the sample cast twice adds nothing.
+
 ## Deleting a character (spec §12)
 
 **Delete…** shows what refers to the character, then offers three choices:
@@ -354,6 +444,10 @@ average skill, so variants and encounters can be compared.
 - `apps/studio/src/renderer/model/character/ai.ts` holds the AI profile, the state machine, its checks and the preview simulator `aiStep`.
 - `apps/studio/src/renderer/model/character/roles.ts` holds the player, interactive NPC, ally and extra settings and their checks.
 - `apps/studio/src/renderer/model/character/variants.ts` holds variants: resolving, differences, difficulty, the generator and the guardrails.
+- `apps/studio/src/renderer/model/character/groups.ts` holds groups and the seeded population generator.
+- `apps/studio/src/renderer/model/character/crowd.ts` holds a level's characters and how they move and fight in play.
+- `apps/studio/src/renderer/model/character/samples.ts` holds the sample cast.
+- `apps/studio/src/renderer/components/level/figure3d.ts` builds the 3D placeholder.
 - `apps/studio/src/renderer/model/character/profile.ts` holds:
   - the profile and its defaults;
   - archetypes;
@@ -366,4 +460,5 @@ average skill, so variants and encounters can be compared.
 - Tests:
   - `model/__tests__/character.test.ts`
   - `model/__tests__/character-phase2.test.ts`
+  - `model/__tests__/character-phase3.test.ts`
   - `__tests__/character-creator.test.tsx`

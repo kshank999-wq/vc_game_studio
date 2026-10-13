@@ -10498,6 +10498,32 @@ button.bible-dual-col:hover {
   width: auto;
 }
 
+/* Character Creator, phase 3: groups. */
+.cc-groups {
+  grid-row: 2 / 4;
+  grid-column: 1 / 4;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.cc-groups > .cc-left,
+.cc-groups > .cc-center {
+  grid-area: auto;
+}
+
+.cc-groups .cc-table .cc-num {
+  width: 64px;
+}
+
+.lvl-cast-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 6px;
+}
+
 /* The top bar on narrower windows: what can go goes first, so every button stays in reach. */
 @media (max-width: 1720px) {
   .topbar .view-name {

@@ -1,4 +1,5 @@
 import { canSee, sightOf, startPoses, stepActors, type ActorPose, type Blocker } from './actors';
+import { castOf, sightBlocked, startCast, stepCast, type CastMember, type CastPose } from '../character/crowd';
 import { collidersFrom } from './controller';
 import { craftCheck, recipeOf, recipesOf } from '../crafting';
 import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
@@ -65,6 +66,8 @@ export interface LevelPlayState {
   light: { on: boolean; fuel: number };
   /** Actors that move (patrols, companions), where they are now, by item id. */
   actors: Record<string, ActorPose>;
+  /** The Character Creator's people (group members, AI enemies), where they are now, by member key (character spec §7). */
+  cast?: Record<string, CastPose>;
   /** Spawners and once-only volumes that have gone off. */
   done: Record<string, boolean>;
   /** Volumes the player is inside. */
@@ -128,6 +131,7 @@ export const startLevelPlay = (project: Project, levelId: string, options: { pre
     gone: {},
     spawned: [],
     actors: startPoses(set, levelId, options.global),
+    cast: startCast(levelCast(project, levelId, options.global)),
     light: { on: false, fuel: fullFuel(project, levelId, options.global) },
     done: {},
     inside: [],
@@ -136,6 +140,10 @@ export const startLevelPlay = (project: Project, levelId: string, options: { pre
     time: 0,
     log: [{ t: 0, kind: 'info', text: `${level?.name ?? 'Level'} starts${options.preset ? ` from “${options.preset.name}”` : options.world ? ' carrying the story on' : ''}.` }],
   };
+  // Placed AI enemies stand where they are put until their machine moves them.
+  for (const c of levelCast(project, levelId, options.global)) {
+    if (c.placed && !state.actors[c.itemId]) state = { ...state, actors: { ...state.actors, [c.itemId]: { x: c.home.x, y: c.home.y, z: c.z, yaw: c.yaw, stop: 0, until: 0, moving: false } } };
+  }
   // Spawners with no delay go off at once.
   for (const item of set.items) {
     if (item.levelId !== levelId || assetOf(set, item, options.global).role !== 'spawn' || !present(project, state, item)) continue;
@@ -373,11 +381,23 @@ const approachDoors = (project: Project, state: LevelPlayState, at: Where, globa
 
 /** What blocks sight in a level: its solid parts, worked out once per level as edited. */
 const blockersCache = new WeakMap<LevelSet, Map<string, Blocker[]>>();
-const blockersOf = (set: LevelSet, levelId: string, global?: readonly AssetDefinition[]): Blocker[] => {
+export const blockersOf = (set: LevelSet, levelId: string, global?: readonly AssetDefinition[]): Blocker[] => {
   const byLevel = blockersCache.get(set) ?? blockersCache.set(set, new Map()).get(set)!;
   const known = byLevel.get(levelId);
   if (known) return known;
   const list = collidersFrom(meshesFor(set, levelId, { global })).filter((c) => c.part !== 'floor' && c.part !== 'ceiling');
+  byLevel.set(levelId, list);
+  return list;
+};
+
+/** The level's characters (group areas' people, placed AI enemies), worked out once per project as edited. */
+const castCache = new WeakMap<Project, Map<string, CastMember[]>>();
+export const levelCast = (project: Project, levelId: string, global?: readonly AssetDefinition[]): CastMember[] => {
+  const byLevel = castCache.get(project) ?? castCache.set(project, new Map()).get(project)!;
+  const known = byLevel.get(levelId);
+  if (known) return known;
+  const set = levelsOf(project);
+  const list = castOf(project, set, levelId, global, blockersOf(set, levelId, global));
   byLevel.set(levelId, list);
   return list;
 };
@@ -649,8 +669,29 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   s = runPuzzleClock(project, s);
 
   // Patrols walk on, companions keep up.
-  const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => present(project, s, i), global, s.seen);
+  const cast = levelCast(project, s.levelId, global);
+  const driven = new Set(cast.filter((c) => c.placed).map((c) => c.itemId));
+  const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => !driven.has(i.id) && present(project, s, i), global, s.seen);
   if (actors !== s.actors) s = { ...s, actors };
+
+  // The Character Creator's people: group members go about their business, AI enemies run their machines (character spec §6.2, §7).
+  if (cast.length) {
+    const blockers = blockersOf(set, s.levelId, global).filter((b) => !(b.part === 'door' && s.open[b.itemId]));
+    const here = cast.filter((c) => !c.placed || present(project, s, set.items.find((i) => i.id === c.itemId)!));
+    const step = stepCast(here, s.cast ?? startCast(cast), dt, s.time, { ...at, alive: s.health > 0, noisy: false }, sightBlocked(blockers, at.z));
+    s = { ...s, cast: step.poses };
+    for (const text of step.events) s = log(s, { kind: 'event', text });
+    if (step.damage > 0) s = { ...s, health: Math.max(0, s.health - step.damage) };
+    // A placed actor's own pose follows its machine, so it is drawn (and talked to) where it is.
+    let moved: Record<string, ActorPose> | null = null;
+    for (const c of here) {
+      if (!c.placed) continue;
+      const p = step.poses[c.key];
+      if (!p) continue;
+      (moved ??= { ...s.actors })[c.itemId] = { x: p.x, y: p.y, z: p.z, yaw: p.yaw, stop: 0, until: 0, moving: p.moving };
+    }
+    if (moved) s = { ...s, actors: moved };
+  }
 
   // Walking up to a closed door opens it, as Interact would, or says why it won't: once each approach.
   s = approachDoors(project, s, at, global);

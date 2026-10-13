@@ -53,6 +53,8 @@ import type { Project } from '../../model/types';
 import { Field } from '../puzzle/Field';
 import { AbilityInspector } from './AbilityInspector';
 import { AIPanel } from './AIPanel';
+import { GroupsPanel } from './GroupsPanel';
+import { addSampleCast } from '../../model/character/samples';
 import { DialoguePanel } from './DialoguePanel';
 import { RolePanel } from './RolePanel';
 import { VariantsPanel } from './VariantsPanel';
@@ -112,6 +114,7 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
   const [tab, setTab] = useState<Tab>('diagnostics');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [view, setView] = useState<View>('profile');
+  const [mode, setMode] = useState<'characters' | 'groups'>(() => (focus && (project.characterGroups ?? []).some((g) => g.id === focus) ? 'groups' : 'characters'));
   const [replaceWith, setReplaceWith] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -219,6 +222,27 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
   return (
     <div className="cc">
       <header className="cc-top" aria-label="Character toolbar">
+        <div className="view-toggle" role="tablist" aria-label="Characters or groups">
+          <button role="tab" aria-selected={mode === 'characters'} className={mode === 'characters' ? 'on' : ''} onClick={() => setMode('characters')}>
+            Characters
+          </button>
+          <button role="tab" aria-selected={mode === 'groups'} className={mode === 'groups' ? 'on' : ''} onClick={() => setMode('groups')}>
+            Groups <span className="lvl-count">{(project.characterGroups ?? []).length}</span>
+          </button>
+        </div>
+        <button
+          className="tb-btn small"
+          title="Six working samples (a strolling villager, a talking NPC, a patrol guard, a proximity-aggro orc, a sight-aggro orc, a companion) and two groups (Village Market, Orc Patrol)"
+          onClick={() => {
+            const r = addSampleCast(project);
+            if (!r.added.length) return onSay('The sample cast is already here.');
+            onCommit(r.project);
+            onSay(`Added ${r.added.join(', ')}.`);
+          }}
+        >
+          + Sample cast
+        </button>
+        <span className="pz-sep" />
         <button className="tb-btn primary small" onClick={() => setWizard(true)}>
           + New character
         </button>
@@ -262,6 +286,10 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
         )}
       </header>
 
+      {mode === 'groups' ? (
+        <GroupsPanel project={project} onCommit={onCommit} onOpenLevels={onOpenLevels} onSay={onSay} focus={focus} />
+      ) : (
+      <>
       <aside className="cc-left" aria-label="Characters">
         <select className="inp small" aria-label="Show role" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as CharacterRole | '')}>
           <option value="">Every role</option>
@@ -775,6 +803,8 @@ export const CharacterCreator = ({ project, onCommit, onOpenBible, onOpenLevels,
         </div>
       </section>
 
+      </>
+      )}
       {wizard && (
         <Wizard
           project={project}

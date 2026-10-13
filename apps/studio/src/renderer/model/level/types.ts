@@ -44,6 +44,8 @@ export type AssetRole =
   | 'light'
   | 'pickup' | 'inventory' | 'weapon' | 'ammo' | 'health' | 'checkpoint' | 'objective' | 'cover'
   | 'playerStart' | 'npc' | 'companion' | 'enemy' | 'neutral' | 'patrolNode'
+  /** A Character Creator group put in an area (character spec §7): its people come from `populate`. */
+  | 'crowd'
   | 'trigger' | 'gate' | 'prerequisite' | 'interaction' | 'puzzle' | 'hazard' | 'damage' | 'darkness' | 'water'
   | 'camera' | 'cinematic' | 'audio' | 'ambient' | 'dialogue'
   | 'spawn'

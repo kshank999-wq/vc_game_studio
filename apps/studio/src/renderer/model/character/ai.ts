@@ -263,6 +263,8 @@ export interface AIWorld {
   /** The actor's post and patrol stops (the first is its post). */
   patrol: Vec[];
   walls: [Vec, Vec][];
+  /** What else blocks sight between two points (a level's solids). */
+  blocked?: (a: Vec, b: Vec) => boolean;
 }
 
 export interface AIMemory {
@@ -326,7 +328,7 @@ export const sense = (ai: AIProfile, m: AIMemory, world: AIWorld) => {
   if (!t.alive) return { sees: false, hears: false, near: false, distance, why: 'No target.' };
   const off = Math.abs(wrap(angleTo(m.pos, t) - m.facing)) * (180 / Math.PI);
   const inCone = ai.visionAngle >= 360 || off <= ai.visionAngle / 2;
-  const blocked = ai.lineOfSight && world.walls.some(([a, b]) => crosses(m.pos, t, a, b));
+  const blocked = ai.lineOfSight && (world.walls.some(([a, b]) => crosses(m.pos, t, a, b)) || !!world.blocked?.(m.pos, t));
   const sees = distance <= ai.viewDistance && inCone && !blocked;
   const hears = t.noisy && distance <= ai.hearingRadius;
   const near = distance <= ai.proximityRadius;

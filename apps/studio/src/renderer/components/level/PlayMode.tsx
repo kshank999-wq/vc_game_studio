@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { startPoses } from '../../model/level/actors';
 import { mannequin } from './mannequin';
+import { placeholderFigure } from './figure3d';
+import { profileOf } from '../../model/character/profile';
 import { BODY, collidersFrom, eyeOf, facing, look, step, type Body, type Collider } from '../../model/level/controller';
 import { assetOf, frameOf, meshesFor, num, paramOf, type Mesh } from '../../model/level/geometry';
 import { levelsOf } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
+import { levelCast } from '../../model/level/play';
 import { answerScreen, darknessAt, dismiss, inHand, interactWith, isOpen, lightOf, offerFor, present, spendStamina, startLevelPlay, tick, toggleLight, tracksStamina, traversalAt, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
 import { equipmentList, equipmentOf, usesLeft } from '../../model/equipment';
 import { recipesOf } from '../../model/crafting';
@@ -143,6 +146,8 @@ export const PlayMode = (props: Props) => {
   const darkRef = useRef<HTMLDivElement>(null);
   // Actors that move (patrols, companions): drawn in a group each, placed at their pose every frame.
   const movers = useRef(new Map<string, THREE.Group>());
+  // The Character Creator's group members (character spec §7): a figure each, placed at its pose every frame.
+  const crowd = useRef(new Map<string, THREE.Group>());
 
   useEffect(() => {
     const el = host.current;
@@ -222,7 +227,10 @@ export const PlayMode = (props: Props) => {
     const piece = (m: (typeof scene.visible)[number]) => {
       const item = m.part === 'marker' ? set.items.find((i) => i.id === m.itemId) : undefined;
       if (!item || !PEOPLE.has(assetOf(set, item, global).role)) return buildPiece(m, false);
-      const figure = mannequin(actorColor[assetOf(set, item, global).role] ?? '#8fb07a');
+      // A character from the Character Creator stands in as its own placeholder: tint, silhouette, height, prop.
+      const who = project.objects[String(paramOf(set, item, 'character', global) ?? '')];
+      const ph = who?.type === 'character' && who.data.profile ? profileOf(who) : undefined;
+      const figure = ph ? placeholderFigure(ph.art.placeholder, ph.stats.height * ph.art.placeholder.scale) : mannequin(actorColor[assetOf(set, item, global).role] ?? '#8fb07a');
       figure.position.set(m.x, m.y - m.sy / 2, m.z);
       figure.rotation.y = (-item.rotation * Math.PI) / 180;
       return figure;
@@ -253,7 +261,21 @@ export const PlayMode = (props: Props) => {
         t.content.add(light);
       }
     }
-    for (const child of [...t.actors.children]) if (![...movers.current.values()].includes(child as THREE.Group)) t.actors.remove(child);
+    for (const g of crowd.current.values()) {
+      g.parent?.remove(g);
+      g.traverse(disposePiece);
+    }
+    crowd.current.clear();
+    for (const c of levelCast(project, levelId, global)) {
+      if (c.placed) continue;
+      const g = placeholderFigure(c.placeholder, c.height);
+      g.position.set(c.home.x, c.z, c.home.y);
+      g.rotation.y = -c.yaw;
+      crowd.current.set(c.key, g);
+      t.actors.add(g);
+    }
+    const keep = new Set<THREE.Object3D>([...movers.current.values(), ...crowd.current.values()]);
+    for (const child of [...t.actors.children]) if (!keep.has(child)) t.actors.remove(child);
     const elevation = new Map(level?.floors.map((f) => [f.id, f.elevation]) ?? []);
     for (const a of state.current.spawned) {
       // People appear as stand-in figures; a spawned item as a small crate.
@@ -455,6 +477,12 @@ export const PlayMode = (props: Props) => {
         if (!pose) continue;
         g.position.set(pose.x, pose.z, pose.y);
         g.rotation.y = -(pose.yaw - origin.yaw);
+      }
+      for (const [key, g] of crowd.current) {
+        const pose = s.cast?.[key];
+        if (!pose) continue;
+        g.position.set(pose.x, pose.z, pose.y);
+        g.rotation.y = -pose.yaw;
       }
       placeCamera(t, body.current, p.perspective, collidersRef.current);
       // The dark (spec §6): the view goes dark in a darkness zone; the player's light pushes it back around them.
