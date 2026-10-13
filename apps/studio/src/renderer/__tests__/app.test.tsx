@@ -170,6 +170,34 @@ describe('a scene', () => {
   });
 });
 
+describe('the scene box', () => {
+  it('shows a category’s elements from its node, opens one on a click, and adds a trigger from Logic', () => {
+    let project = createProject('The Sunken Vault');
+    const placed = placeNew(project, 'scene', spineLane(project).id, 400)!;
+    project = addElement(placed.project, placed.id, 'inventory', 'Vault Key')!.project;
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
+
+    const { container } = render(<App />);
+    fireEvent.doubleClick(container.querySelector('[data-type="scene"]')!);
+    // Inventory shows its one item; a click opens its detail, and Escape closes it.
+    const node = (label: string) => [...container.querySelectorAll('.perimeter')].find((b) => b.textContent?.startsWith(label))!;
+    fireEvent.click(node('Inventory'));
+    fireEvent.click(screen.getByText('Vault Key'));
+    expect(screen.getByRole('complementary', { name: 'Vault Key detail' })).toBeTruthy();
+    act(() => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+    expect(screen.queryByRole('complementary', { name: 'Vault Key detail' })).toBeNull();
+    // Logic: + Add logic, + New trigger, and the trigger is in the scene.
+    fireEvent.click(node('Logic'));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add logic' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '+ New trigger' }));
+    expect(container.querySelectorAll('.chip-item')).toHaveLength(2);
+    // The box can be dragged bigger by its corner.
+    expect(container.querySelector('.box-resize.corner')).toBeTruthy();
+  });
+});
+
 describe('the scene timeline', () => {
   it('shows the script’s dialogue, adds events, and edits a line from the inspector', () => {
     let project = createProject('The Sunken Vault');

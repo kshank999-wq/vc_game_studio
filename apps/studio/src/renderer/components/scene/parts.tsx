@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { TYPE_LABEL } from '../../model/semantics';
 import { CATEGORIES, addElement, categoryFor, inScene, useInScene, type Category } from '../../model/scene';
 import type { EventKind, ObjectType, Project, StoryObject } from '../../model/types';
@@ -51,8 +52,17 @@ export const AddMenu = ({ project, sceneId, category, onAdd, onClose }: {
     const added = addElement(project, sceneId, type);
     if (added) onAdd(added.project, added.id, true);
   };
+  // Opens upward when there is no room below it (Logic, under the box, sits right above the timeline strip).
+  const menu = useRef<HTMLDivElement>(null);
+  const [up, setUp] = useState(false);
+  useLayoutEffect(() => {
+    const el = menu.current;
+    const area = el?.closest('.workspace')?.getBoundingClientRect();
+    const r = el?.getBoundingClientRect();
+    if (r && r.bottom > (area ? area.bottom - 56 : window.innerHeight)) setUp(true);
+  }, []);
   return (
-    <div className="add-menu" role="menu" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+    <div ref={menu} className={`add-menu${up ? ' up' : ''}`} role="menu" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
       {existing.length > 0 && <div className="menu-heading">FROM THE BIBLE</div>}
       {existing.map((o) => (
         <button

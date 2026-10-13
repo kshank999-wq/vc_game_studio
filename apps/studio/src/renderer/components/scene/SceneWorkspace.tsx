@@ -51,9 +51,23 @@ interface Props {
   focusLine?: string | null;
 }
 
-// The scene box and the perimeter around it, in stage units (mockup 03).
-const BOX_W = 620;
-const BOX_H = 560;
+// The scene box and the perimeter around it, in stage units (mockup 03). The
+// box can be dragged bigger (or smaller) by its edge; the size is kept for
+// next time. Its current size is read by the layout helpers below.
+const BOX = { w: 680, h: 560 };
+const BOX_MIN = { w: 560, h: 420 };
+const BOX_MAX = { w: 1600, h: 1200 };
+const BOX_KEY = 'vcgs.sceneBox';
+const savedBox = (): { w: number; h: number } => {
+  try {
+    const v = JSON.parse(localStorage.getItem(BOX_KEY) ?? 'null') as { w?: unknown; h?: unknown } | null;
+    if (v && typeof v.w === 'number' && typeof v.h === 'number')
+      return { w: Math.min(BOX_MAX.w, Math.max(BOX_MIN.w, v.w)), h: Math.min(BOX_MAX.h, Math.max(BOX_MIN.h, v.h)) };
+  } catch {
+    // No saved size, or storage is off: the default.
+  }
+  return { w: 680, h: 560 };
+};
 const PILL_W = 150;
 const PILL_H = 38;
 const GAP = 40;
@@ -64,13 +78,13 @@ const CHIP_STEP = 42;
 const pillPosition = (c: Category): { x: number; y: number } => {
   switch (c.side) {
     case 'left':
-      return { x: -GAP - PILL_W, y: BOX_H * c.at - PILL_H / 2 };
+      return { x: -GAP - PILL_W, y: BOX.h * c.at - PILL_H / 2 };
     case 'right':
-      return { x: BOX_W + GAP, y: BOX_H * c.at - PILL_H / 2 };
+      return { x: BOX.w + GAP, y: BOX.h * c.at - PILL_H / 2 };
     case 'top':
-      return { x: BOX_W * c.at - PILL_W / 2, y: -GAP - PILL_H };
+      return { x: BOX.w * c.at - PILL_W / 2, y: -GAP - PILL_H };
     case 'bottom':
-      return { x: BOX_W * c.at - PILL_W / 2, y: BOX_H + GAP };
+      return { x: BOX.w * c.at - PILL_W / 2, y: BOX.h + GAP };
   }
 };
 
@@ -132,6 +146,11 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   const scene = project.objects[sceneId]!;
   const rootRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
+  const [box, setBox] = useState(savedBox);
+  // The layout helpers read the box's size from here.
+  BOX.w = box.w;
+  BOX.h = box.h;
+  const resizing = useRef<{ x: number; y: number; w: number; h: number; edge: 'right' | 'bottom' | 'corner' } | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -145,6 +164,16 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   }, [props.focusLine]);
   const [editingName, setEditingName] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
+  // Escape closes an element's detail (unless a field in it is being typed in).
+  useEffect(() => {
+    if (!detail) return;
+    const close = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]');
+      if (e.key === 'Escape' && !typing) setDetail(null);
+    };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [detail]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -178,9 +207,9 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
 
   // Fit the stage (box, perimeter and whatever is open) into the view.
   let minX = -GAP - PILL_W;
-  let maxX = BOX_W + GAP + PILL_W;
+  let maxX = BOX.w + GAP + PILL_W;
   let minY = -GAP - PILL_H;
-  let maxY = BOX_H + GAP + PILL_H;
+  let maxY = BOX.h + GAP + PILL_H;
   for (const c of PERIMETER) {
     if (!isOpen(c)) continue;
     for (const { chip: p, dialogue } of slotsOf(c, itemsOf(c).length + 1)) {
@@ -196,6 +225,35 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
   const ox = (size.w - (maxX - minX) * k) / 2 - minX * k;
   const oy = (usableH - (maxY - minY) * k) / 2 - minY * k;
   const summary = timelineSummary(project, sceneId);
+
+  // Drag the box's right edge, bottom edge or corner to resize it. It stays centred, so it grows both ways.
+  const startResize = (e: React.PointerEvent, edge: 'right' | 'bottom' | 'corner') => {
+    e.stopPropagation();
+    e.preventDefault();
+    resizing.current = { x: e.clientX, y: e.clientY, w: box.w, h: box.h, edge };
+    const move = (ev: PointerEvent) => {
+      const r = resizing.current;
+      if (!r) return;
+      const w = r.edge === 'bottom' ? r.w : Math.round(Math.min(BOX_MAX.w, Math.max(BOX_MIN.w, r.w + ((ev.clientX - r.x) * 2) / k)));
+      const h = r.edge === 'right' ? r.h : Math.round(Math.min(BOX_MAX.h, Math.max(BOX_MIN.h, r.h + ((ev.clientY - r.y) * 2) / k)));
+      setBox({ w, h });
+    };
+    const up = () => {
+      resizing.current = null;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setBox((b) => {
+        try {
+          localStorage.setItem(BOX_KEY, JSON.stringify(b));
+        } catch {
+          // Not kept for next time; it still works now.
+        }
+        return b;
+      });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
 
   const openCategory = (key: string) => setExpanded((e) => ({ ...e, [key]: true }));
 
@@ -245,7 +303,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
       }}
     >
       <div className="stage" style={{ transform: `translate(${ox}px, ${oy}px) scale(${k})` }}>
-        <svg className="stage-lines" style={{ left: -2000, top: -2000 }} width={4000 + BOX_W} height={4000 + BOX_H} aria-hidden="true">
+        <svg className="stage-lines" style={{ left: -2000, top: -2000 }} width={4000 + BOX.w} height={4000 + BOX.h} aria-hidden="true">
           <g transform="translate(2000 2000)">
             {PERIMETER.map((c) => {
               const p = pillPosition(c);
@@ -253,10 +311,10 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                 c.side === 'left'
                   ? `M${p.x + PILL_W} ${p.y + PILL_H / 2} H0`
                   : c.side === 'right'
-                    ? `M${BOX_W} ${p.y + PILL_H / 2} H${p.x}`
+                    ? `M${BOX.w} ${p.y + PILL_H / 2} H${p.x}`
                     : c.side === 'top'
                       ? `M${p.x + PILL_W / 2} ${p.y + PILL_H} V0`
-                      : `M${p.x + PILL_W / 2} ${BOX_H} V${p.y}`;
+                      : `M${p.x + PILL_W / 2} ${BOX.h} V${p.y}`;
               const items = isOpen(c) ? itemsOf(c).length + 1 : 0;
               const slots = slotsOf(c, items);
               const fan = slots.map(({ chip: q }) => {
@@ -293,6 +351,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                 className={`perimeter${open ? ' open' : ''}${counts[c.key] === 0 ? ' empty' : ''}${dragCategory?.key === c.key ? ' target' : ''}`}
                 style={{ left: p.x, top: p.y, '--cat': c.color } as React.CSSProperties}
                 aria-expanded={open}
+                title={open ? `Hide this scene’s ${c.label.toLowerCase()}` : counts[c.key] ? `Show this scene’s ${c.label.toLowerCase()} (${counts[c.key]}): click one to open it` : `No ${c.label.toLowerCase()} in this scene yet: click to add one`}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => setExpanded((x) => ({ ...x, [c.key]: !open }))}
               >
@@ -340,8 +399,8 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                       e.stopPropagation();
                       props.onSelect(item.id);
                     }}
-                    onDoubleClick={() => setDetail(item.id)}
-                    title="Double-click for detail · F2 renames"
+                    onClick={() => editing !== item.id && setDetail(item.id)}
+                    title="Click to open it · F2 renames"
                   >
                     <Symbol type={item.symbol} size={13} color={item.color} />
                     {editing === item.id ? (
@@ -384,7 +443,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
           );
         })}
 
-        <section className="scene-box" aria-label="Scene authoring" style={{ width: BOX_W, height: BOX_H }} onPointerDown={(e) => e.stopPropagation()}>
+        <section className="scene-box" aria-label="Scene authoring" style={{ width: BOX.w, height: BOX.h }} onPointerDown={(e) => e.stopPropagation()}>
           <div className="scene-head">
             <div className="scene-title">
               <Symbol type={scene.type} size={16} />
@@ -463,6 +522,9 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
             )}
           </div>
           {tab === 'Script' && <ScriptFooter project={project} sceneId={sceneId} onCommit={props.onCommit} />}
+          <div className="box-resize right" role="separator" aria-orientation="vertical" aria-label="Drag to make the scene box wider or narrower" title="Drag to resize" onPointerDown={(e) => startResize(e, 'right')} />
+          <div className="box-resize bottom" role="separator" aria-orientation="horizontal" aria-label="Drag to make the scene box taller or shorter" title="Drag to resize" onPointerDown={(e) => startResize(e, 'bottom')} />
+          <div className="box-resize corner" aria-label="Drag to resize the scene box" title="Drag to resize" onPointerDown={(e) => startResize(e, 'corner')} onDoubleClick={() => { setBox({ w: 680, h: 560 }); try { localStorage.removeItem(BOX_KEY); } catch { /* fine */ } }} />
         </section>
       </div>
 

@@ -10702,3 +10702,63 @@ button.bible-dual-col:hover {
 .header-level b {
   flex-shrink: 0;
 }
+
+/* The add menu around the scene box opens upward when there is no room below (parts.tsx). */
+.add-menu {
+  max-height: 340px;
+  overflow-y: auto;
+  z-index: 5;
+}
+
+.add-menu.up {
+  top: auto;
+  bottom: 34px;
+}
+
+/* The scene box's header wraps rather than cutting its tabs off. */
+.scene-meta {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+/* Drag the scene box's edges to resize it (SceneWorkspace.tsx). */
+.box-resize {
+  position: absolute;
+  z-index: 3;
+}
+
+.box-resize.right {
+  top: 12px;
+  right: -5px;
+  bottom: 12px;
+  width: 10px;
+  cursor: ew-resize;
+}
+
+.box-resize.bottom {
+  left: 12px;
+  right: 12px;
+  bottom: -5px;
+  height: 10px;
+  cursor: ns-resize;
+}
+
+.box-resize.corner {
+  right: -6px;
+  bottom: -6px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--c-scene) 50%, var(--c-scene) 60%, transparent 60%, transparent 70%, var(--c-scene) 70%, var(--c-scene) 80%, transparent 80%);
+  border-bottom-right-radius: 10px;
+}
+
+.box-resize.right:hover,
+.box-resize.bottom:hover {
+  background: color-mix(in srgb, var(--c-scene) 35%, transparent);
+  border-radius: 4px;
+}
+
+.chip-item {
+  cursor: pointer;
+}
