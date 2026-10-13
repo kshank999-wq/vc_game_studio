@@ -2380,6 +2380,60 @@ ${UNREAL_PUZZLES}
     // ------------------------------------------------------------ the graph
 
     /** Following the story graph between scenes: routes, choices on the graph, endings. */
+    /**
+     * A level transition cinematic playing: its key, its heading and shots, how long it
+     * runs (its shots' seconds, 3 s with none) and how far it is. The subsystem starts it
+     * on each level crossing; it finishes when its time is up, or on Finish (a skip, or
+     * the game's own cut is over).
+     */
+    struct TransitionPlayback
+    {
+        std::string Key, Title;
+        std::vector<std::string> Shots;
+        double Seconds = 0, Elapsed = 0;
+        std::function<void(const std::string&)> OnFinished;
+
+        bool Playing() const { return !Key.empty(); }
+
+        void Start(const Story& story, const std::string& key, const std::string& from, const std::string& to)
+        {
+            Key = key;
+            Title = "[Transition] " + from + " → " + to;
+            Shots.clear();
+            Seconds = 0;
+            Elapsed = 0;
+            auto c = story.Cinematics.find(key);
+            if (c != story.Cinematics.end())
+            {
+                for (const auto& shot : (*c->second)["shots"].items)
+                {
+                    const double seconds = shot["seconds"].Num(0);
+                    Seconds += seconds;
+                    char length[32];
+                    std::snprintf(length, sizeof length, "%g", seconds);
+                    Shots.push_back(std::to_string(Shots.size() + 1) + ". " + shot["framing"].Str() + " · " + shot["move"].Str() + ": " + shot["action"].Str() + " (" + length + "s)");
+                }
+            }
+            if (Seconds <= 0) Seconds = 3;
+        }
+
+        /** Time passes; the transition finishes once its time is up. */
+        void Advance(double seconds)
+        {
+            if (!Playing()) return;
+            Elapsed += seconds;
+            if (Elapsed >= Seconds) Finish();
+        }
+
+        void Finish()
+        {
+            if (!Playing()) return;
+            const std::string key = Key;
+            Key.clear();
+            if (OnFinished) OnFinished(key);
+        }
+    };
+
     namespace StoryWalker
     {
         /** Where a node goes: its first route whose conditions hold, else on along the spine. */
@@ -2403,6 +2457,18 @@ ${UNREAL_PUZZLES}
          * A cinematic that is the transition between two levels: "<level left> → <level entered>"
          * ("" for any other node). Play it as the player crosses, right after Arrive reports the level change.
          */
+        /** The transition cinematic for a crossing from one level into another ("" when it has none). */
+        inline std::string TransitionFor(const GameState& game, const std::string& from, const std::string& to)
+        {
+            if (from.empty() || to.empty()) return "";
+            for (const auto& n : game.StoryData.Graph)
+            {
+                const Value& t = (*n.second)["transition"];
+                if (t.IsObject() && t["from"].Str() == from && t["to"].Str() == to) return n.first;
+            }
+            return "";
+        }
+
         inline std::string TransitionOf(const GameState& game, const std::string& node)
         {
             const Value& t = Story::Find(game.StoryData.Graph, node)["transition"];

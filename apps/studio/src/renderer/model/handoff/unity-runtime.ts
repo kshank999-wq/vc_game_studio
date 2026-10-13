@@ -1714,6 +1714,18 @@ namespace VCGS
             return t.Count > 0 ? D.Str(t, "from") + " → " + D.Str(t, "to") : "";
         }
 
+        /// <summary>The transition cinematic for a crossing from one level into another ("" when it has none).</summary>
+        public static string TransitionFor(GameState game, string from, string to)
+        {
+            if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to)) return "";
+            foreach (var e in game.Story.Graph)
+            {
+                var t = D.Map(e.Value, "transition");
+                if (t.Count > 0 && D.Str(t, "from") == from && D.Str(t, "to") == to) return e.Key;
+            }
+            return "";
+        }
+
         /// <summary>The key of the map of the level a node happens in ("" for none).</summary>
         public static string LevelMapOf(GameState game, string node) => game.Story.Graph.TryGetValue(node, out var n) ? D.Str(n, "level_map") : "";
 
@@ -2622,6 +2634,60 @@ namespace VCGS
     /// </summary>
     [DefaultExecutionOrder(-100)]
     /// <summary>
+    /// A level transition cinematic playing: its key, its heading and shots, how
+    /// long it runs (its shots' seconds, 3 s with none) and how far it is. VcgsGame
+    /// starts it on each level crossing; it finishes when its time is up, or when
+    /// Finish is called (a skip, or the game's own cut is over).
+    /// </summary>
+    public sealed class TransitionPlayback
+    {
+        public string Key { get; private set; } = "";
+        public string Title { get; private set; } = "";
+        public readonly System.Collections.Generic.List<string> Shots = new System.Collections.Generic.List<string>();
+        public double Seconds { get; private set; }
+        public double Elapsed { get; private set; }
+        public bool Playing => Key != "";
+        /// <summary>The transition finished (its key).</summary>
+        public event System.Action<string> Finished;
+
+        public void Start(Story story, string key, string from, string to)
+        {
+            Key = key ?? "";
+            Title = "[Transition] " + from + " → " + to;
+            Shots.Clear();
+            Seconds = 0;
+            Elapsed = 0;
+            if (story.Cinematics.TryGetValue(Key, out var c))
+            {
+                foreach (var o in D.List(c, "shots"))
+                {
+                    var shot = D.Map(o);
+                    var seconds = D.Num(shot, "seconds", 0);
+                    Seconds += seconds;
+                    Shots.Add((Shots.Count + 1) + ". " + D.Str(shot, "framing") + " · " + D.Str(shot, "move") + ": " + D.Str(shot, "action") + " (" + seconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + "s)");
+                }
+            }
+            if (Seconds <= 0) Seconds = 3;
+        }
+
+        /// <summary>Time passes; the transition finishes once its time is up.</summary>
+        public void Advance(double seconds)
+        {
+            if (!Playing) return;
+            Elapsed += seconds;
+            if (Elapsed >= Seconds) Finish();
+        }
+
+        public void Finish()
+        {
+            if (!Playing) return;
+            var key = Key;
+            Key = "";
+            Finished?.Invoke(key);
+        }
+    }
+
+    /// <summary>
     /// The level maps as Unity scenes: on a level transition the level's scene
     /// (named after its map's key, in Build Settings) loads additively in place
     /// of the last level's, beside the story's own scenes.
@@ -2667,14 +2733,51 @@ namespace VCGS
             DontDestroyOnLoad(gameObject);
             Story = Story.FromJson(story != null ? story.text : "{}");
             State = new GameState(Story);
-            State.LevelEntered += (from, to, map) => { if (loadLevelScenes) VcgsLevelScenes.Show(map); };
+            State.LevelEntered += (from, to, map) =>
+            {
+                if (loadLevelScenes) VcgsLevelScenes.Show(map);
+                PlayTransition(from, to);
+            };
+        }
+
+        [Tooltip("On a level transition, play its transition cinematic: your own cut through TransitionRequested, else a stand-in on screen (its heading and shots, for its length).")]
+        public bool playTransitions = true;
+        /// <summary>The transition cinematic playing, if any (Transition.Finished says when it is over).</summary>
+        public TransitionPlayback Transition { get; } = new TransitionPlayback();
+        /// <summary>A transition cinematic to play: its key, the level left, the level entered. Play your own cut and call Transition.Finish() when it ends; with no handler, a stand-in plays on screen.</summary>
+        public event System.Action<string, string, string> TransitionRequested;
+        bool standIn;
+
+        /// <summary>Play the transition between two levels, if they have one; false when there is none.</summary>
+        public bool PlayTransition(string from, string to)
+        {
+            var key = playTransitions ? StoryWalker.TransitionFor(State, from, to) : "";
+            if (key == "") return false;
+            Transition.Start(Story, key, from, to);
+            standIn = TransitionRequested == null;
+            TransitionRequested?.Invoke(key, from, to);
+            return true;
+        }
+
+        void OnGUI()
+        {
+            if (!standIn || !Transition.Playing) return;
+            var w = System.Math.Min(560f, Screen.width - 40f);
+            var rect = new Rect((Screen.width - w) / 2f, Screen.height * 0.3f, w, 60f + 20f * Transition.Shots.Count);
+            GUI.Box(rect, Transition.Title + "\n" + string.Join("\n", Transition.Shots));
+            if (GUI.Button(new Rect(rect.x + rect.width - 80f, rect.y + rect.height - 30f, 70f, 24f), "Skip")) Transition.Finish();
         }
 
         [Tooltip("On a level transition, load the level's map scene (Assets/VCGS/Levels/<map>.unity, made by VCGS › Build each level as a scene) in place of the last one.")]
         public bool loadLevelScenes = true;
 
         /// <summary>The play clock runs while the game does (timed puzzle steps).</summary>
-        void Update() => State?.AdvanceClock(Time.deltaTime);
+        void Update()
+        {
+            State?.AdvanceClock(Time.deltaTime);
+            // The stand-in runs for the transition's length; your own cut finishes it itself.
+            if (standIn) Transition.Advance(Time.deltaTime);
+        }
 
         /// <summary>A saved game was loaded: open the Unity scene for this story scene key ("" for the story's beginning), whose VcgsSceneFlow plays it from its start.</summary>
         public event System.Action<string> GameLoaded;

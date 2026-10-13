@@ -70,6 +70,7 @@ static FLogCategory LogTemp;
     struct Name \
     { \
         template <typename... Args> void Broadcast(const Args&...) const {} \
+        bool IsBound() const { return false; } \
     };
 #define DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(Name, T1, P1) VCGS_DECLARE_DELEGATE(Name)
 #define DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(Name, T1, P1, T2, P2) VCGS_DECLARE_DELEGATE(Name)

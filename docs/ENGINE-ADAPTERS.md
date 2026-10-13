@@ -708,9 +708,15 @@ engines as the cinematic on the spine just after the plot point where two
 levels meet, with `transition: { from, to }` on its graph node (and the
 field `transition` on the cinematic). It plays straight after the level
 change: Godot's story player shows it as "[Transition] <from> → <to>" with
-its shots; in Unity `StoryWalker.TransitionOf(State, node)` and in Unreal
-`UVcgsSubsystem::TransitionOf(Node)` name the levels it joins, for the
-game to play it as the player crosses.
+its shots. Unity and Unreal play it on their own as the player crosses
+too: VcgsGame (`playTransitions`) and `UVcgsSubsystem` (`bPlayTransitions`)
+find the crossing's transition and play it. Handle `TransitionRequested`
+(Unity) or bind `OnTransitionRequested` (Unreal) to play your own cut, a
+Timeline or Level Sequence, and finish it with `Transition.Finish()` or
+`FinishTransition()`; with nothing handling it, a stand-in shows its heading
+and shots on screen for its length (3 seconds with no shots). Each says when
+it is over (`Transition.Finished`, `OnTransitionFinished`), and
+`TransitionOf` names the levels a cinematic joins.
 
 ## What each engine gets
 

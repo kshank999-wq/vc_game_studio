@@ -91,6 +91,17 @@ static class RoomsCheck
         game.Level = "The Flooded Cave";
         if (StoryWalker.Arrive(game, descent) != "End of The Flooded Cave → LEVEL · The Sunken Vault" || StoryWalker.Arrive(game, transition) != "")
             Fail("crossing at Descent should change the level once, before its transition plays");
+        // Played on its own as the player crosses: the crossing finds it, and it runs its length (3 s with no shots), then finishes.
+        if (StoryWalker.TransitionFor(game, "The Flooded Cave", "The Sunken Vault") != transition || StoryWalker.TransitionFor(game, "The Sunken Vault", "The Flooded Cave") != "")
+            Fail("the crossing should find its transition cinematic");
+        var playback = new TransitionPlayback();
+        var finished = "";
+        playback.Finished += k => finished = k;
+        playback.Start(story, transition, "The Flooded Cave", "The Sunken Vault");
+        playback.Advance(1);
+        if (!playback.Playing || playback.Title != "[Transition] The Flooded Cave → The Sunken Vault" || playback.Seconds != 3) Fail("the transition should be playing, got " + playback.Title + " " + playback.Seconds);
+        playback.Advance(2.5);
+        if (playback.Playing || finished != transition) Fail("the transition should finish once its time is up");
         Console.WriteLine("levels: " + first + " · " + crossing + " · scene " + scenePath + " · transition " + StoryWalker.TransitionOf(game, transition));
         if (failures > 0) return 1;
         Console.WriteLine("rooms OK");

@@ -153,7 +153,12 @@ project.
    VcgsGame loads the level's scene additively on each transition, in place
    of the last one (\`loadLevelScenes\`, on by default). A cinematic between two
    levels is their transition: \`StoryWalker.TransitionOf(State, node)\` names
-   them ("The Flooded Cave → The Sunken Vault"); play it as the player crosses.
+   them ("The Flooded Cave → The Sunken Vault"). VcgsGame plays it on its own
+   as the player crosses (\`playTransitions\`, on by default): handle
+   \`TransitionRequested(key, from, to)\` to play your own cut (a Timeline) and
+   call \`Transition.Finish()\` when it ends; with no handler a stand-in shows
+   its heading and shots on screen for its length, with Skip.
+   \`Transition.Finished\` says when it is over.
 5. **Puzzles** built in the Puzzle Creator play their steps as the studio does
    (order, links, time limits on \`State.Clock\`, which VcgsGame advances,
    rewards, wrong moves, resets): \`PuzzleStep\`, \`StepDone\`, \`HintGiven\` and

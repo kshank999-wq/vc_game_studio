@@ -184,6 +184,7 @@ struct VCGS_API FVcgsLineRow : public FTableRowBase
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Containers/Ticker.h"
 #include "VcgsCore.h"
 #include "VcgsTypes.h"
 #include <memory>
@@ -194,6 +195,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsSceneSignature, const FString&,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsSkillSignature, const FString&, Skill, int32, Rank);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsGearSignature, const FString&, Item, const FString&, Slot);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FVcgsLevelSignature, const FString&, From, const FString&, To, const FString&, Map);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FVcgsTransitionSignature, const FString&, Cinematic, const FString&, From, const FString&, To);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVcgsTransitionDoneSignature, const FString&, Cinematic);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FVcgsPuzzleStepSignature, const FString&, Puzzle, const FString&, Step, const FString&, What);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsHintSignature, const FString&, Puzzle, const FString&, Text);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVcgsCueSignature, const FString&, Puzzle, const FString&, Kind, const FString&, Text, const FString&, Ref);
@@ -287,6 +290,19 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS|Story") bool bLoadLevelMaps = true;
     /** Stream in a level map (/Game/VCGS/Levels/<Map>) in place of the one shown; false when there is no such map. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") bool ShowLevelMap(const FString& Map);
+    /** On a level transition, play its transition cinematic: your own cut through OnTransitionRequested, else a stand-in on screen (its heading and shots, for its length). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS|Story") bool bPlayTransitions = true;
+    /** A transition cinematic to play: play your own cut (a Level Sequence) and call FinishTransition when it ends. Unbound, a stand-in plays on screen. */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Story") FVcgsTransitionSignature OnTransitionRequested;
+    /** The transition cinematic finished (its time was up, it was skipped, or FinishTransition was called). */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS|Story") FVcgsTransitionDoneSignature OnTransitionFinished;
+    /** Play the transition between two levels, if they have one; false when there is none. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Story") bool PlayTransition(const FString& From, const FString& To);
+    /** End the transition playing (a skip, or your own cut is over). */
+    UFUNCTION(BlueprintCallable, Category = "VCGS|Story") void FinishTransition();
+    UFUNCTION(BlueprintPure, Category = "VCGS|Story") bool IsTransitionPlaying() const { return Transition.Playing(); }
+    /** The transition playing: "[Transition] <level left> → <level entered>" ("" for none). */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetTransitionTitle() const;
     /** The level map streamed in now ("" for none). */
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetShownLevelMap() const { return ShownLevelMap; }
 
@@ -434,6 +450,10 @@ private:
     /** The level map streamed in for the level the player is in. */
     UPROPERTY() class ULevelStreamingDynamic* ShownLevel = nullptr;
     FString ShownLevelMap;
+    vcgs::TransitionPlayback Transition;
+    bool bTransitionStandIn = false;
+    FTSTicker::FDelegateHandle TransitionTicker;
+    bool TickTransition(float DeltaTime);
     std::unique_ptr<vcgs::Codex> CodexData;
 };
 `,
@@ -448,6 +468,7 @@ private:
 #include "Misc/Paths.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LevelStreamingDynamic.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 
 using VcgsConvert::ToF;
@@ -475,6 +496,9 @@ void UVcgsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UVcgsSubsystem::Deinitialize()
 {
+    if (TransitionTicker.IsValid()) FTSTicker::GetCoreTicker().RemoveTicker(TransitionTicker);
+    TransitionTicker.Reset();
+    Transition.OnFinished = nullptr;
     Game.reset();
     StoryData.reset();
     Super::Deinitialize();
@@ -501,6 +525,7 @@ bool UVcgsSubsystem::LoadStory(const FString& Json)
     {
         if (bLoadLevelMaps && !Map.empty()) ShowLevelMap(ToF(Map));
         OnLevelEntered.Broadcast(ToF(From), ToF(To), ToF(Map));
+        PlayTransition(ToF(From), ToF(To));
     };
     Game->OnMechanicAvailable = [this](const std::string& Mechanic) { OnMechanicAvailable.Broadcast(ToF(Mechanic)); };
     Game->OnSkillLearned = [this](const std::string& Skill, int Rank) { OnSkillLearned.Broadcast(ToF(Skill), Rank); };
@@ -769,6 +794,43 @@ FString UVcgsSubsystem::Onward(const FString& Node) { return Game ? ToF(vcgs::St
 FString UVcgsSubsystem::Arrive(const FString& Node) { return Game ? ToF(vcgs::StoryWalker::Arrive(*Game, ToStd(Node))) : FString(); }
 FString UVcgsSubsystem::GetLevel() const { return Game ? ToF(Game->Level) : FString(); }
 FString UVcgsSubsystem::TransitionOf(const FString& Node) const { return Game ? ToF(vcgs::StoryWalker::TransitionOf(*Game, ToStd(Node))) : FString(); }
+
+bool UVcgsSubsystem::PlayTransition(const FString& From, const FString& To)
+{
+    const std::string Key = Game && bPlayTransitions ? vcgs::StoryWalker::TransitionFor(*Game, ToStd(From), ToStd(To)) : std::string();
+    if (Key.empty()) return false;
+    Transition.OnFinished = [this](const std::string& Done)
+    {
+        if (TransitionTicker.IsValid()) FTSTicker::GetCoreTicker().RemoveTicker(TransitionTicker);
+        TransitionTicker.Reset();
+        bTransitionStandIn = false;
+        OnTransitionFinished.Broadcast(ToF(Done));
+    };
+    Transition.Start(*StoryData, Key, ToStd(From), ToStd(To));
+    bTransitionStandIn = !OnTransitionRequested.IsBound();
+    if (bTransitionStandIn)
+    {
+        // The stand-in: its heading and shots on screen for its length, then on with the game.
+        FString Text = ToF(Transition.Title);
+        for (const std::string& Shot : Transition.Shots) Text = Text + TEXT("\\n") + ToF(Shot);
+        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, static_cast<float>(Transition.Seconds), FColor::White, Text);
+        TransitionTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UVcgsSubsystem::TickTransition));
+    }
+    else
+    {
+        OnTransitionRequested.Broadcast(ToF(Key), From, To);
+    }
+    return true;
+}
+
+bool UVcgsSubsystem::TickTransition(float DeltaTime)
+{
+    Transition.Advance(DeltaTime);
+    return Transition.Playing();
+}
+
+void UVcgsSubsystem::FinishTransition() { Transition.Finish(); }
+FString UVcgsSubsystem::GetTransitionTitle() const { return Transition.Playing() ? ToF(Transition.Title) : FString(); }
 
 bool UVcgsSubsystem::ShowLevelMap(const FString& Map)
 {
@@ -1577,7 +1639,11 @@ player is in, kept in saves. To have the level maps load on those transitions, s
 once after each export: each level map the story uses becomes \`/Game/VCGS/Levels/<map>\`,
 and the subsystem streams it in on each transition in place of the last one
 (\`bLoadLevelMaps\`, on by default; \`ShowLevelMap\` does it by hand). A cinematic between
-two levels is their transition: \`TransitionOf(Node)\` names them; play it as the player crosses.
+two levels is their transition: \`TransitionOf(Node)\` names them. The subsystem plays it on its
+own as the player crosses (\`bPlayTransitions\`, on by default): bind \`OnTransitionRequested\`
+to play your own cut (a Level Sequence) and call \`FinishTransition\` when it ends; unbound, a
+stand-in shows its heading and shots on screen for its length. \`OnTransitionFinished\` says
+when it is over.
 
 **Puzzles** built in the Puzzle Creator play their steps as the studio does
 (order, links, time limits on the play clock, which the level director advances
