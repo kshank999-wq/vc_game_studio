@@ -7553,6 +7553,20 @@ kbd {
 .lvl-popbtn-inspector {
   grid-area: right;
 }
+.lvl-reopen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(232, 200, 114, 0.08);
+}
+.lvl-reopen span {
+  flex: 1 1 auto;
+}
+
 .lvl-view {
   position: relative;
   flex: 1 1 auto;

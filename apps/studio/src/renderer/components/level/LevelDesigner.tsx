@@ -53,6 +53,7 @@ import { ImportPlanDialog } from './ImportPlanDialog';
 import { PREFAB_DRAG, PrefabsPanel } from './PrefabsPanel';
 import { TeamDialog } from './TeamDialog';
 import { PopOut } from '../PopOut';
+import { desktop } from '../../desktop';
 import { claim as claimLevel, handOut, release as releaseLevel, sendBackName, workingCopyOf } from '../../model/level/coop';
 import { makePrefab, makeStructurePrefab, placePrefab, prefabsOf, prefabText, removePrefab, savePrefab, starterPrefabs, type Prefab } from '../../model/level/prefabs';
 import { downloadText, fileNameFor, serialize } from '../../files';
@@ -98,6 +99,34 @@ const OUTLINE_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.ex
 
 /** The Levels panels that can go into windows of their own. */
 type PanelKey = 'library' | 'inspector' | 'graph' | 'generate' | 'prefabs' | 'view';
+const PANEL_KEYS: readonly PanelKey[] = ['view', 'library', 'inspector', 'graph', 'generate', 'prefabs'];
+const PANEL_NAMES: Record<PanelKey, string> = { view: 'the map', library: 'the library', inspector: 'the properties', graph: 'the structure graph', generate: 'the generator', prefabs: 'prefabs' };
+
+/** Which panels were in windows of their own when the studio was last closed, kept on this computer. */
+const OUTS_KEY = 'vcgs.levels.popouts';
+const readOuts = (): PanelKey[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(OUTS_KEY) ?? '[]') as unknown;
+    return Array.isArray(v) ? PANEL_KEYS.filter((k) => v.includes(k)) : [];
+  } catch {
+    return [];
+  }
+};
+const writeOuts = (keys: Iterable<PanelKey>) => {
+  try {
+    localStorage.setItem(OUTS_KEY, JSON.stringify([...keys]));
+  } catch {
+    // Storage off: they don't come back next time.
+  }
+};
+/** Set while the studio closes: its windows close with it, and that isn't putting them back. */
+let closingApp = false;
+globalThis.addEventListener?.('pagehide', () => {
+  closingApp = true;
+});
+globalThis.addEventListener?.('beforeunload', () => {
+  closingApp = true;
+});
 
 /**
  * The Level Designer (docs/specs/level-designer-spec.md): library on the
@@ -159,11 +188,18 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [newWorld, setNewWorld] = useState(false);
   const [newStructure, setNewStructure] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [showPrefabs, setShowPrefabs] = useState(false);
+  const [showPrefabs, setShowPrefabs] = useState(() => (desktop() ? readOuts().includes('prefabs') : false));
   const [showTeam, setShowTeam] = useState(false);
   /** Panels pulled out into windows of their own. */
-  const [outs, setOuts] = useState<ReadonlySet<PanelKey>>(() => new Set());
+  // The desktop app opens again the windows that were open; a browser only opens one on a click, so it asks.
+  const [outs, setOuts] = useState<ReadonlySet<PanelKey>>(() => new Set(desktop() ? readOuts() : []));
+  const [reopen, setReopen] = useState<PanelKey[] | null>(() => (desktop() ? null : readOuts().length ? readOuts() : null));
   outsRef.current = outs;
+  useEffect(() => {
+    // Remembered as they come and go; not while the studio itself is closing, nor before the browser's offer is answered.
+    if (closingApp || reopen) return;
+    writeOuts(outs);
+  }, [outs, reopen]);
   const popOut = (k: PanelKey) => setOuts((o) => new Set(o).add(k));
   /** The window the map or graybox is in, when it is in one of its own. */
   const [viewWin, setViewWin] = useState<Window | null>(null);
@@ -180,7 +216,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       return n;
     });
   const [showStructure, setShowStructure] = useState(true);
-  const [showGenerate, setShowGenerate] = useState(false);
+  // A panel that was in a window of its own last time is open again (in its window).
+  const [showGenerate, setShowGenerate] = useState(() => desktop() ? readOuts().includes('generate') : false);
   const [preview, setPreview] = useState<Proposal | null>(null);
   /** Floor by floor: the point the generator is asking for, if any. */
   const [asking, setAsking] = useState<'entrance' | 'stairs' | null>(null);
@@ -1130,6 +1167,28 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         }}
       />)}
       <div className="lvl-centre">
+        {reopen && (
+          <div className="lvl-reopen" role="note" aria-label="Windows from last time">
+            <span>
+              Last time {reopen.length === 1 ? 'this was' : 'these were'} in {reopen.length === 1 ? 'a window' : 'windows'} of {reopen.length === 1 ? 'its' : 'their'} own: {reopen.map((k) => PANEL_NAMES[k]).join(', ')}.
+            </span>
+            <button
+              className="tb-btn small primary"
+              onClick={() => {
+                if (reopen.includes('generate')) setShowGenerate(true);
+                if (reopen.includes('prefabs')) setShowPrefabs(true);
+                if (reopen.includes('graph')) setShowStructure(true);
+                setOuts(new Set(reopen));
+                setReopen(null);
+              }}
+            >
+              Open {reopen.length === 1 ? 'it' : 'them'} again
+            </button>
+            <button className="tb-btn small" onClick={() => setReopen(null)}>
+              Keep them here
+            </button>
+          </div>
+        )}
         {dockView(
           <div className="lvl-view" onDragOver={onViewDragOver} onDrop={onViewDrop}>
         {asking && mode === '2d' && (

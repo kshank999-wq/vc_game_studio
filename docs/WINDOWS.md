@@ -49,5 +49,12 @@ In the desktop app:
 
 In a browser, each window (the map's too) also reopens where you last put it and at its last size, remembered on this computer. Allow pop-ups for the studio; if a window is blocked, the studio says so and the panel stays where it was.
 
+**Next time.** The windows that were open when you closed the studio (or left the Levels tab) come back:
+
+- In the desktop app they open again by themselves, where they were.
+- A browser only opens a window when you click. A bar at the top of the map lists them ("Last time these were in windows of their own: the map, the properties"), with **Open them again** and **Keep them here**.
+
+Closing one of these windows yourself puts that panel back, and it stays back next time.
+
 **Dragging between windows.** Drag an asset from the library, or a prefab from Prefabs, onto the 2D map or the 3D graybox in any window, and it is placed where you drop it. It works from the library window onto the map window on another screen, and the other way round. This uses the system's own drag and drop, so the dragged tile follows the pointer across the screens. Clicking an asset and then clicking on the map still works too. Anything else dropped on the map (a file, a link) is ignored.
 
