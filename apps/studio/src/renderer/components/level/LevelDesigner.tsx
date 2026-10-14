@@ -1,5 +1,5 @@
 import { elementsOf, itemsFor } from '../../model/puzzle/elements';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { assetOf, frameOf, type Point } from '../../model/level/geometry';
 import { findAsset } from '../../model/level/library';
 import {
@@ -47,11 +47,12 @@ import { NewStructureDialog } from './NewStructureDialog';
 import { StructurePanel } from './StructurePanel';
 import type { FloorStack } from '../../model/level/stack';
 import { GeneratePanel, type GenerateAsk } from './GeneratePanel';
-import { acceptLayout, proposeDressing, proposeLayout, type Proposal } from '../../model/level/generate';
+import { acceptLayout, entranceAt, groundFloorOf, guidedOrder, laidOut, proposeDressing, proposeLayout, stairsAt, type Proposal } from '../../model/level/generate';
 import { importPlan } from '../../model/level/cad';
 import { ImportPlanDialog } from './ImportPlanDialog';
 import { PrefabsPanel } from './PrefabsPanel';
 import { TeamDialog } from './TeamDialog';
+import { PopOut } from '../PopOut';
 import { claim as claimLevel, handOut, release as releaseLevel, sendBackName, workingCopyOf } from '../../model/level/coop';
 import { makePrefab, makeStructurePrefab, placePrefab, prefabsOf, prefabText, removePrefab, savePrefab } from '../../model/level/prefabs';
 import { downloadText, fileNameFor, serialize } from '../../files';
@@ -93,6 +94,10 @@ const isTyping = (target: EventTarget | null): boolean =>
 
 const DRAW_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.exterior', 'space.arena', 'logic.trigger', 'pres.ambient', 'spawn.wave', 'space.platform', 'arch.floor'];
 const OUTLINE_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.exterior', 'space.arena', 'logic.trigger', 'pres.cinematic', 'pres.ambient', 'logic.hazard', 'logic.damage', 'spawn.wave', 'play.checkpoint'];
+
+
+/** The Levels panels that can go into windows of their own. */
+type PanelKey = 'library' | 'inspector' | 'graph' | 'generate' | 'prefabs';
 
 /**
  * The Level Designer (docs/specs/level-designer-spec.md): library on the
@@ -150,9 +155,20 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [importing, setImporting] = useState(false);
   const [showPrefabs, setShowPrefabs] = useState(false);
   const [showTeam, setShowTeam] = useState(false);
+  /** Panels pulled out into windows of their own. */
+  const [outs, setOuts] = useState<ReadonlySet<PanelKey>>(() => new Set());
+  const popOut = (k: PanelKey) => setOuts((o) => new Set(o).add(k));
+  const dockBack = (k: PanelKey) =>
+    setOuts((o) => {
+      const n = new Set(o);
+      n.delete(k);
+      return n;
+    });
   const [showStructure, setShowStructure] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
   const [preview, setPreview] = useState<Proposal | null>(null);
+  /** Floor by floor: the point the generator is asking for, if any. */
+  const [asking, setAsking] = useState<'entrance' | 'stairs' | null>(null);
   // A preview is of the project as it was: an undo, an edit elsewhere or another map drops it.
   useEffect(() => setPreview(null), [project, levelId]);
   // A room being detailed (spec V2 §2, §7): the map frames it, the rest of the floor dims, the library offers room things.
@@ -602,13 +618,42 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const shownSet = levelsOf(shown);
   const held = () => onSay('Accept or reject the generated layout first.');
   const picked = pick && findAsset(pick.assetId, set.assets, global);
+  /** A panel in the main window, or in a window of its own (to put on another screen). */
+  const dock = (key: PanelKey, title: string, render: (pop?: () => void) => ReactNode): ReactNode => {
+    if (outs.has(key))
+      return (
+        <PopOut key={`pop-${key}`} id={key} title={title} width={key === 'library' || key === 'inspector' ? 380 : 980} height={key === 'library' || key === 'inspector' ? 860 : 560} className="lvl lvl-popout" onClose={() => dockBack(key)} onBlocked={() => onSay('The new window was blocked: allow pop-ups for the studio, then try again.')}>
+          <div className="popout-bar">
+            <strong>{title}</strong>
+            <span className="muted">{level.name}</span>
+            <span className="grow" />
+            <button className="tb-btn small" onClick={() => dockBack(key)}>
+              Put it back
+            </button>
+          </div>
+          {render()}
+        </PopOut>
+      );
+    if (key === 'library' || key === 'inspector')
+      return (
+        <>
+          {render()}
+          {!playing && (
+            <button className={`icon-btn small lvl-popbtn lvl-popbtn-${key}`} aria-label={`Open the ${title.toLowerCase()} in its own window`} title="Open in its own window, to put on another screen" onClick={() => popOut(key)}>
+              ⧉
+            </button>
+          )}
+        </>
+      );
+    return render(() => popOut(key));
+  };
   const crumbs = pathTo(set, level.id);
   const codes = floorCodes(level);
   const selectedRoom = selected && assetOf(set, selected, global).kind === 'space' ? selected : undefined;
   const focusedRoom = focusRoom ? set.items.find((i) => i.id === focusRoom) : undefined;
 
   return (
-    <div className={`lvl${pick ? ' is-placing' : ''}${playing ? ' playing' : ''}`}>
+    <div className={`lvl${pick ? ' is-placing' : ''}${playing ? ' playing' : ''}${outs.has('library') ? ' left-out' : ''}${outs.has('inspector') ? ' right-out' : ''}`}>
       <div className="lvl-bar" role="toolbar" aria-label="Level tools">
         {playing ? (
           <>
@@ -908,7 +953,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         </>
         )}
       </div>
-      <LevelLibrary
+      {dock('library', 'Library', () => <LevelLibrary
         navigator={
           <MapNavigator
             set={set}
@@ -973,8 +1018,43 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           promoteAsset(a);
           onSay(`${a.name} is in your library now, for every project on this computer.`);
         }}
-      />
+      />)}
       <div className="lvl-centre">
+        {asking && mode === '2d' && (
+          <div
+            className="lvl-ask"
+            role="button"
+            tabIndex={0}
+            aria-label={asking === 'entrance' ? 'Click on the outside wall where the entrance goes' : 'Click where the stairs go up'}
+            onKeyDown={(e) => e.key === 'Escape' && setAsking(null)}
+            onClick={(e) => {
+              const pt = map.current?.worldAt(e.clientX, e.clientY);
+              if (!pt) return;
+              if (asking === 'entrance') {
+                const q = entranceAt(project, level.id, pt, global);
+                if (!q) {
+                  onSay('Click on the outside wall of the ground floor (its footprint’s edge).');
+                  return;
+                }
+                onCommit(updateStructure(project, level.id, { entrance: q }));
+                setAsking(null);
+                onSay(`The way in is set. Now generate ${groundFloorOf(level)?.name ?? 'the ground floor'}.`);
+              } else {
+                const q = stairsAt(project, level.id, pt, global);
+                if (!q) {
+                  onSay('Click inside the footprint, where the stairs go up.');
+                  return;
+                }
+                onCommit(updateStructure(project, level.id, { stairs: q }));
+                setAsking(null);
+                const nextFloor = guidedOrder(level).find((f) => !laidOut(set, level.id, f.id, global));
+                onSay(`The stairs are set: they stand there on every floor.${nextFloor ? ` Now generate ${nextFloor.name}.` : ''}`);
+              }
+            }}
+          >
+            <span className="lvl-ask-hint">{asking === 'entrance' ? 'Click on the outside wall where the entrance goes · Esc to cancel' : 'Click where the stairs go up to the next floor · Esc to cancel'}</span>
+          </div>
+        )}
         {playing ? (
           <Suspense fallback={<div className="view-loading" role="status">Starting Play Mode…</div>}>
             <PlayMode
@@ -1025,6 +1105,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onOpen3D={(id) => (id && (childOfItem(set, id) || opensAsMap(set, id, global)) ? openChild(id) : open3D(id))}
             onHover={setHover}
             puzzles={overlays.puzzles ? shownPuzzles : undefined}
+            markers={showGenerate && isStructure(level) ? [...(level.structure?.entrance && floor.id === groundFloorOf(level)?.id ? [{ ...level.structure.entrance, label: 'Way in' }] : []), ...(level.structure?.stairs ? [{ ...level.structure.stairs, label: 'Stairs' }] : [])] : undefined}
             badges={badges}
             issues={issueMap}
           />
@@ -1057,14 +1138,60 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           </Suspense>
         )}
         {!playing && isStructure(level) && showGenerate && (
-          <GeneratePanel
+          dock('generate', 'Generate', (pop) => <GeneratePanel
+            {...(pop ? { onPopOut: pop } : {})}
             key={level.id}
             level={level}
             floorId={floor.id}
             units={set.settings.units}
             areaName={selected && ['space', 'volume'].includes(assetOf(set, selected, global).kind) && assetOf(set, selected, global).role !== 'footprint' ? selected.name : undefined}
             proposal={preview}
+            {...(level.floors.length > 1
+              ? {
+                  guided: {
+                    ...(level.structure?.entrance ? { entrance: level.structure.entrance } : {}),
+                    ...(level.structure?.stairs ? { stairs: level.structure.stairs } : {}),
+                    picking: asking,
+                    onPick: (what: 'entrance' | 'stairs' | null) => {
+                      setPreview(null);
+                      setAsking(what);
+                      if (what) {
+                        setMode('2d');
+                        const g = groundFloorOf(level);
+                        if (g) setFloorId(g.id);
+                        // The whole floor in view, so its outside walls can be clicked.
+                        setTimeout(() => map.current?.frame(), 0);
+                        onSay(what === 'entrance' ? 'Click on the outside wall of the ground floor where the entrance goes.' : 'Click where the stairs go up: they will stand there on every floor.');
+                      }
+                    },
+                    floors: (() => {
+                      const order = guidedOrder(level);
+                      const ground = order[0];
+                      const sorted = [...level.floors].sort((a, b) => a.elevation - b.elevation);
+                      return order.map((f) => {
+                        const done = laidOut(set, level.id, f.id, global);
+                        const k = sorted.findIndex((x) => x.id === f.id);
+                        // The floor next to it on the way back to the ground: its stairs come from there.
+                        const toward = ground && f.elevation > ground.elevation ? sorted[k - 1] : sorted[k + 1];
+                        const nearDone = !toward || laidOut(set, level.id, toward.id, global);
+                        const isGround = f.id === ground?.id;
+                        const ready = isGround ? !!level.structure?.entrance : !!level.structure?.stairs && nearDone;
+                        const why = isGround ? 'Set the way in first.' : !level.structure?.stairs ? 'Set the stairs first.' : !nearDone ? `Lay out ${toward!.name} first.` : undefined;
+                        return { id: f.id, name: f.name, code: codes.get(f.id) ?? '', done, ready, ...(why ? { why } : {}) };
+                      });
+                    })(),
+                  },
+                }
+              : {})}
             onPreview={(ask: GenerateAsk) => {
+              if (ask.floorId) {
+                // Floor by floor: just this one, seen on the map; before the stairs are set, with no stair core yet.
+                setFloorId(ask.floorId);
+                setMode('2d');
+                setAsking(null);
+                setPreview(proposeLayout(project, { levelId: level.id, floorIds: [ask.floorId], seed: ask.seed, settings: ask.settings, ...(level.structure?.stairs ? {} : { noCore: true }) }, global));
+                return;
+              }
               const floorIds = ask.scope === 'structure' ? level.floors.map((f) => f.id) : [floor.id];
               const areaId = ask.scope === 'area' && selected ? selected.id : undefined;
               if (ask.dressOnly) {
@@ -1080,6 +1207,15 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               const next = updateStructure(acceptLayout(preview), level.id, { seed: preview.run.seed });
               setPreview(null);
               onCommit(next);
+              // Floor by floor: the ground floor done and no stairs yet, ask for them now.
+              const ground = groundFloorOf(level);
+              if (level.floors.length > 1 && preview.run.floorIds.length === 1 && preview.run.floorIds[0] === ground?.id && !level.structure?.stairs && level.structure?.entrance) {
+                setAsking('stairs');
+                setMode('2d');
+                setTimeout(() => map.current?.frame(), 0);
+                onSay(`${ground!.name} is laid out. Now click where the stairs go up to the next floor: they line up through every floor.`);
+                return;
+              }
               onSay(
                 preview.counts.rooms || preview.counts.corridors
                   ? `Layout accepted: ${preview.counts.rooms} rooms and ${preview.counts.doors} doors. Edit them as you like; regenerating replaces only what you leave as it was.`
@@ -1098,10 +1234,11 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               setPreview(null);
               setShowGenerate(false);
             }}
-          />
+          />)
         )}
         {!playing && showPrefabs && (
-          <PrefabsPanel
+          dock('prefabs', 'Prefabs', (pop) => <PrefabsPanel
+            {...(pop ? { onPopOut: pop } : {})}
             prefabs={prefabsOf(project)}
             selected={selection.length}
             {...(isStructure(level) ? { structureName: level.name } : {})}
@@ -1147,10 +1284,11 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               onCommit(removePrefab(project, prefab.id));
               onSay(`Removed the prefab “${prefab.name}”. What was placed from it stays.`);
             }}
-          />
+          />)
         )}
         {!playing && isStructure(level) && showStructure && (
-          <StructurePanel
+          dock('graph', 'Structure graph', (pop) => <StructurePanel
+            {...(pop ? { onPopOut: pop } : {})}
             project={shown}
             levelId={level.id}
             floorId={floor.id}
@@ -1162,7 +1300,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               setSelection([id]);
               setTimeout(() => (mode === '3d' ? box.current : map.current)?.frame([id]), 0);
             }}
-          />
+          />)
         )}
         <div className="lvl-status" aria-live="polite">
           <span className="mono">{hover ? `${formatLength(hover.x, set.settings.units)}, ${formatLength(hover.y, set.settings.units)}` : '—'}</span>
@@ -1183,7 +1321,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           {pick?.sticky && <span className="lvl-hint-on">Click where the {picked?.name ?? 'asset'} goes · Esc to cancel</span>}
         </div>
       </div>
-      <LevelInspector
+      {dock('inspector', 'Properties', () => <LevelInspector
         project={project}
         levelId={level.id}
         floorId={floor.id}
@@ -1206,7 +1344,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         focusRoom={focusRoom}
         onSay={onSay}
         onShowPuzzle={showPuzzle}
-      />
+      />)}
       {newWorld && (
         <NewWorldDialog
           units={set.settings.units}

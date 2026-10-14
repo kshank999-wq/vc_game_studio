@@ -56,6 +56,8 @@ interface Props {
   puzzles?: readonly PuzzleOverlay[];
   /** Items that are part of a puzzle, and which: each gets a small badge (puzzle spec §12). */
   badges?: ReadonlyMap<string, string[]>;
+  /** Points the guided generator asks for (the way in, the stairs), drawn as pins. */
+  markers?: readonly { x: number; y: number; label: string }[];
 }
 
 type Drag =
@@ -1207,6 +1209,15 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
               })()}
             </g>
           )}
+          {props.markers?.map((m) => (
+            <g key={m.label} pointerEvents="none" className="lvl-marker">
+              <circle cx={m.x} cy={m.y} r={px(9)} fill="rgba(232,200,114,0.25)" stroke="var(--gold-hi)" strokeWidth={px(2)} />
+              <circle cx={m.x} cy={m.y} r={px(2.5)} fill="var(--gold-hi)" />
+              <text x={m.x + px(12)} y={m.y - px(10)} fontSize={px(12)} fill="var(--gold-hi)" fontWeight={600}>
+                {m.label}
+              </text>
+            </g>
+          ))}
           {marquee && <rect x={marquee.minX} y={marquee.minY} width={marquee.maxX - marquee.minX} height={marquee.maxY - marquee.minY} fill="rgba(232,200,114,0.06)" stroke="var(--gold)" strokeWidth={px(1)} strokeDasharray={`${px(4)} ${px(3)}`} pointerEvents="none" />}
         </g>
       </svg>

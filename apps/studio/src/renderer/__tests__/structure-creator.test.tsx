@@ -66,6 +66,7 @@ describe('the Structure Creator (structure spec MVP 1)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create structure' }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
     const panel = screen.getByRole('region', { name: 'Generate a layout' });
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Floor by floor' }));
     expect((within(panel).getByRole('combobox', { name: 'Rules' }) as HTMLSelectElement).value).toBe('linear');
     const rooms = () => within(screen.getByRole('region', { name: 'Structure graph' })).getByText(/rooms ·/).textContent!;
     expect(rooms()).toMatch(/^0 rooms/);
@@ -95,6 +96,7 @@ describe('the Structure Creator (structure spec MVP 1)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create structure' }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
     const panel = screen.getByRole('region', { name: 'Generate a layout' });
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Floor by floor' }));
     expect((within(panel).getByRole('combobox', { name: 'Theme' }) as HTMLSelectElement).value).toBe('residential');
     fireEvent.click(within(panel).getByRole('button', { name: 'Preview' }));
     expect(within(panel).getByRole('status').textContent).toMatch(/dressed with \d+ props, \d+ lights/);
@@ -149,6 +151,7 @@ describe('the Structure Creator (structure spec MVP 1)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create structure' }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
     const panel = screen.getByRole('region', { name: 'Generate a layout' });
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Floor by floor' }));
     fireEvent.click(within(panel).getByRole('button', { name: 'Preview' }));
     fireEvent.click(within(panel).getByRole('button', { name: 'Accept' }));
     // The walkthrough: in from outside, room by room.

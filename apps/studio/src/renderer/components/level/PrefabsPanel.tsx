@@ -27,6 +27,7 @@ export const PrefabsPanel = ({
   onRemove,
   onSay,
   onClose,
+  onPopOut,
 }: {
   prefabs: readonly Prefab[];
   /** How many items are selected (a prefab is made of them and what comes with them). */
@@ -43,6 +44,8 @@ export const PrefabsPanel = ({
   onRemove: (prefab: Prefab) => void;
   onSay: (text: string) => void;
   onClose: () => void;
+  /** Pull it out into a window of its own (to put on another screen). */
+  onPopOut?: () => void;
 }) => {
   const prefs = usePreferences();
   const [name, setName] = useState('');
@@ -124,6 +127,11 @@ export const PrefabsPanel = ({
         <strong>Prefabs</strong>
         <span className="muted">Pieces to place again, here or in another project</span>
         <span className="grow" />
+        {onPopOut && (
+          <button className="icon-btn small" aria-label="Open in its own window" title="Open in its own window, to put on another screen" onClick={onPopOut}>
+            ⧉
+          </button>
+        )}
         <button className="icon-btn small" aria-label="Close prefabs" onClick={onClose}>
           ×
         </button>

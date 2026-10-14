@@ -84,7 +84,20 @@ map. It proposes a layout from a seed, inside each floor's footprint. Every
 room, corridor and door it makes is an ordinary Level Designer item,
 editable like any other.
 
-**What to lay out:**
+**Floor by floor (a building with more than one floor).** Ticked by default, the generator asks for things in order:
+
+1. **The way in.** **Set the entrance**, then click on the ground floor's outside wall (the footprint's edge) where it goes. A *Way in* pin marks it. The ground floor's entrance door goes on the nearest outside wall of a room, as close to the pin as it fits.
+2. **The ground floor.** **Generate** lays it out from the way in. There is no stair core yet.
+3. **The stairs.** Once the ground floor is accepted, the generator asks where the stairs go up: click there, inside the footprint. A *Stairs* pin marks it.
+4. **Each floor in turn.** Floors go up to the roof, then down through the basements, each with **Generate**.
+   - Every floor gets its own seed, so no two plans are alike.
+   - Every floor's stair core (its stairwell) stands at the stairs pin, so the stairs line up through the whole building.
+   - A floor is ready once the floor next to it, on the way back to the ground, is laid out.
+   - As each floor is accepted, the stairs come up into it from the floor below: on the ground floor, in the room where you set them; above, in the stairwell. A step-free building also gets a lift beside them.
+
+**Again** lays out a floor afresh. **Move it** and **Move them** reset the pins. Untick **Floor by floor** to lay out the whole structure in one go, as before.
+
+**What to lay out (all at once):**
 
 - the whole structure;
 - this floor;
@@ -638,7 +651,7 @@ A plain building map can be made a structure from here.
 - `apps/studio/src/renderer/model/handoff/structures.ts` builds the structure manifest (`structureManifest`); `levelRevisions` in `handoff/levels.ts` gives re-export its revisions.
 - `apps/studio/src/renderer/model/level/sample-structure.ts` is the Old Tomb and its walk (`withTomb`, `tombWalk`), for the tests and the engine checks (`scripts/godot-check/check_structure.gd`, `scripts/unity-structure-check/`, `scripts/unreal-check/structure_check.cpp`).
 - Play Mode (`model/level/play.ts`) plays the door rules, the objectives and completion, and what a structure remembers (`leaveLevel`, `PlaceMemory` in the play world's `places`).
-- `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, `proposeDressing` (dress rooms only), the rule presets and each structure type's room names.
+- `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, `proposeDressing` (dress rooms only), floor by floor (`guidedOrder`, `entranceAt`, `stairsAt`, `laidOut`; the structure's `entrance` and `stairs`), the rule presets and each structure type's room names.
 - `apps/studio/src/renderer/model/level/cad.ts` holds CAD plan import: `parseDxf`, `parseSvg`, `guessRole`, `guessUnits`, `readPlan` and `importPlan`. The dialog is `components/level/ImportPlanDialog.tsx`.
 - `apps/studio/src/renderer/model/level/prefabs.ts` holds prefabs and catalogs: `makePrefab`, `makeStructurePrefab`, `placePrefab`, `readPrefab`, `starterPrefabs`, `readCatalog`, `fetchCatalog` and `fetchListed`. `insertItems` in `level.ts` puts copies down with new GUIDs. The panel is `components/level/PrefabsPanel.tsx`.
 - `apps/studio/src/renderer/model/level/coop.ts` holds cooperative editing: `claim`, `release`, `handOut`, `mergePlan` and `applyMerge`. A level's `claim` and a set's `working` (the base) are in `model/level/types.ts`. The dialog is `components/level/TeamDialog.tsx`.
@@ -649,4 +662,4 @@ A plain building map can be made a structure from here.
   - `syncBuildings` (in `model/level/hierarchy.ts`) leaves basements and the roof out of a mass's count;
   - preflight takes the structure's issues (`model/level/validate.ts`).
 - The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph and the walkthrough), `GeneratePanel.tsx` (the generator), `StructureSection.tsx` (the inspector's Structure and As a scene sections) and `PlaceInRoom.tsx`.
-- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-themes.test.ts`, `model/__tests__/structure-cad.test.ts`, `model/__tests__/structure-prefabs.test.ts`, `__tests__/level-prefabs.test.tsx`, `model/__tests__/structure-coop.test.ts`, `__tests__/level-team.test.tsx`, `model/__tests__/structure-library.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.
+- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-guided.test.ts`, `__tests__/structure-guided.test.tsx`, `model/__tests__/structure-themes.test.ts`, `model/__tests__/structure-cad.test.ts`, `model/__tests__/structure-prefabs.test.ts`, `__tests__/level-prefabs.test.tsx`, `model/__tests__/structure-coop.test.ts`, `__tests__/level-team.test.tsx`, `model/__tests__/structure-library.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.

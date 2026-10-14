@@ -7524,6 +7524,62 @@ kbd {
   border-color: var(--gold-lo);
 }
 
+/* Panels in windows of their own (to put on another screen). */
+
+.lvl.left-out {
+  grid-template-columns: 0 minmax(0, 1fr) 320px;
+}
+.lvl.right-out {
+  grid-template-columns: 250px minmax(0, 1fr) 0;
+}
+.lvl.left-out.right-out {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+.lvl-popbtn {
+  z-index: 4;
+  align-self: start;
+  justify-self: end;
+  margin: 4px 6px 0 0;
+  opacity: 0.7;
+}
+.lvl-popbtn:hover {
+  opacity: 1;
+}
+.lvl-popbtn-library {
+  grid-area: left;
+  align-self: end;
+  margin: 0 6px 6px 0;
+}
+.lvl-popbtn-inspector {
+  grid-area: right;
+}
+.popout-root {
+  position: fixed;
+  inset: 0;
+}
+.lvl.lvl-popout {
+  display: flex;
+  flex-direction: column;
+  grid-template: none;
+}
+.lvl.lvl-popout > :not(.popout-bar) {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  width: auto;
+  border: 0;
+}
+.popout-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel, var(--ground));
+  font-size: 12px;
+}
+
 /* ------------------------------------------------------------ level Play Mode (spec §9) */
 
 .lvl.playing {
@@ -12911,6 +12967,54 @@ button.bible-dual-col:hover {
   flex-direction: column;
   border-top: 1px solid var(--border);
   background: var(--panel, var(--ground));
+}
+
+.lvl-ask {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  cursor: crosshair;
+  background: rgba(232, 200, 114, 0.04);
+  outline: 2px dashed rgba(232, 200, 114, 0.5);
+  outline-offset: -4px;
+}
+.lvl-ask-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--panel, #1a1710);
+  border: 1px solid var(--gold, #c9a54a);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.lvl-guided {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.lvl-guided li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  opacity: 0.7;
+}
+.lvl-guided li.now {
+  opacity: 1;
+}
+.lvl-guided li.done {
+  opacity: 0.9;
+}
+.lvl-guided li.done strong::before {
+  content: '✓ ';
+  color: var(--gold-hi, #e8c872);
 }
 
 .lvl-team {

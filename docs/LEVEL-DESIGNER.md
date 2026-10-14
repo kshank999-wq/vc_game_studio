@@ -20,6 +20,7 @@ adds the scale above a level: worlds, regions and the maps inside them. See
 | Library (left) | The starter catalog in every category in spec §4.2, plus the project's own assets and "my library". Drag an asset onto the map or the graybox, or click it and then click where it goes. Search matches names and descriptions. |
 | Outliner (left, second tab) | Everything on this floor by layer. Each layer can be hidden; each item can be hidden or locked. |
 | Map / graybox (middle) | The same items drawn top-down or in 3D. A status line shows the pointer's position and the selection's name, export name, GUID and size. |
+| Windows of their own | ⧉ on the library (bottom right of it), the inspector (top right), the structure graph, the generator and prefabs opens each in a window of its own, to put on another screen. It stays live: select on the map and the inspector window follows, place from the library or prefabs window and it lands on the map. **Put it back**, or closing that window, docks it again; the map takes the room while it is out. The desktop app remembers where each window was. |
 | Inspector (right) | The authoritative place to edit (spec §6). With nothing selected it shows the level: its floors, story links, units, grid and naming. With several items selected it shows align, distribute, rotate, mirror, group, duplicate, save to library and delete. |
 
 ## The Level lane on the story graph

@@ -15,7 +15,7 @@ const KIND_LABEL: Record<StructureEdge['kind'], string> = { door: 'door', openin
  * walkthrough the solvability check found (structure spec §11): how a player
  * gets through, key by key. Click a room to go to it.
  */
-export const StructurePanel = ({ project, levelId, floorId, global, selection, onSelect, onClose }: { project: Project; levelId: string; floorId: string; global: readonly AssetDefinition[]; selection: readonly string[]; onSelect: (id: string, floorId: string) => void; onClose: () => void }) => {
+export const StructurePanel = ({ project, levelId, floorId, global, selection, onSelect, onClose, onPopOut }: { project: Project; levelId: string; floorId: string; global: readonly AssetDefinition[]; selection: readonly string[]; onSelect: (id: string, floorId: string) => void; onClose: () => void; onPopOut?: () => void }) => {
   const set = project.levels as LevelSet;
   const level = set.levels.find((l) => l.id === levelId)!;
   const [tab, setTab] = useState<'issues' | 'walk'>('issues');
@@ -60,6 +60,11 @@ export const StructurePanel = ({ project, levelId, floorId, global, selection, o
           {graph.unreachable.length ? ` · ${graph.unreachable.length} unreachable` : ''}
         </span>
         <span className="grow" />
+        {onPopOut && (
+          <button className="icon-btn small" aria-label="Open in its own window" title="Open in its own window, to put on another screen" onClick={onPopOut}>
+            ⧉
+          </button>
+        )}
         <button className="icon-btn small" aria-label="Close the structure graph" onClick={onClose}>
           ×
         </button>

@@ -314,6 +314,8 @@ export interface GenerateRequest {
   areaId?: string;
   seed: number;
   settings: GeneratorSettings;
+  /** Floor by floor, before the stairs are set: no stair core yet (it goes where the designer then says). */
+  noCore?: boolean;
 }
 
 export interface Proposal {
@@ -445,7 +447,7 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
   let core: Rect | null = null;
   const coreW = Math.max(2, Math.round(4 / cell));
   const coreH = Math.max(3, Math.round(6 / cell));
-  if (multi && planFloors.length) {
+  if (multi && planFloors.length && !req.noCore) {
     const anchors: Point[] = [];
     for (const i of set.items) {
       if (i.levelId !== level.id || req.floorIds.includes(i.floorId)) continue;
@@ -454,7 +456,9 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     }
     const g0 = grids.get(planFloors[0]!.id)!;
     const box = freeBox(g0) ?? { c: 0, r: 0, w: g0.cols, h: g0.rows };
-    const centre = anchors[0] ? cellOf(g0, anchors[0]) : { c: box.c + Math.floor(box.w / 2), r: box.r + Math.floor(box.h / 2) };
+    // Where the designer said the stairs go comes first; then stairs already on the floors kept; then the middle.
+    const chosen = level.structure?.stairs;
+    const centre = chosen ? cellOf(g0, chosen) : anchors[0] ? cellOf(g0, anchors[0]) : { c: box.c + Math.floor(box.w / 2), r: box.r + Math.floor(box.h / 2) };
     const fits = (R: Rect) => planFloors.every((f) => {
       const g = grids.get(f.id)!;
       // Every floor's grid is laid on the same origin by its own footprint: compare in plan metres.
@@ -470,7 +474,7 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
           if (fits(R)) core = R;
         }
     if (!core) problems.push('No place for a stair core on every floor being laid out: the floors are laid out without one.');
-    else if (anchors.length && (Math.abs(core.c + core.w / 2 - centre.c) > coreW || Math.abs(core.r + core.h / 2 - centre.r) > coreH)) problems.push('The stair core couldn’t stand over the stairs of the floors kept: check they still meet.');
+    else if ((anchors.length || chosen) && (Math.abs(core.c + core.w / 2 - centre.c) > coreW || Math.abs(core.r + core.h / 2 - centre.r) > coreH)) problems.push(chosen ? 'The stairs couldn’t go where you set them on every floor (something kept is in the way): they are as near as they fit.' : 'The stair core couldn’t stand over the stairs of the floors kept: check they still meet.');
   }
   const corePlan = core ? toPlan(grids.get(planFloors[0]!.id)!, core) : null;
 
@@ -529,7 +533,7 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     if (isGround && !isRoof && !areaPoly) {
       // Path-first: the way in is the route's first chamber, by a passage out to the edge if it is inside.
       if (pathFloor) entranceFromRoute(plan, cw, N.corridor, doorMin, problems);
-      else entrancesFor(plan, s.entrances, doorMin, problems);
+      else entrancesFor(plan, s.entrances, doorMin, problems, level.structure?.entrance);
     }
     plans.push(plan);
   }
@@ -601,12 +605,31 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
       const landing = { x: c.x, y: c.y - 2.3 };
       const above = up?.core || s3.items.some((it) => it.levelId === level.id && it.floorId === upper.id && assetOf(s3, it, global).kind === 'space' && contains(frameOf(s3, it, global), landing));
       if (!above) {
-        problems.push(`The stairs from ${lower.name} have no room to come up into on ${upper.name}.`);
+        // Floor by floor: the floor above isn't laid out yet, and its stairs come when it is.
+        const upperEmpty = !up && !s3.items.some((it) => it.levelId === level.id && it.floorId === upper.id && assetOf(s3, it, global).kind === 'space' && assetOf(s3, it, global).role !== 'footprint');
+        if (!upperEmpty) problems.push(`The stairs from ${lower.name} have no room to come up into on ${upper.name}.`);
         continue;
       }
       if (style === 'ladders') put(lower.id, 'arch.ladder', c.x, c.y - 2.5, `Ladder to ${upper.name}`, { h: rise });
       else put(lower.id, 'arch.stairs', style === 'accessible' ? c.x - 0.9 : c.x, c.y, `Stairs to ${upper.name}`, { w: 1.2, d: Math.min(4, c.d - 1.5), h: rise }, { steps: Math.max(4, Math.round(rise / 0.18)) });
+      // Floor by floor, step-free: the floor above was laid out before, so this floor's lift goes up to it.
+      if (style === 'accessible' && !up) put(lower.id, 'arch.elevator', c.x + 1, c.y, `Lift to ${upper.name}`, { w: 1.6, d: 1.6 }, { travel: rise });
       counts.connectors++;
+      continue;
+    }
+    // Floor by floor: this floor's core stands over a floor laid out before; its stairs come up from there.
+    if (!lp && up?.core && !req.floorIds.includes(lower.id)) {
+      const c = toPlan(up.grid, up.core);
+      const foot = { x: c.x, y: c.y };
+      const hasRoom = s3.items.some((it) => it.levelId === level.id && it.floorId === lower.id && assetOf(s3, it, global).kind === 'space' && assetOf(s3, it, global).role !== 'footprint' && contains(frameOf(s3, it, global), foot));
+      const already = s3.items.some((it) => it.levelId === level.id && it.floorId === lower.id && ['stairs', 'ladder', 'elevator'].includes(assetOf(s3, it, global).role) && Math.hypot(it.x - c.x, it.y - c.y) < 3);
+      if (hasRoom && !already) {
+        if (style === 'ladders') put(lower.id, 'arch.ladder', c.x, c.y - 2.5, `Ladder to ${upper.name}`, { h: rise });
+        else put(lower.id, 'arch.stairs', style === 'accessible' ? c.x - 0.9 : c.x, c.y, `Stairs to ${upper.name}`, { w: 1.2, d: Math.min(4, c.d - 1.5), h: rise }, { steps: Math.max(4, Math.round(rise / 0.18)) });
+        // Step-free: a lift beside the stairs, up one floor (the next floor's run adds the next one).
+        if (style === 'accessible') put(lower.id, 'arch.elevator', c.x + 1, c.y, `Lift to ${upper.name}`, { w: 1.6, d: 1.6 }, { travel: rise });
+        counts.connectors++;
+      } else if (!hasRoom) problems.push(`${upper.name}’s stairs come down onto ${lower.name}, but nothing is laid out there under them.`);
       continue;
     }
     // Path-first floors meet where a chamber sits over another: a shaft with a ladder.
@@ -985,9 +1008,9 @@ const connect = (plan: FloorPlan, rules: LayoutRules, rand: () => number, doorMi
 };
 
 /** The ways in (spec §6 entrances): corridors first, then halls, then rooms, on an outside wall, the south first. */
-const entrancesFor = (plan: FloorPlan, count: number, doorMin: number, problems: string[]) => {
+const entrancesFor = (plan: FloorPlan, count: number, doorMin: number, problems: string[], near?: Point) => {
   const g = plan.grid;
-  const options: { el: number; vertical: boolean; line: number; along: number; rank: number; y: number }[] = [];
+  const options: { el: number; vertical: boolean; line: number; along: number; rank: number; y: number; d: number }[] = [];
   plan.elements.forEach((e, i) => {
     if (e.kind === 'kept' || e.kind === 'zone') return;
     const R = e.rect;
@@ -1012,13 +1035,31 @@ const entrancesFor = (plan: FloorPlan, count: number, doorMin: number, problems:
         }
       });
       if (best && best[1] - best[0] >= doorMin) {
-        const along = (side.vertical ? R.r : R.c) + (best[0] + best[1]) / 2;
-        options.push({ el: i, vertical: side.vertical, line: side.line, along, rank, y: side.vertical ? along : side.line });
+        let along = (side.vertical ? R.r : R.c) + (best[0] + best[1]) / 2;
+        let d = 0;
+        if (near) {
+          // As near the entrance the designer set as the run allows.
+          const want = side.vertical ? (near.y - g.y0) / g.cell : (near.x - g.x0) / g.cell;
+          const lo = (side.vertical ? R.r : R.c) + best[0] + doorMin / 2;
+          const hi = (side.vertical ? R.r : R.c) + best[1] - doorMin / 2;
+          along = Math.max(lo, Math.min(hi, want));
+          const px = side.vertical ? g.x0 + side.line * g.cell : g.x0 + along * g.cell;
+          const py = side.vertical ? g.y0 + along * g.cell : g.y0 + side.line * g.cell;
+          d = Math.hypot(px - near.x, py - near.y);
+        }
+        options.push({ el: i, vertical: side.vertical, line: side.line, along, rank, y: side.vertical ? along : side.line, d });
       }
     }
   });
   const used = new Set<number>();
   options.sort((a, b) => a.rank - b.rank || b.y - a.y);
+  // The one the designer set goes first: the outside wall nearest it.
+  if (near && options.length) {
+    const first = options.reduce((m, o) => (o.d < m.d ? o : m));
+    options.splice(options.indexOf(first), 1);
+    options.unshift(first);
+    if (first.d > 3) problems.push(`The way in couldn’t go exactly where you set it: it is ${first.d.toFixed(1)} m away, on the nearest outside wall of a room.`);
+  }
   for (const o of options) {
     if (plan.entrances.length >= count) break;
     if (used.has(o.el)) continue;
@@ -1082,4 +1123,58 @@ const overlapOf = (a: FloorPlan, b: FloorPlan): Point | null => {
     }
   }
   return null;
+};
+
+// ---------------------------------------------------------------- floor by floor (the guided generator)
+
+/** The ground floor: the first that isn't a basement. */
+export const groundFloorOf = (level: Level): Floor | undefined => {
+  const sorted = [...level.floors].sort((a, b) => a.elevation - b.elevation);
+  return sorted.find((f) => floorKindOf(f) === 'ground') ?? sorted.find((f) => floorKindOf(f) !== 'basement') ?? sorted[0];
+};
+
+/** The order to lay floors out one by one: the ground floor, then up to the roof, then down through the basements. */
+export const guidedOrder = (level: Level): Floor[] => {
+  const sorted = [...level.floors].sort((a, b) => a.elevation - b.elevation);
+  const g = groundFloorOf(level);
+  if (!g) return sorted;
+  return [g, ...sorted.filter((f) => f.elevation > g.elevation), ...sorted.filter((f) => f.elevation < g.elevation).reverse()];
+};
+
+/** Whether a floor has been laid out: it has a room, a corridor or a stairwell on it. */
+export const laidOut = (set: LevelSet, levelId: string, floorId: string, global?: readonly AssetDefinition[]): boolean =>
+  set.items.some((i) => i.levelId === levelId && i.floorId === floorId && assetOf(set, i, global).kind === 'space' && assetOf(set, i, global).role !== 'footprint');
+
+/**
+ * Where a click on the map puts the entrance: the nearest point on the ground
+ * floor's outside wall (its footprint). Null when the click is far from any wall.
+ */
+export const entranceAt = (project: Project, levelId: string, p: Point, global?: readonly AssetDefinition[], within = 4): Point | null => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === levelId);
+  const ground = level && groundFloorOf(level);
+  if (!level || !ground) return null;
+  const poly = footprintOf(set, level, ground.id, global);
+  if (!poly) return null;
+  let best: { q: Point; d: number } | null = null;
+  for (let k = 0; k < poly.length; k++) {
+    const a = poly[k]!;
+    const b = poly[(k + 1) % poly.length]!;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1)));
+    const q = { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    if (!best || d < best.d) best = { q, d };
+  }
+  return best && best.d <= within ? { x: Math.round(best.q.x * 100) / 100, y: Math.round(best.q.y * 100) / 100 } : null;
+};
+
+/** Where the stairs go: inside the footprint, with room for the stair core (4 × 6 m) inside it. */
+export const stairsAt = (project: Project, levelId: string, p: Point, global?: readonly AssetDefinition[]): Point | null => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === levelId);
+  const ground = level && groundFloorOf(level);
+  if (!level || !ground) return null;
+  const poly = footprintOf(set, level, ground.id, global);
+  if (!poly || !insidePolygon(p, poly, 0)) return null;
+  return { x: Math.round(p.x * 2) / 2, y: Math.round(p.y * 2) / 2 };
 };

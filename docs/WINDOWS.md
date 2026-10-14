@@ -27,3 +27,21 @@ back to the graph.
   another window (a search result, a Bible "where used" link) is shown on the
   main window's graph.
 - Preferences change in every window at once.
+
+## Levels panels in their own windows
+
+In the Levels tab, the library, the inspector, the structure graph, the generator and prefabs each have ⧉ to open them in a window of their own, to drag onto another monitor.
+
+These are not separate copies of the studio. The panel keeps running in the main window, with the same project and the same undo, and is only drawn in the other window. So it is live both ways: select on the map and the inspector window shows it; place from the library window and it lands on the map.
+
+The window takes the studio's look and theme. **Put it back**, closing the window, or closing the studio docks the panel again.
+
+In the desktop app:
+
+- only these panel windows may open (any other link still goes to your browser);
+- each window comes back where you last put it.
+
+In a browser, allow pop-ups for the studio; if a window is blocked, the studio says so and the panel stays where it was.
+
+Drag-and-drop between windows isn't supported: in the library window, click an asset and then click on the map.
+

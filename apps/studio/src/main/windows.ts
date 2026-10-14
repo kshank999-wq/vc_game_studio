@@ -55,10 +55,36 @@ const options = (bounds: Rect | null, extra: BrowserWindowConstructorOptions = {
 });
 
 const load = (window: BrowserWindow, query?: string) => {
-  // External links (the store page, docs) open in the browser, never in the app.
-  window.webContents.setWindowOpenHandler(({ url }) => {
+  window.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    // A Levels panel pulled out into its own window (to put on another screen): a blank child the
+    // studio draws into, with no preload and nothing it can load by itself; placed where it was last time.
+    if (url === 'about:blank' && /^vcgs-panel-[a-z]+$/.test(frameName)) {
+      const bounds = saved(`popout:${frameName}`);
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          ...(bounds ?? {}),
+          minWidth: 280,
+          minHeight: 240,
+          autoHideMenuBar: true,
+          backgroundColor: '#0b0a07',
+          webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+        },
+      };
+    }
+    // External links (the store page, docs) open in the browser, never in the app.
     void shell.openExternal(url);
     return { action: 'deny' };
+  });
+  window.webContents.on('did-create-window', (child, { frameName }) => {
+    if (!/^vcgs-panel-[a-z]+$/.test(frameName)) return;
+    track(`popout:${frameName}`, child);
+    // A pulled-out panel never navigates anywhere, and never opens windows of its own.
+    child.webContents.on('will-navigate', (e) => e.preventDefault());
+    child.webContents.setWindowOpenHandler(({ url: link }) => {
+      void shell.openExternal(link);
+      return { action: 'deny' };
+    });
   });
   const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
   if (isDevelopment && devServerUrl) void window.loadURL(query ? `${devServerUrl}?${query}` : devServerUrl);

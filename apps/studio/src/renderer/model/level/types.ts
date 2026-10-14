@@ -379,6 +379,10 @@ export interface StructureInfo {
   localStates?: string[];
   /** What the structure remembers when the player leaves and comes back (structure spec §10); absent: all of it. */
   persist?: StructurePersist;
+  /** Floor by floor (the guided generator): where the way in is, on the ground floor's outside wall, in plan metres. */
+  entrance?: { x: number; y: number };
+  /** Where the stairs go up: the stair core stands here on every floor, so the floors meet. */
+  stairs?: { x: number; y: number };
 }
 
 /** One thing to do in a structure. */
