@@ -2,6 +2,7 @@ import { PATROLLERS, patrolStops } from './actors';
 import type { Project } from '../types';
 import { assetOf, corners, frameOf, openingOf, outlineOf, overlaps, paramOf, selfIntersects, sizeOf, wallsOf } from './geometry';
 import { referencesOf } from './links';
+import { structureIssues } from './structure';
 import { migrationFor } from './migrate';
 import { navigate } from './nav';
 import { BODY, CROUCH } from './controller';
@@ -41,6 +42,15 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
   if (!set) return [];
   const out: LevelIssue[] = [];
   const add = (issue: LevelIssue) => out.push(issue);
+
+  // Structures (structure spec §8, §15): floors, footprints, the way in and every room reachable.
+  for (const level of set.levels) {
+    if (!level.structure) continue;
+    for (const i of structureIssues(set, level.id, global)) {
+      if (i.severity === 'info') continue;
+      add({ id: i.id, levelId: level.id, severity: i.severity, message: i.message, export: i.severity === 'error' ? 'The floors would be built into each other in the engine.' : 'It exports as drawn; in play the player can’t get everywhere it is meant to go.' });
+    }
+  }
 
   for (const level of set.levels) {
     const items = set.items.filter((i) => i.levelId === level.id);

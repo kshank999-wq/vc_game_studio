@@ -99,7 +99,7 @@ export const itemsInRoom = (set: LevelSet, roomId: string, global?: readonly Ass
 export const categoryAtScale = (scale: MapScale, category: AssetCategory): boolean => SCALE_CATEGORIES[scale].includes(category);
 
 /** A new map's snap step, by its size: a hundredth of it, in a round number. */
-const gridFor = (size: number): number => {
+export const gridFor = (size: number): number => {
   const raw = size / 100;
   for (const step of [0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000]) if (step >= raw) return step;
   return 1000;
@@ -188,7 +188,7 @@ export const statusOf = (set: LevelSet, level: Level, global?: readonly AssetDef
   return 'grayboxed';
 };
 
-const addMap = (set: LevelSet, level: Omit<Level, 'serial'>): LevelSet => {
+export const addMap = (set: LevelSet, level: Omit<Level, 'serial'>): LevelSet => {
   const serial = (set.counters.level ?? 0) + 1;
   return { ...set, counters: { ...set.counters, level: serial }, levels: [...set.levels, { ...level, serial }] };
 };
@@ -298,6 +298,9 @@ const storeysOf = (set: LevelSet, item: LevelItem, height: number, global?: read
  * up, the building gets the floors it lacks (floors are never taken away
  * from under rooms: remove them in the building).
  */
+/** A floor of the mass above ground: not a basement, not the roof. */
+const isStorey = (f: Floor): boolean => f.kind !== 'roof' && f.kind !== 'basement' && !(f.kind === undefined && f.elevation < -1e-6);
+
 export const syncBuildings = (before: Project, after: Project, global?: readonly AssetDefinition[]): Project => {
   const a = levelsOf(before);
   let set = levelsOf(after);
@@ -310,11 +313,14 @@ export const syncBuildings = (before: Project, after: Project, global?: readonly
     if (!anchor || !assetOf(set, anchor, global).params.some((p) => p.key === 'floors')) continue;
     const old = a.levels.find((l) => l.id === level.id);
     const oldAnchor = a.items.find((i) => i.id === anchor.id);
-    const top = Math.max(...level.floors.map((fl) => fl.elevation + fl.height));
+    // Basements and the roof aren't storeys of the mass (structure spec §8): it stands on the ground.
+    const storeys = level.floors.filter(isStorey);
+    if (!storeys.length) continue;
+    const top = Math.max(...storeys.map((fl) => fl.elevation + fl.height));
     const floorsChanged = !!old && old.floors !== level.floors;
     const wanted = Math.round(Number(paramOf(set, anchor, 'floors', global) ?? 1)) || 1;
     if (floorsChanged) {
-      const count = level.floors.length;
+      const count = storeys.length;
       if (wanted !== count || Math.abs(frameOf(set, anchor, global).h - top) > 1e-6) {
         set = {
           ...set,
@@ -322,11 +328,13 @@ export const syncBuildings = (before: Project, after: Project, global?: readonly
         };
         changed = true;
       }
-    } else if (oldAnchor && oldAnchor.params?.floors !== anchor.params?.floors && wanted > level.floors.length) {
-      const each = Number(paramOf(set, anchor, 'floorHeight', global)) || level.floors[level.floors.length - 1]!.height;
-      const added: Floor[] = Array.from({ length: wanted - level.floors.length }, (_, n) => ({ id: guid(), name: `Floor ${level.floors.length + n + 1}`, elevation: Math.round((top + n * each) * 1000) / 1000, height: each }));
-      const floors = [...level.floors, ...added];
-      const height = Math.max(...floors.map((fl) => fl.elevation + fl.height));
+    } else if (oldAnchor && oldAnchor.params?.floors !== anchor.params?.floors && wanted > storeys.length) {
+      const each = Number(paramOf(set, anchor, 'floorHeight', global)) || storeys[storeys.length - 1]!.height;
+      const added: Floor[] = Array.from({ length: wanted - storeys.length }, (_, n) => ({ id: guid(), name: `Floor ${storeys.length + n + 1}`, elevation: Math.round((top + n * each) * 1000) / 1000, height: each, ...(level.structure ? { kind: 'upper' as const } : {}) }));
+      // A roof goes up with the floors put under it.
+      const lift = added.length * each;
+      const floors = [...level.floors.map((fl) => (fl.kind === 'roof' ? { ...fl, elevation: Math.round((fl.elevation + lift) * 1000) / 1000 } : fl)), ...added];
+      const height = Math.max(...floors.filter(isStorey).map((fl) => fl.elevation + fl.height));
       set = {
         ...set,
         levels: set.levels.map((l) => (l.id === level.id ? { ...l, floors } : l)),

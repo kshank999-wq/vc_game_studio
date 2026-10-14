@@ -254,6 +254,11 @@ export const STARTER: readonly AssetDefinition[] = [
     { id: 'arch.ramp', name: 'Ramp', kind: 'solid', role: 'ramp', naming: 'architecture', size: [2, 4, 1], proxy: 'wedge', engine: SOLID, description: 'A slope rising to the north.' },
     { id: 'arch.ladder', name: 'Ladder', kind: 'solid', role: 'ladder', naming: 'architecture', size: [0.6, 0.1, 3], proxy: 'box', engine: SOLID, description: 'Climbable, straight up.', params: interaction(true, 'Climb') },
     { id: 'arch.elevator', name: 'Elevator', kind: 'solid', role: 'elevator', naming: 'interactive', size: [2, 2, 0.2], proxy: 'box', engine: PICKUP, description: 'A platform that moves between floors.', params: [{ key: 'travel', label: 'Travel', group: 'dimensions', type: 'number', unit: 'length', default: 3, step: 0.5 }, ...interaction(true, 'Call')] },
+    {
+      id: 'struct.footprint', name: 'Structure footprint', kind: 'volume', role: 'footprint', naming: 'logic', size: [20, 20, 3], proxy: 'none',
+      engine: E('Data (the floor’s footprint)', 'Data (the floor’s footprint)', 'Data (the floor’s footprint)'),
+      description: 'The outer edge of a structure’s floor (structure spec §5): rooms are meant to stay inside it. Drag its corners to shape it.',
+    },
     { id: 'arch.railing', name: 'Railing', kind: 'solid', role: 'railing', naming: 'architecture', size: [3, 0.08, 1], proxy: 'box', engine: SOLID, description: 'A waist-high rail.' },
   ]),
   ...group('primitives', [

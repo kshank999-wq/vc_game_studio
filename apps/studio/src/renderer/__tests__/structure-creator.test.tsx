@@ -1,0 +1,57 @@
+/** @vitest-environment jsdom */
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { App } from '../App';
+import { sunkenVault } from '../model/sample';
+import { resetPreferences } from '../preferences';
+
+const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull(), { timeout: 5000 });
+
+beforeAll(() => {
+  globalThis.PointerEvent ??= class extends MouseEvent {} as unknown as typeof PointerEvent;
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+});
+
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+  resetPreferences();
+});
+
+describe('the Structure Creator (structure spec MVP 1)', () => {
+  it('adds an office to a level: its floors from the car park to the roof, the structure graph and its settings', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: '+ Structure', exact: true } as never));
+    const dialog = screen.getByRole('dialog', { name: 'New structure' });
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Modern office/ }));
+    expect((within(dialog).getByRole('spinbutton', { name: 'Floors above ground' }) as HTMLInputElement).value).toBe('5');
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Structure name' }), { target: { value: 'Harbour Office' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create structure' }));
+    expect(screen.queryByRole('dialog', { name: 'New structure' })).toBeNull();
+    // On its own map, the ground floor showing; every floor has its code, the top first.
+    const floors = within(screen.getByRole('combobox', { name: 'Floor' })).getAllByRole('option').map((o) => o.textContent);
+    expect(floors.slice(0, 7).map((f) => f!.split(' · ')[0])).toEqual(['R', '5', '4', '3', '2', 'G', 'B1']);
+    expect((screen.getByRole('combobox', { name: 'Floor' }) as HTMLSelectElement).selectedOptions[0]!.textContent).toMatch(/^G · Ground floor/);
+    const graph = screen.getByRole('region', { name: 'Structure graph' });
+    expect(within(graph).getByText(/0 rooms/)).toBeTruthy();
+    expect(within(graph).getByRole('img', { name: 'Rooms on 7 floors and how they connect' })).toBeTruthy();
+    // The inspector says what it is.
+    expect((screen.getByRole('combobox', { name: 'Structure type' }) as HTMLSelectElement).value).toBe('office');
+    expect((screen.getByRole('combobox', { name: 'Between floors' }) as HTMLSelectElement).value).toBe('accessible');
+    fireEvent.click(screen.getByRole('button', { name: '+ Basement' }));
+    const after = within(screen.getByRole('combobox', { name: 'Floor' })).getAllByRole('option').map((o) => o.textContent!.split(' · ')[0]);
+    expect(after.slice(0, 8)).toEqual(['R', '5', '4', '3', '2', 'G', 'B1', 'B2']);
+    // The graph can be closed and opened again from the toolbar.
+    fireEvent.click(within(graph).getByRole('button', { name: 'Close the structure graph' }));
+    expect(screen.queryByRole('region', { name: 'Structure graph' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Structure graph' }));
+    expect(screen.getByRole('region', { name: 'Structure graph' })).toBeTruthy();
+  });
+});

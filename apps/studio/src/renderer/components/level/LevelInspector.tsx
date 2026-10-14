@@ -50,6 +50,8 @@ import { BoolField, NumberField, RefField, Section, SelectField, TextField } fro
 import { itemsInRoom, anchorOf, boundsOf as mapBounds, BOUNDARIES, childOfItem, childrenOf, descendantsOf, kindLabel, kindOf, MAP_KINDS, moveMap, STATUSES, statusOf, updateMap } from '../../model/level/hierarchy';
 import { formatLength } from './units';
 import { ReferencesSection } from './ReferencesSection';
+import { StructureSection } from './StructureSection';
+import { floorCodes } from '../../model/level/structure';
 import { ItemPuzzles, MapPuzzles } from './PuzzlesSection';
 import { canTravel, kindLabelOf, TRANSITIONS, TRAVEL_KINDS, travelById, travelLabel, travelLength, travelPoints, updateTravel } from '../../model/level/travel';
 import { emptyState } from '../../model/rules';
@@ -191,6 +193,7 @@ export const LevelInspector = (props: Props) => {
 
   if (!selected.length) {
     const floors = [...level.floors].sort((a, b) => a.elevation - b.elevation);
+    const codes = floorCodes(level);
     return (
       <aside className="lvl-right" aria-label="Properties">
         <header className="lvl-right-head">
@@ -203,6 +206,7 @@ export const LevelInspector = (props: Props) => {
           <TextField label="Notes" value={level.notes ?? ''} onCommit={(v) => onCommit(updateLevel(project, level.id, { notes: v }))} />
         </Section>
         <MapSection project={project} levelId={level.id} global={global} open={!closed.has('map')} onToggle={() => toggle('map')} onCommit={onCommit} onOpenMap={props.onOpenMap} />
+        <StructureSection project={project} levelId={level.id} open={!closed.has('structure')} onToggle={() => toggle('structure')} onCommit={onCommit} onFloor={props.onFloor} />
         <ReferencesSection project={project} levelId={level.id} floorId={floorId} global={global} open={!closed.has('references')} onToggle={() => toggle('references')} onCommit={onCommit} onSay={props.onSay} />
         <MapPuzzles project={project} levelId={level.id} global={global} open={!closed.has('puzzles')} onToggle={() => toggle('puzzles')} onShow={props.onShowPuzzle} onOpenStory={props.onOpenStory} onOpenMap={props.onOpenMap} />
         <Section title="Floors" open={!closed.has('floors')} onToggle={() => toggle('floors')} count={floors.length}>
@@ -210,10 +214,11 @@ export const LevelInspector = (props: Props) => {
             .slice()
             .reverse()
             .map((f) => (
-              <div key={f.id} className={`lvl-floor${f.id === floorId ? ' on' : ''}`}>
+              <div key={f.id} className={`lvl-floor${f.id === floorId ? ' on' : ''}${level.structure ? ' coded' : ''}`}>
                 <button className="lvl-floor-go" onClick={() => props.onFloor(f.id)} aria-label={`Show ${f.name}`}>
                   {f.id === floorId ? '●' : '○'}
                 </button>
+                {level.structure && <span className="lvl-floor-code mono">{codes.get(f.id)}</span>}
                 <TextField label="Floor" value={f.name} onCommit={(v) => v.trim() && onCommit(updateFloor(project, level.id, f.id, { name: v.trim() }))} />
                 <NumberField label="Elevation" unit="length" units={units} value={f.elevation} step={0.5} onCommit={(v) => onCommit(updateFloor(project, level.id, f.id, { elevation: v }))} />
                 <NumberField label="Height" unit="length" units={units} value={f.height} step={0.5} min={1} onCommit={(v) => onCommit(updateFloor(project, level.id, f.id, { height: v }))} />

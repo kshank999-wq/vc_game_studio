@@ -52,7 +52,9 @@ export type AssetRole =
   | 'waypoint' | 'patrolPath' | 'traversal' | 'portal' | 'destination'
   | 'assembly'
   /** World and town scale (spec V2 §7): planning shapes, exported as data. */
-  | 'region' | 'biome' | 'streaming' | 'landmark' | 'road' | 'block' | 'building' | 'terrain' | 'vegetation';
+  | 'region' | 'biome' | 'streaming' | 'landmark' | 'road' | 'block' | 'building' | 'terrain' | 'vegetation'
+  /** A structure floor's outer footprint (structure spec §5): data for the plan, not geometry. */
+  | 'footprint';
 
 /** The inspector's sections (spec §6), in the order they appear. */
 export type PropertyGroup =
@@ -319,12 +321,41 @@ export interface PuzzleBinding {
   node?: string;
 }
 
+/** Where a floor sits in a structure (structure spec §8): below ground, at it, above it, or the roof. */
+export type FloorKind = 'basement' | 'ground' | 'upper' | 'roof';
+
 export interface Floor {
   id: string;
   name: string;
   /** Height of this floor's ground above the level's origin. */
   elevation: number;
   height: number;
+  /** Set by the Structure Creator; worked out from the elevation when absent (floorKindOf). */
+  kind?: FloorKind;
+}
+
+/** What a structure is (structure spec §5): the preset it was made from. */
+export type StructureType = 'pyramid' | 'temple' | 'fortress' | 'office' | 'apartment' | 'industrial' | 'bunker' | 'dungeon' | 'custom';
+
+/** How the player gets between floors (structure spec §15): the traversal the validator assumes. */
+export type TraversalStyle = 'stairs' | 'ladders' | 'mixed' | 'accessible';
+
+/**
+ * A building map made with the Structure Creator (structure spec §5, §13
+ * Structure): what it is, what it is for, and how it is meant to be played.
+ * Its floors are the map's floors, its footprint each floor's footprint item,
+ * its rooms the map's spaces: one model, as everywhere in the Level Designer.
+ */
+export interface StructureInfo {
+  type: StructureType;
+  purpose: string;
+  tags: string[];
+  author: string;
+  traversal: TraversalStyle;
+  /** For the generator (MVP 2): the same seed, the same layout. */
+  seed: number;
+  /** The story scene the structure plays as (structure spec §10), if any. */
+  scene?: string;
 }
 
 /**
@@ -378,6 +409,8 @@ export interface Level {
   navigation?: string;
   /** Images traced over (spec V2 §10): an old map, a floor plan, a heightmap, a photo. */
   references?: ReferenceImage[];
+  /** Made with the Structure Creator (structure spec): what the structure is. */
+  structure?: StructureInfo;
 }
 
 export type ReferenceKind = 'map' | 'floorPlan' | 'heightmap' | 'photo';

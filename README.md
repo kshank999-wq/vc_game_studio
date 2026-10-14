@@ -24,6 +24,7 @@ handoff that generates engine code for Unity, Unreal, Godot or a custom engine.
 - Note Sorter: [`docs/NOTE-SORTER.md`](docs/NOTE-SORTER.md)
 - Puzzle Creator: [`docs/PUZZLE-CREATOR.md`](docs/PUZZLE-CREATOR.md)
 - Character Creator: [`docs/CHARACTER-CREATOR.md`](docs/CHARACTER-CREATOR.md)
+- Structure Creator: [`docs/STRUCTURE-CREATOR.md`](docs/STRUCTURE-CREATOR.md)
 - Comments, tasks and history: [`docs/COLLABORATION.md`](docs/COLLABORATION.md)
 - Selling it (vc-gamestudio.com, subscriptions, licenses, installers): [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Plan and status: [`docs/ROADMAP.md`](docs/ROADMAP.md)

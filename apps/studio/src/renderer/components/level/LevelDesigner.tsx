@@ -43,6 +43,9 @@ import { syncBuildings, opensAsMap, scaleOf, childOfItem, createWorld, duplicate
 import { MapNavigator } from './MapNavigator';
 import { removeTravel, travelById, TRAVEL_KINDS } from '../../model/level/travel';
 import { NewWorldDialog } from './NewWorldDialog';
+import { NewStructureDialog } from './NewStructureDialog';
+import { StructurePanel } from './StructurePanel';
+import { createStructure, floorCodes, isStructure } from '../../model/level/structure';
 
 // three.js is big: it loads the first time the graybox is opened.
 const Graybox = lazy(() => import('./Graybox'));
@@ -130,6 +133,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [playPreset, setPlayPreset] = useState('');
   const [playPerspective, setPlayPerspective] = useState<Perspective | null>(null);
   const [newWorld, setNewWorld] = useState(false);
+  const [newStructure, setNewStructure] = useState(false);
+  const [showStructure, setShowStructure] = useState(true);
   // A room being detailed (spec V2 §2, §7): the map frames it, the rest of the floor dims, the library offers room things.
   const [focusRoom, setFocusRoomState] = useState<string | null>(null);
   focusRoomRef.current = focusRoom;
@@ -574,6 +579,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const floors = [...level.floors].sort((a, b) => b.elevation - a.elevation);
   const picked = pick && findAsset(pick.assetId, set.assets, global);
   const crumbs = pathTo(set, level.id);
+  const codes = floorCodes(level);
   const selectedRoom = selected && assetOf(set, selected, global).kind === 'space' ? selected : undefined;
   const focusedRoom = focusRoom ? set.items.find((i) => i.id === focusRoom) : undefined;
 
@@ -670,11 +676,22 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         }}>
           {floors.map((f) => (
             <option key={f.id} value={f.id}>
+              {level.structure ? `${codes.get(f.id)} · ` : ''}
               {f.name} · {formatLength(f.elevation, set.settings.units)}
             </option>
           ))}
           <option value="+">+ Floor above</option>
         </select>
+        {kindOf(level) !== 'world' && kindOf(level) !== 'region' && (
+          <button className="tb-btn small" onClick={() => setNewStructure(true)} title="Add a pyramid, temple, fortress, office, bunker or dungeon here: a mini-level with its own floors (structure spec)">
+            + Structure
+          </button>
+        )}
+        {isStructure(level) && (
+          <button className={`tb-btn small${showStructure ? ' on' : ''}`} aria-pressed={showStructure} onClick={() => setShowStructure((v) => !v)} title="The structure graph: rooms on every floor, and how they connect">
+            Structure graph
+          </button>
+        )}
         <div role="group" aria-label="View" className="view-toggle">
           <button className={mode === '2d' ? 'on' : ''} aria-pressed={mode === '2d'} onClick={() => setMode('2d')} title="The top-down map (2)">
             2D map
@@ -968,6 +985,21 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             />
           </Suspense>
         )}
+        {!playing && isStructure(level) && showStructure && (
+          <StructurePanel
+            set={set}
+            levelId={level.id}
+            floorId={floor.id}
+            global={global}
+            selection={selection}
+            onClose={() => setShowStructure(false)}
+            onSelect={(id, fid) => {
+              if (fid !== floor.id) setFloorId(fid);
+              setSelection([id]);
+              setTimeout(() => (mode === '3d' ? box.current : map.current)?.frame([id]), 0);
+            }}
+          />
+        )}
         <div className="lvl-status" aria-live="polite">
           <span className="mono">{hover ? `${formatLength(hover.x, set.settings.units)}, ${formatLength(hover.y, set.settings.units)}` : '—'}</span>
           {selected ? (
@@ -1020,6 +1052,29 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onCommit(made.project);
             setNewWorld(false);
             openMap(made.id, undefined, undefined, made.project);
+          }}
+        />
+      )}
+      {newStructure && (
+        <NewStructureDialog
+          units={set.settings.units}
+          scenes={Object.values(project.objects)
+            .filter((o) => o.type === 'scene')
+            .map((o) => ({ id: o.id, name: `${o.data.code ? `${o.data.code} ` : ''}${o.name}` }))}
+          onClose={() => setNewStructure(false)}
+          onCreate={(choice) => {
+            // In the middle of what is in view.
+            const r = document.querySelector('.lvl-centre')?.getBoundingClientRect();
+            const at = (r && map.current?.worldAt(r.left + r.width / 2, r.top + r.height / 2)) || { x: 0, y: 0 };
+            const made = createStructure(project, { ...choice, parentId: level.id, floorId: floor.id, at }, global);
+            setNewStructure(false);
+            if (!made.id) return;
+            onCommit(made.project);
+            const m = levelsOf(made.project).levels.find((l) => l.id === made.id)!;
+            const ground = m.floors.find((f) => f.kind === 'ground') ?? m.floors[0]!;
+            onSay(`${m.name} is on ${level.name}, and opens as its own map with ${m.floors.length} floors. Draw its rooms; Alt+↑ goes back.`);
+            setShowStructure(true);
+            openMap(made.id, ground.id, undefined, made.project);
           }}
         />
       )}

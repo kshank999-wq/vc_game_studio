@@ -101,10 +101,15 @@ export const addFloor = (project: Project, levelId: string): { project: Project;
   const set = levelsOf(project);
   const level = set.levels.find((l) => l.id === levelId);
   if (!level) return { project, id: '' };
-  const top = [...level.floors].sort((a, b) => b.elevation - a.elevation)[0];
-  const floor: Floor = { id: guid(), name: `Floor ${level.floors.length + 1}`, elevation: top ? top.elevation + top.height : 0, height: top?.height ?? 3 };
+  // Under a roof (structure spec §8) the new floor goes below it, and the roof goes up.
+  const roof = level.floors.find((f) => f.kind === 'roof');
+  const below = level.floors.filter((f) => f !== roof);
+  const top = [...below].sort((a, b) => b.elevation - a.elevation)[0];
+  const count = below.filter((f) => f.kind !== 'basement' && !(f.kind === undefined && f.elevation < -1e-6)).length;
+  const floor: Floor = { id: guid(), name: `Floor ${count + 1}`, elevation: top ? top.elevation + top.height : 0, height: top?.height ?? 3, ...(level.structure ? { kind: 'upper' as const } : {}) };
+  const lift = (f: Floor): Floor => (f === roof ? { ...f, elevation: Math.round((floor.elevation + floor.height) * 1000) / 1000 } : f);
   return {
-    project: withSet(project, { ...set, levels: set.levels.map((l) => (l.id === levelId ? { ...l, floors: [...l.floors, floor] } : l)) }),
+    project: withSet(project, { ...set, levels: set.levels.map((l) => (l.id === levelId ? { ...l, floors: [...l.floors.map(lift), floor] } : l)) }),
     id: floor.id,
   };
 };
