@@ -161,3 +161,18 @@ describe('prefabs (structure spec V2)', () => {
     expect(safeUrl('file:///etc/passwd')).toBeNull();
   });
 });
+
+describe('the starter lever and gate', () => {
+  it('works where it is placed: the lever is reached first and lifts the portcullis', () => {
+    const pre = starterPrefabs().find((s) => s.name === 'Lever and gate')!;
+    const b = blank();
+    const out = placePrefab(b.p, b.levelId, b.floorId, pre, { x: 0, y: 0 });
+    const made = items(out.project, out.ids);
+    const gate = made.find((i) => i.name === 'Portcullis')!;
+    expect(gate.host?.id).toBeDefined();
+    expect(made.find((i) => i.name === 'Lever')!.params?.works).toBe(gate.id);
+    let s = startLevelPlay(out.project, b.levelId);
+    s = interactWith(out.project, s, made.find((i) => i.name === 'Lever')!.id);
+    expect(isOpen(out.project, s, gate)).toBe(true);
+  });
+});

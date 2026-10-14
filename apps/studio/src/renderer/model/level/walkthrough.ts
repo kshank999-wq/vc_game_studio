@@ -196,7 +196,8 @@ export const walkStructure = (project: Project, levelId: string, global?: readon
   for (const [id, r] of shut) {
     const name = label(id);
     if (!r.key) {
-      say('warning', id, `${name} is locked and nothing opens it: set what it Needs, or make it breakable.`);
+      const by = openers.get(id) ?? [];
+      say('warning', id, by.length ? `${name} is opened by ${by.map((i) => i.name).join(' or ')}, but that can’t be reached before it.` : `${name} is locked and nothing opens it: set what it Needs, or make it breakable.`);
       continue;
     }
     if (!project.objects[r.key]) {

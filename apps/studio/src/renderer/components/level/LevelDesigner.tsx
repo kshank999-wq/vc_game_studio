@@ -51,8 +51,10 @@ import { acceptLayout, proposeDressing, proposeLayout, type Proposal } from '../
 import { importPlan } from '../../model/level/cad';
 import { ImportPlanDialog } from './ImportPlanDialog';
 import { PrefabsPanel } from './PrefabsPanel';
+import { TeamDialog } from './TeamDialog';
+import { claim as claimLevel, handOut, release as releaseLevel, sendBackName, workingCopyOf } from '../../model/level/coop';
 import { makePrefab, makeStructurePrefab, placePrefab, prefabsOf, prefabText, removePrefab, savePrefab } from '../../model/level/prefabs';
-import { downloadText } from '../../files';
+import { downloadText, fileNameFor, serialize } from '../../files';
 import { getPreferences } from '../../preferences';
 import { createStructure, floorCodes, isStructure, updateStructure } from '../../model/level/structure';
 
@@ -147,6 +149,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [newStructure, setNewStructure] = useState(false);
   const [importing, setImporting] = useState(false);
   const [showPrefabs, setShowPrefabs] = useState(false);
+  const [showTeam, setShowTeam] = useState(false);
   const [showStructure, setShowStructure] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
   const [preview, setPreview] = useState<Proposal | null>(null);
@@ -722,6 +725,21 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           Prefabs
         </button>
         {isStructure(level) && (
+          <button className="tb-btn small" onClick={() => setShowTeam(true)} title="Work on this structure together: claim it, hand out a working copy, merge one back (structure spec V2)">
+            Team
+          </button>
+        )}
+        {level.claim && (
+          <span className="lvl-claim" role="note" title={`Claimed ${new Date(level.claim.at).toLocaleString()}`}>
+            {level.claim.by} is working on this
+          </span>
+        )}
+        {workingCopyOf(project)?.levelId === level.id && (
+          <span className="lvl-claim" role="note">
+            Working copy from {workingCopyOf(project)!.by}
+          </span>
+        )}
+        {isStructure(level) && (
           <button className="tb-btn small" onClick={() => setImporting(true)} title="Import a floor plan from CAD (DXF or SVG) onto this floor: rooms, doors, stairs and the footprint (structure spec V2)">
             Import plan
           </button>
@@ -1198,6 +1216,39 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onCommit(made.project);
             setNewWorld(false);
             openMap(made.id, undefined, undefined, made.project);
+          }}
+        />
+      )}
+      {showTeam && isStructure(level) && (
+        <TeamDialog
+          project={project}
+          levelId={level.id}
+          levelName={level.name}
+          me={getPreferences().authorName}
+          onClose={() => setShowTeam(false)}
+          onClaim={(by) => {
+            onCommit(claimLevel(project, level.id, by));
+            onSay(`${level.name} is claimed by ${by.trim()}.`);
+          }}
+          onRelease={() => {
+            onCommit(releaseLevel(project, level.id));
+            onSay(`${level.name} is free again.`);
+          }}
+          onHandOut={(to) => {
+            const out = handOut(project, level.id, to, getPreferences().authorName || 'Someone');
+            if (!out) return;
+            onCommit(out.project);
+            downloadText(fileNameFor(out.copy), serialize(out.copy), 'application/json');
+            onSay(`Handed ${level.name} out to ${to.trim()}: give them the file just saved. When they send it back, merge it here.`);
+          }}
+          onSendBack={() => {
+            downloadText(sendBackName(project), serialize(project), 'application/json');
+            onSay('Saved the working copy to send back. They merge it into their project.');
+          }}
+          onMerged={(merged, taken, kept) => {
+            onCommit(merged);
+            setShowTeam(false);
+            onSay(`Merged ${level.name}: ${taken} ${taken === 1 ? 'change' : 'changes'} taken${kept ? `, ${kept} kept as you had ${kept === 1 ? 'it' : 'them'}` : ''}. Undo takes the merge back.`);
           }}
         />
       )}

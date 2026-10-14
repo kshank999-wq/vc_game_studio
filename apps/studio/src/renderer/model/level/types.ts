@@ -460,6 +460,8 @@ export interface Level {
   references?: ReferenceImage[];
   /** Made with the Structure Creator (structure spec): what the structure is. */
   structure?: StructureInfo;
+  /** Who is working on it (structure spec V2 cooperative editing): a warning, not a lock. */
+  claim?: import('./coop').Claim;
   /** The layouts the structure generator made and the designer accepted (structure spec §13 GenerationRun), newest last. */
   generation?: GenerationRun[];
 }
@@ -640,4 +642,6 @@ export interface LevelSet {
   travel?: TravelLink[];
   /** The project's prefabs (structure spec V2): see prefabs.ts. */
   prefabs?: import('./prefabs').Prefab[];
+  /** Set when this project is a working copy of one structure (structure spec V2): see coop.ts. */
+  working?: import('./coop').WorkingCopyInfo;
 }

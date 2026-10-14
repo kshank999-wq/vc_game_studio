@@ -19,7 +19,7 @@ other map (spec §3, §12). Nothing is kept twice.
 | MVP 2: Generation | Seeded plan-first and path-first layouts, previews to accept or reject, locked rooms, regenerating part of a structure | **Built** |
 | MVP 3: Gameplay | Door rules (one-way, timed, secret, breakable), the structure as a scene with objectives, completion and state that stays on re-entry, local and world states, items and characters placed in rooms, solvability (the key before its door, softlocks) and a walkthrough | **Built** |
 | MVP 4: Graybox and handoff | Stacked floors, cutaways and the structure graph in 3D, rough play into a structure and back out, a structure manifest for Godot, Unity and Unreal, door rules and objectives in their runtimes, re-export by id | **Built** |
-| V2: Enhancements | The structure library (levers, plates, gates, breakable walls, traps, chests…), procedural themes, CAD plan import, prefabs and marketplace hooks, cooperative editing | **Building** |
+| V2: Enhancements | The structure library (levers, plates, gates, breakable walls, traps, chests…), procedural themes, CAD plan import, prefabs and marketplace hooks, cooperative editing | **Built** |
 
 Much of what the spec asks for was already in the Level Designer. MVP 1
 builds on it rather than beside it:
@@ -308,6 +308,48 @@ The catalog format:
 ```
 
 A package's `url` is relative to the catalog or absolute; its `sha256` is the hash of the file as served.
+
+## Working on a structure together (spec V2)
+
+Several people can work on one project's structures without a server: a structure is handed out as a file and merged back. **Team** on a structure's toolbar opens this.
+
+**Claims.** **Claim it** puts your name (from Preferences) on the structure.
+
+- Everyone who opens the project sees "Sam is working on this" on the toolbar.
+- A claim warns; it doesn't lock.
+- **Release the claim** frees it, and merging a working copy back releases it too.
+
+**Handing out a working copy.** **Hand out a working copy** asks whose it is, then:
+
+- saves a project file to give them;
+- claims the structure for them.
+
+The file is the whole project, so the story, its items and characters are all there. It also keeps the structure as it was handed out, its *base*. They open it like any project and work on it. The toolbar says "Working copy from Kim".
+
+**Sending it back.** In their copy, **Team** offers **Send it back**, which saves the copy to return. Only the structure goes back; anything else they change stays in their copy.
+
+**Merging it back.** **Open the working copy…** compares, by GUID, three versions:
+
+- the base;
+- the structure here now;
+- theirs.
+
+For each item, each floor and the structure's own settings:
+
+| Here | Theirs | Result |
+| --- | --- | --- |
+| unchanged | changed, added or removed | theirs comes in |
+| changed | unchanged | yours stays |
+| changed | changed the same way | nothing to do |
+| changed (or removed) | changed differently (or removed) | a **conflict**: **Keep mine** or **Take theirs**, item by item; mine unless you choose |
+
+The dialog lists:
+
+- their changes;
+- each conflict, with the fields that differ;
+- the new story objects their structure points at, which come with it.
+
+If the structure was handed out again since, the dialog warns, and the newer claim stays. **Merge** is one change, so Undo takes it back. Serial counters stay ahead of anything they numbered.
 
 ## Floors (spec §8)
 
@@ -599,6 +641,7 @@ A plain building map can be made a structure from here.
 - `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, `proposeDressing` (dress rooms only), the rule presets and each structure type's room names.
 - `apps/studio/src/renderer/model/level/cad.ts` holds CAD plan import: `parseDxf`, `parseSvg`, `guessRole`, `guessUnits`, `readPlan` and `importPlan`. The dialog is `components/level/ImportPlanDialog.tsx`.
 - `apps/studio/src/renderer/model/level/prefabs.ts` holds prefabs and catalogs: `makePrefab`, `makeStructurePrefab`, `placePrefab`, `readPrefab`, `starterPrefabs`, `readCatalog`, `fetchCatalog` and `fetchListed`. `insertItems` in `level.ts` puts copies down with new GUIDs. The panel is `components/level/PrefabsPanel.tsx`.
+- `apps/studio/src/renderer/model/level/coop.ts` holds cooperative editing: `claim`, `release`, `handOut`, `mergePlan` and `applyMerge`. A level's `claim` and a set's `working` (the base) are in `model/level/types.ts`. The dialog is `components/level/TeamDialog.tsx`.
 - `apps/studio/src/renderer/model/level/themes.ts` holds the procedural themes: `THEMES`, `defaultTheme`, `dressRooms` and `undress`.
 - Changes elsewhere:
   - `Level.structure` and `Floor.kind` are in `model/level/types.ts`;
@@ -606,4 +649,4 @@ A plain building map can be made a structure from here.
   - `syncBuildings` (in `model/level/hierarchy.ts`) leaves basements and the roof out of a mass's count;
   - preflight takes the structure's issues (`model/level/validate.ts`).
 - The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph and the walkthrough), `GeneratePanel.tsx` (the generator), `StructureSection.tsx` (the inspector's Structure and As a scene sections) and `PlaceInRoom.tsx`.
-- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-themes.test.ts`, `model/__tests__/structure-cad.test.ts`, `model/__tests__/structure-prefabs.test.ts`, `__tests__/level-prefabs.test.tsx`, `model/__tests__/structure-library.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.
+- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-themes.test.ts`, `model/__tests__/structure-cad.test.ts`, `model/__tests__/structure-prefabs.test.ts`, `__tests__/level-prefabs.test.tsx`, `model/__tests__/structure-coop.test.ts`, `__tests__/level-team.test.tsx`, `model/__tests__/structure-library.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.

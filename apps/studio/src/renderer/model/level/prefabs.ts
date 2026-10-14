@@ -431,10 +431,12 @@ export const starterPrefabs = (): Prefab[] => {
       put('prop.chair', 1.1, 0, 'Chair');
       put('light.emissive', -2.7, -2, 'Torch', { color: '#ffa84a', flicker: true });
     }),
-    build('Lever and gate', 'A passage closed by a portcullis, and the lever beside it that lifts it.', ['puzzle', 'gate'], (put) => {
-      put('space.corridor', 0, 0, 'Gate passage', undefined, { w: 3, d: 8 });
-      const gate = put('arch.gate', 0, -4, 'Portcullis');
-      put('logic.lever', 1, -2.5, 'Lever', { works: gate });
+    build('Lever and gate', 'A gatehouse with a lever that lifts the portcullis into the passage beyond.', ['puzzle', 'gate'], (put) => {
+      put('space.room', 0, 0, 'Gatehouse', undefined, { w: 6, d: 5 });
+      put('space.corridor', 0, -6.5, 'Passage', undefined, { w: 3, d: 8 });
+      put('arch.door', 0, 2.5, 'Way in');
+      const gate = put('arch.gate', 0, -2.5, 'Portcullis');
+      put('logic.lever', 2, 1, 'Lever', { works: gate });
     }),
     build('Locked vault', 'A vault behind a locked door, a chest inside, and the key that opens both, to put somewhere else.', ['room', 'treasure', 'key'], (put, p, setP) => {
       const key = makeObject('inventory', 'Vault Key', at);
