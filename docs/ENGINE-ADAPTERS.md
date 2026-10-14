@@ -716,9 +716,11 @@ find the crossing's transition and play it. Handle `TransitionRequested`
 (Unity) or bind `OnTransitionRequested` (Unreal) to play your own cut, a
 Timeline or Level Sequence, and finish it with `Transition.Finish()` or
 `FinishTransition()`; with nothing handling it, a stand-in shows its heading
-and shots on screen for its length (3 seconds with no shots), with a Skip
-button (in Unreal on `AVcgsCodexHUD`, which also skips on Space, Enter or
-Escape). Each says when
+and shots on screen for its length (3 seconds with no shots), with a way to
+skip it. Godot and Unity show a Skip button. Unreal shows one in
+`AVcgsCodexHUD`'s box, which also skips on Space, Enter or Escape. With a HUD
+of your own, Unreal shows the stand-in as on-screen text that says
+"[Skip: Space, Enter or Esc]" and skips on those keys. Each says when
 it is over (`Transition.Finished`, `OnTransitionFinished`), and
 `TransitionOf` names the levels a cinematic joins.
 

@@ -300,7 +300,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "VCGS|Story") FVcgsTransitionDoneSignature OnTransitionFinished;
     /** Play the transition between two levels, if they have one; false when there is none. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") bool PlayTransition(const FString& From, const FString& To);
-    /** End the transition playing (a skip, or your own cut is over). */
+    /** End the transition playing (a skip, or your own cut is over). The stand-in skips itself on Space, Enter or Escape; bind this to a Skip button of your own. */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") void FinishTransition();
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") bool IsTransitionPlaying() const { return Transition.Playing(); }
     /** The transition playing: "[Transition] <level left> → <level entered>" ("" for none). */
@@ -480,6 +480,8 @@ private:
 #include "Engine/LevelStreamingDynamic.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 
 using VcgsConvert::ToF;
 using VcgsConvert::ToStd;
@@ -824,7 +826,8 @@ bool UVcgsSubsystem::PlayTransition(const FString& From, const FString& To)
         // The stand-in: its heading and shots on screen for its length, then on with the game.
         FString Text = ToF(Transition.Title);
         for (const std::string& Shot : Transition.Shots) Text = Text + TEXT("\\n") + ToF(Shot);
-        // On-screen text, for a game with its own HUD; AVcgsCodexHUD draws a box with Skip instead.
+        Text = Text + TEXT("\\n[Skip: Space, Enter or Esc]");
+        // On-screen text, for a game with its own HUD (Space, Enter or Escape skips it); AVcgsCodexHUD draws a box with a Skip button instead.
         if (GEngine) GEngine->AddOnScreenDebugMessage(TransitionTextKey, static_cast<float>(Transition.Seconds), FColor::White, Text);
         TransitionTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UVcgsSubsystem::TickTransition));
     }
@@ -837,6 +840,14 @@ bool UVcgsSubsystem::PlayTransition(const FString& From, const FString& To)
 
 bool UVcgsSubsystem::TickTransition(float DeltaTime)
 {
+    // Skip on the on-screen text: Space, Enter or Escape (AVcgsCodexHUD's box takes the same keys and a click on Skip).
+    UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+    const APlayerController* Player = World ? World->GetFirstPlayerController() : nullptr;
+    if (Player && (Player->WasInputKeyJustPressed(EKeys::SpaceBar) || Player->WasInputKeyJustPressed(EKeys::Enter) || Player->WasInputKeyJustPressed(EKeys::Escape)))
+    {
+        Transition.Finish();
+        return false;
+    }
     Transition.Advance(DeltaTime);
     return Transition.Playing();
 }
@@ -1689,8 +1700,8 @@ own as the player crosses (\`bPlayTransitions\`, on by default): bind \`OnTransi
 to play your own cut (a Level Sequence) and call \`FinishTransition\` when it ends; unbound, a
 stand-in shows its heading and shots on screen for its length. With \`AVcgsCodexHUD\` as the HUD
 it is a box with a **Skip** button (click it, or press Space, Enter or Escape); with your own HUD
-it is on-screen text (draw it yourself from \`GetTransitionTitle\` and call \`FinishTransition\`
-to skip). \`OnTransitionFinished\` says when it is over.
+it is on-screen text that Space, Enter or Escape skips (or draw it yourself from
+\`GetTransitionTitle\`, with a Skip button of your own that calls \`FinishTransition\`). \`OnTransitionFinished\` says when it is over.
 
 **Puzzles** built in the Puzzle Creator play their steps as the studio does
 (order, links, time limits on the play clock, which the level director advances
