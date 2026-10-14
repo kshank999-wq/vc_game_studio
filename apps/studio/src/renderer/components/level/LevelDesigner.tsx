@@ -102,19 +102,35 @@ type PanelKey = 'library' | 'inspector' | 'graph' | 'generate' | 'prefabs' | 'vi
 const PANEL_KEYS: readonly PanelKey[] = ['view', 'library', 'inspector', 'graph', 'generate', 'prefabs'];
 const PANEL_NAMES: Record<PanelKey, string> = { view: 'the map', library: 'the library', inspector: 'the properties', graph: 'the structure graph', generate: 'the generator', prefabs: 'prefabs' };
 
-/** Which panels were in windows of their own when the studio was last closed, kept on this computer. */
+/**
+ * Which panels were in windows of their own when the studio was last closed,
+ * for each project (by its id), kept on this computer: each project opens with
+ * the windows it had.
+ */
 const OUTS_KEY = 'vcgs.levels.popouts';
-const readOuts = (): PanelKey[] => {
+const readAllOuts = (): Record<string, PanelKey[]> => {
   try {
-    const v = JSON.parse(localStorage.getItem(OUTS_KEY) ?? '[]') as unknown;
-    return Array.isArray(v) ? PANEL_KEYS.filter((k) => v.includes(k)) : [];
+    const v = JSON.parse(localStorage.getItem(OUTS_KEY) ?? '{}') as unknown;
+    // Before it was kept per project it was one list: it stands for whichever project opens next.
+    if (Array.isArray(v)) return { '*': PANEL_KEYS.filter((k) => v.includes(k)) };
+    return v && typeof v === 'object' ? (v as Record<string, PanelKey[]>) : {};
   } catch {
-    return [];
+    return {};
   }
 };
-const writeOuts = (keys: Iterable<PanelKey>) => {
+const readOuts = (projectId: string): PanelKey[] => {
+  const all = readAllOuts();
+  const v = all[projectId] ?? all['*'] ?? [];
+  return Array.isArray(v) ? PANEL_KEYS.filter((k) => v.includes(k)) : [];
+};
+const writeOuts = (projectId: string, keys: Iterable<PanelKey>) => {
   try {
-    localStorage.setItem(OUTS_KEY, JSON.stringify([...keys]));
+    const all = readAllOuts();
+    delete all['*'];
+    const list = [...keys];
+    if (list.length) all[projectId] = list;
+    else delete all[projectId];
+    localStorage.setItem(OUTS_KEY, JSON.stringify(all));
   } catch {
     // Storage off: they don't come back next time.
   }
@@ -188,17 +204,35 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [newWorld, setNewWorld] = useState(false);
   const [newStructure, setNewStructure] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [showPrefabs, setShowPrefabs] = useState(() => (desktop() ? readOuts().includes('prefabs') : false));
+  const [showPrefabs, setShowPrefabs] = useState(() => (desktop() ? readOuts(project.id).includes('prefabs') : false));
   const [showTeam, setShowTeam] = useState(false);
   /** Panels pulled out into windows of their own. */
   // The desktop app opens again the windows that were open; a browser only opens one on a click, so it asks.
-  const [outs, setOuts] = useState<ReadonlySet<PanelKey>>(() => new Set(desktop() ? readOuts() : []));
-  const [reopen, setReopen] = useState<PanelKey[] | null>(() => (desktop() ? null : readOuts().length ? readOuts() : null));
+  const [outs, setOuts] = useState<ReadonlySet<PanelKey>>(() => new Set(desktop() ? readOuts(project.id) : []));
+  const [reopen, setReopen] = useState<PanelKey[] | null>(() => (desktop() ? null : readOuts(project.id).length ? readOuts(project.id) : null));
   outsRef.current = outs;
+  /** The project the panels out now belong to. */
+  const outsOf = useRef(project.id);
+  useEffect(() => {
+    // Another project opened: its own windows, not this one's.
+    if (outsOf.current === project.id) return;
+    outsOf.current = project.id;
+    const saved = readOuts(project.id);
+    if (desktop()) {
+      if (saved.includes('generate')) setShowGenerate(true);
+      if (saved.includes('prefabs')) setShowPrefabs(true);
+      if (saved.includes('graph')) setShowStructure(true);
+      setOuts(new Set(saved));
+      setReopen(null);
+    } else {
+      setOuts(new Set());
+      setReopen(saved.length ? saved : null);
+    }
+  }, [project.id]);
   useEffect(() => {
     // Remembered as they come and go; not while the studio itself is closing, nor before the browser's offer is answered.
     if (closingApp || reopen) return;
-    writeOuts(outs);
+    writeOuts(outsOf.current, outs);
   }, [outs, reopen]);
   const popOut = (k: PanelKey) => setOuts((o) => new Set(o).add(k));
   /** The window the map or graybox is in, when it is in one of its own. */
@@ -217,7 +251,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
     });
   const [showStructure, setShowStructure] = useState(true);
   // A panel that was in a window of its own last time is open again (in its window).
-  const [showGenerate, setShowGenerate] = useState(() => desktop() ? readOuts().includes('generate') : false);
+  const [showGenerate, setShowGenerate] = useState(() => (desktop() ? readOuts(project.id).includes('generate') : false));
   const [preview, setPreview] = useState<Proposal | null>(null);
   /** Floor by floor: the point the generator is asking for, if any. */
   const [asking, setAsking] = useState<'entrance' | 'stairs' | null>(null);
