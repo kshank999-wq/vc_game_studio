@@ -12645,6 +12645,45 @@ button.bible-dual-col:hover {
 
 /* ---------------------------------------------------------------- Structure Creator (structure spec) */
 
+.lvl-import-plan {
+  width: min(920px, calc(100vw - 32px));
+}
+.lvl-import-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 16px;
+  margin: 12px 0;
+}
+@media (max-width: 720px) {
+  .lvl-import-body {
+    grid-template-columns: 1fr;
+  }
+}
+.lvl-import-layers {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.lvl-import-layers th,
+.lvl-import-layers td {
+  text-align: left;
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--line, rgba(128, 128, 128, 0.2));
+}
+.lvl-import-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  vertical-align: middle;
+}
+.lvl-import-preview svg {
+  width: 100%;
+  max-height: 340px;
+  background: var(--panel-2, rgba(128, 128, 128, 0.06));
+  border-radius: 6px;
+}
 .lvl-structure-dialog {
   width: min(720px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);

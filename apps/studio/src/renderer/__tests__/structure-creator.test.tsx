@@ -109,6 +109,34 @@ describe('the Structure Creator (structure spec MVP 1)', () => {
     expect(within(screen.getByRole('region', { name: 'Structure graph' })).getByText(/rooms ·/).textContent).toBe(rooms);
   });
 
+  it('imports a floor plan from an SVG: layers with roles, a preview, then rooms and doors on the floor (structure spec V2)', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: '+ Structure', exact: true } as never));
+    const dialog = screen.getByRole('dialog', { name: 'New structure' });
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Ancient temple/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create structure' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import plan' }));
+    const imp = screen.getByRole('dialog', { name: 'Import a floor plan' });
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600cm" height="800cm" viewBox="0 0 1600 800">
+      <g id="Outline"><rect x="0" y="0" width="1600" height="800"/></g>
+      <g id="Rooms"><rect x="0" y="0" width="800" height="800"/><rect x="800" y="0" width="800" height="800"/></g>
+      <g id="Labels"><text x="400" y="400">Nave</text><text x="1200" y="400">Vestry</text></g>
+      <g id="Doors"><rect x="760" y="350" width="80" height="90"/></g>
+    </svg>`;
+    const file = new File([svg], 'temple.svg', { type: 'image/svg+xml' });
+    fireEvent.change(within(imp).getByLabelText('Plan file'), { target: { files: [file] } });
+    await waitFor(() => expect(within(imp).getByRole('status').textContent).toBe('16 × 8 m: 2 rooms, 1 doors, 0 stairs.'));
+    expect((within(imp).getByRole('combobox', { name: 'Drawn in' }) as HTMLSelectElement).value).toBe('cm');
+    expect((within(imp).getByRole('combobox', { name: 'Layer Doors' }) as HTMLSelectElement).value).toBe('doors');
+    fireEvent.click(within(imp).getByRole('button', { name: /^Import onto/ }));
+    expect(screen.queryByRole('dialog', { name: 'Import a floor plan' })).toBeNull();
+    const graph = screen.getByRole('region', { name: 'Structure graph' });
+    expect(within(graph).getByText(/rooms ·/).textContent).toMatch(/^2 rooms/);
+  });
+
   it('plays as a scene: a walkthrough, objectives, and things put in a room (structure spec MVP 3)', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     render(<App />);

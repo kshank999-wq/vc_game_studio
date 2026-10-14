@@ -48,6 +48,8 @@ import { StructurePanel } from './StructurePanel';
 import type { FloorStack } from '../../model/level/stack';
 import { GeneratePanel, type GenerateAsk } from './GeneratePanel';
 import { acceptLayout, proposeDressing, proposeLayout, type Proposal } from '../../model/level/generate';
+import { importPlan } from '../../model/level/cad';
+import { ImportPlanDialog } from './ImportPlanDialog';
 import { createStructure, floorCodes, isStructure, updateStructure } from '../../model/level/structure';
 
 // three.js is big: it loads the first time the graybox is opened.
@@ -139,6 +141,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [playPerspective, setPlayPerspective] = useState<Perspective | null>(null);
   const [newWorld, setNewWorld] = useState(false);
   const [newStructure, setNewStructure] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [showStructure, setShowStructure] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
   const [preview, setPreview] = useState<Proposal | null>(null);
@@ -710,6 +713,11 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             Generate
           </button>
         )}
+        {isStructure(level) && (
+          <button className="tb-btn small" onClick={() => setImporting(true)} title="Import a floor plan from CAD (DXF or SVG) onto this floor: rooms, doors, stairs and the footprint (structure spec V2)">
+            Import plan
+          </button>
+        )}
         <div role="group" aria-label="View" className="view-toggle">
           <button className={mode === '2d' ? 'on' : ''} aria-pressed={mode === '2d'} onClick={() => setMode('2d')} title="The top-down map (2)">
             2D map
@@ -1133,6 +1141,23 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onCommit(made.project);
             setNewWorld(false);
             openMap(made.id, undefined, undefined, made.project);
+          }}
+        />
+      )}
+      {importing && isStructure(level) && (
+        <ImportPlanDialog
+          floorName={floor.name}
+          onClose={() => setImporting(false)}
+          onImport={(plan, file) => {
+            const out = importPlan(project, level.id, floor.id, plan, global);
+            setImporting(false);
+            if (!out.made.length) {
+              onSay(out.problems[0] ?? 'Nothing in the plan could be put on this floor.');
+              return;
+            }
+            onCommit(out.project);
+            setSelection(out.made.filter((id) => levelsOf(out.project).items.find((i) => i.id === id)?.assetId !== 'struct.footprint'));
+            onSay(`${file} is on ${floor.name}: ${out.counts.rooms} rooms, ${out.counts.doors} doors and ${out.counts.stairs} stairs.${out.problems.length ? ` ${out.problems.join(' ')}` : ''} Undo takes it all back.`);
           }}
         />
       )}

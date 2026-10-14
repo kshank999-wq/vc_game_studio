@@ -201,6 +201,53 @@ Regenerating a layout leaves alone the dressing inside rooms that stay.
 
 Everything dressing makes is tagged `dressing` and recorded as part of its run, like the rest of the generator's work. It goes to the engines like anything placed by hand: furniture as solids, lights with their colour and flicker, traps with their cycle.
 
+## Importing a CAD plan (spec V2)
+
+**Import plan** on a structure's toolbar puts a floor plan drawn elsewhere onto the floor in view. It reads:
+
+- DXF, saved as text (ASCII), from AutoCAD, BricsCAD, LibreCAD or a Revit export;
+- SVG, from Illustrator, Inkscape or any vector tool.
+
+The file is read on this computer and never sent anywhere.
+
+**What it reads.**
+
+- DXF: lines, polylines (with their arcs), arcs, circles, text and multiline text, and block inserts (moved, scaled and turned, blocks inside blocks). It also reads the units the file says it is in (`$INSUNITS`).
+- SVG: rects, polygons, polylines, lines, paths, circles and text. It follows each group's transform. A layer is an Inkscape layer or a group's id; the units come from the width (`2000cm` over a 2000-wide viewBox is centimetres).
+
+Anything else (dimensions, hatches) is left out, and the dialog says so.
+
+**Layers and their roles.** Each layer gets a role, guessed from its name; change any of them in the dialog:
+
+| Role | Guessed from | Becomes |
+| --- | --- | --- |
+| Rooms | A-AREA, room, space, zone | a room for each closed shape, named by the text inside it |
+| Walls | A-WALL, wall, partition | rooms too, when there is no Rooms layer; the biggest closed wall is then the outside, the footprint |
+| Doors | A-DOOR, door, opening | a door for each swing (hinge and arc) or door block, in the nearest wall, as wide as the swing |
+| Stairs | stair, step | stairs the size of the shape |
+| Outline / footprint | outline, boundary, footprint | the floor's footprint, reshaped to it |
+| Room names | text, anno, label | the names (text on any kept layer counts) |
+| Leave out | furniture, dimensions, grid, hatch | nothing |
+
+**Units.** The units are what the file says. If it doesn't say, they are guessed from its size: a plan 30 000 across is in millimetres. You can change them.
+
+**Shapes.** Loose lines that meet end to end count as one shape, so a room drawn line by line still closes. A rectangle stays a rectangle; any other shape becomes an outlined room.
+
+**The preview.** It shows:
+
+- every kept line, coloured by its role;
+- the rooms with their names;
+- the doors;
+- the plan's size, and how many rooms, doors and stairs it found.
+
+**Importing.** Import is one change, so Undo takes it all back. North stays up, and the plan is centred on the structure. Everything imported is tagged `cad`.
+
+Problems are reported rather than left broken, for example:
+
+- a door found on no room's wall (within a metre and a half) is left out;
+- a room outside the footprint is named;
+- a shape that crosses itself becomes a rectangle round it.
+
 ## Floors (spec §8)
 
 - **Codes.** Every floor has a code: B2 and B1 below ground, G, then 2, 3 … and R for the roof. The floor picker and the inspector's Floors section show them.
@@ -489,6 +536,7 @@ A plain building map can be made a structure from here.
 - `apps/studio/src/renderer/model/level/sample-structure.ts` is the Old Tomb and its walk (`withTomb`, `tombWalk`), for the tests and the engine checks (`scripts/godot-check/check_structure.gd`, `scripts/unity-structure-check/`, `scripts/unreal-check/structure_check.cpp`).
 - Play Mode (`model/level/play.ts`) plays the door rules, the objectives and completion, and what a structure remembers (`leaveLevel`, `PlaceMemory` in the play world's `places`).
 - `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, `proposeDressing` (dress rooms only), the rule presets and each structure type's room names.
+- `apps/studio/src/renderer/model/level/cad.ts` holds CAD plan import: `parseDxf`, `parseSvg`, `guessRole`, `guessUnits`, `readPlan` and `importPlan`. The dialog is `components/level/ImportPlanDialog.tsx`.
 - `apps/studio/src/renderer/model/level/themes.ts` holds the procedural themes: `THEMES`, `defaultTheme`, `dressRooms` and `undress`.
 - Changes elsewhere:
   - `Level.structure` and `Floor.kind` are in `model/level/types.ts`;
@@ -496,4 +544,4 @@ A plain building map can be made a structure from here.
   - `syncBuildings` (in `model/level/hierarchy.ts`) leaves basements and the roof out of a mass's count;
   - preflight takes the structure's issues (`model/level/validate.ts`).
 - The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph and the walkthrough), `GeneratePanel.tsx` (the generator), `StructureSection.tsx` (the inspector's Structure and As a scene sections) and `PlaceInRoom.tsx`.
-- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-themes.test.ts`, `model/__tests__/structure-library.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.
+- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-themes.test.ts`, `model/__tests__/structure-cad.test.ts`, `model/__tests__/structure-library.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.
