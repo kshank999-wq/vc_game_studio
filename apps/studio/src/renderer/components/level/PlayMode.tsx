@@ -9,7 +9,8 @@ import { assetOf, frameOf, meshesFor, num, paramOf, type Mesh } from '../../mode
 import { levelsOf } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
 import { levelCast } from '../../model/level/play';
-import { answerScreen, darknessAt, dismiss, inHand, interactWith, isOpen, lightOf, offerFor, present, spendStamina, startLevelPlay, tick, toggleLight, tracksStamina, traversalAt, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
+import { doorRules } from '../../model/level/doors';
+import { answerScreen, darknessAt, dismiss, inHand, interactWith, isOpen, leaveLevel, lightOf, offerFor, present, spendStamina, startLevelPlay, tick, toggleLight, tracksStamina, traversalAt, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
 import { equipmentList, equipmentOf, usesLeft } from '../../model/equipment';
 import { recipesOf } from '../../model/crafting';
 import { skillsOf } from '../../model/skills';
@@ -119,12 +120,12 @@ export const PlayMode = (props: Props) => {
 
   const signature = useMemo(() => {
     const items = set.items.filter((i) => i.levelId === levelId);
-    return items.map((i) => `${i.id}:${present(project, hud, i) ? 1 : 0}:${isOpen(project, hud, i, global) ? 1 : 0}`).join('|') + `|${hud.spawned.map((a) => a.id).join(',')}|${debug}|${props.perspective}`;
+    return items.map((i) => `${i.id}:${present(project, hud, i) ? 1 : 0}:${isOpen(project, hud, i, global) ? 1 : 0}${hud.found?.[i.id] ? 'f' : ''}`).join('|') + `|${hud.spawned.map((a) => a.id).join(',')}|${debug}|${props.perspective}`;
   }, [set, levelId, project, hud, global, debug, props.perspective]);
 
   const scene = useMemo(() => {
     const s = state.current;
-    const all = meshesFor(set, levelId, { ceilings: true, global, models: true, skip: (i) => !present(project, s, i), open: (i) => isOpen(project, s, i, global) });
+    const all = meshesFor(set, levelId, { ceilings: true, global, models: true, skip: (i) => !present(project, s, i), open: (i) => isOpen(project, s, i, global), concealed: (i) => !s.found?.[i.id] && doorRules(set, i, global).secret });
     const colliders: Collider[] = collidersFrom(all);
     const byId = new Map(set.items.map((i) => [i.id, i]));
     const visible = all.filter((m) => {
@@ -445,7 +446,7 @@ export const PlayMode = (props: Props) => {
           // What is in reach.
           const target = nearestOffer(p.project, s, body.current, p.perspective, p.global);
           if ((target?.itemId ?? null) !== (latest.current.offer?.itemId ?? null) || target?.verb !== latest.current.offer?.verb || target?.blocked !== latest.current.offer?.blocked) setOffer(target);
-          if (once('interact') && target) s = interactWith(p.project, s, target.itemId, p.global);
+          if (once('interact') && target) s = interactWith(p.project, s, target.itemId, p.global, body.current);
           if (once('light')) s = toggleLight(p.project, s, p.global);
           if (once('useItem')) s = useInHand(p.project, s);
         }
@@ -454,7 +455,7 @@ export const PlayMode = (props: Props) => {
           s = { ...s, placePlayer: undefined };
         }
         if (s.goTo) {
-          p.onGoToLevel(s.goTo, s.world);
+          p.onGoToLevel(s.goTo, leaveLevel(p.project, s));
           s = { ...s, goTo: undefined };
         }
       }
@@ -465,7 +466,7 @@ export const PlayMode = (props: Props) => {
       if (s !== state.current) {
         state.current = s;
         // The HUD follows at 12 frames a second; anything that changes what is there shows at once.
-        if (now - hudAt > 80 || s.world !== hud.world || s.gone !== hud.gone || s.open !== hud.open || s.cinematic !== hud.cinematic || s.scene !== hud.scene || s.screen !== hud.screen || s.over !== hud.over || s.spawned !== hud.spawned || s.enabled !== hud.enabled || s.light?.on !== hud.light?.on) {
+        if (now - hudAt > 80 || s.world !== hud.world || s.gone !== hud.gone || s.open !== hud.open || s.found !== hud.found || s.cinematic !== hud.cinematic || s.scene !== hud.scene || s.screen !== hud.screen || s.over !== hud.over || s.spawned !== hud.spawned || s.enabled !== hud.enabled || s.light?.on !== hud.light?.on) {
           hudAt = now;
           setHud(s);
         }
@@ -760,7 +761,7 @@ const nearestOffer = (project: Project, state: LevelPlayState, b: Body, perspect
     const reach = num(paramOf(set, item, 'range', global), 1.5) + Math.max(fr.w, def.kind === 'hosted' ? 0.3 : fr.d) / 2 + 0.2;
     if (d > reach) continue;
     if (perspective !== 'top' && d > 0.6 && (dx * f.x + dy * f.y) / d < 0.35) continue;
-    const offer = offerFor(project, state, item, global);
+    const offer = offerFor(project, state, item, global, b);
     if (offer && (!best || d < best.d)) best = { offer, d };
   }
   return best?.offer ?? null;

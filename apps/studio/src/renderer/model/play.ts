@@ -15,6 +15,7 @@ import { apply, dropEquipped, describeEffect, describeRule, evaluate, isEmpty, t
 import { dualWith, elementsIn, spokenTogether } from './scene';
 import { cinematicTiming, describeShot, shotsOf } from './shots';
 import { eventLine, eventTitle, loseOf, MAIN, sceneTimeline } from './timeline';
+import type { PlaceMemory } from './level/play';
 import type { DialogueLine, ObjectType, OptionBehaviour, Project, StoryObject, TimelineEvent } from './types';
 
 /**
@@ -52,6 +53,8 @@ export interface PlayWorld extends PlayState {
   hinted?: Record<string, boolean>;
   /** Wrong answers given at each object's screen puzzle (puzzle spec §8). */
   screenFails?: Record<string, number>;
+  /** What each structure the player has been in remembers of it, by map (structure spec §10): carried from map to map with the story. */
+  places?: Record<string, PlaceMemory>;
 }
 
 export type { QuestState };

@@ -1,6 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { floorCodes, OUTSIDE, structureGraph, structureIssues, type StructureEdge } from '../../model/level/structure';
 import type { AssetDefinition, LevelSet } from '../../model/level/types';
+import { walkStructure } from '../../model/level/walkthrough';
+import type { Project } from '../../model/types';
 
 const KIND_LABEL: Record<StructureEdge['kind'], string> = { door: 'door', opening: 'open', stairs: 'stairs', ramp: 'ramp', ladder: 'ladder', elevator: 'lift', traversal: 'climb', portal: 'portal' };
 
@@ -9,11 +11,19 @@ const KIND_LABEL: Record<StructureEdge['kind'], string> = { door: 'door', openin
  * top floor first; its rooms as nodes; doors, openings, stairs, ladders and
  * lifts as edges (dashed between floors, red where something keeps them shut);
  * the outside on the left, joined by the entrances. Rooms no one can reach are
- * ringed, and the structure's issues are listed beside it. Click a room to go to it.
+ * ringed, and the structure's issues are listed beside it, with the
+ * walkthrough the solvability check found (structure spec §11): how a player
+ * gets through, key by key. Click a room to go to it.
  */
-export const StructurePanel = ({ set, levelId, floorId, global, selection, onSelect, onClose }: { set: LevelSet; levelId: string; floorId: string; global: readonly AssetDefinition[]; selection: readonly string[]; onSelect: (id: string, floorId: string) => void; onClose: () => void }) => {
+export const StructurePanel = ({ project, levelId, floorId, global, selection, onSelect, onClose }: { project: Project; levelId: string; floorId: string; global: readonly AssetDefinition[]; selection: readonly string[]; onSelect: (id: string, floorId: string) => void; onClose: () => void }) => {
+  const set = project.levels as LevelSet;
   const level = set.levels.find((l) => l.id === levelId)!;
-  const { graph, issues } = useMemo(() => ({ graph: structureGraph(set, levelId, global), issues: structureIssues(set, levelId, global) }), [set, levelId, global]);
+  const [tab, setTab] = useState<'issues' | 'walk'>('issues');
+  const { graph, issues, walk } = useMemo(() => {
+    const walk = walkStructure(project, levelId, global);
+    return { graph: structureGraph(set, levelId, global), issues: [...structureIssues(set, levelId, global), ...walk.issues], walk };
+  }, [project, set, levelId, global]);
+  const walked = new Set(walk.reached);
   const codes = floorCodes(level);
   const floors = [...level.floors].sort((a, b) => b.elevation - a.elevation);
   const band = 54;
@@ -57,6 +67,11 @@ export const StructurePanel = ({ set, levelId, floorId, global, selection, onSel
       <div className="lvl-structure-body">
         <div className="lvl-structure-graph">
           <svg width={svgWidth} height={height} role="img" aria-label={`Rooms on ${floors.length} floors and how they connect`}>
+            <defs>
+              <marker id="lvl-oneway" viewBox="0 0 10 10" refX="16" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" className="lvl-structure-arrow" />
+              </marker>
+            </defs>
             {floors.map((f, i) => (
               <g key={f.id}>
                 <rect x={0} y={i * band + 6} width={svgWidth} height={band - 2} className={`lvl-structure-band${f.id === floorId ? ' on' : ''}`} />
@@ -73,9 +88,10 @@ export const StructurePanel = ({ set, levelId, floorId, global, selection, onSel
               const b = pos.get(e.to);
               if (!a || !b) return null;
               return (
-                <line key={e.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`lvl-structure-edge ${e.kind}${e.vertical ? ' vertical' : ''}${e.gated ? ' gated' : ''}`}>
+                <line key={e.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} markerEnd={e.oneWay ? 'url(#lvl-oneway)' : undefined} className={`lvl-structure-edge ${e.kind}${e.vertical ? ' vertical' : ''}${e.gated ? ' gated' : ''}${e.secret ? ' secret' : ''}`}>
                   <title>
-                    {KIND_LABEL[e.kind]}
+                    {e.secret ? 'secret door' : KIND_LABEL[e.kind]}
+                    {e.oneWay ? ', one way' : ''}
                     {e.gated ? ' (closed until something opens it)' : ''}
                   </title>
                 </line>
@@ -93,8 +109,8 @@ export const StructurePanel = ({ set, levelId, floorId, global, selection, onSel
               const p = pos.get(n.id)!;
               const on = selection.includes(n.id);
               return (
-                <g key={n.id} className="lvl-structure-node" role="button" tabIndex={0} aria-label={`${n.name}${unreachable.has(n.id) ? ', unreachable' : ''}`} onClick={() => onSelect(n.id, n.floorId)} onKeyDown={(ev) => (ev.key === 'Enter' || ev.key === ' ') && onSelect(n.id, n.floorId)}>
-                  <circle cx={p.x} cy={p.y} r={on ? 8 : 6.5} className={`${unreachable.has(n.id) ? 'unreachable' : ''}${on ? ' on' : ''} ${n.role}`} />
+                <g key={n.id} className="lvl-structure-node" role="button" tabIndex={0} aria-label={`${n.name}${unreachable.has(n.id) ? ', unreachable' : graph.start && !walked.has(n.id) ? ', shut off' : ''}`} onClick={() => onSelect(n.id, n.floorId)} onKeyDown={(ev) => (ev.key === 'Enter' || ev.key === ' ') && onSelect(n.id, n.floorId)}>
+                  <circle cx={p.x} cy={p.y} r={on ? 8 : 6.5} className={`${unreachable.has(n.id) ? 'unreachable' : graph.start && !walked.has(n.id) ? 'shut' : ''}${on ? ' on' : ''} ${n.role}`} />
                   <text x={p.x + 10} y={p.y + 4} className="lvl-structure-label">
                     {n.name.length > 16 ? `${n.name.slice(0, 15)}…` : n.name}
                   </text>
@@ -104,22 +120,52 @@ export const StructurePanel = ({ set, levelId, floorId, global, selection, onSel
           </svg>
           {!graph.nodes.length && <p className="muted lvl-structure-empty">No rooms yet. Draw rooms on the floors, put doors in their walls and stairs between floors: they appear here as you go.</p>}
         </div>
-        <ul className="lvl-structure-issues" aria-label="Structure issues">
-          {issues.length === 0 && <li className="muted">{graph.nodes.length ? 'Every room can be reached, and the floors line up.' : 'Nothing to check yet.'}</li>}
-          {issues.map((i, n) => (
-            <li key={n}>
-              <button
-                className={`lvl-issue ${i.severity}`}
-                onClick={() => {
-                  const item = set.items.find((x) => x.id === i.id);
-                  if (item) onSelect(item.id, item.floorId);
-                }}
-              >
-                {i.message}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="lvl-structure-side">
+          <div role="tablist" aria-label="Structure checks" className="view-toggle small">
+            <button role="tab" aria-selected={tab === 'issues'} className={tab === 'issues' ? 'on' : ''} onClick={() => setTab('issues')}>
+              Issues{issues.filter((i) => i.severity !== 'info').length ? ` (${issues.filter((i) => i.severity !== 'info').length})` : ''}
+            </button>
+            <button role="tab" aria-selected={tab === 'walk'} className={tab === 'walk' ? 'on' : ''} onClick={() => setTab('walk')}>
+              Walkthrough
+            </button>
+          </div>
+          {tab === 'walk' ? (
+            <ol className="lvl-structure-issues lvl-structure-walk" aria-label="Walkthrough">
+              {walk.steps.length === 0 && <li className="muted">No way in yet: the walkthrough starts at an entrance or the player start.</li>}
+              {walk.steps.map((st, n) => (
+                <li key={n} className={`lvl-walk-step ${st.kind}`}>
+                  <button
+                    className="lvl-issue info"
+                    disabled={!st.id}
+                    onClick={() => {
+                      const item = set.items.find((x) => x.id === st.id);
+                      if (item) onSelect(item.id, item.floorId);
+                    }}
+                  >
+                    {st.text}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <ul className="lvl-structure-issues" aria-label="Structure issues">
+              {issues.length === 0 && <li className="muted">{graph.nodes.length ? 'Every room can be reached, every key before its door, and the floors line up.' : 'Nothing to check yet.'}</li>}
+              {issues.map((i, n) => (
+                <li key={n}>
+                  <button
+                    className={`lvl-issue ${i.severity}`}
+                    onClick={() => {
+                      const item = set.items.find((x) => x.id === i.id);
+                      if (item) onSelect(item.id, item.floorId);
+                    }}
+                  >
+                    {i.message}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </section>
   );

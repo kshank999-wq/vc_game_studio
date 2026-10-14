@@ -451,6 +451,8 @@ export interface MeshOptions {
   skip?: (item: LevelItem) => boolean;
   /** Doors standing open (Play Mode): no leaf, nothing to bump into. */
   open?: (item: LevelItem) => boolean;
+  /** Secret doors not yet found (Play Mode): drawn as the wall they hide in. */
+  concealed?: (item: LevelItem) => boolean;
   /** Draw imported models as themselves (the studio's views); a box otherwise (the engines, collision). */
   models?: boolean;
 }
@@ -565,7 +567,22 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
       const host = item.host && set.items.find((i) => i.id === item.host!.id);
       const hostBase = host ? elevation.get(host.floorId) ?? 0 : base;
       const open = def.role === 'door' ? String(paramOf(set, item, 'swing', g)) === 'open archway' || !!options.open?.(item) : false;
-      if (!open) {
+      if (!open && def.role === 'door' && options.concealed?.(item)) {
+        push({
+          key: `${item.id}:leaf`,
+          collide: true,
+          part: 'door',
+          shape: 'box',
+          x: f.x,
+          y: hostBase + f.z + f.h / 2,
+          z: f.y,
+          sx: f.w + 0.02,
+          sy: f.h,
+          sz: host ? num(paramOf(set, host, 'wallThickness', g), 0.2) + 0.01 : 0.2,
+          color: CATEGORY_COLOR.spaces!,
+          opacity: 1,
+        });
+      } else if (!open) {
         push({
           key: `${item.id}:leaf`,
           collide: true,

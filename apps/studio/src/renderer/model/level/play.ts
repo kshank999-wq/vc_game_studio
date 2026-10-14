@@ -10,9 +10,10 @@ import { learnCheck, skillsOf } from '../skills';
 import { describeEffect, describeRule, evaluate, isEmpty } from '../rules';
 import { cinematicTiming } from '../shots';
 import type { Project } from '../types';
-import { assetOf, bool, contains, frameOf, meshesFor, num, paramOf, type Point } from './geometry';
+import { assetOf, bool, contains, frameOf, meshesFor, num, paramOf, spaceAt, type Point } from './geometry';
+import { doorRules, doorSide } from './doors';
 import { guid, levelsOf } from './level';
-import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelSet, PlayNote, PlayPreset } from './types';
+import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelSet, PlayNote, PlayPreset, StructureObjective } from './types';
 
 /**
  * Play Mode's rules (spec §8, §9): what the level does as the player moves
@@ -57,6 +58,12 @@ export interface LevelPlayState {
   open: Record<string, boolean>;
   /** Locked doors opened with their key: they stay unlocked. */
   unlocked: Record<string, boolean>;
+  /** Secret doors the player has found (structure spec §7). */
+  found?: Record<string, boolean>;
+  /** Doors broken open: they stay open. */
+  broken?: Record<string, boolean>;
+  /** Timed doors standing open, and when each shuts again. */
+  closesAt?: Record<string, number>;
   /** Items switched off (false) or back on (true) by rules. */
   enabled: Record<string, boolean>;
   /** Items taken or despawned. */
@@ -93,8 +100,27 @@ export interface LevelPlayState {
   message?: { text: string; until: number };
   /** A portal or rule sent the player to another level. */
   goTo?: string;
+  /** In a structure (structure spec §10): its objectives done, and whether it is complete. */
+  structure?: { objectives: Record<string, boolean>; complete: boolean };
   over?: { text: string };
   log: LevelLogEntry[];
+}
+
+/** What a structure remembers of the player's last visit (structure spec §10). */
+export interface PlaceMemory {
+  open: Record<string, boolean>;
+  unlocked: Record<string, boolean>;
+  found: Record<string, boolean>;
+  broken: Record<string, boolean>;
+  gone: Record<string, boolean>;
+  done: Record<string, boolean>;
+  spawned: Spawned[];
+  actors: Record<string, ActorPose>;
+  cast?: Record<string, CastPose>;
+  objectives: Record<string, boolean>;
+  complete: boolean;
+  /** Times the player has left it. */
+  visits: number;
 }
 
 const LOG_LIMIT = 400;
@@ -140,6 +166,7 @@ export const startLevelPlay = (project: Project, levelId: string, options: { pre
     time: 0,
     log: [{ t: 0, kind: 'info', text: `${level?.name ?? 'Level'} starts${options.preset ? ` from “${options.preset.name}”` : options.world ? ' carrying the story on' : ''}.` }],
   };
+  if (level?.structure) state = enterStructure(project, state, options.global);
   // Placed AI enemies stand where they are put until their machine moves them.
   for (const c of levelCast(project, levelId, options.global)) {
     if (c.placed && !state.actors[c.itemId]) state = { ...state, actors: { ...state.actors, [c.itemId]: { x: c.home.x, y: c.home.y, z: c.z, yaw: c.yaw, stop: 0, until: 0, moving: false } } };
@@ -230,6 +257,7 @@ export const present = (project: Project, state: LevelPlayState, item: LevelItem
   item.levelId === state.levelId && !item.hidden && !state.gone[item.id] && state.enabled[item.id] !== false && evaluate(item.activeWhen, state.world);
 
 export const isOpen = (project: Project, state: LevelPlayState, item: LevelItem, global?: readonly AssetDefinition[]): boolean => {
+  if (state.broken?.[item.id]) return true;
   if (item.id in state.open) return state.open[item.id]!;
   const set = levelsOf(project);
   return bool(paramOf(set, item, 'startsOpen', global), false) || String(paramOf(set, item, 'swing', global)) === 'open archway';
@@ -373,7 +401,9 @@ const approachDoors = (project: Project, state: LevelPlayState, at: Where, globa
     if (Math.abs(at.z - bottom) > 1 || Math.hypot(at.x - f.x, at.y - f.y) > Math.max(DOOR_REACH, f.w / 2 + 0.4)) continue;
     near[item.id] = true;
     if (s.atDoors?.[item.id] || isOpen(project, s, item, global) || !bool(paramOf(set, item, 'autoOpen', global), true)) continue;
-    s = interactWith(project, s, item.id, global);
+    // A secret door waits to be searched.
+    if (doorRules(set, item, global).secret && !s.found?.[item.id]) continue;
+    s = interactWith(project, s, item.id, global, at);
   }
   const before = Object.keys(s.atDoors ?? {});
   return before.length === Object.keys(near).length && before.every((id) => near[id]) ? s : { ...s, atDoors: near };
@@ -503,7 +533,7 @@ export interface Offer {
 const INTERACTIVE_ROLES = new Set(['door', 'pickup', 'inventory', 'weapon', 'ammo', 'health', 'npc', 'companion', 'neutral', 'dialogue', 'interaction', 'puzzle', 'elevator', 'ladder']);
 
 /** What pressing Interact would do to this item, if anything. */
-export const offerFor = (project: Project, state: LevelPlayState, item: LevelItem, global?: readonly AssetDefinition[]): Offer | null => {
+export const offerFor = (project: Project, state: LevelPlayState, item: LevelItem, global?: readonly AssetDefinition[], at?: Point): Offer | null => {
   const set = levelsOf(project);
   const def = assetOf(set, item, global);
   if (!present(project, state, item)) return null;
@@ -518,36 +548,57 @@ export const offerFor = (project: Project, state: LevelPlayState, item: LevelIte
   }
   if (def.role === 'door') {
     const open = isOpen(project, state, item, global);
-    if (String(paramOf(set, item, 'swing', global)) === 'open archway') return null;
-    const key = String(paramOf(set, item, 'keyItem', global) ?? '');
-    const locked = bool(paramOf(set, item, 'locked', global), false) && !state.unlocked[item.id];
-    if (!open && locked && key && !(state.world.items[key] ?? 0)) return { itemId: item.id, verb: prompt, label: item.name, blocked: `Locked. Needs ${name(project, key)}.` };
-    if (!open && locked && !key) return { itemId: item.id, verb: prompt, label: item.name, blocked: 'Locked.' };
-    return { itemId: item.id, verb: open ? 'Close' : locked ? `${prompt}` : 'Open', label: item.name };
+    if (String(paramOf(set, item, 'swing', global)) === 'open archway' || state.broken?.[item.id]) return null;
+    const rules = doorRules(set, item, global);
+    // A secret door is the wall until it is searched (structure spec §7).
+    if (rules.secret && !state.found?.[item.id]) return { itemId: item.id, verb: 'Search', label: 'the wall' };
+    if (open) return { itemId: item.id, verb: 'Close', label: item.name };
+    const side = rules.oneWay && at ? doorSide(set, item, at, global) : null;
+    if (side && side !== rules.oneWay) return { itemId: item.id, verb: prompt, label: item.name, blocked: 'It won’t open from this side.' };
+    const locked = rules.locked && !state.unlocked[item.id];
+    const hasKey = !!rules.key && (state.world.items[rules.key] ?? 0) > 0;
+    if (locked && !hasKey) {
+      // A breakable door gives way, to bare hands or to what breaks it.
+      if (rules.breakable && (!rules.breakWith || (state.world.items[rules.breakWith] ?? 0) > 0)) return { itemId: item.id, verb: 'Break', label: item.name };
+      const needs = [rules.key && name(project, rules.key), rules.breakable && rules.breakWith && `${name(project, rules.breakWith)} to break it`].filter(Boolean).join(', or ');
+      return { itemId: item.id, verb: prompt, label: item.name, blocked: needs ? `Locked. Needs ${needs}.` : 'Locked.' };
+    }
+    return { itemId: item.id, verb: locked ? prompt : 'Open', label: item.name };
   }
   return { itemId: item.id, verb: prompt, label: item.name };
 };
 
 /** The player uses an item: what each kind of thing does, then its rules. */
-export const interactWith = (project: Project, state: LevelPlayState, itemId: string, global?: readonly AssetDefinition[]): LevelPlayState => {
+export const interactWith = (project: Project, state: LevelPlayState, itemId: string, global?: readonly AssetDefinition[], at?: Point): LevelPlayState => {
   const set = levelsOf(project);
   const item = set.items.find((i) => i.id === itemId);
   if (!item) return state;
-  const offer = offerFor(project, state, item, global);
+  const offer = offerFor(project, state, item, global, at);
   if (!offer) return state;
   const def = assetOf(set, item, global);
   let s = log(state, { kind: 'event', itemId, text: `${offer.verb} · ${item.name}` });
   if (offer.blocked) return say(log(s, { kind: 'check', itemId, pass: false, text: `${item.name}: ${offer.blocked}` }), offer.blocked);
 
   if (def.role === 'door') {
+    const rules = doorRules(set, item, global);
     const open = isOpen(project, s, item, global);
-    const key = String(paramOf(set, item, 'keyItem', global) ?? '');
-    const locked = bool(paramOf(set, item, 'locked', global), false) && !s.unlocked[item.id];
-    if (!open && locked && key) {
-      s = log({ ...s, unlocked: { ...s.unlocked, [item.id]: true } }, { kind: 'check', itemId, pass: true, text: `${item.name} unlocks with ${name(project, key)}` });
+    if (offer.verb === 'Search') {
+      // Found: a door from now on, to open like any other.
+      s = say(log({ ...s, found: { ...s.found, [item.id]: true } }, { kind: 'action', itemId, text: `Finds ${item.name}` }), `A hidden door: ${item.name}.`);
+    } else if (offer.verb === 'Break') {
+      s = say(log({ ...s, broken: { ...s.broken, [item.id]: true } }, { kind: 'action', itemId, text: `${item.name} is broken open${rules.breakWith ? ` with ${name(project, rules.breakWith)}` : ''}` }), `${item.name} gives way.`);
+    } else {
+      const locked = rules.locked && !s.unlocked[item.id];
+      if (!open && locked && rules.key) {
+        s = log({ ...s, unlocked: { ...s.unlocked, [item.id]: true } }, { kind: 'check', itemId, pass: true, text: `${item.name} unlocks with ${name(project, rules.key)}` });
+      }
+      s = { ...s, open: { ...s.open, [item.id]: !open } };
+      // A timed door shuts again on its own.
+      const closesAt = { ...s.closesAt };
+      if (!open && rules.openFor > 0) closesAt[item.id] = s.time + rules.openFor;
+      else delete closesAt[item.id];
+      s = log({ ...s, closesAt }, { kind: 'action', itemId, text: `${item.name} ${open ? 'closes' : 'opens'}${!open && rules.openFor > 0 ? ` for ${rules.openFor}s` : ''}` });
     }
-    s = { ...s, open: { ...s.open, [item.id]: !open } };
-    s = log(s, { kind: 'action', itemId, text: `${item.name} ${open ? 'closes' : 'opens'}` });
   } else if (['pickup', 'inventory', 'weapon', 'ammo', 'health'].includes(def.role) && paramOf(set, item, 'collectible', global) !== false) {
     s = { ...s, gone: { ...s.gone, [item.id]: true } };
     const gives = String(paramOf(set, item, 'item', global) ?? '');
@@ -693,6 +744,19 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
     if (moved) s = { ...s, actors: moved };
   }
 
+  // Timed doors shut when their time is up, unless the player is standing in the doorway.
+  for (const [id, when] of Object.entries(s.closesAt ?? {})) {
+    if (when > s.time) continue;
+    const door = set.items.find((i) => i.id === id);
+    if (door) {
+      const f = frameOf(set, door, global);
+      if (Math.hypot(at.x - f.x, at.y - f.y) < Math.max(DOOR_REACH, f.w / 2 + 0.4) && Math.abs(at.z - ((elevation.get(door.floorId) ?? 0) + f.z)) < 1.5) continue;
+    }
+    const closesAt = { ...s.closesAt };
+    delete closesAt[id];
+    s = log({ ...s, closesAt, open: { ...s.open, [id]: false } }, { kind: 'action', itemId: id, text: `${door?.name ?? 'A door'} shuts again` });
+  }
+
   // Walking up to a closed door opens it, as Interact would, or says why it won't: once each approach.
   s = approachDoors(project, s, at, global);
 
@@ -723,6 +787,9 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
     if (perSecond > 0) s = { ...s, health: Math.max(0, s.health - perSecond * dt) };
   }
   if (s.health <= 0 && !s.over) s = log({ ...s, over: { text: 'You didn’t make it.' } }, { kind: 'warn', text: 'The player is dead' });
+
+  // A structure's objectives, and its completion (structure spec §10).
+  if (level?.structure) s = checkStructure(project, s, at, global);
 
   // Timers and delayed spawns.
   for (const item of items) {
@@ -904,4 +971,151 @@ export const pointNear = (project: Project, itemId: string, global?: readonly As
 export const volumesAt = (project: Project, state: LevelPlayState): LevelItem[] => {
   const set = levelsOf(project);
   return state.inside.map((id) => set.items.find((i) => i.id === id)).filter((i): i is LevelItem => !!i);
+};
+
+// ---------------------------------------------------------------- structures as scenes (structure spec §10)
+
+const PICKUP_ROLES = new Set(['pickup', 'inventory', 'weapon', 'ammo', 'health']);
+
+/** The puzzles a map's items are bound to or linked with. */
+const puzzlesIn = (project: Project, levelId: string): string[] => {
+  const set = levelsOf(project);
+  const ids = new Set<string>();
+  for (const i of set.items) {
+    if (i.levelId !== levelId) continue;
+    for (const b of i.puzzles ?? []) if (b.puzzle) ids.add(b.puzzle);
+    for (const l of i.links ?? []) if (project.objects[l]?.type === 'puzzle') ids.add(l);
+  }
+  return [...ids];
+};
+
+/**
+ * Coming into a structure: what it remembers of the last visit comes back,
+ * as its persistence rules say (doors, items, enemies, puzzles: kept or
+ * reset), and its first objective is shown.
+ */
+const enterStructure = (project: Project, state: LevelPlayState, global?: readonly AssetDefinition[]): LevelPlayState => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === state.levelId)!;
+  const info = level.structure!;
+  const memory = state.world.places?.[level.id];
+  let s: LevelPlayState = { ...state, structure: { objectives: { ...memory?.objectives }, complete: !!memory?.complete } };
+  if (memory) {
+    const keep = { doors: 'keep', items: 'keep', enemies: 'keep', puzzles: 'keep', ...info.persist };
+    const role = (id: string) => {
+      const item = set.items.find((i) => i.id === id);
+      return item ? assetOf(set, item, global).role : '';
+    };
+    const kept: string[] = [];
+    const reset: string[] = [];
+    (keep.doors === 'keep' ? kept : reset).push('doors');
+    (keep.items === 'keep' ? kept : reset).push('items');
+    (keep.enemies === 'keep' ? kept : reset).push('enemies');
+    (keep.puzzles === 'keep' ? kept : reset).push('puzzles');
+    if (keep.doors === 'keep') s = { ...s, open: { ...memory.open }, unlocked: { ...memory.unlocked }, found: { ...memory.found }, broken: { ...memory.broken } };
+    const gone: Record<string, boolean> = {};
+    for (const [id, v] of Object.entries(memory.gone)) {
+      const isItem = PICKUP_ROLES.has(role(id));
+      if ((isItem && keep.items === 'keep') || (!isItem && keep.enemies === 'keep')) gone[id] = v;
+    }
+    s = { ...s, gone };
+    if (keep.enemies === 'keep') s = { ...s, spawned: [...memory.spawned], done: { ...memory.done }, actors: { ...s.actors, ...memory.actors }, ...(memory.cast ? { cast: { ...memory.cast } } : {}) };
+    if (keep.puzzles === 'reset') {
+      // Its puzzles unsolved and its own states as the story starts them.
+      const start = startWorld(project);
+      const solved = { ...s.world.solved };
+      for (const id of puzzlesIn(project, level.id)) delete solved[id];
+      const flags = { ...s.world.flags };
+      for (const id of info.localStates ?? []) {
+        if (id in start.flags) flags[id] = start.flags[id]!;
+        else delete flags[id];
+      }
+      s = { ...s, world: { ...s.world, solved, flags } };
+    }
+    s = log(s, { kind: 'info', text: `Back in ${level.name}${kept.length ? `: ${kept.join(', ')} as you left them` : ''}${reset.length ? `${kept.length ? ';' : ':'} ${reset.join(', ')} reset` : ''}.` });
+  } else if (info.localStates?.length) {
+    // The first time in, its own states start as the story starts them.
+    const start = startWorld(project);
+    const flags = { ...s.world.flags };
+    for (const id of info.localStates) {
+      if (id in start.flags) flags[id] = start.flags[id]!;
+      else delete flags[id];
+    }
+    s = { ...s, world: { ...s.world, flags } };
+  }
+  const next = nextObjective(info.objectives, s.structure!.objectives);
+  if (next && !s.objective) s = { ...s, objective: next.text };
+  return s;
+};
+
+const nextObjective = (objectives: StructureObjective[] | undefined, done: Record<string, boolean>): StructureObjective | undefined =>
+  (objectives ?? []).find((o) => !done[o.id] && !o.optional) ?? (objectives ?? []).find((o) => !done[o.id]);
+
+/** Which room the player is in now. */
+export const roomAt = (project: Project, levelId: string, at: Where, global?: readonly AssetDefinition[]): LevelItem | undefined => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === levelId);
+  const floor = [...(level?.floors ?? [])].sort((a, b) => b.elevation - a.elevation).find((f) => f.elevation <= at.z + 0.5) ?? level?.floors[0];
+  return floor ? spaceAt(set, levelId, floor.id, at, global) : undefined;
+};
+
+/** An objective is done when its condition holds, or (with none) when the player reaches its room or comes up to its item. */
+const objectiveDone = (project: Project, state: LevelPlayState, o: StructureObjective, at: Where, room: LevelItem | undefined, global?: readonly AssetDefinition[]): boolean => {
+  if (o.when && !isEmpty(o.when)) return evaluate(o.when, state.world);
+  if (!o.at) return false;
+  if (room?.id === o.at) return true;
+  const set = levelsOf(project);
+  const target = set.items.find((i) => i.id === o.at && i.levelId === state.levelId);
+  if (!target || assetOf(set, target, global).kind === 'space' || !present(project, state, target)) return false;
+  const f = frameOf(set, target, global);
+  const base = set.levels.find((l) => l.id === state.levelId)?.floors.find((fl) => fl.id === target.floorId)?.elevation ?? 0;
+  return Math.hypot(at.x - f.x, at.y - f.y) <= Math.max(2, f.w / 2 + 1) && Math.abs(at.z - (base + f.z)) < 2;
+};
+
+const checkStructure = (project: Project, state: LevelPlayState, at: Where, global?: readonly AssetDefinition[]): LevelPlayState => {
+  const level = levelsOf(project).levels.find((l) => l.id === state.levelId)!;
+  const info = level.structure!;
+  let s = state.structure ? state : { ...state, structure: { objectives: {}, complete: false } };
+  const objectives = info.objectives ?? [];
+  const room = objectives.some((o) => o.at && !s.structure!.objectives[o.id]) ? roomAt(project, s.levelId, at, global) : undefined;
+  for (const o of objectives) {
+    if (s.structure!.objectives[o.id] || !objectiveDone(project, s, o, at, room, global)) continue;
+    s = { ...s, structure: { ...s.structure!, objectives: { ...s.structure!.objectives, [o.id]: true } } };
+    const next = nextObjective(objectives, s.structure!.objectives);
+    s = log(say({ ...s, objective: next?.text ?? s.objective }, next ? `Done: ${o.text}. Next: ${next.text}` : `Done: ${o.text}`, 4), { kind: 'event', text: `Objective done: ${o.text}` });
+  }
+  if (s.structure!.complete) return s;
+  const complete = info.completeWhen && !isEmpty(info.completeWhen) ? evaluate(info.completeWhen, s.world) : objectives.some((o) => !o.optional) && objectives.every((o) => o.optional || s.structure!.objectives[o.id]);
+  if (!complete) return s;
+  s = say(log({ ...s, structure: { ...s.structure!, complete: true } }, { kind: 'event', text: `${level.name} is complete` }), `${level.name} complete.`, 4);
+  if (info.onComplete?.length) {
+    const changed = applyStoryEffects(project, s.world, info.onComplete);
+    s = changeWorld(project, s, changed.world, changed.log.length ? changed.log : info.onComplete.map((e) => ({ kind: 'effect', text: describeEffect(project, e) }) as Entry), undefined, 0);
+  }
+  return s;
+};
+
+/**
+ * Leaving a map for another: the story goes on, and a structure keeps what it
+ * remembers of this visit (structure spec §10) for the next one.
+ */
+export const leaveLevel = (project: Project, state: LevelPlayState): PlayWorld => {
+  const level = levelsOf(project).levels.find((l) => l.id === state.levelId);
+  if (!level?.structure) return state.world;
+  const before = state.world.places?.[level.id];
+  const memory: PlaceMemory = {
+    open: { ...state.open },
+    unlocked: { ...state.unlocked },
+    found: { ...state.found },
+    broken: { ...state.broken },
+    gone: { ...state.gone },
+    done: { ...state.done },
+    spawned: [...state.spawned],
+    actors: { ...state.actors },
+    ...(state.cast ? { cast: { ...state.cast } } : {}),
+    objectives: { ...state.structure?.objectives },
+    complete: !!state.structure?.complete,
+    visits: (before?.visits ?? 0) + 1,
+  };
+  return { ...state.world, places: { ...state.world.places, [level.id]: memory } };
 };

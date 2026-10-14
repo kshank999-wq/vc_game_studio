@@ -17,8 +17,8 @@ other map (spec §3, §12). Nothing is kept twice.
 |---|---|---|
 | MVP 1: Authoring core | Structures from presets, footprints, floors from basements to the roof, rooms, walls, doors and stairs (the Level Designer's own), the structure graph, validation, save and load | **Built** |
 | MVP 2: Generation | Seeded plan-first and path-first layouts, previews to accept or reject, locked rooms, regenerating part of a structure | **Built** |
-| MVP 3: Gameplay | Door rules (one-way, timed, secret, breakable), the structure as a scene with entry and exit conditions and state that stays on re-entry, puzzles, items and characters placed in rooms, solvability (the key before its door, softlocks) | Next |
-| MVP 4: Graybox and handoff | Stacked floors and cutaways in 3D, rough play through a structure, a structure manifest for Godot, Unity and Unreal, re-export by id | Planned |
+| MVP 3: Gameplay | Door rules (one-way, timed, secret, breakable), the structure as a scene with objectives, completion and state that stays on re-entry, local and world states, items and characters placed in rooms, solvability (the key before its door, softlocks) and a walkthrough | **Built** |
+| MVP 4: Graybox and handoff | Stacked floors and cutaways in 3D, rough play through a structure, a structure manifest for Godot, Unity and Unreal (with the door rules and the scene settings), re-export by id | Next |
 
 Much of what the spec asks for was already in the Level Designer. MVP 1
 builds on it rather than beside it:
@@ -115,7 +115,7 @@ path**: click the way in, then each chamber along the way. Then:
 
 - **Chambers.** Each point of the route gets a chamber. The first is the entrance (Entrance Hall in a pyramid), the last the final chamber (Relic Chamber).
 - **Passages.** Passages join the chambers in route order: across, then along.
-- **Dead ends and secret branches.** These go off chambers along the way. A secret branch is behind a door named **Secret door** and tagged `secret`. For now that is all a secret door is; MVP 3 gives it its rules.
+- **Dead ends and secret branches.** These go off chambers along the way. A secret branch is behind a **Secret door** (its Secret rule on, and tagged `secret`): the wall until the player searches it.
 - **The way in.** It is through the first chamber. A passage is cut out to the nearest outside wall if the chamber doesn't reach one.
 - **Between floors.** Where a chamber stands over a chamber on the next floor, a shaft with a ladder joins them.
 - **Floors without a route.** These are left empty, and the generator says so.
@@ -190,7 +190,8 @@ map:
   - stairs and ramps from where they start to the room they come up in, on the floor their top reaches;
   - ladders and traversal links straight up, and lifts at every floor within their travel;
   - portals out.
-- **How lines are drawn.** Lines between floors are dashed gold. A door with a key, a condition or a puzzle gate is red. That door counts as open for now: MVP 3 checks the key can be reached first.
+- **How lines are drawn.** Lines between floors are dashed gold. A door with a key, a condition or a puzzle gate is red. A one-way door has an arrow, the way it can be gone through. A secret door is dotted.
+- **Shut off.** A room the walkthrough can't get to, because a locked door stays shut, is ringed with a dashed line.
 - **Unreachable rooms.** A room no one can get to from an entrance (or from the player start, with no entrance) is ringed in red.
 - **The issues list.** It is on the right. Click an issue or a room to go to it, on its floor.
 
@@ -200,6 +201,117 @@ map:
 - **Ladders and stairs:** ladders as well.
 - **Anything climbable:** traversal links as well.
 - **Step-free:** lifts and ramps only. This is a design option; it doesn't mean building-code compliance (spec §15).
+
+## Door rules (spec §7)
+
+A door in a structure (or on any map) has these rules in the inspector, under
+Gameplay:
+
+| Rule | What it does in Play Mode |
+|---|---|
+| **Locked**, with what it **Needs** | Shut until the player has the key. Then it unlocks, and stays unlocked. A door that names a key but isn't locked opens for anyone (the walkthrough says so). |
+| **Breakable**, **Broken with** | A locked door the player can break open, for good: with bare hands, or with the item named. "Locked. Needs Bronze Key, or Crowbar to break it." |
+| **Opens from** | Both sides, or one way: only from inside its room (the room whose wall it is in), or only from outside it. From the wrong side: "It won't open from this side." Once open, it is open both ways. |
+| **Closes again after** | A timed door: it shuts this many seconds after it opens, but never on the player standing in the doorway. 0: it stays open. |
+| **Secret** | It looks like the wall, in the 3D view of Play Mode too, and doesn't open as the player walks up. Interact by it offers **Search the wall**; then it is a door like any other. |
+
+Switches, codes and puzzles already open doors: a rule's **Open** action, a
+condition on the door, or a puzzle gate binding.
+
+The door rules go to the engines with the door's other settings. Their
+runtimes play them from MVP 4.
+
+## The structure as a scene (spec §10)
+
+With nothing selected, the inspector's **As a scene** section says what the
+structure is for in play.
+
+**Objectives.** What the player comes to do, in order. Each is done in one of
+three ways:
+
+- by reaching a room;
+- by coming up to an item;
+- when its condition holds ("Anywhere (by its condition)").
+
+An objective can be **Optional**. Play Mode shows the next objective, says
+when one is done, and goes on to the next.
+
+**Complete when.** By default the structure is complete when every objective
+that isn't optional is done. A condition here replaces that.
+
+**When it is complete, outside.** Effects on the story: set a state, give an
+item, solve a puzzle, start or complete a quest. These are how the structure
+changes the scene it is part of. They happen once.
+
+**Its own states (local).** A story state ticked here belongs to the
+structure. It goes back to how the story starts it whenever the structure's
+puzzles reset (below), and the first time the player comes in. Every other
+state is the world's: it carries in and out.
+
+**Coming back in.** What the structure remembers when the player leaves it
+(through a portal or a rule's **Go to level**) and comes back:
+
+| | Kept | Reset each visit |
+|---|---|---|
+| Doors | Opened, unlocked, found and broken, as left | As they start |
+| Items | Pickups taken stay taken | Pickups are back |
+| Enemies | Who was spawned, where they are, who is down | As they start |
+| Puzzles | Solved stays solved | Its puzzles unsolved, its local states as the story starts them |
+
+Everything is kept unless you say otherwise. Objectives done and the
+structure's completion are always kept. Play Mode's log says what came back:
+"Back in Tomb: doors, items, enemies, puzzles as you left them."
+
+The memory is kept with the story's state (the play world), so it travels
+from map to map.
+
+## Putting things in a room (spec §9)
+
+Select a room in a structure. **Put in this room**, in the inspector, takes:
+
+- **an item from the story's catalog.** It goes in as a pickup that gives it;
+- **a character.** An enemy goes in as an Enemy marker, an ally as a Companion, anyone else as an NPC;
+- **a new item.** Its name makes an inventory item in the catalog, then a pickup for it here.
+
+The room holds the placement; the definition stays in the catalog. Renaming
+the pickup doesn't rename the item, and editing the character in the
+Character Creator changes them everywhere they are placed. Things go round
+the room's middle, so they don't land on each other.
+
+## Solvability and the walkthrough (spec §11, §15)
+
+**Walkthrough**, a tab beside the issues in the structure panel, walks the
+structure as a player would:
+
+1. In from outside (or from the player start).
+2. Through every door that will open.
+3. Taking what is lying in each room it reaches: pickups, and things whose rules give items.
+4. Unlocking locked doors once their key is in hand, breaking breakable ones, opening ones a switch opens, searching for secret doors.
+5. Round again until nothing more opens.
+
+It lists each step: "Take Bronze Key (Key on the altar) in Entrance Hall.",
+"Unlock Inner door with Bronze Key.", "Reach Burial Chamber.". Then come the
+objectives it can reach. Click a step to go to it.
+
+A door kept shut by a condition or a puzzle gate counts as open here: the
+Puzzle Creator's own check says whether the puzzle can be solved.
+
+What the walk couldn't do is in the issues, and in preflight:
+
+| Issue | |
+|---|---|
+| A key behind the door it opens | Error: every way to the key goes through that door |
+| Locked doors waiting on each other | Error: Inner door needs the Bronze Key, behind the Vault door, which needs the Crowbar, behind the Inner door |
+| A locked door whose key isn't in the structure | Warning: the player has to bring it in |
+| A locked door with no key, not breakable | Warning |
+| A door that stays shut because its key is behind another door the player can't open | Warning |
+| A one-way door with no way back and no way out beyond it | Warning: a softlock (a portal or an objective beyond it is a way out) |
+| An objective that can't be reached | Error, or a warning if it is optional |
+| An objective with nowhere to be done and no condition | Warning |
+| A portal that leads nowhere, or to a map that isn't there; a rule that goes to a map that no longer exists | Error |
+| A pickup or a trigger that can't be reached | Warning |
+| A pickup that gives nothing, a trigger with no rules | Information |
+| A door that names a key but isn't locked; the only way somewhere is a secret door | Information |
 
 ## Validation (spec §8, §15)
 
@@ -232,11 +344,15 @@ A plain building map can be made a structure from here.
   - floor kinds and codes, basements and the roof;
   - `createStructure`;
   - the structure graph (`structureGraph`) and validation (`structureIssues`).
+- `apps/studio/src/renderer/model/level/doors.ts` reads a door's rules (`doorRules`) for Play Mode, the graph and the walkthrough.
+- `apps/studio/src/renderer/model/level/walkthrough.ts` holds the solvability check and the walkthrough (`walkStructure`).
+- `apps/studio/src/renderer/model/level/place-in-room.ts` puts catalog items and characters into a room (`placeInRoom`).
+- Play Mode (`model/level/play.ts`) plays the door rules, the objectives and completion, and what a structure remembers (`leaveLevel`, `PlaceMemory` in the play world's `places`).
 - `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, the rule presets and each structure type's room names.
 - Changes elsewhere:
   - `Level.structure` and `Floor.kind` are in `model/level/types.ts`;
   - the footprint asset is in `model/level/library.ts`;
   - `syncBuildings` (in `model/level/hierarchy.ts`) leaves basements and the roof out of a mass's count;
   - preflight takes the structure's issues (`model/level/validate.ts`).
-- The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph), `GeneratePanel.tsx` (the generator) and `StructureSection.tsx` (the inspector).
-- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts` and `__tests__/structure-creator.test.tsx`.
+- The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph and the walkthrough), `GeneratePanel.tsx` (the generator), `StructureSection.tsx` (the inspector's Structure and As a scene sections) and `PlaceInRoom.tsx`.
+- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-gameplay.test.ts` and `__tests__/structure-creator.test.tsx`.

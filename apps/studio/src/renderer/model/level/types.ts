@@ -361,6 +361,46 @@ export interface StructureInfo {
   seed: number;
   /** The story scene the structure plays as (structure spec §10), if any. */
   scene?: string;
+  /** What the player is there to do (structure spec §10), in order. */
+  objectives?: StructureObjective[];
+  /** When the structure is complete; absent: when every objective that isn't optional is done. */
+  completeWhen?: Rule;
+  /** What completing it does to the story outside (the parent scene). */
+  onComplete?: Effect[];
+  /**
+   * Story states that belong to the structure (local scope): they go back to
+   * how the story starts them whenever the structure resets. Every other
+   * state is the world's, and carries in and out.
+   */
+  localStates?: string[];
+  /** What the structure remembers when the player leaves and comes back (structure spec §10); absent: all of it. */
+  persist?: StructurePersist;
+}
+
+/** One thing to do in a structure. */
+export interface StructureObjective {
+  id: string;
+  text: string;
+  /** The room or item where it is done: reaching it does it, unless `when` says otherwise. */
+  at?: string;
+  /** Done when this holds, wherever the player is. */
+  when?: Rule;
+  /** Not needed to complete the structure. */
+  optional?: boolean;
+}
+
+/** Keep: as the player left it. Reset: as it starts, each time the player comes in. */
+export type PersistRule = 'keep' | 'reset';
+
+export interface StructurePersist {
+  /** Doors opened, unlocked, found and broken. */
+  doors: PersistRule;
+  /** Pickups taken. */
+  items: PersistRule;
+  /** Enemies and people spawned, where they are, who is down. */
+  enemies: PersistRule;
+  /** Puzzles solved in the structure, and its local states. */
+  puzzles: PersistRule;
 }
 
 /**

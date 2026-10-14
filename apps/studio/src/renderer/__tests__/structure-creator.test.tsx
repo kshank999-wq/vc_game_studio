@@ -83,4 +83,38 @@ describe('the Structure Creator (structure spec MVP 1)', () => {
     // The seed it was made with is the structure's now.
     expect((screen.getByRole('spinbutton', { name: 'Seed' }) as HTMLInputElement).value).toBe(seed);
   });
+
+  it('plays as a scene: a walkthrough, objectives, and things put in a room (structure spec MVP 3)', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: '+ Structure', exact: true } as never));
+    const dialog = screen.getByRole('dialog', { name: 'New structure' });
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Apartment block/ }));
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Structure name' }), { target: { value: 'Old Hotel' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create structure' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    const panel = screen.getByRole('region', { name: 'Generate a layout' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Preview' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Accept' }));
+    // The walkthrough: in from outside, room by room.
+    const graph = screen.getByRole('region', { name: 'Structure graph' });
+    fireEvent.click(within(graph).getByRole('tab', { name: 'Walkthrough' }));
+    const walk = within(graph).getByRole('list', { name: 'Walkthrough' });
+    expect(within(walk).getAllByRole('listitem')[0]!.textContent).toBe('Come in from outside.');
+    expect(within(walk).getAllByRole('listitem').length).toBeGreaterThan(3);
+    // An objective, in the inspector's As a scene section (nothing selected).
+    fireEvent.click(screen.getByRole('button', { name: '+ Objective' }));
+    expect((screen.getByRole('textbox', { name: 'Objective 1' }) as HTMLInputElement).value).toBe('Objective 1');
+    // Put a new item into a room picked in the graph.
+    const room = within(graph).getAllByRole('button').find((b) => /Lobby|Corridor|Room|Hall|Flat/.test(b.getAttribute('aria-label') ?? ''))!;
+    fireEvent.click(room);
+    fireEvent.change(screen.getByRole('combobox', { name: 'What to put in this room' }), { target: { value: 'new' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'New item’s name' }), { target: { value: 'Room Key' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Put it here' }));
+    expect((screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement).value).toBe('Room Key');
+    fireEvent.click(within(graph).getByRole('tab', { name: 'Walkthrough' }));
+    expect(within(graph).getByRole('list', { name: 'Walkthrough' }).textContent).toContain('Take Room Key (Room Key)');
+  });
 });

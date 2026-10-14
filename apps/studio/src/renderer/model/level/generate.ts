@@ -563,7 +563,7 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     const y = vertical ? g.y0 + along * g.cell : g.y0 + line * g.cell;
     // An opening as wide as its wall allows (to 3 m), leaving 0.4 m each side.
     const wide = open ? Math.max(1.2, Math.min(3, wall * g.cell - 0.8)) : 0;
-    const id = put(plan.floor.id, 'arch.door', x, y, name, open ? { w: wide } : undefined, open ? { swing: 'open archway' } : undefined, secret ? { tags: ['secret'] } : undefined);
+    const id = put(plan.floor.id, 'arch.door', x, y, name, open ? { w: wide } : undefined, open ? { swing: 'open archway' } : secret ? { secret: true } : undefined, secret ? { tags: ['secret'] } : undefined);
     if (id) counts.doors++;
   };
   for (const plan of plans) {

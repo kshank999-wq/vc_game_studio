@@ -233,7 +233,7 @@ the opening.
 
 The level runs on the same story state as the story's play-through, changed by
 the same effects, with triggers and puzzles settling after every change:
-- **Doors:** open and close; a locked door says what it needs, and opens with its key item.
+- **Doors:** open and close; a locked door says what it needs, and opens with its key item. Doors have the Structure Creator's door rules too: breakable, one way, timed and secret (see [STRUCTURE-CREATOR.md](STRUCTURE-CREATOR.md#door-rules-spec-7)).
 - **Pickups:** give their inventory item.
 - **Characters:** a linked scene starts, shown as a scene card.
 - **Interaction points:** tied to a story object, they use it the way free play does.

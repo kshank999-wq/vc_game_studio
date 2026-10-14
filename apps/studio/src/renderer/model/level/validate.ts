@@ -3,6 +3,7 @@ import type { Project } from '../types';
 import { assetOf, corners, frameOf, openingOf, outlineOf, overlaps, paramOf, selfIntersects, sizeOf, wallsOf } from './geometry';
 import { referencesOf } from './links';
 import { structureIssues } from './structure';
+import { walkStructure } from './walkthrough';
 import { migrationFor } from './migrate';
 import { navigate } from './nav';
 import { BODY, CROUCH } from './controller';
@@ -49,6 +50,11 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
     for (const i of structureIssues(set, level.id, global)) {
       if (i.severity === 'info') continue;
       add({ id: i.id, levelId: level.id, severity: i.severity, message: i.message, export: i.severity === 'error' ? 'The floors would be built into each other in the engine.' : 'It exports as drawn; in play the player can’t get everywhere it is meant to go.' });
+    }
+    // Can it be finished: keys before their doors, no softlocks, objectives in reach (structure spec §11, §15).
+    for (const i of walkStructure(project, level.id, global).issues) {
+      if (i.severity === 'info') continue;
+      add({ id: i.id, levelId: level.id, severity: i.severity, message: i.message, export: 'It exports as drawn; in play the player can get stuck or never finish it.' });
     }
   }
 

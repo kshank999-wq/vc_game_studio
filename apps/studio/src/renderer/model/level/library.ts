@@ -245,8 +245,19 @@ export const STARTER: readonly AssetDefinition[] = [
         { key: 'swing', label: 'Opens', group: 'dimensions', type: 'select', default: 'in', options: ['in', 'out', 'sliding', 'open archway'] },
         { key: 'startsOpen', label: 'Starts open', group: 'interaction', type: 'boolean', default: false },
         { key: 'autoOpen', label: 'Opens as the player walks up', group: 'interaction', type: 'boolean', default: true, hint: 'Off: the player opens it with Interact (E). A locked door still says what it needs.' },
-        { key: 'keyItem', label: 'Needs', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'], hint: 'An inventory item that unlocks it.' },
-        ...interaction(true, 'Open'),
+        { key: 'keyItem', label: 'Needs', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'], hint: 'An inventory item that unlocks it, when it is locked.' },
+        // Door rules (structure spec §7): one way, timed, secret, breakable.
+        { key: 'oneWay', label: 'Opens from', group: 'gameplay', type: 'select', default: 'both sides', options: ['both sides', 'inside its room', 'outside its room'], hint: 'One way: it opens only from one side (its room is the one whose wall it is in). Once open, it is open both ways.' },
+        { key: 'openFor', label: 'Closes again after', group: 'gameplay', type: 'number', unit: 's', default: 0, min: 0, step: 1, hint: 'Timed: it shuts this long after it opens. 0: it stays open.' },
+        { key: 'secret', label: 'Secret', group: 'gameplay', type: 'boolean', default: false, hint: 'Looks like the wall until the player searches it (Interact).' },
+        { key: 'breakWith', label: 'Broken with', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'], hint: 'For a breakable door: what it takes to break it. None: bare hands.' },
+        ...interaction(true, 'Open').map((p) =>
+          p.key === 'locked'
+            ? { ...p, group: 'gameplay' as const, advanced: false, hint: 'It needs its key (Needs) to open, or to be broken.' }
+            : p.key === 'destructible'
+              ? { ...p, label: 'Breakable', group: 'gameplay' as const, advanced: false, hint: 'A locked door the player can break open, for good.' }
+              : p,
+        ),
       ],
     },
     { id: 'arch.window', name: 'Window', kind: 'hosted', role: 'window', naming: 'architecture', size: [1.2, 0.2, 1.2], proxy: 'box', engine: HOSTED, description: 'An opening in a wall above a sill.', params: [{ key: 'sill', label: 'Sill height', group: 'dimensions', type: 'number', unit: 'length', default: 0.9, min: 0, step: 0.05 }] },

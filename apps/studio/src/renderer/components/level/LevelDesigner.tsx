@@ -1037,7 +1037,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         )}
         {!playing && isStructure(level) && showStructure && (
           <StructurePanel
-            set={shownSet}
+            project={shown}
             levelId={level.id}
             floorId={floor.id}
             global={global}

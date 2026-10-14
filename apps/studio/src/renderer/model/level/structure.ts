@@ -1,5 +1,6 @@
 import type { Project } from '../types';
 import { assetOf, contains, corners, frameOf, num, paramOf, pointInPolygon, spaceAt, toPlan, type Frame, type Point } from './geometry';
+import { doorRules } from './doors';
 import { addMap, gridFor, kindOf } from './hierarchy';
 import { guid, levelsOf, placeAsset, withSet } from './level';
 import type { AssetDefinition, Floor, FloorKind, Level, LevelItem, LevelSet, OutlinePoint, StructureInfo, StructureType, TraversalStyle } from './types';
@@ -268,8 +269,12 @@ export interface StructureEdge {
   kind: ConnectionKind;
   /** Between floors. */
   vertical: boolean;
-  /** Closed until something opens it: a key, a condition (gameplay MVP: checked for solvability). */
+  /** Closed until something opens it: a key, a condition, a puzzle (the solvability check works out when). */
   gated: boolean;
+  /** One way (structure spec §7): it can be gone through from `from` to `to` only (once open, it is open both ways, but by then the player has come from `from`). */
+  oneWay?: boolean;
+  /** A secret door: the wall until it is searched. */
+  secret?: boolean;
 }
 
 export const OUTSIDE = 'outside';
@@ -319,7 +324,8 @@ export const insidePolygon = (p: Point, poly: readonly Point[], tolerance = 0.05
   return false;
 };
 
-const isGated = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): boolean => !!item.activeWhen || !!String(paramOf(set, item, 'keyItem', global) ?? '').trim() || !!item.puzzles?.some((b) => b.role === 'gate');
+const isGated = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): boolean =>
+  !!item.activeWhen || !!String(paramOf(set, item, 'keyItem', global) ?? '').trim() || paramOf(set, item, 'locked', global) === true || !!item.puzzles?.some((b) => b.role === 'gate');
 
 /**
  * The structure graph of a map (spec §8): its spaces on every floor as nodes,
@@ -366,8 +372,12 @@ export const structureGraph = (set: LevelSet, levelId: string, global?: readonly
       const a = { x: f.x + n.x * reach, y: f.y + n.y * reach };
       const b = { x: f.x - n.x * reach, y: f.y - n.y * reach };
       const beyond = contains(hf, a) ? b : a;
-      const other = at(item.floorId, beyond, host.id);
-      add({ from: host.id, to: other ?? OUTSIDE, via: item.id, kind: 'door', vertical: false, gated: isGated(set, item, global) });
+      const other = at(item.floorId, beyond, host.id) ?? OUTSIDE;
+      const rules = doorRules(set, item, global);
+      const gated = isGated(set, item, global);
+      // A one-way door goes from the side it opens from.
+      if (rules.oneWay === 'outside') add({ from: other, to: host.id, via: item.id, kind: 'door', vertical: false, gated, oneWay: true, ...(rules.secret ? { secret: true } : {}) });
+      else add({ from: host.id, to: other, via: item.id, kind: 'door', vertical: false, gated, ...(rules.oneWay ? { oneWay: true } : {}), ...(rules.secret ? { secret: true } : {}) });
       continue;
     }
     const vk = VERTICAL[r];
@@ -410,7 +420,7 @@ export const structureGraph = (set: LevelSet, levelId: string, global?: readonly
     }
   }
 
-  // Walk from the outside (or the player start's room), through doors both ways and up and down.
+  // Walk from the outside (or the player start's room), through doors (one-way doors only their way) and up and down.
   const startItem = items.find((i) => role(i) === 'playerStart');
   const start = edges.some((e) => e.to === OUTSIDE || e.from === OUTSIDE) ? OUTSIDE : startItem ? (at(startItem.floorId, { x: startItem.x, y: startItem.y }) ?? null) : null;
   const reached = new Set<string>();
@@ -420,7 +430,7 @@ export const structureGraph = (set: LevelSet, levelId: string, global?: readonly
     while (queue.length) {
       const here = queue.shift()!;
       for (const e of edges) {
-        const there = e.from === here ? e.to : e.to === here ? e.from : null;
+        const there = e.from === here ? e.to : e.to === here && !e.oneWay ? e.from : null;
         if (there && !reached.has(there)) {
           reached.add(there);
           queue.push(there);
