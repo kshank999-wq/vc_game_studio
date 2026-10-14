@@ -752,6 +752,34 @@ reason, and every final state:
 
 The checks also spawn the market group and a placed Orc Sentry.
 
+## Structures
+
+A structure (the Structure Creator's mini-levels: pyramids, temples, offices,
+bunkers) goes to the engines as a map like any other. It also carries a
+**structure manifest**: its floors with their codes and footprints, its rooms
+and how they connect, each door's rules, its objectives and completion, its
+own states, and what it remembers between visits.
+
+- **Godot**: `structure_data()` in the level's script.
+- **Unity and Unreal**: `structure` in the level's JSON.
+
+Every runtime plays:
+
+- the door rules: breakable, one way, timed, secret;
+- the objectives, and the completion with its effects on the story;
+- what each map remembers when the player leaves it and comes back.
+
+The checks export the sample with the Old Tomb (`export-sample.ts <dir>
+<engine> structure`). The export writes `structure_expect.json`: the studio's
+Play Mode walking it. Each engine must say and do the same at every step:
+
+- `check_structure.gd` in Godot 4.3;
+- `unity-structure-check` with dotnet;
+- `structure_check.cpp` with g++.
+
+[STRUCTURE-CREATOR.md](STRUCTURE-CREATOR.md#in-the-engines-spec-13-14) has the
+details.
+
 ## What each engine gets
 
 The handoff screen's *What … gets* table (spec §14, the capability matrix)

@@ -45,3 +45,10 @@ cp "$here/godot-check/project.godot" "$here/godot-check/check_cast.gd" "$cast/"
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$cast" godot cast > /dev/null)
 "$GODOT" --headless --path "$cast" --import > /dev/null 2>&1 || true
 "$GODOT" --headless --path "$cast" -s check_cast.gd
+# The Structure Creator's Old Tomb (structure spec §7, §10, §14): door rules, objectives, completion and memory, as the studio plays them.
+tomb="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast" "$tomb"' EXIT
+cp "$here/godot-check/project.godot" "$here/godot-check/check_structure.gd" "$tomb/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$tomb" godot structure > /dev/null)
+"$GODOT" --headless --path "$tomb" --import > /dev/null 2>&1 || true
+"$GODOT" --headless --path "$tomb" -s check_structure.gd

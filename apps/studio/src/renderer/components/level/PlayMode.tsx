@@ -50,7 +50,8 @@ interface Props {
   onCommit: (project: Project) => void;
   /** Leave Play Mode, back to the editor (on the item the player was nearest, if any). */
   onExit: (nearItem?: string) => void;
-  onGoToLevel: (levelId: string, world: PlayWorld) => void;
+  /** Off to another map, carrying the story on; where to arrive there, when it isn't its start. */
+  onGoToLevel: (levelId: string, world: PlayWorld, arrival?: PlayStart) => void;
 }
 
 const PERSPECTIVES: { id: Perspective; label: string }[] = [
@@ -455,8 +456,8 @@ export const PlayMode = (props: Props) => {
           s = { ...s, placePlayer: undefined };
         }
         if (s.goTo) {
-          p.onGoToLevel(s.goTo, leaveLevel(p.project, s));
-          s = { ...s, goTo: undefined };
+          p.onGoToLevel(s.goTo, leaveLevel(p.project, s), s.arrival);
+          s = { ...s, goTo: undefined, arrival: undefined };
         }
       }
       pressedOnce.current.delete('interact');

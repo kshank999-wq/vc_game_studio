@@ -45,3 +45,10 @@ cp "$here/unity-check/UnityStubs.cs" "$here/unity-cast-check/"* "$cast/"
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$cast" unity cast > /dev/null)
 cd "$cast"
 dotnet run --nologo -v q
+# The Structure Creator's Old Tomb (structure spec §7, §10, §14): door rules, objectives, completion and memory, as the studio plays them.
+tomb="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast" "$tomb"' EXIT
+cp "$here/unity-check/UnityStubs.cs" "$here/unity-structure-check/"* "$tomb/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$tomb" unity structure > /dev/null)
+cd "$tomb"
+dotnet run --nologo -v q

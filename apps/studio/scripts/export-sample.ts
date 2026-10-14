@@ -20,6 +20,7 @@ import { frameOf } from '../src/renderer/model/level/geometry';
 import { levelsOf, placeAsset, resizeItem, setParam } from '../src/renderer/model/level/level';
 import { buildIR } from '../src/renderer/model/handoff/ir';
 import { runScenario } from '../src/renderer/model/handoff/cast';
+import { tombWalk, withTomb } from '../src/renderer/model/level/sample-structure';
 
 /**
  * With "puzzles": the sample and the built-in puzzle templates (puzzle spec
@@ -101,10 +102,18 @@ const scenarios = (project: Project) => {
 const dir = process.argv[2];
 if (!dir) throw new Error('Usage: export-sample.ts <godot project folder>');
 const engine = (process.argv[3] ?? 'godot') as EngineId;
-const base = process.argv[4] === 'puzzles' ? withPuzzles(sunkenVault()) : process.argv[4] === 'rooms' ? withRooms(sunkenVault()) : process.argv[4] === 'cast' ? withCast(sunkenVault()) : sunkenVault();
+const tomb = process.argv[4] === 'structure' ? withTomb(sunkenVault()) : null;
+const base = process.argv[4] === 'puzzles' ? withPuzzles(sunkenVault()) : process.argv[4] === 'rooms' ? withRooms(sunkenVault()) : process.argv[4] === 'cast' ? withCast(sunkenVault()) : tomb ? tomb.project : sunkenVault();
 if (process.argv[4] === 'cast') {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'cast_expect.json'), JSON.stringify({ scenarios: scenarios(base) }, null, 2));
+}
+if (tomb) {
+  // The walk through the Old Tomb, as the studio's Play Mode plays it: each engine must say and do the same.
+  const level = buildIR(tomb.project).levels.find((l) => l.guid === tomb.id)!;
+  const flag = String(level.structure!.on_complete![0]!.ref);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'structure_expect.json'), JSON.stringify({ level: level.key, scene: `${level.key}.tscn`, export_name: level.export_name, steps: tombWalk(tomb, (id) => (id === tomb.plundered ? flag : id)) }, null, 2));
 }
 const plan = planHandoff(setTarget(base, { engine }));
 for (const file of plan.output!.files) {

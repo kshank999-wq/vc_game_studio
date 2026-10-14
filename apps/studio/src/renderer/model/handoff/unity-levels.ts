@@ -57,6 +57,14 @@ namespace VCGS
         public string Why = "";
     }
 
+    /// <summary>What a map remembers of the player's visit (structure spec §10), for the next.</summary>
+    public sealed class PlaceMemory
+    {
+        public Dictionary<string, bool> Open = new Dictionary<string, bool>();
+        public HashSet<string> Unlocked = new HashSet<string>(), Found = new HashSet<string>(), Broken = new HashSet<string>(), Gone = new HashSet<string>(), Done = new HashSet<string>(), Objectives = new HashSet<string>();
+        public bool Complete;
+    }
+
     public sealed class LevelLogic
     {
         static readonly HashSet<string> Interactive = new HashSet<string> { "door", "pickup", "inventory", "weapon", "ammo", "health", "npc", "companion", "neutral", "dialogue", "interaction", "puzzle", "elevator", "ladder" };
@@ -73,6 +81,19 @@ namespace VCGS
         public readonly Dictionary<string, bool> Open = new Dictionary<string, bool>();
         public readonly Dictionary<string, bool> Enabled = new Dictionary<string, bool>();
         public readonly HashSet<string> Unlocked = new HashSet<string>();
+        /// <summary>Secret doors found, doors broken open, and timed doors with the level time each shuts again (structure spec §7).</summary>
+        public readonly HashSet<string> Found = new HashSet<string>();
+        public readonly HashSet<string> Broken = new HashSet<string>();
+        public readonly Dictionary<string, double> ClosesAt = new Dictionary<string, double>();
+        /// <summary>A structure's manifest (structure spec §13): floors, rooms, connections, door rules, objectives, what it remembers. Empty for a map that isn't one.</summary>
+        public readonly Dictionary<string, object> Structure;
+        /// <summary>The structure's objectives done, and whether it is complete.</summary>
+        public readonly HashSet<string> ObjectivesDone = new HashSet<string>();
+        public bool Complete;
+        /// <summary>A structure was completed (its level key): its effects on the story have run.</summary>
+        public event Action<string> StructureCompleted;
+        /// <summary>What each map remembers of the player's last visit, by level key, for the next (structure spec §10). VcgsLevel keeps it as levels load and unload.</summary>
+        public static readonly Dictionary<string, PlaceMemory> Places = new Dictionary<string, PlaceMemory>();
         public readonly HashSet<string> Gone = new HashSet<string>();
         public readonly HashSet<string> Done = new HashSet<string>();
         public readonly HashSet<string> Inside = new HashSet<string>();
@@ -133,6 +154,7 @@ namespace VCGS
             LightFuel = LightFuelFull;
             names = D.Map(data, "names");
             Map = D.Map(data, "map");
+            Structure = D.Map(data, "structure");
             foreach (var o in D.List(data, "travel")) Travel[D.Str(D.Map(o), "key")] = D.Map(o);
             foreach (var o in D.List(data, "items"))
             {
@@ -159,6 +181,9 @@ namespace VCGS
             }
             foreach (var guid in Order)
                 if (Role(guid) == "spawn" && D.Str(Item(guid), "kind") == "marker" && ParamNum(guid, "delay", 0) <= 0 && IsPresent(guid)) Spawn(guid);
+            // Back in: what it remembers of the last visit comes back (structure spec §10).
+            if (Places.TryGetValue(Key, out var memory)) Recall(memory);
+            if (Objective == "") Objective = NextObjective();
         }
 
         public Dictionary<string, object> Item(string guid) => Items.TryGetValue(guid, out var i) ? i : new Dictionary<string, object>();
@@ -247,7 +272,7 @@ namespace VCGS
             Items.ContainsKey(guid) && !Gone.Contains(guid) && !(Enabled.TryGetValue(guid, out var on) && !on) && Rules.Check(D.Get(Item(guid), "active_when"), Game);
 
         public bool IsOpen(string guid) =>
-            Open.TryGetValue(guid, out var open) ? open : ParamBool(guid, "startsOpen", false) || ParamStr(guid, "swing") == "open archway";
+            Broken.Contains(guid) || (Open.TryGetValue(guid, out var open) ? open : ParamBool(guid, "startsOpen", false) || ParamStr(guid, "swing") == "open archway");
 
         bool HasRule(string guid, params string[] on)
         {
@@ -269,13 +294,27 @@ namespace VCGS
             if (TooDark(guid)) return new LevelOffer { Verb = prompt, Label = label, Blocked = HasLightSource() ? "Too dark to see. Turn your light on (L)." : "Too dark to see." + (LightSource != "" ? " It needs " + StoryName(LightSource) + " for light." : "") };
             if (Role(guid) == "door")
             {
-                if (ParamStr(guid, "swing") == "open archway") return null;
+                if (ParamStr(guid, "swing") == "open archway" || Broken.Contains(guid)) return null;
+                // A secret door is the wall until it is searched (structure spec §7).
+                if (ParamBool(guid, "secret", false) && !Found.Contains(guid)) return new LevelOffer { Verb = "Search", Label = "the wall" };
+                if (IsOpen(guid)) return new LevelOffer { Verb = "Close", Label = label };
+                var way = OneWay(guid);
+                var side = way != "" ? DoorSide(guid) : "";
+                if (side != "" && side != way) return new LevelOffer { Verb = prompt, Label = label, Blocked = "It won\u2019t open from this side." };
                 var key = ParamStr(guid, "keyItem");
                 var locked = ParamBool(guid, "locked", false) && !Unlocked.Contains(guid);
-                var open = IsOpen(guid);
-                if (!open && locked && key != "" && !Game.HasItem(key)) return new LevelOffer { Verb = prompt, Label = label, Blocked = "Locked. Needs " + StoryName(key) + "." };
-                if (!open && locked && key == "") return new LevelOffer { Verb = prompt, Label = label, Blocked = "Locked." };
-                return new LevelOffer { Verb = open ? "Close" : locked ? prompt : "Open", Label = label };
+                if (locked && !(key != "" && Game.HasItem(key)))
+                {
+                    // A breakable door gives way, to bare hands or to what breaks it.
+                    var breaker = ParamStr(guid, "breakWith");
+                    var breakable = ParamBool(guid, "destructible", false);
+                    if (breakable && (breaker == "" || Game.HasItem(breaker))) return new LevelOffer { Verb = "Break", Label = label };
+                    var needs = new List<string>();
+                    if (key != "") needs.Add(StoryName(key));
+                    if (breakable && breaker != "") needs.Add(StoryName(breaker) + " to break it");
+                    return new LevelOffer { Verb = prompt, Label = label, Blocked = needs.Count > 0 ? "Locked. Needs " + string.Join(", or ", needs) + "." : "Locked." };
+                }
+                return new LevelOffer { Verb = locked ? prompt : "Open", Label = label };
             }
             return new LevelOffer { Verb = prompt, Label = label };
         }
@@ -295,9 +334,27 @@ namespace VCGS
             var role = Role(guid);
             if (role == "door")
             {
-                var wasOpen = IsOpen(guid);
-                if (!wasOpen && ParamBool(guid, "locked", false)) Unlocked.Add(guid);
-                Open[guid] = !wasOpen;
+                if (offer.Verb == "Search")
+                {
+                    // Found: a door from now on, to open like any other.
+                    Found.Add(guid);
+                    said = "A hidden door: " + D.Str(item, "name") + ".";
+                }
+                else if (offer.Verb == "Break")
+                {
+                    Broken.Add(guid);
+                    said = D.Str(item, "name") + " gives way.";
+                }
+                else
+                {
+                    var wasOpen = IsOpen(guid);
+                    if (!wasOpen && ParamBool(guid, "locked", false)) Unlocked.Add(guid);
+                    Open[guid] = !wasOpen;
+                    // A timed door shuts again on its own.
+                    var openFor = ParamNum(guid, "openFor", 0);
+                    if (!wasOpen && openFor > 0) ClosesAt[guid] = Time + openFor;
+                    else ClosesAt.Remove(guid);
+                }
             }
             else if (Pickups.Contains(role) && ParamBool(guid, "collectible", true))
             {
@@ -373,6 +430,7 @@ namespace VCGS
             Time += dt;
             MoveActors(dt);
             Watch();
+            CloseTimed();
             ApproachDoors();
             BurnLight(dt);
             foreach (var guid in new List<string>(Inside))
@@ -386,6 +444,7 @@ namespace VCGS
                 Health = 100;
                 PlayerDied?.Invoke();
             }
+            CheckStructure();
             foreach (var guid in Order)
             {
                 if (!IsPresent(guid)) continue;
@@ -630,10 +689,209 @@ namespace VCGS
                 if (Math.Abs(Player[1] - D.Num(at[1], 0)) > 1 || Math.Sqrt(dx * dx + dz * dz) > Math.Max(1.1, width / 2 + 0.4)) continue;
                 near.Add(guid);
                 if (AtDoors.Contains(guid) || IsOpen(guid) || !ParamBool(guid, "autoOpen", true)) continue;
+                // A secret door waits to be searched.
+                if (ParamBool(guid, "secret", false) && !Found.Contains(guid)) continue;
                 Interact(guid);
             }
             AtDoors.Clear();
             AtDoors.UnionWith(near);
+        }
+
+        // ---------------------------------------------------------------- door rules and structures (structure spec §7, §10)
+
+        /// <summary>A one-way door's side: "inside" (its room, the one whose wall it is in) or "outside"; "" for both ways.</summary>
+        string OneWay(string guid)
+        {
+            var way = ParamStr(guid, "oneWay");
+            return way == "inside its room" ? "inside" : way == "outside its room" ? "outside" : "";
+        }
+
+        /// <summary>Which side of a door the Player is on: "inside" its room, "outside", or "" when that can't be told.</summary>
+        public string DoorSide(string guid)
+        {
+            var host = D.Str(D.Map(Item(guid), "host"), "guid");
+            if (Player == null || Player.Length < 3 || host == "" || !Items.ContainsKey(host)) return "";
+            return InRoom(host, Player) ? "inside" : "outside";
+        }
+
+        /// <summary>Whether a level-space point is inside a room on the plan: its outline, or its rectangle.</summary>
+        public bool InRoom(string guid, double[] at)
+        {
+            var item = Item(guid);
+            var p = D.List(item, "position");
+            var size = D.List(item, "size");
+            if (p.Count < 3 || size.Count < 3) return false;
+            var t = D.Num(item, "turn", 0) * Math.PI / 180;
+            double dx = at[0] - D.Num(p[0], 0), dz = at[2] - D.Num(p[2], 0);
+            var lx = dx * Math.Cos(t) - dz * Math.Sin(t);
+            var lz = dx * Math.Sin(t) + dz * Math.Cos(t);
+            var outline = D.List(item, "outline");
+            if (outline.Count < 3) return Math.Abs(lx) <= D.Num(size[0], 0) / 2 + 1e-6 && Math.Abs(lz) <= D.Num(size[2], 0) / 2 + 1e-6;
+            var inside = false;
+            for (int i = 0, j = outline.Count - 1; i < outline.Count; j = i++)
+            {
+                double xi = D.Num(D.List(outline[i])[0], 0), zi = D.Num(D.List(outline[i])[1], 0), xj = D.Num(D.List(outline[j])[0], 0), zj = D.Num(D.List(outline[j])[1], 0);
+                if ((zi > lz) != (zj > lz) && lx < (xj - xi) * (lz - zi) / (zj - zi) + xi) inside = !inside;
+            }
+            return inside;
+        }
+
+        /// <summary>The room a level-space point is in: on the floor at its height, the smallest room around it.</summary>
+        public string RoomAt(double[] at)
+        {
+            string floor = "", lowestKey = "";
+            double best = double.NegativeInfinity, lowest = double.PositiveInfinity;
+            foreach (var f in D.List(Structure, "floors"))
+            {
+                var e = D.Num(D.Map(f), "elevation", 0);
+                if (e <= at[1] + 0.5 && e > best) { best = e; floor = D.Str(D.Map(f), "key"); }
+                if (e < lowest) { lowest = e; lowestKey = D.Str(D.Map(f), "key"); }
+            }
+            if (floor == "") floor = lowestKey;
+            var room = "";
+            var area = double.PositiveInfinity;
+            foreach (var guid in Order)
+            {
+                var item = Item(guid);
+                if (D.Str(item, "kind") != "space" || D.Str(item, "floor") != floor || !InRoom(guid, at)) continue;
+                var size = D.List(item, "size");
+                var a = D.Num(size[0], 0) * D.Num(size[2], 0);
+                if (a < area) { area = a; room = guid; }
+            }
+            return room;
+        }
+
+        /// <summary>Timed doors shut when their time is up, unless the Player is standing in the doorway.</summary>
+        void CloseTimed()
+        {
+            foreach (var guid in new List<string>(ClosesAt.Keys))
+            {
+                if (ClosesAt[guid] > Time) continue;
+                if (Player != null && Player.Length >= 3)
+                {
+                    var p = D.List(Item(guid), "position");
+                    var size = D.List(Item(guid), "size");
+                    var width = size.Count > 0 ? D.Num(size[0], 1.2) : 1.2;
+                    double dx = Player[0] - D.Num(p[0], 0), dz = Player[2] - D.Num(p[2], 0);
+                    if (Math.Sqrt(dx * dx + dz * dz) < Math.Max(1.1, width / 2 + 0.4) && Math.Abs(Player[1] - D.Num(p[1], 0)) < 1.5) continue;
+                }
+                ClosesAt.Remove(guid);
+                Open[guid] = false;
+                Refreshed?.Invoke();
+            }
+        }
+
+        /// <summary>The first objective not done yet (one that isn't optional first); "" when there is none.</summary>
+        public string NextObjective()
+        {
+            var any = "";
+            foreach (var o in D.List(Structure, "objectives"))
+            {
+                var obj = D.Map(o);
+                if (ObjectivesDone.Contains(D.Str(obj, "id"))) continue;
+                if (!D.Bool(obj, "optional")) return D.Str(obj, "text");
+                if (any == "") any = D.Str(obj, "text");
+            }
+            return any;
+        }
+
+        /// <summary>An objective is done when its condition holds, or (with none) when the Player reaches its room or comes up to its item.</summary>
+        bool ObjectiveDone(Dictionary<string, object> o)
+        {
+            if (D.Map(o, "when").Count > 0) return Rules.Check(D.Get(o, "when"), Game);
+            var at = D.Str(o, "at");
+            if (at == "" || Player == null || Player.Length < 3 || !Items.ContainsKey(at)) return false;
+            if (D.Str(Item(at), "kind") == "space") return RoomAt(Player) == at;
+            if (!IsPresent(at)) return false;
+            var p = D.List(Item(at), "position");
+            var size = D.List(Item(at), "size");
+            double dx = Player[0] - D.Num(p[0], 0), dz = Player[2] - D.Num(p[2], 0);
+            return Math.Sqrt(dx * dx + dz * dz) <= Math.Max(2, D.Num(size[0], 0) / 2 + 1) && Math.Abs(Player[1] - D.Num(p[1], 0)) < 2;
+        }
+
+        /// <summary>A structure's objectives, in order, and its completion: completing it runs its effects on the story outside, once.</summary>
+        void CheckStructure()
+        {
+            if (Structure.Count == 0) return;
+            var objectives = D.List(Structure, "objectives");
+            foreach (var o in objectives)
+            {
+                var obj = D.Map(o);
+                var id = D.Str(obj, "id");
+                if (ObjectivesDone.Contains(id) || !ObjectiveDone(obj)) continue;
+                ObjectivesDone.Add(id);
+                var next = NextObjective();
+                if (next != "")
+                {
+                    Objective = next;
+                    ObjectiveChanged?.Invoke(next);
+                }
+                Message?.Invoke("Done: " + D.Str(obj, "text") + (next != "" ? ". Next: " + next : ""));
+            }
+            if (Complete) return;
+            bool all;
+            if (D.Map(Structure, "complete_when").Count > 0) all = Rules.Check(D.Get(Structure, "complete_when"), Game);
+            else
+            {
+                var required = 0;
+                all = true;
+                foreach (var o in objectives)
+                {
+                    var obj = D.Map(o);
+                    if (D.Bool(obj, "optional")) continue;
+                    required++;
+                    if (!ObjectivesDone.Contains(D.Str(obj, "id"))) all = false;
+                }
+                all = all && required > 0;
+            }
+            if (!all) return;
+            Complete = true;
+            Rules.Apply(D.Get(Structure, "on_complete"), Game);
+            Message?.Invoke(D.Str(Structure, "name") + " complete.");
+            StructureCompleted?.Invoke(Key);
+            Refreshed?.Invoke();
+        }
+
+        /// <summary>What this map remembers of the visit, for the next (structure spec §10). VcgsLevel stores it in Places as the level goes.</summary>
+        public PlaceMemory Remember() => new PlaceMemory
+        {
+            Open = new Dictionary<string, bool>(Open),
+            Unlocked = new HashSet<string>(Unlocked),
+            Found = new HashSet<string>(Found),
+            Broken = new HashSet<string>(Broken),
+            Gone = new HashSet<string>(Gone),
+            Done = new HashSet<string>(Done),
+            Objectives = new HashSet<string>(ObjectivesDone),
+            Complete = Complete,
+        };
+
+        /// <summary>Back in: what it remembers comes back, as a structure's persistence rules say (doors, items, enemies, puzzles kept or reset).</summary>
+        public void Recall(PlaceMemory memory)
+        {
+            var persist = D.Map(Structure, "persist");
+            bool Keeps(string what) => D.Str(persist, what) != "reset";
+            if (Keeps("doors"))
+            {
+                Open.Clear(); foreach (var pair in memory.Open) Open[pair.Key] = pair.Value;
+                Unlocked.Clear(); Unlocked.UnionWith(memory.Unlocked);
+                Found.Clear(); Found.UnionWith(memory.Found);
+                Broken.Clear(); Broken.UnionWith(memory.Broken);
+            }
+            Gone.Clear();
+            foreach (var guid in memory.Gone)
+            {
+                var isItem = Pickups.Contains(Role(guid));
+                if ((isItem && Keeps("items")) || (!isItem && Keeps("enemies"))) Gone.Add(guid);
+            }
+            if (Keeps("enemies")) { Done.Clear(); Done.UnionWith(memory.Done); }
+            if (!Keeps("puzzles"))
+            {
+                foreach (var key in D.List(Structure, "puzzles")) if (key is string k) Game.Solved.Remove(k);
+                foreach (var st in D.List(Structure, "local_states")) Game.SetFlag(D.Str(D.Map(st), "key"), D.Str(D.Map(st), "start"));
+            }
+            ObjectivesDone.Clear();
+            ObjectivesDone.UnionWith(memory.Objectives);
+            Complete = memory.Complete;
         }
 
         /// <summary>Line of sight: true when something solid lies between two level-space points. VcgsLevel sets it (a raycast); unset, nothing blocks.</summary>
@@ -908,6 +1166,12 @@ namespace VCGS
 
         [Tooltip("Who companions follow; the GameObject tagged Player when empty.")]
         public Transform player = null;
+
+        /// <summary>Leaving: the map remembers the visit for the next time it loads (structure spec §10).</summary>
+        void OnDestroy()
+        {
+            if (Logic != null && Logic.Key != "") LevelLogic.Places[Logic.Key] = Logic.Remember();
+        }
 
         void Update()
         {

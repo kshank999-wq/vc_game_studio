@@ -56,6 +56,14 @@ namespace vcgs
         double Until = 0;
     };
 
+    /** What a map remembers of the player's visit (structure spec §10), for the next. */
+    struct PlaceMemory
+    {
+        std::map<std::string, bool> Open;
+        std::set<std::string> Unlocked, Found, Broken, Gone, Done, Objectives;
+        bool Complete = false;
+    };
+
     class LevelLogic
     {
     public:
@@ -66,6 +74,22 @@ namespace vcgs
         std::map<std::string, const Value*> Items;
         std::map<std::string, bool> Open, Enabled;
         std::set<std::string> Unlocked, Gone, Done, Inside;
+        /** Secret doors found, doors broken open, and timed doors with the level time each shuts again (structure spec §7). */
+        std::set<std::string> Found, Broken;
+        std::map<std::string, double> ClosesAt;
+        /** The structure's objectives done, and whether it is complete (structure spec §10). */
+        std::set<std::string> ObjectivesDone;
+        bool Complete = false;
+        /** A structure was completed (its level key): its effects on the story have run. */
+        std::function<void(const std::string&)> OnStructureCompleted;
+        /** What each map remembers of the player's last visit, by level key, for the next. The director keeps it as levels begin and end play. */
+        static std::map<std::string, PlaceMemory>& Places()
+        {
+            static std::map<std::string, PlaceMemory> places;
+            return places;
+        }
+        /** A structure's manifest (structure spec §13): floors, rooms, connections, door rules, objectives, what it remembers. Null for a map that isn't one. */
+        const Value& Structure() const { return Data["structure"]; }
         std::map<std::string, double> Timers;
         std::string Objective;
         double Health = 100;
@@ -186,6 +210,8 @@ namespace vcgs
                 if (std::fabs(PlayerY - at[1].Num(0)) > 1 || std::sqrt(dx * dx + dz * dz) > std::max(1.1, width / 2 + 0.4)) continue;
                 near.insert(guid);
                 if (AtDoors.count(guid) || IsOpen(guid) || !ParamBool(guid, "autoOpen", true)) continue;
+                // A secret door waits to be searched.
+                if (ParamBool(guid, "secret", false) && !Found.count(guid)) continue;
                 Interact(guid);
             }
             AtDoors = near;
@@ -193,6 +219,206 @@ namespace vcgs
 
         bool HasPlayer = false;
         double PlayerX = 0, PlayerY = 0, PlayerZ = 0;
+
+        // ---------------------------------------------------------------- door rules and structures (structure spec §7, §10)
+
+        /** A one-way door's side: "inside" (its room, the one whose wall it is in) or "outside"; empty for both ways. */
+        std::string OneWay(const std::string& guid) const
+        {
+            const std::string way = Param(guid, "oneWay").Str();
+            return way == "inside its room" ? "inside" : way == "outside its room" ? "outside" : "";
+        }
+
+        /** Which side of a door the player is on: "inside" its room, "outside", or empty when that can't be told. */
+        std::string DoorSide(const std::string& guid) const
+        {
+            const std::string host = Item(guid)["host"]["guid"].Str();
+            if (!HasPlayer || host.empty() || !Items.count(host)) return "";
+            return InRoom(host, PlayerX, PlayerY, PlayerZ) ? "inside" : "outside";
+        }
+
+        /** Whether a level-space point is inside a room on the plan: its outline, or its rectangle. */
+        bool InRoom(const std::string& guid, double x, double y, double z) const
+        {
+            (void)y;
+            const Value& it = Item(guid);
+            const Value& at = it["position"];
+            const Value& size = it["size"];
+            const double t = it["turn"].Num(0) * 3.14159265358979323846 / 180;
+            const double dx = x - at[0].Num(0), dz = z - at[2].Num(0);
+            const double lx = dx * std::cos(t) - dz * std::sin(t);
+            const double lz = dx * std::sin(t) + dz * std::cos(t);
+            const Value& outline = it["outline"];
+            if (outline.Size() < 3) return std::fabs(lx) <= size[0].Num(0) / 2 + 1e-6 && std::fabs(lz) <= size[2].Num(0) / 2 + 1e-6;
+            bool inside = false;
+            for (size_t i = 0, j = outline.Size() - 1; i < outline.Size(); j = i++)
+            {
+                const double xi = outline[i][0].Num(0), zi = outline[i][1].Num(0), xj = outline[j][0].Num(0), zj = outline[j][1].Num(0);
+                if ((zi > lz) != (zj > lz) && lx < (xj - xi) * (lz - zi) / (zj - zi) + xi) inside = !inside;
+            }
+            return inside;
+        }
+
+        /** The room a level-space point is in: on the floor at its height, the smallest room around it. */
+        std::string RoomAt(double x, double y, double z) const
+        {
+            std::string floor, lowestKey;
+            double best = -std::numeric_limits<double>::infinity(), lowest = std::numeric_limits<double>::infinity();
+            const Value& floors = Structure()["floors"];
+            for (size_t i = 0; i < floors.Size(); i++)
+            {
+                const double e = floors[i]["elevation"].Num(0);
+                if (e <= y + 0.5 && e > best) { best = e; floor = floors[i]["key"].Str(); }
+                if (e < lowest) { lowest = e; lowestKey = floors[i]["key"].Str(); }
+            }
+            if (floor.empty()) floor = lowestKey;
+            std::string room;
+            double area = std::numeric_limits<double>::infinity();
+            for (const auto& guid : Order)
+            {
+                const Value& it = Item(guid);
+                if (it["kind"].Str() != "space" || it["floor"].Str() != floor || !InRoom(guid, x, y, z)) continue;
+                const double a = it["size"][0].Num(0) * it["size"][2].Num(0);
+                if (a < area) { area = a; room = guid; }
+            }
+            return room;
+        }
+
+        /** Timed doors shut when their time is up, unless the player is standing in the doorway. */
+        void CloseTimed()
+        {
+            std::vector<std::string> due;
+            for (const auto& pair : ClosesAt) if (pair.second <= Time) due.push_back(pair.first);
+            for (const auto& guid : due)
+            {
+                if (HasPlayer)
+                {
+                    const Value& at = Item(guid)["position"];
+                    const double width = Item(guid)["size"][0].Num(1.2);
+                    const double dx = PlayerX - at[0].Num(0), dz = PlayerZ - at[2].Num(0);
+                    if (std::sqrt(dx * dx + dz * dz) < std::max(1.1, width / 2 + 0.4) && std::fabs(PlayerY - at[1].Num(0)) < 1.5) continue;
+                }
+                ClosesAt.erase(guid);
+                Open[guid] = false;
+                if (OnRefresh) OnRefresh();
+            }
+        }
+
+        /** The first objective not done yet (one that isn't optional first); empty when there is none. */
+        std::string NextObjective() const
+        {
+            std::string any;
+            const Value& objectives = Structure()["objectives"];
+            for (size_t i = 0; i < objectives.Size(); i++)
+            {
+                const Value& o = objectives[i];
+                if (ObjectivesDone.count(o["id"].Str())) continue;
+                if (!(o["optional"].type == Value::Type::Bool && o["optional"].boolean)) return o["text"].Str();
+                if (any.empty()) any = o["text"].Str();
+            }
+            return any;
+        }
+
+        /** An objective is done when its condition holds, or (with none) when the player reaches its room or comes up to its item. */
+        bool ObjectiveDone(const Value& o) const
+        {
+            if (o["when"].IsObject()) return Rules::Check(o["when"], Game);
+            const std::string at = o["at"].Str();
+            if (at.empty() || !HasPlayer || !Items.count(at)) return false;
+            if (Item(at)["kind"].Str() == "space") return RoomAt(PlayerX, PlayerY, PlayerZ) == at;
+            if (!IsPresent(at)) return false;
+            const Value& p = Item(at)["position"];
+            const double dx = PlayerX - p[0].Num(0), dz = PlayerZ - p[2].Num(0);
+            return std::sqrt(dx * dx + dz * dz) <= std::max(2.0, Item(at)["size"][0].Num(0) / 2 + 1) && std::fabs(PlayerY - p[1].Num(0)) < 2;
+        }
+
+        /** A structure's objectives, in order, and its completion: completing it runs its effects on the story outside, once. */
+        void CheckStructure()
+        {
+            if (!Structure().IsObject()) return;
+            const Value& objectives = Structure()["objectives"];
+            for (size_t i = 0; i < objectives.Size(); i++)
+            {
+                const Value& o = objectives[i];
+                const std::string id = o["id"].Str();
+                if (ObjectivesDone.count(id) || !ObjectiveDone(o)) continue;
+                ObjectivesDone.insert(id);
+                const std::string next = NextObjective();
+                if (!next.empty())
+                {
+                    Objective = next;
+                    if (OnObjective) OnObjective(next);
+                }
+                if (OnMessage) OnMessage("Done: " + o["text"].Str() + (next.empty() ? std::string() : ". Next: " + next));
+            }
+            if (Complete) return;
+            bool all = true;
+            if (Structure()["complete_when"].IsObject()) all = Rules::Check(Structure()["complete_when"], Game);
+            else
+            {
+                int required = 0;
+                for (size_t i = 0; i < objectives.Size(); i++)
+                {
+                    const Value& o = objectives[i];
+                    if (o["optional"].type == Value::Type::Bool && o["optional"].boolean) continue;
+                    required++;
+                    if (!ObjectivesDone.count(o["id"].Str())) all = false;
+                }
+                all = all && required > 0;
+            }
+            if (!all) return;
+            Complete = true;
+            Rules::Apply(Structure()["on_complete"], Game);
+            if (OnMessage) OnMessage(Structure()["name"].Str() + " complete.");
+            if (OnStructureCompleted) OnStructureCompleted(Key);
+            if (OnRefresh) OnRefresh();
+        }
+
+        /** What this map remembers of the visit, for the next (structure spec §10). The director stores it in Places() as play ends. */
+        PlaceMemory Remember() const
+        {
+            PlaceMemory m;
+            m.Open = Open;
+            m.Unlocked = Unlocked;
+            m.Found = Found;
+            m.Broken = Broken;
+            m.Gone = Gone;
+            m.Done = Done;
+            m.Objectives = ObjectivesDone;
+            m.Complete = Complete;
+            return m;
+        }
+
+        /** Back in: what it remembers comes back, as a structure's persistence rules say (doors, items, enemies, puzzles kept or reset). */
+        void Recall(const PlaceMemory& memory)
+        {
+            const Value& persist = Structure()["persist"];
+            auto keeps = [&persist](const char* what) { return persist[what].Str() != "reset"; };
+            if (keeps("doors"))
+            {
+                Open = memory.Open;
+                Unlocked = memory.Unlocked;
+                Found = memory.Found;
+                Broken = memory.Broken;
+            }
+            static const std::set<std::string> pickups = {"pickup", "inventory", "weapon", "ammo", "health"};
+            Gone.clear();
+            for (const auto& guid : memory.Gone)
+            {
+                const bool isItem = pickups.count(Role(guid)) > 0;
+                if ((isItem && keeps("items")) || (!isItem && keeps("enemies"))) Gone.insert(guid);
+            }
+            if (keeps("enemies")) Done = memory.Done;
+            if (!keeps("puzzles"))
+            {
+                const Value& puzzles = Structure()["puzzles"];
+                for (size_t i = 0; i < puzzles.Size(); i++) Game.Solved.erase(puzzles[i].Str());
+                const Value& states = Structure()["local_states"];
+                for (size_t i = 0; i < states.Size(); i++) Game.SetFlag(states[i]["key"].Str(), states[i]["start"].Str());
+            }
+            ObjectivesDone = memory.Objectives;
+            Complete = memory.Complete;
+        }
         /** How far behind a companion may fall before it catches up at once. */
         static constexpr double CatchUp = 12;
         /** The player's light (spec §6), from the player start: what lights it (a story item or mechanic), its fuel (infinity for ever), its reach. */
@@ -248,6 +474,10 @@ namespace vcgs
                 }
                 Poses[guid] = pose;
             }
+            // Back in: what it remembers of the last visit comes back (structure spec §10).
+            auto memory = Places().find(Key);
+            if (memory != Places().end()) Recall(memory->second);
+            if (Objective.empty()) Objective = NextObjective();
             subscription = Game.Subscribe([this]() { Changed(); });
             for (const auto& guid : Order)
                 if (Role(guid) == "spawn" && Item(guid)["kind"].Str() == "marker" && Param(guid, "delay").Num(0) <= 0 && IsPresent(guid)) Spawn(guid);
@@ -359,6 +589,7 @@ namespace vcgs
 
         bool IsOpen(const std::string& guid) const
         {
+            if (Broken.count(guid)) return true;
             auto o = Open.find(guid);
             if (o != Open.end()) return o->second;
             return ParamBool(guid, "startsOpen", false) || Param(guid, "swing").Str() == "open archway";
@@ -387,13 +618,45 @@ namespace vcgs
             }
             if (Role(guid) == "door")
             {
-                if (Param(guid, "swing").Str() == "open archway") return LevelOffer();
+                if (Param(guid, "swing").Str() == "open archway" || Broken.count(guid)) return LevelOffer();
+                // A secret door is the wall until it is searched (structure spec §7).
+                if (ParamBool(guid, "secret", false) && !Found.count(guid))
+                {
+                    out.Verb = "Search";
+                    out.Label = "the wall";
+                    return out;
+                }
+                if (IsOpen(guid))
+                {
+                    out.Verb = "Close";
+                    return out;
+                }
+                const std::string way = OneWay(guid);
+                const std::string side = way.empty() ? std::string() : DoorSide(guid);
+                if (!side.empty() && side != way)
+                {
+                    out.Blocked = "It won\xE2\x80\x99t open from this side.";
+                    return out;
+                }
                 std::string key = Param(guid, "keyItem").Str();
                 bool locked = ParamBool(guid, "locked", false) && !Unlocked.count(guid);
-                bool open = IsOpen(guid);
-                if (!open && locked && !key.empty() && !Game.HasItem(key)) out.Blocked = "Locked. Needs " + StoryName(key) + ".";
-                else if (!open && locked && key.empty()) out.Blocked = "Locked.";
-                else if (open) out.Verb = "Close";
+                if (locked && !(!key.empty() && Game.HasItem(key)))
+                {
+                    // A breakable door gives way, to bare hands or to what breaks it.
+                    const std::string breaker = Param(guid, "breakWith").Str();
+                    const bool breakable = ParamBool(guid, "destructible", false);
+                    if (breakable && (breaker.empty() || Game.HasItem(breaker)))
+                    {
+                        out.Verb = "Break";
+                        return out;
+                    }
+                    std::vector<std::string> needs;
+                    if (!key.empty()) needs.push_back(StoryName(key));
+                    if (breakable && !breaker.empty()) needs.push_back(StoryName(breaker) + " to break it");
+                    std::string text;
+                    for (size_t i = 0; i < needs.size(); i++) text += (i ? ", or " : "") + needs[i];
+                    out.Blocked = needs.empty() ? "Locked." : "Locked. Needs " + text + ".";
+                }
                 else if (!locked) out.Verb = "Open";
             }
             return out;
@@ -414,9 +677,27 @@ namespace vcgs
             static const std::set<std::string> pickups = {"pickup", "inventory", "weapon", "ammo", "health"};
             if (role == "door")
             {
-                bool wasOpen = IsOpen(guid);
-                if (!wasOpen && ParamBool(guid, "locked", false)) Unlocked.insert(guid);
-                Open[guid] = !wasOpen;
+                if (offer.Verb == "Search")
+                {
+                    // Found: a door from now on, to open like any other.
+                    Found.insert(guid);
+                    said = "A hidden door: " + Item(guid)["name"].Str() + ".";
+                }
+                else if (offer.Verb == "Break")
+                {
+                    Broken.insert(guid);
+                    said = Item(guid)["name"].Str() + " gives way.";
+                }
+                else
+                {
+                    bool wasOpen = IsOpen(guid);
+                    if (!wasOpen && ParamBool(guid, "locked", false)) Unlocked.insert(guid);
+                    Open[guid] = !wasOpen;
+                    // A timed door shuts again on its own.
+                    const double openFor = Param(guid, "openFor").Num(0);
+                    if (!wasOpen && openFor > 0) ClosesAt[guid] = Time + openFor;
+                    else ClosesAt.erase(guid);
+                }
             }
             else if (pickups.count(role) && ParamBool(guid, "collectible", true))
             {
@@ -505,6 +786,7 @@ namespace vcgs
                 else if (HasPlayer) StepFollow(pair.second, motion, dt, PlayerX, PlayerY, PlayerZ);
             }
             Watch();
+            CloseTimed();
             ApproachDoors();
             for (const auto& guid : std::vector<std::string>(Inside.begin(), Inside.end()))
             {
@@ -517,6 +799,7 @@ namespace vcgs
                 Health = 100;
                 if (OnDied) OnDied();
             }
+            CheckStructure();
             for (const auto& guid : Order)
             {
                 if (!IsPresent(guid)) continue;
@@ -1163,6 +1446,8 @@ public:
 protected:
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
+    /** Leaving: the map remembers the visit for the next time it begins play (structure spec §10). */
+    virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
     std::unique_ptr<vcgs::LevelLogic> Logic;
@@ -1203,6 +1488,12 @@ using VcgsConvert::ToStd;
 AVcgsLevelDirector::AVcgsLevelDirector()
 {
     PrimaryActorTick.bCanEverTick = true;
+}
+
+void AVcgsLevelDirector::EndPlay(const EEndPlayReason::Type Reason)
+{
+    if (Logic && !Logic->Key.empty()) vcgs::LevelLogic::Places()[Logic->Key] = Logic->Remember();
+    Super::EndPlay(Reason);
 }
 
 void AVcgsLevelDirector::BeginPlay()

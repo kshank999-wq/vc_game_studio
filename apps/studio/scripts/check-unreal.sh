@@ -62,6 +62,13 @@ for source in "$cast"/Plugins/VCGS/Source/VCGS/Private/VcgsActorComponents.cpp "
 done
 echo "cast classes compile against the stubs"
 
+# The Structure Creator's Old Tomb (structure spec §7, §10, §14): door rules, objectives, completion and memory, as the studio plays them.
+tomb="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast" "$tomb"' EXIT
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$tomb" unreal structure > /dev/null)
+"$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$tomb/Plugins/VCGS/Source/VCGS/Public" -o "$tomb/structure_check" "$here/unreal-check/structure_check.cpp"
+(cd "$tomb" && ./structure_check)
+
 # Unreal Header Tool writes the .generated.h files; for the check they are empty.
 mkdir -p "$work/generated"
 for header in "$public"/*.h; do : > "$work/generated/$(basename "${header%.h}").generated.h"; done

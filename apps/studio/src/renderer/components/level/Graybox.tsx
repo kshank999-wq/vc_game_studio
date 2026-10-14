@@ -8,6 +8,7 @@ import { levelCast } from '../../model/level/play';
 import { extrude, levelsOf, mapGrid, moveItems, placeAt, setPivot, snap, withGroups } from '../../model/level/level';
 import { boundsOf as mapBounds } from '../../model/level/hierarchy';
 import { navigate } from '../../model/level/nav';
+import { graphLines, stackMeshes, type FloorStack } from '../../model/level/stack';
 import { alongLine, buildCollision, buildHandles, buildWalkable, clearGroup, type Axes, type Handle, type Tool3d } from './gizmo';
 import type { AssetDefinition } from '../../model/level/types';
 import type { Project } from '../../model/types';
@@ -31,6 +32,10 @@ interface Props {
   floorId: string;
   /** Every floor, or just the current one. */
   allFloors: boolean;
+  /** With every floor: all of them as built, a cutaway down to the current floor, or spread apart (structure spec §12). */
+  stack?: FloorStack;
+  /** Draw the structure graph's connections between rooms. */
+  connections?: boolean;
   ceilings: boolean;
   /** Show trigger volumes, spawn radii and collision edges. */
   logic: boolean;
@@ -108,13 +113,19 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
 
   const meshes = useMemo(
     () =>
-      meshesFor(set, levelId, {
-        ceilings: props.ceilings,
-        global,
-        models: true,
-        ...(props.allFloors ? {} : { floorId }),
-      }).filter((m) => props.logic || m.part !== 'volume'),
-    [set, levelId, floorId, props.allFloors, props.ceilings, props.logic, global],
+      stackMeshes(
+        set,
+        levelId,
+        meshesFor(set, levelId, {
+          ceilings: props.ceilings,
+          global,
+          models: true,
+          ...(props.allFloors ? {} : { floorId }),
+        }).filter((m) => props.logic || m.part !== 'volume'),
+        floorId,
+        props.allFloors ? props.stack : undefined,
+      ),
+    [set, levelId, floorId, props.allFloors, props.stack, props.ceilings, props.logic, global],
   );
 
   // ------------------------------------------------------------ setup
@@ -265,7 +276,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
 
   // The selected item's handles.
   const single = props.selection.length === 1 ? set.items.find((i) => i.id === props.selection[0]) : undefined;
-  const editable = single && !single.host && !single.locked && single.levelId === levelId && (props.allFloors || single.floorId === floorId) ? single : undefined;
+  const editable = single && !single.host && !single.locked && single.levelId === levelId && (props.allFloors || single.floorId === floorId) && !(props.allFloors && props.stack === 'exploded') ? single : undefined;
   const itemElevation = level?.floors.find((f) => f.id === editable?.floorId)?.elevation ?? floorElevation;
   useEffect(() => {
     const t = three.current;
@@ -316,8 +327,9 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
       const cells = props.allFloors || !top ? nav.cells : nav.cells.filter((c) => c.z >= top.elevation - 0.6 && c.z < top.elevation + top.height);
       buildWalkable(t.overlay, cells, nav.cell);
     }
+    if (props.connections) buildConnections(t.overlay, graphLines(set, levelId, floorId, props.allFloors ? (props.stack ?? 'all') : 'one', global));
     t.render();
-  }, [colliders, nav, props.collision, props.allFloors, floorId, level]);
+  }, [colliders, nav, props.collision, props.allFloors, props.stack, props.connections, floorId, level, set, levelId, global]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const frame = (ids?: readonly string[]) => {
     const t = three.current;
@@ -547,3 +559,43 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
 Graybox.displayName = 'Graybox';
 
 export default Graybox;
+
+const LINE_COLOR: Record<string, string> = { door: '#c9a24a', opening: '#9a8f7a', stairs: '#e0b84f', ramp: '#e0b84f', ladder: '#e0b84f', elevator: '#b58fd1', traversal: '#e0b84f', portal: '#6cc4d6' };
+
+/** The structure graph in 3D: a line for each way between rooms (red where something keeps it shut, dashed between floors), a dot at each room. */
+const buildConnections = (group: THREE.Group, lines: ReturnType<typeof graphLines>) => {
+  const dots = new Map<string, [number, number, number]>();
+  for (const l of lines) {
+    const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...l.from), new THREE.Vector3(...l.to)]);
+    const color = l.gated ? '#e5484d' : (LINE_COLOR[l.kind] ?? '#c9a24a');
+    const material =
+      l.vertical || l.secret
+        ? new THREE.LineDashedMaterial({ color, dashSize: l.secret ? 0.15 : 0.5, gapSize: 0.3, depthTest: false, transparent: true })
+        : new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true });
+    const line = new THREE.Line(geometry, material);
+    line.userData.owned = { dispose: () => (geometry.dispose(), material.dispose()) };
+    line.computeLineDistances();
+    line.renderOrder = 5;
+    group.add(line);
+    if (l.oneWay) {
+      // An arrowhead two thirds of the way along, pointing the way it goes.
+      const dir = new THREE.Vector3(...l.to).sub(new THREE.Vector3(...l.from));
+      const length = dir.length();
+      if (length > 0.1) {
+        const arrow = new THREE.ArrowHelper(dir.normalize(), new THREE.Vector3(...l.from).addScaledVector(dir, length * 0.55), length * 0.15, color, 0.5, 0.35);
+        arrow.renderOrder = 5;
+        group.add(arrow);
+      }
+    }
+    dots.set(l.from.join(','), l.from);
+    dots.set(l.to.join(','), l.to);
+  }
+  const dot = new THREE.SphereGeometry(0.18, 12, 8);
+  const material = new THREE.MeshBasicMaterial({ color: '#f1e7cf', depthTest: false, transparent: true });
+  for (const p of dots.values()) {
+    const m = new THREE.Mesh(dot, material);
+    m.position.set(...p);
+    m.renderOrder = 6;
+    group.add(m);
+  }
+};

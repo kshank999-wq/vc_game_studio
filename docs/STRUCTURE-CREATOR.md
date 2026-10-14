@@ -18,7 +18,7 @@ other map (spec §3, §12). Nothing is kept twice.
 | MVP 1: Authoring core | Structures from presets, footprints, floors from basements to the roof, rooms, walls, doors and stairs (the Level Designer's own), the structure graph, validation, save and load | **Built** |
 | MVP 2: Generation | Seeded plan-first and path-first layouts, previews to accept or reject, locked rooms, regenerating part of a structure | **Built** |
 | MVP 3: Gameplay | Door rules (one-way, timed, secret, breakable), the structure as a scene with objectives, completion and state that stays on re-entry, local and world states, items and characters placed in rooms, solvability (the key before its door, softlocks) and a walkthrough | **Built** |
-| MVP 4: Graybox and handoff | Stacked floors and cutaways in 3D, rough play through a structure, a structure manifest for Godot, Unity and Unreal (with the door rules and the scene settings), re-export by id | Next |
+| MVP 4: Graybox and handoff | Stacked floors, cutaways and the structure graph in 3D, rough play into a structure and back out, a structure manifest for Godot, Unity and Unreal, door rules and objectives in their runtimes, re-export by id | **Built** |
 
 Much of what the spec asks for was already in the Level Designer. MVP 1
 builds on it rather than beside it:
@@ -218,8 +218,9 @@ Gameplay:
 Switches, codes and puzzles already open doors: a rule's **Open** action, a
 condition on the door, or a puzzle gate binding.
 
-The door rules go to the engines with the door's other settings. Their
-runtimes play them from MVP 4.
+The door rules go to the engines with the door's other settings, and
+Godot, Unity and Unreal play them as the studio does (see
+[In the engines](#in-the-engines-spec-13-14)).
 
 ## The structure as a scene (spec §10)
 
@@ -313,6 +314,69 @@ What the walk couldn't do is in the issues, and in preflight:
 | A pickup that gives nothing, a trigger with no rules | Information |
 | A door that names a key but isn't locked; the only way somewhere is a secret door | Information |
 
+## Stacked floors in 3D (spec §12)
+
+In the 3D graybox, **Floors in 3D** (the toolbar) shows:
+
+- **This floor**.
+- **All floors**, as built.
+- **Cutaway to this floor**: the floors up to the one picked in the floor list, with its ceiling off, so you look down into it. Pick another floor to go up or down the building.
+- **Floors spread apart**: each floor lifted clear of the one below by the tallest floor's height, to see a whole building from the basements to the roof at once. The ground floor stays where it is. Items can't be dragged while the floors are spread (they aren't where they are).
+
+On a structure, **Connections** draws the structure graph in the graybox:
+
+- a line between the rooms each door, stairway, ladder or lift joins, at waist height;
+- red where something keeps it shut;
+- dashed between floors, dotted for a secret door;
+- an arrow on a one-way door;
+- a dot at each room, and out beyond each way in.
+
+## Rough play through a structure (spec §12, §16)
+
+Play Mode goes in and out of a structure as a player would:
+
+- **In.** On the map a structure stands on, walk up to its mass and press Interact: **Enter Old Tomb**. You arrive just inside the way in nearest where you stood, facing in.
+- **Through.** The floors, doors, stairs, lifts and door rules play as on any map.
+- **Out.** Walk out of a way in and past the footprint. You are back on the map it stands on, outside the mass where you came out, facing away from it.
+- **State kept.** Both maps remember the visit: doors as you left them, what you took, who is where. A structure's **Coming back in** rules say what of that it keeps.
+
+## In the engines (spec §13, §14)
+
+Each structure goes to the engines with a **structure manifest**:
+
+- what it is: name, type, purpose, tags, author, traversal style, the scene it plays as, its mass on the parent map;
+- its floors: key, code (B1, G, 2 … R), kind, elevation, height and footprint;
+- its rooms and how they connect (the structure graph), the ways in, and each door's rules;
+- its objectives, its completion condition and its effects on the story outside;
+- its own states with their start values, its puzzles, and what it remembers between visits;
+- the seed and generator version of its last accepted layout;
+- the studio's walkthrough, to test against in the engine.
+
+The manifest is in each engine's level data:
+
+- **Godot**: `STRUCTURE` and `structure_data()` in the level's script.
+- **Unity and Unreal**: `structure` in the level's JSON.
+- **JSON**: `levels[].structure`.
+
+The runtimes play what the studio's Play Mode plays:
+
+- the door rules (breakable, one way, timed, secret);
+- the objectives in order (`objective_changed`), and the completion with its effects (`structure_completed` / `StructureCompleted` / `OnStructureCompleted`);
+- what a map remembers between visits. It is kept as each level leaves the scene tree (Godot), is destroyed (Unity) or ends play (Unreal), and comes back when the level loads again.
+
+How a structure is loaded is up to its boundary, as with any child map: continuous and streamed children load into the parent; instanced and transition ones are loaded by your game when `level_requested` asks.
+
+Each engine's check walks the same sample structure, the Old Tomb (`model/level/sample-structure.ts`):
+
+- one door of each rule;
+- the key;
+- two objectives;
+- leaving and coming back.
+
+The walk is played on the studio's Play Mode first, and Godot 4.3, Unity (C# against stubs) and Unreal (the C++ core) must match it step for step: every offer, every door, the objectives, the completion, and the story state.
+
+**Re-export by id (spec §14).** Every item keeps its GUID. The structure manifest has a revision of its own, so the handoff lists exactly what changed since the last export, for example a door rule changed: that door and "Old Tomb (its structure manifest)". Files edited in the engine since are reviewed before they are written over, as with every export.
+
 ## Validation (spec §8, §15)
 
 The panel lists these. Preflight lists the errors and warnings too:
@@ -347,6 +411,9 @@ A plain building map can be made a structure from here.
 - `apps/studio/src/renderer/model/level/doors.ts` reads a door's rules (`doorRules`) for Play Mode, the graph and the walkthrough.
 - `apps/studio/src/renderer/model/level/walkthrough.ts` holds the solvability check and the walkthrough (`walkStructure`).
 - `apps/studio/src/renderer/model/level/place-in-room.ts` puts catalog items and characters into a room (`placeInRoom`).
+- `apps/studio/src/renderer/model/level/stack.ts` stacks the floors in 3D (`stackMeshes`, `floorLift`) and draws the graph there (`graphLines`).
+- `apps/studio/src/renderer/model/handoff/structures.ts` builds the structure manifest (`structureManifest`); `levelRevisions` in `handoff/levels.ts` gives re-export its revisions.
+- `apps/studio/src/renderer/model/level/sample-structure.ts` is the Old Tomb and its walk (`withTomb`, `tombWalk`), for the tests and the engine checks (`scripts/godot-check/check_structure.gd`, `scripts/unity-structure-check/`, `scripts/unreal-check/structure_check.cpp`).
 - Play Mode (`model/level/play.ts`) plays the door rules, the objectives and completion, and what a structure remembers (`leaveLevel`, `PlaceMemory` in the play world's `places`).
 - `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, the rule presets and each structure type's room names.
 - Changes elsewhere:
@@ -355,4 +422,4 @@ A plain building map can be made a structure from here.
   - `syncBuildings` (in `model/level/hierarchy.ts`) leaves basements and the roof out of a mass's count;
   - preflight takes the structure's issues (`model/level/validate.ts`).
 - The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph and the walkthrough), `GeneratePanel.tsx` (the generator), `StructureSection.tsx` (the inspector's Structure and As a scene sections) and `PlaceInRoom.tsx`.
-- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-gameplay.test.ts` and `__tests__/structure-creator.test.tsx`.
+- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.

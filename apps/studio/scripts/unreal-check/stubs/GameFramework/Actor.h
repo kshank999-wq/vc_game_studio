@@ -1,5 +1,6 @@
 #pragma once
 #include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
 class UWorld;
 class USceneComponent;
 class UClass {};
@@ -11,6 +12,7 @@ public:
     USceneComponent* RootComponent = nullptr;
     struct { bool bCanEverTick = false; } PrimaryActorTick;
     virtual void BeginPlay() {}
+    virtual void EndPlay(const EEndPlayReason::Type) {}
     virtual void OnConstruction(const FTransform& Transform) { (void)Transform; }
     virtual void Tick(float DeltaSeconds) { (void)DeltaSeconds; }
     UWorld* GetWorld() const { return nullptr; }

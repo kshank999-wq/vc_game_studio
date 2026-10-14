@@ -543,11 +543,20 @@ with \`collide\` are in the player's way. A \`slab\` piece is a freeform floor o
 ceiling: its \`outline\` corners raised to \`size[1]\`, with \`triangles\` for its
 top. A freeform space or volume also has its \`outline\`; a volume is in the
 level wherever that outline is, up to its height. A door's \`host.wall\` counts
-its walls from corner 0.
+its walls from corner 0. A structure (a pyramid, a temple, an office) also has
+\`structure\`: its floors with their codes and footprints, its rooms and how they
+connect, each door's rules, its objectives (done in a room, at an item, or when
+\`when\` holds), \`complete_when\` and \`on_complete\` (effects on the story), its
+own states, and what it remembers when the player leaves and comes back
+(\`persist\`: keep or reset).
 
 1. An item is in the level only while \`active_when\` holds.
 2. **Interact**: a \`door\` opens and shuts; a locked one (\`params.locked\`) needs
-   \`params.keyItem\` held and then stays unlocked. A pickup (\`pickup\`,
+   \`params.keyItem\` held and then stays unlocked, unless it is breakable
+   (\`params.destructible\`, with \`params.breakWith\` if it takes something). A
+   door may open from one side only (\`params.oneWay\`: inside or outside the
+   room in \`host\`), shut again \`params.openFor\` seconds after it opens, or be
+   \`params.secret\`: the wall until searched. A pickup (\`pickup\`,
    \`inventory\`, …) leaves the level and gives \`params.item\`. A character
    starts its first linked scene (\`scenes\`).
 3. **Volumes** notice the player: \`enter\` and \`exit\` rules run;

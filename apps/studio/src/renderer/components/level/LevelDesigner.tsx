@@ -45,6 +45,7 @@ import { removeTravel, travelById, TRAVEL_KINDS } from '../../model/level/travel
 import { NewWorldDialog } from './NewWorldDialog';
 import { NewStructureDialog } from './NewStructureDialog';
 import { StructurePanel } from './StructurePanel';
+import type { FloorStack } from '../../model/level/stack';
 import { GeneratePanel, type GenerateAsk } from './GeneratePanel';
 import { acceptLayout, proposeLayout, type Proposal } from '../../model/level/generate';
 import { createStructure, floorCodes, isStructure, updateStructure } from '../../model/level/structure';
@@ -117,9 +118,11 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [overlays, setOverlays] = useState({ story: true, dims: true, ghost: true, puzzles: false, cast: false });
   // The puzzle shown on the map (spec V2 §14): one, or every puzzle with a part here ('').
   const [puzzleFocus, setPuzzleFocus] = useState('');
-  const [view3d, setView3d] = useState<{ ceilings: boolean; allFloors: boolean; logic: boolean; collision: boolean; walkable: boolean; tool: Tool3d; axes: Axes }>({
+  const [view3d, setView3d] = useState<{ ceilings: boolean; allFloors: boolean; stack: FloorStack; connections: boolean; logic: boolean; collision: boolean; walkable: boolean; tool: Tool3d; axes: Axes }>({
     ceilings: false,
     allFloors: false,
+    stack: 'all',
+    connections: false,
     logic: true,
     collision: false,
     walkable: false,
@@ -782,7 +785,24 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               </select>
             )}
             <label className="lvl-toggle"><input type="checkbox" checked={view3d.ceilings} onChange={(e) => setView3d((o) => ({ ...o, ceilings: e.target.checked }))} /> Ceilings</label>
-            <label className="lvl-toggle"><input type="checkbox" checked={view3d.allFloors} onChange={(e) => setView3d((o) => ({ ...o, allFloors: e.target.checked }))} /> All floors</label>
+            <select
+              className="inp small lvl-pick"
+              aria-label="Floors in 3D"
+              title="Which floors the graybox shows: this one, all of them, a cutaway down to this floor, or the floors spread apart"
+              value={view3d.allFloors ? view3d.stack : 'one'}
+              onChange={(e) => {
+                const v = e.target.value;
+                setView3d((o) => (v === 'one' ? { ...o, allFloors: false } : { ...o, allFloors: true, stack: v as FloorStack }));
+              }}
+            >
+              <option value="one">This floor</option>
+              <option value="all">All floors</option>
+              <option value="cutaway">Cutaway to this floor</option>
+              <option value="exploded">Floors spread apart</option>
+            </select>
+            {isStructure(level) && (
+              <label className="lvl-toggle" title="The structure graph in 3D: the ways between rooms"><input type="checkbox" checked={view3d.connections} onChange={(e) => setView3d((o) => ({ ...o, connections: e.target.checked }))} /> Connections</label>
+            )}
             <label className="lvl-toggle"><input type="checkbox" checked={view3d.logic} onChange={(e) => setView3d((o) => ({ ...o, logic: e.target.checked }))} /> Logic volumes</label>
             <label className="lvl-toggle" title="What the player bumps into and stands on"><input type="checkbox" checked={view3d.collision} onChange={(e) => setView3d((o) => ({ ...o, collision: e.target.checked }))} /> Collision</label>
             <label className="lvl-toggle" title="Where the player can walk to from the player start (green), and where they can’t (amber). Doors and gates count as open."><input type="checkbox" checked={view3d.walkable} onChange={(e) => setView3d((o) => ({ ...o, walkable: e.target.checked }))} /> Walkable</label>
@@ -938,13 +958,13 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
                 setPlaying(null);
                 if (near) setSelection([near]);
               }}
-              onGoToLevel={(lid, world) => {
+              onGoToLevel={(lid, world, arrival) => {
                 const next = set.levels.find((l) => l.id === lid);
                 if (!next) return;
                 setLevelId(lid);
-                setFloorId(next.floors[0]!.id);
+                setFloorId(arrival?.floorId && next.floors.some((f) => f.id === arrival.floorId) ? arrival.floorId : next.floors[0]!.id);
                 onSay(`On to ${next.name}.`);
-                setPlaying({ levelId: lid, start: startPoint(project, lid, global), world, key: Date.now() });
+                setPlaying({ levelId: lid, start: arrival ?? startPoint(project, lid, global), world, key: Date.now() });
               }}
             />
           </Suspense>
@@ -983,6 +1003,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               levelId={level.id}
               floorId={floor.id}
               allFloors={view3d.allFloors}
+              stack={view3d.stack}
+              connections={view3d.connections && isStructure(level)}
               ceilings={view3d.ceilings}
               logic={view3d.logic}
               tool={view3d.tool}

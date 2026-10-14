@@ -127,7 +127,8 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
   const levelSet = levelsOf(project);
   const levelName = (id: string) => levelSet.levels.find((l) => l.id === id)?.name ?? levelSet.items.find((i) => i.id === id)?.name;
   const { added, changed: changedItems, removed } = plan.levelChanges;
-  const itemName = (guid: string) => plan.levels.flatMap((l) => l.items).find((i) => i.guid === guid)?.name ?? 'An item';
+  const itemName = (guid: string) =>
+    plan.levels.flatMap((l) => l.items).find((i) => i.guid === guid)?.name ?? (guid.startsWith('structure:') ? `${plan.levels.find((l) => `structure:${l.guid}` === guid)?.name ?? 'A structure'} (its structure manifest)` : 'An item');
 
   const pickFolder = async () => {
     if (!bridge) return;

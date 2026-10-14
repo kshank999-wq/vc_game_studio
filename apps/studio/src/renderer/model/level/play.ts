@@ -12,6 +12,7 @@ import { cinematicTiming } from '../shots';
 import type { Project } from '../types';
 import { assetOf, bool, contains, frameOf, meshesFor, num, paramOf, spaceAt, type Point } from './geometry';
 import { doorRules, doorSide } from './doors';
+import { footprintOf, insidePolygon, OUTSIDE, structureGraph } from './structure';
 import { guid, levelsOf } from './level';
 import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelSet, PlayNote, PlayPreset, StructureObjective } from './types';
 
@@ -100,6 +101,8 @@ export interface LevelPlayState {
   message?: { text: string; until: number };
   /** A portal or rule sent the player to another level. */
   goTo?: string;
+  /** Where the player arrives there, when it isn't the map's start (going into a structure, or back out beside it). */
+  arrival?: Where & { yaw: number; floorId: string };
   /** In a structure (structure spec §10): its objectives done, and whether it is complete. */
   structure?: { objectives: Record<string, boolean>; complete: boolean };
   over?: { text: string };
@@ -166,7 +169,7 @@ export const startLevelPlay = (project: Project, levelId: string, options: { pre
     time: 0,
     log: [{ t: 0, kind: 'info', text: `${level?.name ?? 'Level'} starts${options.preset ? ` from “${options.preset.name}”` : options.world ? ' carrying the story on' : ''}.` }],
   };
-  if (level?.structure) state = enterStructure(project, state, options.global);
+  if (level?.structure || state.world.places?.[levelId]) state = enterStructure(project, state, options.global);
   // Placed AI enemies stand where they are put until their machine moves them.
   for (const c of levelCast(project, levelId, options.global)) {
     if (c.placed && !state.actors[c.itemId]) state = { ...state, actors: { ...state.actors, [c.itemId]: { x: c.home.x, y: c.home.y, z: c.z, yaw: c.yaw, stop: 0, until: 0, moving: false } } };
@@ -530,7 +533,7 @@ export interface Offer {
   blocked?: string;
 }
 
-const INTERACTIVE_ROLES = new Set(['door', 'pickup', 'inventory', 'weapon', 'ammo', 'health', 'npc', 'companion', 'neutral', 'dialogue', 'interaction', 'puzzle', 'elevator', 'ladder']);
+const INTERACTIVE_ROLES = new Set(['building', 'door', 'pickup', 'inventory', 'weapon', 'ammo', 'health', 'npc', 'companion', 'neutral', 'dialogue', 'interaction', 'puzzle', 'elevator', 'ladder']);
 
 /** What pressing Interact would do to this item, if anything. */
 export const offerFor = (project: Project, state: LevelPlayState, item: LevelItem, global?: readonly AssetDefinition[], at?: Point): Offer | null => {
@@ -545,6 +548,11 @@ export const offerFor = (project: Project, state: LevelPlayState, item: LevelIte
   if (tooDark(project, state, item, global)) {
     const source = lightOf(project, state.levelId, global).source;
     return { itemId: item.id, verb: prompt, label: item.name, blocked: hasLightSource(project, state, global) ? 'Too dark to see. Turn your light on (L).' : `Too dark to see.${source ? ` It needs ${name(project, source)} for light.` : ''}` };
+  }
+  if (def.role === 'building') {
+    // A structure's mass (structure spec §12): the player goes in.
+    const inside = set.levels.find((l) => l.anchorId === item.id && l.structure);
+    return inside ? { itemId: item.id, verb: 'Enter', label: inside.name } : null;
   }
   if (def.role === 'door') {
     const open = isOpen(project, state, item, global);
@@ -579,6 +587,11 @@ export const interactWith = (project: Project, state: LevelPlayState, itemId: st
   let s = log(state, { kind: 'event', itemId, text: `${offer.verb} · ${item.name}` });
   if (offer.blocked) return say(log(s, { kind: 'check', itemId, pass: false, text: `${item.name}: ${offer.blocked}` }), offer.blocked);
 
+  if (def.role === 'building') {
+    const inside = set.levels.find((l) => l.anchorId === item.id && l.structure)!;
+    const arrival = arrivalInto(project, inside.id, at, global);
+    return log({ ...s, goTo: inside.id, ...(arrival ? { arrival } : {}) }, { kind: 'action', itemId, text: `Goes into ${inside.name}` });
+  }
   if (def.role === 'door') {
     const rules = doorRules(set, item, global);
     const open = isOpen(project, s, item, global);
@@ -790,6 +803,8 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
 
   // A structure's objectives, and its completion (structure spec §10).
   if (level?.structure) s = checkStructure(project, s, at, global);
+  // Walked out of a structure: back to the map it stands on, beside it.
+  if (level?.structure && !s.goTo) s = leaveIfOutside(project, s, at, global);
 
   // Timers and delayed spawns.
   for (const item of items) {
@@ -997,9 +1012,10 @@ const puzzlesIn = (project: Project, levelId: string): string[] => {
 const enterStructure = (project: Project, state: LevelPlayState, global?: readonly AssetDefinition[]): LevelPlayState => {
   const set = levelsOf(project);
   const level = set.levels.find((l) => l.id === state.levelId)!;
-  const info = level.structure!;
+  // Any map the player has left remembers it; a structure says what it keeps (structure spec §10).
+  const info: Partial<NonNullable<typeof level.structure>> = level.structure ?? {};
   const memory = state.world.places?.[level.id];
-  let s: LevelPlayState = { ...state, structure: { objectives: { ...memory?.objectives }, complete: !!memory?.complete } };
+  let s: LevelPlayState = level.structure ? { ...state, structure: { objectives: { ...memory?.objectives }, complete: !!memory?.complete } } : state;
   if (memory) {
     const keep = { doors: 'keep', items: 'keep', enemies: 'keep', puzzles: 'keep', ...info.persist };
     const role = (id: string) => {
@@ -1043,6 +1059,7 @@ const enterStructure = (project: Project, state: LevelPlayState, global?: readon
     }
     s = { ...s, world: { ...s.world, flags } };
   }
+  if (!level.structure) return s;
   const next = nextObjective(info.objectives, s.structure!.objectives);
   if (next && !s.objective) s = { ...s, objective: next.text };
   return s;
@@ -1096,12 +1113,14 @@ const checkStructure = (project: Project, state: LevelPlayState, at: Where, glob
 };
 
 /**
- * Leaving a map for another: the story goes on, and a structure keeps what it
- * remembers of this visit (structure spec §10) for the next one.
+ * Leaving a map for another: the story goes on, and the map keeps what it
+ * remembers of this visit for the next one (structure spec §10): its doors,
+ * what was taken, who is where. A structure's persistence rules say what of
+ * that comes back.
  */
 export const leaveLevel = (project: Project, state: LevelPlayState): PlayWorld => {
   const level = levelsOf(project).levels.find((l) => l.id === state.levelId);
-  if (!level?.structure) return state.world;
+  if (!level) return state.world;
   const before = state.world.places?.[level.id];
   const memory: PlaceMemory = {
     open: { ...state.open },
@@ -1118,4 +1137,123 @@ export const leaveLevel = (project: Project, state: LevelPlayState): PlayWorld =
     visits: (before?.visits ?? 0) + 1,
   };
   return { ...state.world, places: { ...state.world.places, [level.id]: memory } };
+};
+
+// ---------------------------------------------------------------- in and out of a structure (structure spec §12)
+
+/** A structure's map and its mass: the item on the parent map it details, and how its own plan sits on the parent's. */
+const anchorOf = (project: Project, structureId: string, global?: readonly AssetDefinition[]) => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === structureId);
+  const mass = level?.anchorId ? set.items.find((i) => i.id === level.anchorId) : undefined;
+  if (!level || !mass || !level.parentId || mass.levelId !== level.parentId) return null;
+  const f = frameOf(set, mass, global);
+  const r = (f.rotation * Math.PI) / 180;
+  const ox = level.origin?.x ?? 0;
+  const oy = level.origin?.y ?? 0;
+  const parentFloor = set.levels.find((l) => l.id === mass.levelId)?.floors.find((fl) => fl.id === mass.floorId);
+  return {
+    level,
+    mass,
+    frame: f,
+    /** A point on the structure's plan, on the parent map. */
+    out: (p: Point): Point => ({ x: f.x + (p.x + ox) * Math.cos(r) - (p.y + oy) * Math.sin(r), y: f.y + (p.x + ox) * Math.sin(r) + (p.y + oy) * Math.cos(r) }),
+    /** A point on the parent map, on the structure's plan. */
+    into: (p: Point): Point => {
+      const dx = p.x - f.x;
+      const dy = p.y - f.y;
+      return { x: dx * Math.cos(r) + dy * Math.sin(r) - ox, y: -dx * Math.sin(r) + dy * Math.cos(r) - oy };
+    },
+    ground: (parentFloor?.elevation ?? 0) + mass.z,
+  };
+};
+
+const facing = (dx: number, dy: number) => Math.atan2(dx, -dy);
+
+/** The structure's ways in from outside: its doors to the outside, on the floors nearest the ground. */
+const entrancesOf = (project: Project, structureId: string, global?: readonly AssetDefinition[]) => {
+  const set = levelsOf(project);
+  const graph = structureGraph(set, structureId, global);
+  const level = set.levels.find((l) => l.id === structureId)!;
+  const elevation = new Map(level.floors.map((f) => [f.id, f.elevation]));
+  return graph.edges
+    .filter((e) => e.kind === 'door' && (e.from === OUTSIDE || e.to === OUTSIDE) && !(e.oneWay && e.to === OUTSIDE))
+    .map((e) => ({ door: set.items.find((i) => i.id === e.via)!, room: e.from === OUTSIDE ? e.to : e.from }))
+    .filter((x) => x.door)
+    .sort((a, b) => Math.abs(elevation.get(a.door.floorId) ?? 0) - Math.abs(elevation.get(b.door.floorId) ?? 0));
+};
+
+/**
+ * Where the player arrives going into a structure from its mass: just inside
+ * the way in nearest to where they stood outside, facing in. With no door
+ * out, the structure's own start.
+ */
+export const arrivalInto = (project: Project, structureId: string, from: Point | undefined, global?: readonly AssetDefinition[]): (Where & { yaw: number; floorId: string }) | null => {
+  const set = levelsOf(project);
+  const anchor = anchorOf(project, structureId, global);
+  const ways = entrancesOf(project, structureId, global);
+  if (!ways.length) return null;
+  const here = from && anchor ? anchor.into(from) : undefined;
+  const lowest = Math.abs(set.levels.find((l) => l.id === structureId)!.floors.find((f) => f.id === ways[0]!.door.floorId)?.elevation ?? 0);
+  const best = ways
+    .filter((w) => Math.abs(set.levels.find((l) => l.id === structureId)!.floors.find((f) => f.id === w.door.floorId)?.elevation ?? 0) === lowest)
+    .map((w) => ({ w, f: frameOf(set, w.door, global) }))
+    .sort((a, b) => (here ? Math.hypot(a.f.x - here.x, a.f.y - here.y) - Math.hypot(b.f.x - here.x, b.f.y - here.y) : 0))[0]!;
+  const room = set.items.find((i) => i.id === best.w.room);
+  const rf = room ? frameOf(set, room, global) : undefined;
+  // Step in from the door, toward the middle of the room behind it.
+  const dx = (rf?.x ?? 0) - best.f.x;
+  const dy = (rf?.y ?? 0) - best.f.y;
+  const n = Math.hypot(dx, dy) || 1;
+  const step = Math.min(1.5, n * 0.6);
+  const floor = set.levels.find((l) => l.id === structureId)!.floors.find((f) => f.id === best.w.door.floorId);
+  return { x: best.f.x + (dx / n) * step, y: best.f.y + (dy / n) * step, z: floor?.elevation ?? 0, yaw: facing(dx, dy), floorId: best.w.door.floorId };
+};
+
+/** Whether a plan point is outside every floor's footprint of a structure, by more than a margin. */
+const outsideFootprints = (project: Project, levelId: string, p: Point, margin: number, global?: readonly AssetDefinition[]): boolean | null => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === levelId);
+  if (!level) return null;
+  const polys = level.floors.map((f) => footprintOf(set, level, f.id, global)).filter((x): x is Point[] => !!x);
+  if (!polys.length) return null;
+  return polys.every((poly) => !insidePolygon(p, poly, 0) && distanceToPolygon(p, poly) > margin);
+};
+
+const distanceToPolygon = (p: Point, poly: readonly Point[]) => {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1)));
+    best = Math.min(best, Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y))));
+  }
+  return best;
+};
+
+/**
+ * Out through a structure's way in and past its footprint: the player goes
+ * back to the map it stands on, outside the mass where they came out, facing
+ * away from it.
+ */
+const leaveIfOutside = (project: Project, state: LevelPlayState, at: Where, global?: readonly AssetDefinition[]): LevelPlayState => {
+  const anchor = anchorOf(project, state.levelId, global);
+  if (!anchor || outsideFootprints(project, state.levelId, at, 0.8, global) !== true) return state;
+  const p = anchor.out(at);
+  const f = anchor.frame;
+  // Beyond the mass's edge, on the side they came out.
+  let dx = p.x - f.x;
+  let dy = p.y - f.y;
+  const n = Math.hypot(dx, dy) || 1;
+  dx /= n;
+  dy /= n;
+  const reach = Math.hypot(f.w, f.d) / 2;
+  const r = (f.rotation * Math.PI) / 180;
+  const lx = dx * Math.cos(r) + dy * Math.sin(r);
+  const ly = -dx * Math.sin(r) + dy * Math.cos(r);
+  // How far from the middle to the mass's edge along this way.
+  const edge = Math.min(lx ? f.w / 2 / Math.abs(lx) : Infinity, ly ? f.d / 2 / Math.abs(ly) : Infinity, reach);
+  const out = Math.max(n, edge + 1.2);
+  const arrival = { x: f.x + dx * out, y: f.y + dy * out, z: anchor.ground, yaw: facing(dx, dy), floorId: anchor.mass.floorId };
+  return log({ ...state, goTo: anchor.level.parentId!, arrival }, { kind: 'action', text: `Comes out of ${anchor.level.name}` });
 };

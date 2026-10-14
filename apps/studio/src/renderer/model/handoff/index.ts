@@ -6,7 +6,7 @@ import { json } from './json';
 import { unity } from './unity';
 import { unreal } from './unreal';
 import { buildIR } from './ir';
-import { levelChanges, type IrLevel, type LevelChanges } from './levels';
+import { levelChanges, levelRevisions, type IrLevel, type LevelChanges } from './levels';
 import { levelIssues } from '../level/validate';
 import { fileHash } from './review';
 
@@ -132,7 +132,7 @@ export const recordExport = (project: Project, handoff: Handoff, at = new Date()
     engine: handoff.target.engine,
     fingerprints: Object.fromEntries(handoff.output.elements.map((e) => [e.id, e.fingerprint])),
     files: handoff.output.files.length,
-    levelItems: Object.fromEntries(handoff.levels.flatMap((l) => l.items.map((i) => [i.guid, i.revision]))),
+    levelItems: levelRevisions(handoff.levels),
     fileHashes: Object.fromEntries(
       handoff.output.files.filter((f) => f.kind === 'generated').map((f) => [f.path, kept.includes(f.path) && before[f.path] ? before[f.path]! : fileHash(f.content)]),
     ),

@@ -9,6 +9,7 @@ import { exportNameOf, levelExportName } from '../level/naming';
 import type { LevelItem, ParamValue } from '../level/types';
 import { fingerprint } from './engines';
 import type { IrEffect, IrRule } from './ir';
+import { exportedIds, structureManifest, type IrStructure } from './structures';
 
 /**
  * Levels in the engine-neutral handoff model (spec §11.1). Coordinates are
@@ -181,6 +182,8 @@ export interface IrLevel {
   items: IrLevelItem[];
   map: IrMap;
   travel: IrTravel[];
+  /** A structure's manifest (structure spec §13, §14): floors, rooms, connections, door rules, objectives, persistence. */
+  structure?: IrStructure;
   revision: string;
 }
 
@@ -395,6 +398,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
           ...(t.locked && when ? { unlock_when: when } : {}),
         };
       }),
+      ...(level.structure ? { structure: structureManifest(project, set, level, floorKey, exportedIds(set, level.id), story) } : {}),
     };
     return { ...out, revision: fingerprint(JSON.stringify(out)) };
   });
@@ -408,8 +412,19 @@ export interface LevelChanges {
   same: number;
 }
 
+/**
+ * What re-export compares, by id: each item's revision, and each structure's
+ * manifest (as `structure:` and the map's GUID), so a changed door rule or
+ * objective shows as a change to apply.
+ */
+export const levelRevisions = (levels: readonly IrLevel[]): Record<string, string> =>
+  Object.fromEntries([
+    ...levels.flatMap((l) => l.items.map((i) => [i.guid, i.revision] as const)),
+    ...levels.flatMap((l) => (l.structure ? [[`structure:${l.guid}`, fingerprint(JSON.stringify(l.structure))] as const] : [])),
+  ]);
+
 export const levelChanges = (levels: readonly IrLevel[], last: Record<string, string> | undefined): LevelChanges => {
-  const now = new Map(levels.flatMap((l) => l.items.map((i) => [i.guid, i.revision] as const)));
+  const now = new Map(Object.entries(levelRevisions(levels)));
   if (!last) return { added: [...now.keys()], changed: [], removed: [], same: 0 };
   const added: string[] = [];
   const changed: string[] = [];
