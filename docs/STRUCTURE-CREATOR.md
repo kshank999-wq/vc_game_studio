@@ -19,6 +19,7 @@ other map (spec §3, §12). Nothing is kept twice.
 | MVP 2: Generation | Seeded plan-first and path-first layouts, previews to accept or reject, locked rooms, regenerating part of a structure | **Built** |
 | MVP 3: Gameplay | Door rules (one-way, timed, secret, breakable), the structure as a scene with objectives, completion and state that stays on re-entry, local and world states, items and characters placed in rooms, solvability (the key before its door, softlocks) and a walkthrough | **Built** |
 | MVP 4: Graybox and handoff | Stacked floors, cutaways and the structure graph in 3D, rough play into a structure and back out, a structure manifest for Godot, Unity and Unreal, door rules and objectives in their runtimes, re-export by id | **Built** |
+| V2: Enhancements | The structure library (levers, plates, gates, breakable walls, traps, chests…), procedural themes, CAD plan import, prefabs and marketplace hooks, cooperative editing | **Building** |
 
 Much of what the spec asks for was already in the Level Designer. MVP 1
 builds on it rather than beside it:
@@ -221,6 +222,39 @@ condition on the door, or a puzzle gate binding.
 The door rules go to the engines with the door's other settings, and
 Godot, Unity and Unreal play them as the studio does (see
 [In the engines](#in-the-engines-spec-13-14)).
+
+## The structure library (spec §9)
+
+The library has the parts the spec lists, each working in Play Mode and in
+Godot, Unity and Unreal:
+
+| Category | Parts |
+|---|---|
+| Spaces | Courtyard (no walls or ceiling of its own), Crawlspace (crouch through it), Tunnel, Elevator lobby, Shaft |
+| Envelope | Archway, Hole in the wall, Column, Breakable wall |
+| Traversal | Hatch and ladder, Rope / climb point, Trapdoor |
+| Barriers | Gate / portcullis, Barricade, Rubble, Movable block |
+| Interactives | Lever, Switch, Mechanism, Pressure plate, Keypad, Clue marker |
+| Gameplay | Chest, Safe, Quest item, Trap |
+| Dressing | Urn (breakable), Statue, Sarcophagus, Altar, Machine, Pipe run, Console |
+
+How they work:
+
+- **Lever, Switch, Mechanism, Pressure plate.** Each **Works** another item on the map, picked in the inspector, and **Does**:
+  - **toggle**, **open** or **close** (for a door or gate);
+  - **switch on** or **switch off** (for anything else: a trap, rubble, a trapdoor, a light);
+  - **while held** (a plate): works it as the player steps on, and puts it back as they step off.
+
+  For anything but a door, "open" means out of the way (switched off). A lever opens a locked gate: the lever is its key.
+- **Starts switched off.** Rubble, traps and breakable walls can start switched off: not there until a lever, a plate or a rule switches them on. Rubble that falls as the player steps on a plate is a collapsing passage. A trapdoor that a plate switches off drops the player to the floor below.
+- **Breakable.** A breakable wall, a barricade, rubble or an urn is broken for good with Interact: by hand, or with what it says it takes ("Needs Pickaxe to break it.").
+- **Chest and Safe.** Opened once, with its key if it is locked, it gives what it **Holds** and stays where it is. A second Interact has nothing to do; an empty one says "It's empty."
+- **Trap.** It hurts whoever stands in it while it fires: every **Cycle** seconds, for **Active for** seconds (a cycle of 0 is always on).
+- **Keypad** and **Clue marker** tie into the Puzzle Creator: bind a keypad to a keypad puzzle (its gate opens when the code is right), and a clue to the lore it reveals.
+
+The walkthrough opens doors with the levers and plates that work them ("Open Portcullis with Rusted lever."), and opens chests once their key is in hand ("Open Chest with Tomb Key: take Gold Idol in Treasury."). Preflight warns about a lever that works something no longer on its map. Copying a lever with its gate, or a whole map, keeps them working each other.
+
+What levers, plates and rules switched on and off is remembered with the doors (**Coming back in**); chests opened are remembered with the items.
 
 ## The structure as a scene (spec §10)
 

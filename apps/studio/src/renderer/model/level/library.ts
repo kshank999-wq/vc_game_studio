@@ -37,6 +37,27 @@ const physics = (collision: 'static' | 'dynamic' | 'none' = 'static'): ParamDef[
   { key: 'gravity', label: 'Gravity', group: 'physics', type: 'boolean', default: collision === 'dynamic', advanced: true },
 ];
 
+/**
+ * What a lever, switch or pressure plate works (structure spec §9): another
+ * item on the map, and what it does to it. A door or gate opens and shuts;
+ * anything else is switched on (there) and off (gone).
+ */
+const works = (action = 'toggle'): ParamDef[] => [
+  { key: 'works', label: 'Works', group: 'gameplay', type: 'item', default: '', hint: 'The door, gate, trap or thing it works, on this map.' },
+  { key: 'action', label: 'Does', group: 'gameplay', type: 'select', default: action, options: ['toggle', 'open', 'close', 'switch on', 'switch off', 'while held'], hint: 'Open and close for a door or gate; switch on and off for anything else. While held: opens (or switches on) while the player stands on it, and back as they step off.' },
+];
+
+/** Breakable: Interact breaks it, for good (to bare hands, or with the item named). */
+const breakable = (on = true, prompt = 'Break'): ParamDef[] => [
+  { key: 'destructible', label: 'Breakable', group: 'gameplay', type: 'boolean', default: on, hint: 'Interact breaks it, for good.' },
+  { key: 'breakWith', label: 'Broken with', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'], hint: 'What it takes to break it. None: bare hands.' },
+  { key: 'interactive', label: 'Interactive', group: 'interaction', type: 'boolean', default: on },
+  { key: 'prompt', label: 'Prompt', group: 'interaction', type: 'text', default: prompt },
+];
+
+/** Not there until something switches it on: rubble that falls, a trap that arms, a bridge that comes down. */
+const startsOff: ParamDef = { key: 'startsOff', label: 'Starts switched off', group: 'gameplay', type: 'boolean', default: false, hint: 'Not there until a lever, a plate or a rule switches it on.' };
+
 const interaction = (on = false, prompt = 'Use'): ParamDef[] => [
   { key: 'interactive', label: 'Interactive', group: 'interaction', type: 'boolean', default: on },
   { key: 'prompt', label: 'Prompt', group: 'interaction', type: 'text', default: prompt },
@@ -234,6 +255,12 @@ export const STARTER: readonly AssetDefinition[] = [
       outline: [{ x: -0.42, y: -0.5 }, { x: 0.18, y: -0.44 }, { x: 0.5, y: -0.12 }, { x: 0.38, y: 0.36 }, { x: -0.06, y: 0.5 }, { x: -0.5, y: 0.22 }, { x: -0.36, y: -0.16 }],
     },
     { id: 'space.platform', name: 'Platform', kind: 'solid', role: 'platform', naming: 'architecture', size: [4, 4, 0.5], proxy: 'box', engine: SOLID, description: 'A raised slab to stand on.' },
+    // The structure library (structure spec §9).
+    { id: 'space.courtyard', name: 'Courtyard', kind: 'space', role: 'zone', naming: 'room', size: [12, 12, 4], proxy: 'room', params: room(false, false), engine: ROOM, description: 'Open to the sky, with no walls of its own: the rooms round it are the walls.' },
+    { id: 'space.crawlspace', name: 'Crawlspace', kind: 'space', role: 'corridor', naming: 'room', size: [6, 1.2, 1.2], proxy: 'room', params: room(), engine: ROOM, description: 'A low passage the player crouches through.' },
+    { id: 'space.tunnel', name: 'Tunnel', kind: 'space', role: 'corridor', naming: 'room', size: [16, 2, 2.2], proxy: 'room', params: room(), engine: ROOM, description: 'A long, narrow way through rock or under a wall.' },
+    { id: 'space.liftLobby', name: 'Elevator lobby', kind: 'space', role: 'room', naming: 'room', size: [6, 5, 3], proxy: 'room', params: room(), engine: ROOM, description: 'Where the lifts stop on a floor.' },
+    { id: 'space.shaft', name: 'Shaft', kind: 'space', role: 'stairwell', naming: 'room', size: [2.5, 2.5, 9], proxy: 'room', params: room(true, false), engine: ROOM, description: 'A tall, narrow way between floors: a ladder or a rope in it.' },
   ]),
   ...group('architecture', [
     { id: 'arch.wall', name: 'Wall', kind: 'solid', role: 'wall', naming: 'architecture', size: [4, 0.2, 3], proxy: 'box', engine: SOLID, description: 'A free-standing wall.' },
@@ -271,6 +298,27 @@ export const STARTER: readonly AssetDefinition[] = [
       description: 'The outer edge of a structure’s floor (structure spec §5): rooms are meant to stay inside it. Drag its corners to shape it.',
     },
     { id: 'arch.railing', name: 'Railing', kind: 'solid', role: 'railing', naming: 'architecture', size: [3, 0.08, 1], proxy: 'box', engine: SOLID, description: 'A waist-high rail.' },
+    // The structure library (structure spec §9): openings, gates, barriers.
+    { id: 'arch.archway', name: 'Archway', kind: 'hosted', role: 'door', naming: 'architecture', size: [1.6, 0.2, 2.6], proxy: 'box', engine: HOSTED, description: 'An open arch in a wall: no door to open.', params: [{ key: 'swing', label: 'Opens', group: 'dimensions', type: 'select', default: 'open archway', options: ['in', 'out', 'sliding', 'open archway'] }] },
+    { id: 'arch.hole', name: 'Hole in the wall', kind: 'hosted', role: 'door', naming: 'architecture', size: [1.2, 0.2, 1.4], proxy: 'box', engine: HOSTED, description: 'A rough gap broken through a wall, to climb through.', params: [{ key: 'swing', label: 'Opens', group: 'dimensions', type: 'select', default: 'open archway', options: ['in', 'out', 'sliding', 'open archway'] }] },
+    {
+      id: 'arch.gate', name: 'Gate / portcullis', kind: 'hosted', role: 'door', naming: 'interactive', size: [2.4, 0.2, 3], proxy: 'box', engine: HOSTED, description: 'A heavy gate in a wall, locked: a lever, a switch or a plate opens it (set what it Works on them).',
+      params: [
+        { key: 'swing', label: 'Opens', group: 'dimensions', type: 'select', default: 'sliding', options: ['in', 'out', 'sliding', 'open archway'] },
+        { key: 'locked', label: 'Locked', group: 'gameplay', type: 'boolean', default: true, hint: 'It needs its key (Needs) to open, or a lever.' },
+        { key: 'keyItem', label: 'Needs', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'] },
+        { key: 'autoOpen', label: 'Opens as the player walks up', group: 'interaction', type: 'boolean', default: false },
+        { key: 'prompt', label: 'Prompt', group: 'interaction', type: 'text', default: 'Lift' },
+        { key: 'interactive', label: 'Interactive', group: 'interaction', type: 'boolean', default: true },
+      ],
+    },
+    { id: 'arch.column', name: 'Column', kind: 'solid', role: 'wall', naming: 'architecture', size: [0.6, 0.6, 3], proxy: 'cylinder', engine: SOLID, description: 'A pillar from floor to ceiling.' },
+    { id: 'arch.breakableWall', name: 'Breakable wall', kind: 'solid', role: 'wall', naming: 'interactive', size: [3, 0.3, 3], proxy: 'box', params: [...breakable(true, 'Break through'), startsOff], engine: SOLID, description: 'A weak wall the player can break through: to bare hands, or with the item it takes.' },
+    { id: 'arch.barricade', name: 'Barricade', kind: 'solid', role: 'wall', naming: 'interactive', size: [2.4, 0.6, 1.6], proxy: 'box', params: [...breakable(true, 'Tear down'), startsOff], engine: SOLID, description: 'Planks and furniture blocking the way, until the player tears them down.' },
+    { id: 'arch.rubble', name: 'Rubble', kind: 'solid', role: 'wall', naming: 'interactive', size: [2.4, 2, 1.8], proxy: 'wedge', params: [...breakable(true, 'Clear'), startsOff], engine: SOLID, description: 'Fallen stone blocking a passage: cleared by hand or with a tool; switched on, it falls (a collapsing passage).' },
+    { id: 'arch.trapdoor', name: 'Trapdoor', kind: 'solid', role: 'floor', naming: 'interactive', size: [1.6, 1.6, 0.1], proxy: 'box', params: [{ ...startsOff, default: false, label: 'Starts open (gone)' }], engine: SOLID, description: 'A floor panel over a drop: switched off by a lever or a plate, it gives way and the player falls to the floor below.' },
+    { id: 'arch.hatch', name: 'Hatch and ladder', kind: 'solid', role: 'ladder', naming: 'interactive', size: [0.8, 0.8, 3], proxy: 'box', params: interaction(true, 'Climb'), engine: SOLID, description: 'A hatch in the floor with a ladder down: put it where the floor below has a room.' },
+    { id: 'arch.rope', name: 'Rope / climb point', kind: 'solid', role: 'ladder', naming: 'interactive', size: [0.3, 0.3, 4], proxy: 'cylinder', params: interaction(true, 'Climb'), engine: SOLID, description: 'A rope, a vine or a handhold to climb.' },
   ]),
   ...group('primitives', [
     { id: 'prim.box', name: 'Box', kind: 'solid', role: 'primitive', naming: 'architecture', size: [1, 1, 1], proxy: 'box', engine: SOLID, description: 'A box.' },
@@ -289,6 +337,14 @@ export const STARTER: readonly AssetDefinition[] = [
     { id: 'prop.crate', name: 'Crate', kind: 'solid', role: 'prop', naming: 'prop', size: [1, 1, 1], proxy: 'box', params: physics('dynamic'), engine: SOLID, description: 'A crate that can be pushed.' },
     { id: 'prop.barrel', name: 'Barrel', kind: 'solid', role: 'prop', naming: 'prop', size: [0.6, 0.6, 0.9], proxy: 'cylinder', params: physics('dynamic'), engine: SOLID, description: 'A barrel.' },
     { id: 'prop.generic', name: 'Prop', kind: 'solid', role: 'prop', naming: 'prop', size: [0.5, 0.5, 0.5], proxy: 'box', engine: SOLID, description: 'Anything else: a placeholder for set dressing.' },
+    { id: 'prop.movable', name: 'Movable block', kind: 'solid', role: 'prop', naming: 'prop', size: [1.2, 1.2, 1.2], proxy: 'box', params: [...physics('dynamic'), { key: 'movable', label: 'Movable', group: 'interaction', type: 'boolean', default: true }], engine: SOLID, description: 'A block the player pushes onto a plate or out of the way.' },
+    { id: 'prop.urn', name: 'Urn', kind: 'solid', role: 'prop', naming: 'prop', size: [0.5, 0.5, 0.8], proxy: 'cylinder', params: breakable(true, 'Smash'), engine: SOLID, description: 'A clay urn: smashed, it is gone.' },
+    { id: 'prop.statue', name: 'Statue', kind: 'solid', role: 'prop', naming: 'prop', size: [0.8, 0.8, 2.2], proxy: 'cylinder', engine: SOLID, description: 'A statue on a plinth.' },
+    { id: 'prop.sarcophagus', name: 'Sarcophagus', kind: 'solid', role: 'prop', naming: 'prop', size: [1, 2.4, 1], proxy: 'box', engine: SOLID, description: 'A stone coffin.' },
+    { id: 'prop.altar', name: 'Altar', kind: 'solid', role: 'prop', naming: 'prop', size: [1.6, 0.9, 1], proxy: 'box', engine: SOLID, description: 'A stone altar.' },
+    { id: 'prop.machine', name: 'Machine', kind: 'solid', role: 'prop', naming: 'prop', size: [2, 1.2, 1.8], proxy: 'box', engine: SOLID, description: 'Plant, a generator, a press.' },
+    { id: 'prop.pipe', name: 'Pipe run', kind: 'solid', role: 'prop', naming: 'prop', size: [4, 0.3, 0.3], proxy: 'cylinder', engine: SOLID, description: 'Pipes along a wall or ceiling.' },
+    { id: 'prop.console', name: 'Console', kind: 'solid', role: 'prop', naming: 'prop', size: [1.2, 0.6, 1.1], proxy: 'box', engine: SOLID, description: 'A control desk or terminal.' },
   ]),
   ...group('lighting', [
     { id: 'light.point', name: 'Point light', kind: 'light', role: 'light', naming: 'light', size: [0.3, 0.3, 0.3], proxy: 'sphere', params: light, engine: E('OmniLight3D', 'Light (Point)', 'PointLight'), description: 'Light in every direction.' },
@@ -306,6 +362,37 @@ export const STARTER: readonly AssetDefinition[] = [
     { id: 'play.checkpoint', name: 'Checkpoint', kind: 'volume', role: 'checkpoint', naming: 'logic', size: [2, 2, 2], proxy: 'box', engine: VOLUME, description: 'Saves progress when the player passes.', params: [{ key: 'order', label: 'Order', group: 'gameplay', type: 'number', unit: 'count', default: 1, min: 1, step: 1 }] },
     { id: 'play.objective', name: 'Objective', kind: 'marker', role: 'objective', naming: 'logic', size: [0.5, 0.5, 1], proxy: 'marker', engine: MARKER, description: 'Where the player is meant to go or what to do there.', params: [{ key: 'objective', label: 'Objective', group: 'gameplay', type: 'text', default: '' }] },
     { id: 'play.cover', name: 'Cover point', kind: 'marker', role: 'cover', naming: 'navigation', size: [1, 0.5, 1], proxy: 'marker', engine: MARKER, description: 'A spot actors take cover behind.' },
+    // The structure library (structure spec §9): containers, quest items, traps.
+    {
+      id: 'play.chest', name: 'Chest', kind: 'solid', role: 'container', naming: 'inventory', size: [1, 0.6, 0.7], proxy: 'box', engine: PICKUP, description: 'Opened once (with its key, if it is locked), it gives what is in it, and stays.',
+      params: [
+        { key: 'item', label: 'Holds', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'] },
+        { key: 'quantity', label: 'Quantity', group: 'gameplay', type: 'number', unit: 'count', default: 1, min: 1, step: 1 },
+        { key: 'locked', label: 'Locked', group: 'gameplay', type: 'boolean', default: false },
+        { key: 'keyItem', label: 'Needs', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'], hint: 'What opens it, when it is locked.' },
+        ...interaction(true, 'Open'),
+      ],
+    },
+    {
+      id: 'play.safe', name: 'Safe', kind: 'solid', role: 'container', naming: 'inventory', size: [0.8, 0.7, 1], proxy: 'box', engine: PICKUP, description: 'A safe: locked, opened with its key (or bind it to a keypad puzzle), it gives what is in it.',
+      params: [
+        { key: 'item', label: 'Holds', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'] },
+        { key: 'quantity', label: 'Quantity', group: 'gameplay', type: 'number', unit: 'count', default: 1, min: 1, step: 1 },
+        { key: 'locked', label: 'Locked', group: 'gameplay', type: 'boolean', default: true },
+        { key: 'keyItem', label: 'Needs', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'], hint: 'What opens it, when it is locked.' },
+        ...interaction(true, 'Open'),
+      ],
+    },
+    { id: 'play.questItem', name: 'Quest item', kind: 'solid', role: 'pickup', naming: 'inventory', size: [0.4, 0.4, 0.4], proxy: 'sphere', engine: PICKUP, description: 'Something the story needs found: a relic, a letter, a key part.', params: [{ key: 'item', label: 'Gives', group: 'gameplay', type: 'ref', default: '', refTypes: ['inventory'] }, { key: 'quantity', label: 'Quantity', group: 'gameplay', type: 'number', unit: 'count', default: 1, min: 1, step: 1 }, ...interaction(true, 'Take').map((p) => (p.key === 'collectible' ? { ...p, default: true } : p))] },
+    {
+      id: 'play.trap', name: 'Trap', kind: 'volume', role: 'hazard', naming: 'trigger', size: [2, 2, 1], proxy: 'box', engine: VOLUME, description: 'Spikes, darts, flame: hurts whoever stands in it while it is active, in a cycle if it has one. A lever or plate can switch it on and off.',
+      params: [
+        { key: 'damage', label: 'Damage / s', group: 'gameplay', type: 'number', default: 25, min: 0, step: 1 },
+        { key: 'cycle', label: 'Cycle', group: 'gameplay', type: 'number', unit: 's', default: 2, min: 0, step: 0.5, hint: 'Every this many seconds it fires. 0: always active.' },
+        { key: 'activeFor', label: 'Active for', group: 'gameplay', type: 'number', unit: 's', default: 1, min: 0, step: 0.25, hint: 'How long each firing lasts.' },
+        startsOff,
+      ],
+    },
   ]),
   ...group('actors', [
     { id: 'actor.player', name: 'Player start', kind: 'marker', role: 'playerStart', naming: 'player', size: [0.6, 0.6, 1.8], proxy: 'marker', engine: E('Marker3D (player start)', 'Player spawn point', 'APlayerStart'), description: 'Where the player begins. Every level needs one. Give the player a light here: a story item or mechanic that lights it (L in Play Mode), and how long its fuel lasts.', params: [
@@ -334,6 +421,13 @@ export const STARTER: readonly AssetDefinition[] = [
     { id: 'logic.hazard', name: 'Hazard', kind: 'volume', role: 'hazard', naming: 'trigger', size: [2, 2, 1], proxy: 'box', engine: VOLUME, description: 'Dangerous ground: water, fire, a pit.', params: [{ key: 'damage', label: 'Damage / s', group: 'gameplay', type: 'number', default: 10, min: 0, step: 1 }] },
     { id: 'logic.darkness', name: 'Darkness', kind: 'volume', role: 'darkness', naming: 'trigger', size: [6, 6, 3], proxy: 'box', engine: VOLUME, description: 'Too dark to see without a light: the view goes dark, and nothing in it can be used until the player’s light is on.', params: [{ key: 'dark', label: 'How dark', group: 'gameplay', type: 'number', unit: 'percent', default: 92, min: 0, max: 100, step: 1 }, { key: 'needsLight', label: 'Needs a light to use things', group: 'gameplay', type: 'boolean', default: true }] },
     { id: 'logic.damage', name: 'Damage volume', kind: 'volume', role: 'damage', naming: 'trigger', size: [2, 2, 2], proxy: 'box', engine: VOLUME, description: 'Hurts whoever is inside.', params: [{ key: 'damage', label: 'Damage / s', group: 'gameplay', type: 'number', default: 25, min: 0, step: 1 }, { key: 'kills', label: 'Kills outright', group: 'gameplay', type: 'boolean', default: false }] },
+    // The structure library (structure spec §9): what works doors, gates and traps.
+    { id: 'logic.lever', name: 'Lever', kind: 'solid', role: 'interaction', naming: 'interactive', size: [0.3, 0.3, 1.2], proxy: 'box', engine: PICKUP, description: 'Pulled, it works the door, gate or trap it is set to (Works).', params: [...works('toggle'), ...interaction(true, 'Pull')] },
+    { id: 'logic.switch', name: 'Switch', kind: 'solid', role: 'interaction', naming: 'interactive', size: [0.2, 0.1, 0.3], proxy: 'box', engine: PICKUP, description: 'A wall switch or button: works what it is set to (Works).', params: [...works('toggle'), ...interaction(true, 'Press')] },
+    { id: 'logic.mechanism', name: 'Mechanism', kind: 'solid', role: 'interaction', naming: 'interactive', size: [1, 1, 1.4], proxy: 'cylinder', engine: PICKUP, description: 'A wheel, a crank, a winch: turned, it works what it is set to.', params: [...works('open'), ...interaction(true, 'Turn')] },
+    { id: 'logic.plate', name: 'Pressure plate', kind: 'volume', role: 'trigger', naming: 'trigger', size: [1.2, 1.2, 0.3], proxy: 'box', engine: VOLUME, description: 'Stepped on, it works what it is set to: while the player stands on it, or for good.', params: [...works('while held'), { key: 'once', label: 'Only once', group: 'logic', type: 'boolean', default: false }] },
+    { id: 'logic.keypad', name: 'Keypad', kind: 'solid', role: 'interaction', naming: 'interactive', size: [0.3, 0.1, 0.4], proxy: 'box', engine: PICKUP, description: 'A code panel: bind it to a keypad puzzle (Puzzles) and its gate opens when the code is right.', params: interaction(true, 'Enter code') },
+    { id: 'logic.clue', name: 'Clue marker', kind: 'marker', role: 'interaction', naming: 'interactive', size: [0.5, 0.5, 0.5], proxy: 'marker', engine: PICKUP, description: 'Something to examine: bind it as a puzzle clue, or give it rules that reveal lore.', params: interaction(true, 'Examine') },
   ]),
   ...group('presentation', [
     { id: 'pres.camera', name: 'Camera marker', kind: 'marker', role: 'camera', naming: 'camera', size: [0.5, 0.8, 0.5], proxy: 'marker', engine: E('Camera3D', 'Camera (Cinemachine-ready)', 'CineCameraActor'), description: 'A camera position and facing.', params: [{ key: 'fov', label: 'Field of view', group: 'presentation', type: 'number', unit: 'deg', default: 60, min: 5, max: 150, step: 1 }] },

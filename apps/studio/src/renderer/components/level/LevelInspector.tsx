@@ -311,6 +311,22 @@ export const LevelInspector = (props: Props) => {
       return <SelectField key={p.key} {...base} value={String(value ?? '')} options={[{ value: '', label: variants.length ? 'The base character' : 'No variants' }, ...variants.map((v) => ({ value: v.id, label: v.name }))]} onCommit={(v) => commitParam(p, v)} />;
     }
     if (p.type === 'ref') return <RefField key={p.key} {...base} project={project} value={String(value ?? '')} types={p.refTypes ?? []} onCommit={(v) => commitParam(p, v)} />;
+    if (p.type === 'item') {
+      // Another item on this map: a lever's door, a plate's trap (structure spec §9).
+      const choices = set.items
+        .filter((i) => i.levelId === item.levelId && i.id !== item.id && (!p.itemRoles || p.itemRoles.includes(assetOf(set, i, global).role)) && assetOf(set, i, global).kind !== 'space')
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const v = String(value ?? '');
+      return (
+        <SelectField
+          key={p.key}
+          {...base}
+          value={v}
+          options={[{ value: '', label: '— nothing —' }, ...(v && !choices.some((c) => c.id === v) ? [{ value: v, label: '(no longer on this map)' }] : []), ...choices.map((c) => ({ value: c.id, label: c.name }))]}
+          onCommit={(next) => commitParam(p, next)}
+        />
+      );
+    }
     if (p.type === 'number') return <NumberField key={p.key} {...base} value={num(value, 0)} unit={p.unit} units={units} step={p.step} min={p.min} max={p.max} onCommit={(v) => commitParam(p, v)} />;
     return <TextField key={p.key} {...base} value={String(value ?? '')} onCommit={(v) => commitParam(p, v)} />;
   };

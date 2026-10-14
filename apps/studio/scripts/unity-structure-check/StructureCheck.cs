@@ -41,6 +41,15 @@ static class StructureCheck
             if (string.Join(",", done) != string.Join(",", expected)) Fail(what + ": objectives done " + string.Join(",", done) + ", the studio " + string.Join(",", expected));
         }
         if (want.ContainsKey("complete") && level.Complete != D.Bool(want, "complete")) Fail(what + ": complete is " + level.Complete + ", the studio " + D.Bool(want, "complete"));
+        foreach (var pair in D.Map(want, "present"))
+            if (level.IsPresent(pair.Key) != (pair.Value is bool p && p)) Fail(what + ": " + D.Str(level.Item(pair.Key), "name") + " should " + ((pair.Value is bool p2 && p2) ? "be there" : "be gone"));
+        // Health within a tick of the studio's: a trap's cycle can fall either side of a tick.
+        if (want.ContainsKey("health") && Math.Abs(level.Health - D.Num(want, "health")) > 6) Fail(what + ": health " + level.Health + ", the studio " + D.Num(want, "health"));
+        foreach (var pair in D.Map(want, "items"))
+        {
+            var has = game.Items.TryGetValue(pair.Key, out var count) ? count : 0;
+            if (has != (int)D.Num(pair.Value, 0)) Fail(what + ": carries " + has + " of " + pair.Key + ", the studio " + D.Num(pair.Value, 0));
+        }
         foreach (var pair in D.Map(want, "flags"))
             if (game.GetFlag(pair.Key) != (string)pair.Value) Fail(what + ": " + pair.Key + " is " + game.GetFlag(pair.Key) + ", the studio " + pair.Value);
     }
@@ -52,7 +61,7 @@ static class StructureCheck
         var expect = D.Map(Json.Parse(File.ReadAllText("structure_expect.json")));
         var json = File.ReadAllText("Assets/VCGS/Generated/Levels/" + D.Str(expect, "level") + ".json");
         var level = LevelLogic.FromJson(json, game);
-        if (D.Str(level.Structure, "name") != "Old Tomb" || D.List(level.Structure, "doors").Count != 5 || D.List(level.Structure, "objectives").Count != 2)
+        if (D.Str(level.Structure, "name") != "Old Tomb" || D.List(level.Structure, "doors").Count != 6 || D.List(level.Structure, "objectives").Count != 2)
             Fail("the level data should carry the Old Tomb's manifest");
         if (level.Objective != "Find the Tomb Key") Fail("the first objective should be shown, got " + level.Objective);
         var n = 0;
@@ -63,6 +72,9 @@ static class StructureCheck
             var at = D.List(step, "at");
             var where = new[] { D.Num(at[0], 0), D.Num(at[1], 0), D.Num(at[2], 0) };
             level.Player = where;
+            // What the player came into and left: in a game the physics says so.
+            foreach (var g in D.List(step, "exit")) level.Exit((string)g);
+            foreach (var g in D.List(step, "enter")) level.Enter((string)g);
             switch (D.Str(step, "do"))
             {
                 case "interact":

@@ -140,6 +140,14 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
       add({ id: item.id, levelId: item.levelId, severity: 'error', message: `${item.name} refers to ${missing.length === 1 ? 'something' : `${missing.length} things`} no longer in the project.`, export: 'Those references are dropped from the export. Pick another, or remove them.' });
     }
 
+    // A lever, switch or plate works an item on its own map (structure spec §9).
+    for (const p of def.params.filter((x) => x.type === 'item')) {
+      const target = String(item.params?.[p.key] ?? '').trim();
+      if (target && !set.items.some((i) => i.id === target && i.levelId === item.levelId)) {
+        add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} works something no longer on this map.`, export: 'It exports, and does nothing when used. Pick what it works.' });
+      }
+    }
+
     if (outlineOf(set, item, global)) {
       const f = frameOf(set, item, global);
       if (selfIntersects(corners(f))) {

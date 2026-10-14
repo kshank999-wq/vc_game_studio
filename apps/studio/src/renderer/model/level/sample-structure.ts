@@ -1,7 +1,7 @@
 import { makeObject, nextCode } from '../project';
 import type { Project } from '../types';
 import { levelsOf, placeAsset, setParam } from './level';
-import { interactWith, isOpen, leaveLevel, offerFor, startLevelPlay, tick, type LevelPlayState } from './play';
+import { interactWith, isOpen, leaveLevel, offerFor, present, startLevelPlay, tick, type LevelPlayState } from './play';
 import { createStructure, floorCodes, updateStructure } from './structure';
 
 /**
@@ -13,16 +13,25 @@ import { createStructure, floorCodes, updateStructure } from './structure';
  *
  * The Tomb Key lies in the Entrance Hall. Two objectives: find the key, reach
  * the crypt. Completing it sets Tomb plundered to yes.
+ *
+ * Beyond the Crypt, the structure library (structure spec §9): a Rusted
+ * lever in the Crypt lifts the Portcullis into the Sanctum; a Pressure plate
+ * there brings Falling rubble down (it starts switched off), which the
+ * player clears; a Spike trap fires every two seconds. In the Treasury, a
+ * Chest locked with the Tomb Key holds the Gold Idol.
  */
 export interface Tomb {
   project: Project;
   id: string;
   massId: string;
   floorId: string;
-  rooms: { hall: string; chamber: string; treasury: string; crypt: string };
-  doors: { front: string; inner: string; vault: string; rubble: string; back: string };
+  rooms: { hall: string; chamber: string; treasury: string; crypt: string; sanctum: string };
+  doors: { front: string; inner: string; vault: string; rubble: string; back: string; portcullis: string };
+  /** The structure library's pieces. */
+  parts: { lever: string; plate: string; fallingRubble: string; trap: string; chest: string };
   keyPickup: string;
   key: string;
+  idol: string;
   plundered: string;
 }
 
@@ -45,14 +54,29 @@ export const withTomb = (project: Project, parentId?: string): Tomb => {
   const chamber = put('space.room', -3, 0, 'Burial Chamber');
   const treasury = put('space.room', -11, 6, 'Treasury');
   const crypt = put('space.room', 5, 0, 'Crypt');
+  const sanctum = put('space.room', 13, 0, 'Sanctum');
   const front = put('arch.door', -15, 0, 'Front door');
   const inner = put('arch.door', -7, 1, 'Inner door');
   const vault = put('arch.door', -11, 3, 'Vault door');
   const rubble = put('arch.door', 1, 1, 'Rubble door');
   const back = put('arch.door', -11, 9, 'Back door');
+  const portcullis = put('arch.gate', 9, 1, 'Portcullis');
   const keyObject = makeObject('inventory', 'Tomb Key', NOW, { code: nextCode(p, { prefix: 'ITM-', pad: 2 }) });
   const plundered = makeObject('state', 'Tomb plundered', NOW, { states: ['no', 'yes'], initialState: 'no' });
   p = { ...p, objects: { ...p.objects, [keyObject.id]: keyObject, [plundered.id]: plundered } };
+  const idol = makeObject('inventory', 'Gold Idol', NOW, { code: nextCode(p, { prefix: 'ITM-', pad: 2 }) });
+  p = { ...p, objects: { ...p.objects, [idol.id]: idol } };
+  // The structure library: a lever lifts the portcullis; a plate brings rubble down; a trap; a locked chest.
+  const lever = put('logic.lever', 6, -2, 'Rusted lever');
+  p = setParam(p, lever, 'works', portcullis);
+  const fallingRubble = put('arch.rubble', 15, 1.5, 'Falling rubble');
+  p = setParam(p, fallingRubble, 'startsOff', true);
+  const plate = put('logic.plate', 13, -1.5, 'Pressure plate');
+  p = setParam(setParam(p, plate, 'works', fallingRubble), plate, 'action', 'switch on');
+  const trap = put('play.trap', 11, 1.5, 'Spike trap');
+  p = setParam(setParam(setParam(p, trap, 'damage', 20), trap, 'cycle', 2), trap, 'activeFor', 1);
+  const chest = put('play.chest', -13, 7, 'Chest');
+  p = setParam(setParam(setParam(p, chest, 'item', idol.id), chest, 'locked', true), chest, 'keyItem', keyObject.id);
   const keyPickup = put('play.pickup', -12, -1.5, 'Tomb Key');
   p = setParam(p, keyPickup, 'item', keyObject.id);
   // The door rules: none opens by walking up (Interact does), so the checks say exactly when each opens.
@@ -72,13 +96,28 @@ export const withTomb = (project: Project, parentId?: string): Tomb => {
     onComplete: [{ kind: 'setFlag', ref: plundered.id, value: 'yes' }],
     persist: { doors: 'keep', items: 'keep', enemies: 'keep', puzzles: 'keep' },
   });
-  return { project: p, id: made.id, massId: made.massId, floorId: g, rooms: { hall, chamber, treasury, crypt }, doors: { front, inner, vault, rubble, back }, keyPickup, key: keyObject.id, plundered: plundered.id };
+  return {
+    project: p,
+    id: made.id,
+    massId: made.massId,
+    floorId: g,
+    rooms: { hall, chamber, treasury, crypt, sanctum },
+    doors: { front, inner, vault, rubble, back, portcullis },
+    parts: { lever, plate, fallingRubble, trap, chest },
+    keyPickup,
+    key: keyObject.id,
+    idol: idol.id,
+    plundered: plundered.id,
+  };
 };
 
 /** One step of the walk, and what the studio's Play Mode says after it. */
 export interface TombStep {
   /** What happens: the player stands at `at` and asks what Interact would do to `guid`, uses it, or waits `seconds`. */
   do: 'offer' | 'interact' | 'wait' | 'remember';
+  /** Volumes the player came into, and left, at this step (the engines' physics tells them; the check says so). */
+  enter?: string[];
+  exit?: string[];
   guid?: string;
   /** Where the player stands, in level space [x, y up, z]. */
   at: [number, number, number];
@@ -92,6 +131,12 @@ export interface TombStep {
     complete?: boolean;
     /** Story states (by key) and their values. */
     flags?: Record<string, string>;
+    /** Items in the level now (not taken, not broken, switched on), by GUID. */
+    present?: Record<string, boolean>;
+    /** The player's health. */
+    health?: number;
+    /** Story items carried (by key), and how many. */
+    items?: Record<string, number>;
   };
 }
 
@@ -113,20 +158,31 @@ export const tombWalk = (tomb: Tomb, key: (id: string) => string): TombStep[] =>
     objectives: Object.keys(s.structure?.objectives ?? {}).filter((k) => s.structure!.objectives[k]).sort(),
     complete: !!s.structure?.complete,
     flags: { [key(tomb.plundered)]: s.world.flags[tomb.plundered] ?? '' },
+    present: Object.fromEntries([tomb.parts.fallingRubble, tomb.parts.chest, tomb.keyPickup].map((g) => [g, present(p, s, item(g))])),
+    health: Math.round(s.health * 100) / 100,
+    items: { [key(tomb.key)]: s.world.items[tomb.key] ?? 0, [key(tomb.idol)]: s.world.items[tomb.idol] ?? 0 },
   });
+  /** What the player came into and left, as Play Mode worked it out: for the engine checks to say so. */
+  const moved = (before: readonly string[]): Pick<TombStep, 'enter' | 'exit'> => {
+    const enter = s.inside.filter((g) => !before.includes(g));
+    const exit = before.filter((g) => !s.inside.includes(g));
+    return { ...(enter.length ? { enter } : {}), ...(exit.length ? { exit } : {}) };
+  };
   const plan = (x: number, y: number): [number, number, number] => [x, 0, y];
   const offer = (guid: string, at: [number, number, number]) => {
     const o = offerFor(p, s, item(guid), undefined, { x: at[0], y: at[2] });
     out.push({ do: 'offer', guid, at, expect: { verb: o?.verb ?? '', ...(o?.blocked ? { blocked: o.blocked } : {}) } });
   };
   const use = (guid: string, at: [number, number, number]) => {
+    const before = [...s.inside];
     s = interactWith(p, s, guid, undefined, { x: at[0], y: at[2] });
     s = tick(p, s, 0.05, { x: at[0], y: at[2], z: at[1] });
-    out.push({ do: 'interact', guid, at, expect: snapshot() });
+    out.push({ do: 'interact', guid, at, ...moved(before), expect: snapshot() });
   };
   const wait = (seconds: number, at: [number, number, number]) => {
+    const before = [...s.inside];
     for (let t = 0; t < seconds - 1e-9; t += 0.25) s = tick(p, s, Math.min(0.25, seconds - t), { x: at[0], y: at[2], z: at[1] });
-    out.push({ do: 'wait', seconds, at, expect: snapshot() });
+    out.push({ do: 'wait', seconds, at, ...moved(before), expect: snapshot() });
   };
   const hall = plan(-11, 0);
   offer(d.inner, hall);
@@ -144,9 +200,26 @@ export const tombWalk = (tomb: Tomb, key: (id: string) => string): TombStep[] =>
   use(d.rubble, chamber);
   // In the crypt: the last objective, and the tomb is complete.
   wait(0.5, plan(5, 0));
+  // The structure library (structure spec §9): the portcullis is locked; the lever lifts it.
+  const crypt = plan(5, 0);
+  offer(d.portcullis, crypt);
+  offer(tomb.parts.lever, plan(6, -1.2));
+  use(tomb.parts.lever, plan(6, -1.2));
+  // Onto the plate in the Sanctum: the rubble comes down; the player clears it.
+  wait(0.25, plan(13, -1.5));
+  offer(tomb.parts.fallingRubble, plan(14, 0));
+  use(tomb.parts.fallingRubble, plan(14, 0));
+  // The spike trap fires every two seconds, for one.
+  wait(1.5, plan(11, 1.5));
+  wait(0.25, plan(13, 0));
   // The back door opens from the Treasury, not from outside.
   offer(d.back, plan(-11, 7.5));
   offer(d.back, plan(-11, 10.5));
+  // The chest in the Treasury, locked with the Tomb Key, holds the Gold Idol.
+  const treasury = plan(-12, 6);
+  offer(tomb.parts.chest, treasury);
+  use(tomb.parts.chest, treasury);
+  offer(tomb.parts.chest, treasury);
   // Leaving and coming back: everything as left.
   const world = leaveLevel(p, s);
   s = startLevelPlay(p, tomb.id, { world });

@@ -222,7 +222,7 @@ describe('solvability (structure spec §11, §15)', () => {
     const w = walkStructure(p, t.id);
     const of = (id: string) => w.issues.find((i) => i.id === id);
     expect(of(portal)).toMatchObject({ severity: 'error', message: 'Way down leads nowhere: set where it Leads to.' });
-    expect(of(trigger)!.message).toBe('Trap does nothing: give it rules.');
+    expect(of(trigger)!.message).toBe('Trap does nothing: give it rules, or set what it works.');
     expect(of(sack)!.message).toBe('Sack gives nothing: set what it Gives.');
     expect(of(t.vault)!.message).toBe('Vault door is locked and nothing opens it: set what it Needs, or make it breakable.');
     expect(of(t.treasury)).toMatchObject({ severity: 'error', message: 'Objective “Find the treasure” can’t be reached: Treasury is shut off.' });

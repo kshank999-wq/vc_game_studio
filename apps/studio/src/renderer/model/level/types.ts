@@ -43,6 +43,8 @@ export type AssetRole =
   | 'primitive' | 'prop'
   | 'light'
   | 'pickup' | 'inventory' | 'weapon' | 'ammo' | 'health' | 'checkpoint' | 'objective' | 'cover'
+  /** A chest, a safe, a strongbox (structure spec §9): opened once (with its key, if locked), it gives what is in it and stays. */
+  | 'container'
   | 'playerStart' | 'npc' | 'companion' | 'enemy' | 'neutral' | 'patrolNode'
   /** A Character Creator group put in an area (character spec §7): its people come from `populate`. */
   | 'crowd'
@@ -78,7 +80,7 @@ export interface ParamDef {
   key: string;
   label: string;
   group: PropertyGroup;
-  type: 'number' | 'boolean' | 'text' | 'select' | 'ref';
+  type: 'number' | 'boolean' | 'text' | 'select' | 'ref' | 'item';
   default: ParamValue;
   /** A length is shown in the project's units; the value is always metres. */
   unit?: 'length' | 'deg' | 's' | 'count' | 'percent';
@@ -88,6 +90,8 @@ export interface ParamDef {
   options?: readonly string[];
   /** For a 'ref': the story elements it may point at (an NPC's character, a pickup's inventory item). */
   refTypes?: readonly ObjectType[];
+  /** For an 'item': another item on the same map it points at (a lever's door), of these roles; any role when absent. */
+  itemRoles?: readonly AssetRole[];
   hint?: string;
   /** Kept out of the first view of its section until "More" is opened (spec §15). */
   advanced?: boolean;

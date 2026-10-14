@@ -99,7 +99,7 @@ describe('the structure manifest (structure spec §13, §14)', () => {
     const m = level.structure!;
     expect(m).toMatchObject({ type: 'dungeon', traversal: 'mixed', mass: t.massId, persist: { doors: 'keep', items: 'keep', enemies: 'keep', puzzles: 'keep' } });
     expect(m.floors).toEqual([{ key: level.floors[0]!.key, code: 'G', kind: 'ground', elevation: 0, height: 3, footprint: [[-20, -15], [20, -15], [20, 15], [-20, 15]] }]);
-    expect(m.spaces.map((s) => s.name).sort()).toEqual(['Burial Chamber', 'Crypt', 'Entrance Hall', 'Treasury']);
+    expect(m.spaces.map((s) => s.name).sort()).toEqual(['Burial Chamber', 'Crypt', 'Entrance Hall', 'Sanctum', 'Treasury']);
     expect(m.entrances.sort()).toEqual([t.doors.back, t.doors.front].sort());
     const keyKey = level.items.find((i) => i.guid === t.keyPickup)!.params.item;
     expect(m.doors.find((d) => d.guid === t.doors.inner)).toMatchObject({ locked: true, key: keyKey, open_for: 4, secret: false, breakable: false });

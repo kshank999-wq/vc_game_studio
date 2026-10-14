@@ -60,7 +60,9 @@ namespace vcgs
     struct PlaceMemory
     {
         std::map<std::string, bool> Open;
-        std::set<std::string> Unlocked, Found, Broken, Gone, Done, Objectives;
+        std::set<std::string> Unlocked, Found, Broken, Gone, Done, Opened, Objectives;
+        /** What levers, plates and rules switched on and off (kept with the doors). */
+        std::map<std::string, bool> Enabled;
         bool Complete = false;
     };
 
@@ -77,6 +79,8 @@ namespace vcgs
         /** Secret doors found, doors broken open, and timed doors with the level time each shuts again (structure spec §7). */
         std::set<std::string> Found, Broken;
         std::map<std::string, double> ClosesAt;
+        /** Chests and safes opened (structure spec §9): emptied, they stay. */
+        std::set<std::string> Opened;
         /** The structure's objectives done, and whether it is complete (structure spec §10). */
         std::set<std::string> ObjectivesDone;
         bool Complete = false;
@@ -384,6 +388,8 @@ namespace vcgs
             m.Broken = Broken;
             m.Gone = Gone;
             m.Done = Done;
+            m.Opened = Opened;
+            m.Enabled = Enabled;
             m.Objectives = ObjectivesDone;
             m.Complete = Complete;
             return m;
@@ -400,6 +406,7 @@ namespace vcgs
                 Unlocked = memory.Unlocked;
                 Found = memory.Found;
                 Broken = memory.Broken;
+                for (const auto& pair : memory.Enabled) Enabled[pair.first] = pair.second;
             }
             static const std::set<std::string> pickups = {"pickup", "inventory", "weapon", "ammo", "health"};
             Gone.clear();
@@ -408,6 +415,7 @@ namespace vcgs
                 const bool isItem = pickups.count(Role(guid)) > 0;
                 if ((isItem && keeps("items")) || (!isItem && keeps("enemies"))) Gone.insert(guid);
             }
+            if (keeps("items")) Opened = memory.Opened;
             if (keeps("enemies")) Done = memory.Done;
             if (!keeps("puzzles"))
             {
@@ -581,10 +589,49 @@ namespace vcgs
         /** Not taken, not switched off, and its "present only when" holds. */
         bool IsPresent(const std::string& guid) const
         {
-            if (!Items.count(guid) || Gone.count(guid)) return false;
-            auto e = Enabled.find(guid);
-            if (e != Enabled.end() && !e->second) return false;
+            if (!Items.count(guid) || Gone.count(guid) || !SwitchedOn(guid)) return false;
             return Rules::Check(Item(guid)["active_when"], Game);
+        }
+
+        /** Switched on: as rules, levers and plates left it, else as it starts (on, unless it starts switched off). */
+        bool SwitchedOn(const std::string& guid) const
+        {
+            auto e = Enabled.find(guid);
+            if (e != Enabled.end()) return e->second;
+            return !ParamBool(guid, "startsOff", false);
+        }
+
+        /** A solid the player can break (structure spec §9): a breakable wall, a barricade, rubble, an urn. */
+        bool IsBreakable(const std::string& guid) const
+        {
+            static const std::set<std::string> carried = {"pickup", "inventory", "weapon", "ammo", "health", "container", "door"};
+            return Item(guid)["kind"].Str() == "solid" && !carried.count(Role(guid)) && ParamBool(guid, "destructible", false);
+        }
+
+        /**
+         * A lever, switch or pressure plate works what it is set to (structure spec §9): a door opens or
+         * shuts; anything else is switched on (there) or off (gone). Open is out of the way: for anything
+         * but a door, off. While held, a plate works it as the player steps on, and back as they step off.
+         */
+        void WorkTarget(const std::string& worker, const std::string& phase)
+        {
+            const std::string target = Param(worker, "works").Str();
+            if (target.empty() || !Items.count(target)) return;
+            std::string action = Param(worker, "action").Str();
+            if (action.empty()) action = "toggle";
+            if (phase == "exit" && action != "while held") return;
+            const bool isDoor = Role(target) == "door";
+            const bool now = isDoor ? IsOpen(target) : SwitchedOn(target);
+            bool want = !now;
+            if (action == "while held") want = phase == "use" ? !now : phase == "enter";
+            else if (action == "open") want = isDoor;
+            else if (action == "close") want = !isDoor;
+            else if (action == "switch on") want = true;
+            else if (action == "switch off") want = false;
+            if (want == now) return;
+            if (isDoor) { Open[target] = want; ClosesAt.erase(target); }
+            else Enabled[target] = want;
+            if (OnRefresh) OnRefresh();
         }
 
         bool IsOpen(const std::string& guid) const
@@ -604,7 +651,7 @@ namespace vcgs
             const Value& interactive = Param(guid, "interactive");
             bool no = interactive.type == Value::Type::Bool && !interactive.boolean;
             bool yes = interactive.type == Value::Type::Bool && interactive.boolean;
-            static const std::set<std::string> kinds = {"door", "pickup", "inventory", "weapon", "ammo", "health", "npc", "companion", "neutral", "dialogue", "interaction", "puzzle", "elevator", "ladder"};
+            static const std::set<std::string> kinds = {"door", "container", "pickup", "inventory", "weapon", "ammo", "health", "npc", "companion", "neutral", "dialogue", "interaction", "puzzle", "elevator", "ladder"};
             if (no && !rules) return out;
             if (!yes && !rules && !kinds.count(Role(guid))) return out;
             out.Any = true;
@@ -659,6 +706,18 @@ namespace vcgs
                 }
                 else if (!locked) out.Verb = "Open";
             }
+            else if (Role(guid) == "container")
+            {
+                // A chest or safe (structure spec §9): once opened, there is nothing more to do.
+                if (Opened.count(guid)) return LevelOffer();
+                const std::string chestKey = Param(guid, "keyItem").Str();
+                if (ParamBool(guid, "locked", false) && !(!chestKey.empty() && Game.HasItem(chestKey))) out.Blocked = chestKey.empty() ? "Locked." : "Locked. Needs " + StoryName(chestKey) + ".";
+            }
+            else if (IsBreakable(guid))
+            {
+                const std::string withItem = Param(guid, "breakWith").Str();
+                if (!withItem.empty() && !Game.HasItem(withItem)) out.Blocked = "Needs " + StoryName(withItem) + " to break it.";
+            }
             return out;
         }
 
@@ -699,6 +758,22 @@ namespace vcgs
                     else ClosesAt.erase(guid);
                 }
             }
+            else if (role == "container")
+            {
+                Opened.insert(guid);
+                const std::string holds = Param(guid, "item").Str();
+                if (!holds.empty())
+                {
+                    Game.GiveItem(holds, static_cast<int>(Param(guid, "quantity").Num(1)));
+                    said = "Took " + StoryName(holds);
+                }
+                else said = "It\xE2\x80\x99s empty.";
+            }
+            else if (IsBreakable(guid))
+            {
+                Gone.insert(guid);
+                said = Item(guid)["name"].Str() + " gives way.";
+            }
             else if (pickups.count(role) && ParamBool(guid, "collectible", true))
             {
                 Gone.insert(guid);
@@ -731,6 +806,8 @@ namespace vcgs
                 const Value& links = Item(guid)["links"];
                 for (size_t i = 0; i < links.Size(); i++) if (OnStoryObjectUsed) OnStoryObjectUsed(links[i].Str());
             }
+            // A lever, a switch, a mechanism: it works what it is set to.
+            if (role == "interaction") WorkTarget(guid, "use");
             RunRules(guid, "interact");
             RunRules(guid, "use");
             if (OnRefresh) OnRefresh();
@@ -752,12 +829,15 @@ namespace vcgs
             if (role == "checkpoint" && OnCheckpoint) OnCheckpoint(guid);
             if (role == "portal" && !Param(guid, "to").Str().empty() && OnLevel) OnLevel(Param(guid, "to").Str());
             if (role == "spawn" && !Done.count(guid)) Spawn(guid);
+            // A pressure plate works what it is set to.
+            if (role == "trigger") WorkTarget(guid, "enter");
             RunRules(guid, "enter");
         }
 
         void Exit(const std::string& guid)
         {
             if (!Inside.erase(guid)) return;
+            if (Role(guid) == "trigger") WorkTarget(guid, "exit");
             RunRules(guid, "exit");
         }
 
@@ -792,7 +872,12 @@ namespace vcgs
             {
                 std::string role = Role(guid);
                 if ((role == "hazard" || role == "damage") && IsPresent(guid))
+                {
+                    // A trap in a cycle hurts only while it fires (structure spec §9).
+                    const double cycle = Param(guid, "cycle").Num(0);
+                    if (role == "hazard" && cycle > 0 && std::fmod(Time, cycle) >= Param(guid, "activeFor").Num(cycle)) continue;
                     Health = ParamBool(guid, "kills", false) ? 0 : Health - Param(guid, "damage").Num(0) * dt;
+                }
             }
             if (Health <= 0)
             {

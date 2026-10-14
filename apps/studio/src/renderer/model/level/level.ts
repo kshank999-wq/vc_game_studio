@@ -627,6 +627,21 @@ export const distributeItems = (project: Project, ids: readonly string[], axis: 
 };
 
 /** Copies with new GUIDs and serials, offset so they can be seen. A room's doors come with it. */
+/**
+ * A copied item's references to other items, onto their copies: what a lever
+ * works, and the items its rules open, spawn or switch. References to items
+ * not copied stay as they were.
+ */
+export const remapItemRefs = (item: LevelItem, ids: ReadonlyMap<string, string>): LevelItem => {
+  let out = item;
+  const works = item.params?.works;
+  if (typeof works === 'string' && ids.has(works)) out = { ...out, params: { ...out.params, works: ids.get(works)! } };
+  if (item.rules?.some((r) => (r.actions ?? []).some((a) => ids.has(a.target)))) {
+    out = { ...out, rules: item.rules.map((r) => (r.actions ? { ...r, actions: r.actions.map((a) => (ids.has(a.target) ? { ...a, target: ids.get(a.target)! } : a)) } : r)) };
+  }
+  return out;
+};
+
 export const duplicateItems = (project: Project, ids: readonly string[], offset: Point = { x: 1, y: 1 }): { project: Project; ids: string[] } => {
   let set = levelsOf(project);
   const chosen = new Set(ids);
@@ -654,7 +669,7 @@ export const duplicateItems = (project: Project, ids: readonly string[], offset:
       if (!groupMap.has(o.groupId)) groupMap.set(o.groupId, guid());
       copy.groupId = groupMap.get(o.groupId)!;
     }
-    copies.push(copy);
+    copies.push(remapItemRefs(copy, idMap));
   }
   const made = [...set.items, ...copies];
   return { project: withSet(project, revalidate({ ...set, items: made }, copies.map((c) => c.id))), ids: ids.map((id) => idMap.get(id)).filter((id): id is string => !!id) };

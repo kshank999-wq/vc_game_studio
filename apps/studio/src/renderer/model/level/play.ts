@@ -65,6 +65,8 @@ export interface LevelPlayState {
   broken?: Record<string, boolean>;
   /** Timed doors standing open, and when each shuts again. */
   closesAt?: Record<string, number>;
+  /** Chests and safes opened (structure spec §9): emptied, they stay. */
+  opened?: Record<string, boolean>;
   /** Items switched off (false) or back on (true) by rules. */
   enabled: Record<string, boolean>;
   /** Items taken or despawned. */
@@ -117,6 +119,10 @@ export interface PlaceMemory {
   broken: Record<string, boolean>;
   gone: Record<string, boolean>;
   done: Record<string, boolean>;
+  /** Chests and safes opened. */
+  opened?: Record<string, boolean>;
+  /** What levers, plates and rules switched on and off (kept with the doors). */
+  enabled?: Record<string, boolean>;
   spawned: Spawned[];
   actors: Record<string, ActorPose>;
   cast?: Record<string, CastPose>;
@@ -257,7 +263,10 @@ export const tooDark = (project: Project, state: LevelPlayState, item: LevelItem
 
 /** In the level right now: not taken, not switched off, and its "present only when" holds. */
 export const present = (project: Project, state: LevelPlayState, item: LevelItem): boolean =>
-  item.levelId === state.levelId && !item.hidden && !state.gone[item.id] && state.enabled[item.id] !== false && evaluate(item.activeWhen, state.world);
+  item.levelId === state.levelId && !item.hidden && !state.gone[item.id] && switchedOn(state, item) && evaluate(item.activeWhen, state.world);
+
+/** Switched on: as rules, levers and plates left it, else as it starts (on, unless it starts switched off). */
+const switchedOn = (state: LevelPlayState, item: LevelItem): boolean => (item.id in state.enabled ? state.enabled[item.id] !== false : item.params?.startsOff !== true);
 
 export const isOpen = (project: Project, state: LevelPlayState, item: LevelItem, global?: readonly AssetDefinition[]): boolean => {
   if (state.broken?.[item.id]) return true;
@@ -573,7 +582,59 @@ export const offerFor = (project: Project, state: LevelPlayState, item: LevelIte
     }
     return { itemId: item.id, verb: locked ? prompt : 'Open', label: item.name };
   }
+  if (def.role === 'container') {
+    // A chest or safe (structure spec §9): once opened, there is nothing more to do.
+    if (state.opened?.[item.id]) return null;
+    const key = String(paramOf(set, item, 'keyItem', global) ?? '').trim();
+    if (bool(paramOf(set, item, 'locked', global), false) && !(key && (state.world.items[key] ?? 0) > 0)) return { itemId: item.id, verb: prompt, label: item.name, blocked: key ? `Locked. Needs ${name(project, key)}.` : 'Locked.' };
+    return { itemId: item.id, verb: prompt, label: item.name };
+  }
+  if (breakableSolid(set, item, global)) {
+    const breaker = String(paramOf(set, item, 'breakWith', global) ?? '').trim();
+    if (breaker && !((state.world.items[breaker] ?? 0) > 0)) return { itemId: item.id, verb: prompt, label: item.name, blocked: `Needs ${name(project, breaker)} to break it.` };
+    return { itemId: item.id, verb: prompt, label: item.name };
+  }
   return { itemId: item.id, verb: prompt, label: item.name };
+};
+
+/** A solid the player can break (structure spec §9): a breakable wall, a barricade, rubble, an urn. */
+const breakableSolid = (set: LevelSet, item: LevelItem, global?: readonly AssetDefinition[]): boolean => {
+  const def = assetOf(set, item, global);
+  return def.kind === 'solid' && def.role !== 'door' && !['pickup', 'inventory', 'weapon', 'ammo', 'health', 'container'].includes(def.role) && bool(paramOf(set, item, 'destructible', global), false);
+};
+
+/**
+ * A lever, switch or pressure plate works what it is set to (structure spec
+ * §9): a door opens or shuts; anything else is switched on (there) or off
+ * (gone). Open is "out of the way": for anything but a door, switched off.
+ * While held, a plate works it as the player steps on, and back as they step off.
+ */
+const workTarget = (project: Project, state: LevelPlayState, worker: LevelItem, phase: 'use' | 'enter' | 'exit', global?: readonly AssetDefinition[]): LevelPlayState => {
+  const set = levelsOf(project);
+  const targetId = String(paramOf(set, worker, 'works', global) ?? '').trim();
+  if (!targetId) return state;
+  const target = set.items.find((i) => i.id === targetId && i.levelId === state.levelId);
+  if (!target) return log(state, { kind: 'warn', itemId: worker.id, text: `${worker.name} works something that isn’t on this map` });
+  const action = String(paramOf(set, worker, 'action', global) ?? 'toggle');
+  if (phase === 'exit' && action !== 'while held') return state;
+  const isDoor = assetOf(set, target, global).role === 'door';
+  // Where it is now: a door open, anything else switched on.
+  const now = isDoor ? isOpen(project, state, target, global) : switchedOn(state, target);
+  let want: boolean;
+  if (action === 'while held') want = phase === 'use' ? !now : phase === 'enter';
+  else if (action === 'open') want = isDoor;
+  else if (action === 'close') want = !isDoor;
+  else if (action === 'switch on') want = true;
+  else if (action === 'switch off') want = false;
+  else want = !now;
+  if (want === now) return state;
+  let s: LevelPlayState;
+  if (isDoor) {
+    const closesAt = { ...state.closesAt };
+    delete closesAt[target.id];
+    s = { ...state, open: { ...state.open, [target.id]: want }, closesAt };
+  } else s = { ...state, enabled: { ...state.enabled, [target.id]: want } };
+  return log(s, { kind: 'action', itemId: worker.id, text: `${worker.name} ${isDoor ? (want ? 'opens' : 'shuts') : want ? 'switches on' : 'switches off'} ${target.name}` });
 };
 
 /** The player uses an item: what each kind of thing does, then its rules. */
@@ -612,6 +673,17 @@ export const interactWith = (project: Project, state: LevelPlayState, itemId: st
       else delete closesAt[item.id];
       s = log({ ...s, closesAt }, { kind: 'action', itemId, text: `${item.name} ${open ? 'closes' : 'opens'}${!open && rules.openFor > 0 ? ` for ${rules.openFor}s` : ''}` });
     }
+  } else if (def.role === 'container') {
+    s = { ...s, opened: { ...s.opened, [item.id]: true } };
+    const holds = String(paramOf(set, item, 'item', global) ?? '');
+    const quantity = Math.max(1, Math.round(num(paramOf(set, item, 'quantity', global), 1)));
+    if (holds && project.objects[holds]) {
+      const changed = applyStoryEffects(project, s.world, Array.from({ length: quantity }, () => ({ kind: 'give', ref: holds }) as const));
+      s = changeWorld(project, s, changed.world, [{ kind: 'effect', text: `Takes ${project.objects[holds]!.name}${quantity > 1 ? ` × ${quantity}` : ''} from ${item.name}` }, ...changed.log], itemId, 0);
+      s = say(s, `Took ${project.objects[holds]!.name}`);
+    } else s = say(log(s, { kind: 'action', itemId, text: `${item.name} is empty` }), 'It’s empty.');
+  } else if (breakableSolid(set, item, global)) {
+    s = say(log({ ...s, gone: { ...s.gone, [item.id]: true } }, { kind: 'action', itemId, text: `${item.name} is broken` }), `${item.name} gives way.`);
   } else if (['pickup', 'inventory', 'weapon', 'ammo', 'health'].includes(def.role) && paramOf(set, item, 'collectible', global) !== false) {
     s = { ...s, gone: { ...s.gone, [item.id]: true } };
     const gives = String(paramOf(set, item, 'item', global) ?? '');
@@ -644,6 +716,8 @@ export const interactWith = (project: Project, state: LevelPlayState, itemId: st
       else s = changeWorld(project, s, used.world, used.log, itemId, 0);
     }
   }
+  // A lever, a switch, a mechanism: it works what it is set to.
+  if (def.role === 'interaction') s = workTarget(project, s, item, 'use', global);
   s = runRules(project, s, itemId, 'interact', undefined, 0, global);
   return runRules(project, s, itemId, 'use', undefined, 0, global);
 };
@@ -783,6 +857,9 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   for (const id of inside.filter((id) => !s.inside.includes(id))) s = enter(project, s, id, global);
   for (const id of s.inside.filter((id) => !inside.includes(id))) {
     s = log(s, { kind: 'event', itemId: id, text: `Leaves ${name(project, id)}` });
+    // Off a pressure plate that works something while held: back it goes.
+    const plate = set.items.find((i) => i.id === id);
+    if (plate && assetOf(set, plate, global).role === 'trigger') s = workTarget(project, s, plate, 'exit', global);
     s = runRules(project, s, id, 'exit', undefined, 0, global);
   }
   s = { ...s, inside };
@@ -796,6 +873,9 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
       s = { ...s, health: 0 };
       continue;
     }
+    // A trap in a cycle hurts only while it fires (structure spec §9).
+    const cycle = num(paramOf(set, item, 'cycle', global), 0);
+    if (role === 'hazard' && cycle > 0 && s.time % cycle >= num(paramOf(set, item, 'activeFor', global), cycle)) continue;
     const perSecond = num(paramOf(set, item, 'damage', global), 10);
     if (perSecond > 0) s = { ...s, health: Math.max(0, s.health - perSecond * dt) };
   }
@@ -847,6 +927,8 @@ const enter = (project: Project, state: LevelPlayState, id: string, global?: rea
     else if (to) s = log(s, { kind: 'warn', itemId: id, text: `${item.name} leads to “${to}”, which isn’t a level here` });
   }
   if (def.role === 'spawn' && def.kind === 'volume' && !s.done[id]) s = spawnFrom(project, s, item, global);
+  // A pressure plate works what it is set to.
+  if (def.role === 'trigger') s = workTarget(project, s, item, 'enter', global);
   return runRules(project, s, id, 'enter', undefined, 0, global);
 };
 
@@ -1028,13 +1110,13 @@ const enterStructure = (project: Project, state: LevelPlayState, global?: readon
     (keep.items === 'keep' ? kept : reset).push('items');
     (keep.enemies === 'keep' ? kept : reset).push('enemies');
     (keep.puzzles === 'keep' ? kept : reset).push('puzzles');
-    if (keep.doors === 'keep') s = { ...s, open: { ...memory.open }, unlocked: { ...memory.unlocked }, found: { ...memory.found }, broken: { ...memory.broken } };
+    if (keep.doors === 'keep') s = { ...s, open: { ...memory.open }, unlocked: { ...memory.unlocked }, found: { ...memory.found }, broken: { ...memory.broken }, enabled: { ...s.enabled, ...memory.enabled } };
     const gone: Record<string, boolean> = {};
     for (const [id, v] of Object.entries(memory.gone)) {
       const isItem = PICKUP_ROLES.has(role(id));
       if ((isItem && keep.items === 'keep') || (!isItem && keep.enemies === 'keep')) gone[id] = v;
     }
-    s = { ...s, gone };
+    s = { ...s, gone, ...(keep.items === 'keep' ? { opened: { ...memory.opened } } : {}) };
     if (keep.enemies === 'keep') s = { ...s, spawned: [...memory.spawned], done: { ...memory.done }, actors: { ...s.actors, ...memory.actors }, ...(memory.cast ? { cast: { ...memory.cast } } : {}) };
     if (keep.puzzles === 'reset') {
       // Its puzzles unsolved and its own states as the story starts them.
@@ -1129,6 +1211,8 @@ export const leaveLevel = (project: Project, state: LevelPlayState): PlayWorld =
     broken: { ...state.broken },
     gone: { ...state.gone },
     done: { ...state.done },
+    opened: { ...state.opened },
+    enabled: { ...state.enabled },
     spawned: [...state.spawned],
     actors: { ...state.actors },
     ...(state.cast ? { cast: { ...state.cast } } : {}),

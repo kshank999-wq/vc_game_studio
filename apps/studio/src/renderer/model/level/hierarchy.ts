@@ -1,6 +1,6 @@
 import type { Project } from '../types';
 import { assetOf, contains, frameOf, paramOf } from './geometry';
-import { guid, levelsOf, withSet } from './level';
+import { guid, levelsOf, remapItemRefs, withSet } from './level';
 import type { AssetCategory, AssetDefinition, Floor, Level, LevelItem, LevelSet, MapBoundary, MapKind, MapStatus } from './types';
 
 /**
@@ -406,14 +406,17 @@ export const duplicateMap = (project: Project, id: string): { project: Project; 
     .map((i) => {
       const { exportName: _e, ...rest } = i;
       const groupId = i.groupId ? (groupIds.get(i.groupId) ?? (groupIds.set(i.groupId, guid()), groupIds.get(i.groupId)!)) : undefined;
-      return {
-        ...rest,
-        id: itemIds.get(i.id)!,
-        levelId: copyId,
-        floorId: floorIds.get(i.floorId) ?? i.floorId,
-        ...(i.host ? { host: { ...i.host, id: itemIds.get(i.host.id) ?? i.host.id } } : {}),
-        ...(groupId ? { groupId } : {}),
-      };
+      return remapItemRefs(
+        {
+          ...rest,
+          id: itemIds.get(i.id)!,
+          levelId: copyId,
+          floorId: floorIds.get(i.floorId) ?? i.floorId,
+          ...(i.host ? { host: { ...i.host, id: itemIds.get(i.host.id) ?? i.host.id } } : {}),
+          ...(groupId ? { groupId } : {}),
+        },
+        itemIds,
+      );
     });
   const { anchorId: _a, ...rest } = level;
   const copy = addMap({ ...set, items: [...set.items, ...items] }, { ...rest, id: copyId, name: `${level.name} copy`, floors: level.floors.map((f) => ({ ...f, id: floorIds.get(f.id)! })) });

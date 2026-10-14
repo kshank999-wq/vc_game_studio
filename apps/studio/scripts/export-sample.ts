@@ -113,7 +113,10 @@ if (tomb) {
   const level = buildIR(tomb.project).levels.find((l) => l.guid === tomb.id)!;
   const flag = String(level.structure!.on_complete![0]!.ref);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'structure_expect.json'), JSON.stringify({ level: level.key, scene: `${level.key}.tscn`, export_name: level.export_name, steps: tombWalk(tomb, (id) => (id === tomb.plundered ? flag : id)) }, null, 2));
+  // The story's keys the engines use: the flag's from the tomb's completion, the items' from what gives them.
+  const itemKey = (guid: string) => String(level.items.find((i) => i.guid === guid)!.params.item);
+  const keys: Record<string, string> = { [tomb.plundered]: flag, [tomb.key]: itemKey(tomb.keyPickup), [tomb.idol]: itemKey(tomb.parts.chest) };
+  writeFileSync(join(dir, 'structure_expect.json'), JSON.stringify({ level: level.key, scene: `${level.key}.tscn`, export_name: level.export_name, steps: tombWalk(tomb, (id) => keys[id] ?? id) }, null, 2));
 }
 const plan = planHandoff(setTarget(base, { engine }));
 for (const file of plan.output!.files) {

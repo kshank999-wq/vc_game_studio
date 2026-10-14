@@ -49,6 +49,8 @@ interface Source {
   name: string;
   /** The room it is in. */
   room: string | undefined;
+  /** A locked chest or safe: the item that opens it. */
+  needs?: string;
 }
 
 const PICKUP_ROLES = new Set(['pickup', 'inventory', 'weapon', 'ammo', 'health']);
@@ -79,6 +81,13 @@ export const walkStructure = (project: Project, levelId: string, global?: readon
   for (const i of items) {
     const gives = PICKUP_ROLES.has(role(i)) ? String(paramOf(set, i, 'item', global) ?? '').trim() : '';
     if (gives) sources.push({ gives, id: i.id, name: i.name, room: roomOf(i) });
+    // A chest or safe gives what it holds, once it is open (with its key, when it is locked).
+    const holds = role(i) === 'container' ? String(paramOf(set, i, 'item', global) ?? '').trim() : '';
+    if (holds) {
+      const locked = paramOf(set, i, 'locked', global) === true;
+      const key = String(paramOf(set, i, 'keyItem', global) ?? '').trim();
+      sources.push({ gives: holds, id: i.id, name: i.name, room: roomOf(i), ...(locked ? { needs: key || '\u0000never' } : {}) });
+    }
     for (const rule of i.rules ?? []) {
       if (rule.on !== 'pickup' && rule.on !== 'interact' && rule.on !== 'enter' && rule.on !== 'use') continue;
       for (const e of rule.effects ?? []) if (e.kind === 'give' && e.ref && e.ref !== gives) sources.push({ gives: e.ref, id: i.id, name: i.name, room: roomOf(i) });
@@ -94,6 +103,11 @@ export const walkStructure = (project: Project, levelId: string, global?: readon
   // Switches: items whose rules open a door.
   const openers = new Map<string, LevelItem[]>();
   for (const i of items) for (const rule of i.rules ?? []) for (const a of rule.actions ?? []) if (a.kind === 'open' && doors.has(a.target)) openers.set(a.target, [...(openers.get(a.target) ?? []), i]);
+  // Levers, switches and plates that work a door (structure spec §9).
+  for (const i of items) {
+    const target = String(i.params?.works ?? '');
+    if (target && doors.has(target) && paramOf(set, i, 'action', global) !== 'close') openers.set(target, [...(openers.get(target) ?? []), i]);
+  }
 
   const startHeld = new Set(Object.entries(startWorld(project).items).filter(([, n]) => n > 0).map(([k]) => k));
 
@@ -121,11 +135,11 @@ export const walkStructure = (project: Project, levelId: string, global?: readon
     for (let round = 0; round < 200; round++) {
       // Take what lies in every room reached.
       for (const src of sources) {
-        if (taken.has(src.id + src.gives) || !src.room || !reached.has(src.room)) continue;
+        if (taken.has(src.id + src.gives) || !src.room || !reached.has(src.room) || (src.needs && !held.has(src.needs))) continue;
         taken.add(src.id + src.gives);
         if (!held.has(src.gives)) {
           held.add(src.gives);
-          if (opts.record) steps.push({ kind: 'take', text: `Take ${thing(src.gives)} (${src.name}) in ${place(src.room)}.`, id: src.id });
+          if (opts.record) steps.push({ kind: 'take', text: `${src.needs ? `Open ${src.name} with ${thing(src.needs)}: take` : 'Take'} ${thing(src.gives)}${src.needs ? '' : ` (${src.name})`} in ${place(src.room)}.`, id: src.id });
         }
       }
       let grew = false;
@@ -153,7 +167,7 @@ export const walkStructure = (project: Project, levelId: string, global?: readon
         }
       }
       // Something new in hand may open a door on the next round.
-      if (!grew && !sources.some((src) => !taken.has(src.id + src.gives) && src.room && reached.has(src.room))) break;
+      if (!grew && !sources.some((src) => !taken.has(src.id + src.gives) && src.room && reached.has(src.room) && (!src.needs || held.has(src.needs)))) break;
     }
     return { reached, held, steps, used };
   };
@@ -267,7 +281,7 @@ export const walkStructure = (project: Project, levelId: string, global?: readon
       else if (room && !main.reached.has(room)) say('warning', i.id, `${i.name} can’t be reached: the player will never get it.`);
     }
     if (ro === 'trigger') {
-      if (!(i.rules ?? []).length && !(i.links ?? []).length) say('info', i.id, `${i.name} does nothing: give it rules.`);
+      if (!(i.rules ?? []).length && !(i.links ?? []).length && !String(i.params?.works ?? '')) say('info', i.id, `${i.name} does nothing: give it rules, or set what it works.`);
       else if (room && !main.reached.has(room)) say('warning', i.id, `${i.name} can’t be reached: it will never go off.`);
     }
     if (ro === 'portal') {

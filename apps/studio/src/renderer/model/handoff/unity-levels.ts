@@ -61,13 +61,15 @@ namespace VCGS
     public sealed class PlaceMemory
     {
         public Dictionary<string, bool> Open = new Dictionary<string, bool>();
-        public HashSet<string> Unlocked = new HashSet<string>(), Found = new HashSet<string>(), Broken = new HashSet<string>(), Gone = new HashSet<string>(), Done = new HashSet<string>(), Objectives = new HashSet<string>();
+        public HashSet<string> Unlocked = new HashSet<string>(), Found = new HashSet<string>(), Broken = new HashSet<string>(), Gone = new HashSet<string>(), Done = new HashSet<string>(), Opened = new HashSet<string>(), Objectives = new HashSet<string>();
+        /// <summary>What levers, plates and rules switched on and off (kept with the doors).</summary>
+        public Dictionary<string, bool> Enabled = new Dictionary<string, bool>();
         public bool Complete;
     }
 
     public sealed class LevelLogic
     {
-        static readonly HashSet<string> Interactive = new HashSet<string> { "door", "pickup", "inventory", "weapon", "ammo", "health", "npc", "companion", "neutral", "dialogue", "interaction", "puzzle", "elevator", "ladder" };
+        static readonly HashSet<string> Interactive = new HashSet<string> { "door", "container", "pickup", "inventory", "weapon", "ammo", "health", "npc", "companion", "neutral", "dialogue", "interaction", "puzzle", "elevator", "ladder" };
         static readonly HashSet<string> Pickups = new HashSet<string> { "pickup", "inventory", "weapon", "ammo", "health" };
 
         public readonly GameState Game;
@@ -85,6 +87,8 @@ namespace VCGS
         public readonly HashSet<string> Found = new HashSet<string>();
         public readonly HashSet<string> Broken = new HashSet<string>();
         public readonly Dictionary<string, double> ClosesAt = new Dictionary<string, double>();
+        /// <summary>Chests and safes opened (structure spec §9): emptied, they stay.</summary>
+        public readonly HashSet<string> Opened = new HashSet<string>();
         /// <summary>A structure's manifest (structure spec §13): floors, rooms, connections, door rules, objectives, what it remembers. Empty for a map that isn't one.</summary>
         public readonly Dictionary<string, object> Structure;
         /// <summary>The structure's objectives done, and whether it is complete.</summary>
@@ -269,7 +273,44 @@ namespace VCGS
 
         /// <summary>Not taken, not switched off, and its "present only when" holds.</summary>
         public bool IsPresent(string guid) =>
-            Items.ContainsKey(guid) && !Gone.Contains(guid) && !(Enabled.TryGetValue(guid, out var on) && !on) && Rules.Check(D.Get(Item(guid), "active_when"), Game);
+            Items.ContainsKey(guid) && !Gone.Contains(guid) && SwitchedOn(guid) && Rules.Check(D.Get(Item(guid), "active_when"), Game);
+
+        /// <summary>Switched on: as rules, levers and plates left it, else as it starts (on, unless it starts switched off).</summary>
+        public bool SwitchedOn(string guid) => Enabled.TryGetValue(guid, out var on) ? on : !(Param(guid, "startsOff") is bool off && off);
+
+        /// <summary>A solid the player can break (structure spec §9): a breakable wall, a barricade, rubble, an urn.</summary>
+        public bool IsBreakable(string guid) =>
+            D.Str(Item(guid), "kind") == "solid" && Role(guid) != "door" && Role(guid) != "container" && !Pickups.Contains(Role(guid)) && ParamBool(guid, "destructible", false);
+
+        /// <summary>
+        /// A lever, switch or pressure plate works what it is set to (structure spec §9): a door opens or shuts;
+        /// anything else is switched on (there) or off (gone). Open is out of the way: for anything but a door, off.
+        /// While held, a plate works it as the player steps on, and back as they step off.
+        /// </summary>
+        void WorkTarget(string worker, string phase)
+        {
+            var target = ParamStr(worker, "works");
+            if (target == "" || !Items.ContainsKey(target)) return;
+            var action = ParamStr(worker, "action");
+            if (action == "") action = "toggle";
+            if (phase == "exit" && action != "while held") return;
+            var isDoor = Role(target) == "door";
+            var now = isDoor ? IsOpen(target) : SwitchedOn(target);
+            bool want;
+            switch (action)
+            {
+                case "while held": want = phase == "use" ? !now : phase == "enter"; break;
+                case "open": want = isDoor; break;
+                case "close": want = !isDoor; break;
+                case "switch on": want = true; break;
+                case "switch off": want = false; break;
+                default: want = !now; break;
+            }
+            if (want == now) return;
+            if (isDoor) { Open[target] = want; ClosesAt.Remove(target); }
+            else Enabled[target] = want;
+            Refreshed?.Invoke();
+        }
 
         public bool IsOpen(string guid) =>
             Broken.Contains(guid) || (Open.TryGetValue(guid, out var open) ? open : ParamBool(guid, "startsOpen", false) || ParamStr(guid, "swing") == "open archway");
@@ -316,6 +357,20 @@ namespace VCGS
                 }
                 return new LevelOffer { Verb = locked ? prompt : "Open", Label = label };
             }
+            if (Role(guid) == "container")
+            {
+                // A chest or safe (structure spec §9): once opened, there is nothing more to do.
+                if (Opened.Contains(guid)) return null;
+                var chestKey = ParamStr(guid, "keyItem");
+                if (ParamBool(guid, "locked", false) && !(chestKey != "" && Game.HasItem(chestKey))) return new LevelOffer { Verb = prompt, Label = label, Blocked = chestKey != "" ? "Locked. Needs " + StoryName(chestKey) + "." : "Locked." };
+                return new LevelOffer { Verb = prompt, Label = label };
+            }
+            if (IsBreakable(guid))
+            {
+                var withItem = ParamStr(guid, "breakWith");
+                if (withItem != "" && !Game.HasItem(withItem)) return new LevelOffer { Verb = prompt, Label = label, Blocked = "Needs " + StoryName(withItem) + " to break it." };
+                return new LevelOffer { Verb = prompt, Label = label };
+            }
             return new LevelOffer { Verb = prompt, Label = label };
         }
 
@@ -356,6 +411,22 @@ namespace VCGS
                     else ClosesAt.Remove(guid);
                 }
             }
+            else if (role == "container")
+            {
+                Opened.Add(guid);
+                var holds = ParamStr(guid, "item");
+                if (holds != "")
+                {
+                    Game.GiveItem(holds, (int)ParamNum(guid, "quantity", 1));
+                    said = "Took " + StoryName(holds);
+                }
+                else said = "It\u2019s empty.";
+            }
+            else if (IsBreakable(guid))
+            {
+                Gone.Add(guid);
+                said = D.Str(item, "name") + " gives way.";
+            }
             else if (Pickups.Contains(role) && ParamBool(guid, "collectible", true))
             {
                 Gone.Add(guid);
@@ -386,6 +457,8 @@ namespace VCGS
             {
                 foreach (var link in D.List(item, "links")) if (link is string key) StoryObjectUsed?.Invoke(key);
             }
+            // A lever, a switch, a mechanism: it works what it is set to.
+            if (role == "interaction") WorkTarget(guid, "use");
             RunRules(guid, "interact");
             RunRules(guid, "use");
             Refreshed?.Invoke();
@@ -407,12 +480,15 @@ namespace VCGS
             if (role == "checkpoint") CheckpointReached?.Invoke(guid);
             if (role == "portal" && ParamStr(guid, "to") != "") LevelRequested?.Invoke(ParamStr(guid, "to"));
             if (role == "spawn" && !Done.Contains(guid)) Spawn(guid);
+            // A pressure plate works what it is set to.
+            if (role == "trigger") WorkTarget(guid, "enter");
             RunRules(guid, "enter");
         }
 
         public void Exit(string guid)
         {
             if (!Inside.Remove(guid)) return;
+            if (Role(guid) == "trigger") WorkTarget(guid, "exit");
             RunRules(guid, "exit");
         }
 
@@ -437,7 +513,12 @@ namespace VCGS
             {
                 var role = Role(guid);
                 if ((role == "hazard" || role == "damage") && IsPresent(guid))
+                {
+                    // A trap in a cycle hurts only while it fires (structure spec §9).
+                    var cycle = ParamNum(guid, "cycle", 0);
+                    if (role == "hazard" && cycle > 0 && Time % cycle >= ParamNum(guid, "activeFor", cycle)) continue;
                     Health = ParamBool(guid, "kills", false) ? 0 : Health - ParamNum(guid, "damage", 0) * dt;
+                }
             }
             if (Health <= 0)
             {
@@ -861,6 +942,8 @@ namespace VCGS
             Broken = new HashSet<string>(Broken),
             Gone = new HashSet<string>(Gone),
             Done = new HashSet<string>(Done),
+            Opened = new HashSet<string>(Opened),
+            Enabled = new Dictionary<string, bool>(Enabled),
             Objectives = new HashSet<string>(ObjectivesDone),
             Complete = Complete,
         };
@@ -876,6 +959,7 @@ namespace VCGS
                 Unlocked.Clear(); Unlocked.UnionWith(memory.Unlocked);
                 Found.Clear(); Found.UnionWith(memory.Found);
                 Broken.Clear(); Broken.UnionWith(memory.Broken);
+                foreach (var pair in memory.Enabled) Enabled[pair.Key] = pair.Value;
             }
             Gone.Clear();
             foreach (var guid in memory.Gone)
@@ -883,6 +967,7 @@ namespace VCGS
                 var isItem = Pickups.Contains(Role(guid));
                 if ((isItem && Keeps("items")) || (!isItem && Keeps("enemies"))) Gone.Add(guid);
             }
+            if (Keeps("items")) { Opened.Clear(); Opened.UnionWith(memory.Opened); }
             if (Keeps("enemies")) { Done.Clear(); Done.UnionWith(memory.Done); }
             if (!Keeps("puzzles"))
             {

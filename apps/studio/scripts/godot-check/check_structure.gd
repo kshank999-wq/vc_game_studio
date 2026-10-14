@@ -30,6 +30,17 @@ func check(level: Node, game: Node, step: Dictionary, n: int) -> void:
 			fail("%s: objectives done %s, the studio %s" % [what, str(done), str(want["objectives"])])
 	if want.has("complete") and level.complete != bool(want["complete"]):
 		fail("%s: complete is %s, the studio %s" % [what, level.complete, want["complete"]])
+	if want.has("present"):
+		for guid in want["present"]:
+			if level.is_present(str(guid)) != bool(want["present"][guid]):
+				fail("%s: %s should %s" % [what, level.item(str(guid)).get("name", guid), "be there" if want["present"][guid] else "be gone"])
+	# Health within a tick of the studio's: a trap's cycle can fall either side of a tick.
+	if want.has("health") and absf(float(level.health) - float(want["health"])) > 6.0:
+		fail("%s: health %.2f, the studio %.2f" % [what, level.health, want["health"]])
+	if want.has("items"):
+		for key in want["items"]:
+			if int(game.items.get(str(key), 0)) != int(want["items"][key]):
+				fail("%s: carries %d of %s, the studio %d" % [what, int(game.items.get(str(key), 0)), key, int(want["items"][key])])
 	if want.has("flags"):
 		for key in want["flags"]:
 			if game.get_flag(str(key)) != str(want["flags"][key]):
@@ -46,7 +57,7 @@ func _initialize() -> void:
 	root.add_child(level)
 	level.setup(game)
 	var data: Dictionary = level.structure_data()
-	if str(data.get("name", "")) != "Old Tomb" or data.get("doors", []).size() != 5 or data.get("objectives", []).size() != 2:
+	if str(data.get("name", "")) != "Old Tomb" or data.get("doors", []).size() != 6 or data.get("objectives", []).size() != 2:
 		fail("the level script should carry the Old Tomb's manifest, got %s" % str(data.keys()))
 	if level.objective != "Find the Tomb Key":
 		fail("the first objective should be shown, got " + level.objective)
@@ -58,6 +69,11 @@ func _initialize() -> void:
 		n += 1
 		var at: Array = step["at"]
 		walker.position = Vector3(float(at[0]), float(at[1]), float(at[2]))
+		# What the player came into and left: in a game the physics says so.
+		for g in step.get("exit", []):
+			level.exit(str(g))
+		for g in step.get("enter", []):
+			level.enter(str(g))
 		match str(step["do"]):
 			"interact":
 				level.interact(str(step["guid"]))

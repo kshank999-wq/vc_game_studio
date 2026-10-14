@@ -7,6 +7,7 @@
 #include "VcgsCore.h"
 #include "VcgsLevel.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <memory>
@@ -49,6 +50,16 @@ static void Check(const vcgs::LevelLogic& level, const vcgs::GameState& game, co
         if (done != expected) Fail(what + ": the objectives done differ from the studio's");
     }
     if (want.Has("complete") && level.Complete != want["complete"].boolean) Fail(what + ": complete differs from the studio's");
+    for (const auto& f : want["present"].fields)
+        if (level.IsPresent(f.first) != f.second.boolean) Fail(what + ": " + level.Item(f.first)["name"].Str() + " should " + (f.second.boolean ? "be there" : "be gone"));
+    // Health within a tick of the studio's: a trap's cycle can fall either side of a tick.
+    if (want.Has("health") && std::fabs(level.Health - want["health"].Num(0)) > 6) Fail(what + ": health differs from the studio's");
+    for (const auto& f : want["items"].fields)
+    {
+        auto it = game.Items.find(f.first);
+        const int has = it == game.Items.end() ? 0 : it->second;
+        if (has != static_cast<int>(f.second.Num(0))) Fail(what + ": carries " + std::to_string(has) + " of " + f.first + ", the studio " + std::to_string(static_cast<int>(f.second.Num(0))));
+    }
     for (const auto& f : want["flags"].fields)
         if (game.GetFlag(f.first) != f.second.Str()) Fail(what + ": " + f.first + " is " + game.GetFlag(f.first) + ", the studio " + f.second.Str());
 }
@@ -65,7 +76,7 @@ int main()
     const std::string json = Text(path.c_str());
     auto level = std::make_unique<vcgs::LevelLogic>(vcgs::JsonReader::Parse(json, &error), game);
     const vcgs::Value& s = level->Structure();
-    if (s["name"].Str() != "Old Tomb" || s["doors"].Size() != 5 || s["objectives"].Size() != 2) Fail("the level data should carry the Old Tomb's manifest");
+    if (s["name"].Str() != "Old Tomb" || s["doors"].Size() != 6 || s["objectives"].Size() != 2) Fail("the level data should carry the Old Tomb's manifest");
     if (level->Objective != "Find the Tomb Key") Fail("the first objective should be shown, got " + level->Objective);
     int n = 0;
     for (const auto& step : expect["steps"].items)
@@ -74,6 +85,9 @@ int main()
         const vcgs::Value& at = step["at"];
         auto place = [&](vcgs::LevelLogic& l) { l.HasPlayer = true; l.PlayerX = at[0].Num(0); l.PlayerY = at[1].Num(0); l.PlayerZ = at[2].Num(0); };
         place(*level);
+        // What the player came into and left: in a game the physics says so.
+        for (const auto& g : step["exit"].items) level->Exit(g.Str());
+        for (const auto& g : step["enter"].items) level->Enter(g.Str());
         const std::string act = step["do"].Str();
         if (act == "interact")
         {
