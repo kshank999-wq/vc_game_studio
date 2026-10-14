@@ -97,14 +97,20 @@ const OUTLINE_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.ex
 
 
 /** The Levels panels that can go into windows of their own. */
-type PanelKey = 'library' | 'inspector' | 'graph' | 'generate' | 'prefabs';
+type PanelKey = 'library' | 'inspector' | 'graph' | 'generate' | 'prefabs' | 'view';
 
 /**
  * The Level Designer (docs/specs/level-designer-spec.md): library on the
  * left, the 2D map or 3D graybox in the middle, the inspector on the right.
  * Both views and the inspector edit the same items.
  */
-export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSay, onConfirm, focus, mode: initialMode = '2d', onMode }: Props) => {
+export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSay, onConfirm: confirmHere, focus, mode: initialMode = '2d', onMode }: Props) => {
+  // A question asked while working in a window of its own (on another screen): this window comes forward to ask it.
+  const onConfirm = (request: ConfirmRequest) => {
+    if (outsRef.current.size) window.focus();
+    confirmHere(request);
+  };
+  const outsRef = useRef<ReadonlySet<string>>(new Set());
   const set = levelsOf(project);
   const global = useGlobalAssets();
   const focusItem = focus ? set.items.find((i) => i.id === focus) : undefined;
@@ -157,7 +163,16 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [showTeam, setShowTeam] = useState(false);
   /** Panels pulled out into windows of their own. */
   const [outs, setOuts] = useState<ReadonlySet<PanelKey>>(() => new Set());
+  outsRef.current = outs;
   const popOut = (k: PanelKey) => setOuts((o) => new Set(o).add(k));
+  /** The window the map or graybox is in, when it is in one of its own. */
+  const [viewWin, setViewWin] = useState<Window | null>(null);
+  /** The middle of the view on screen, wherever the view is. */
+  const viewCentre = () => {
+    const doc = outs.has('view') && viewWin ? viewWin.document : document;
+    const r = doc.querySelector('.lvl-view')?.getBoundingClientRect() ?? doc.querySelector('.lvl-centre')?.getBoundingClientRect();
+    return (r && (mode === '3d' ? box.current : map.current)?.worldAt(r.left + r.width / 2, r.top + r.height / 2)) || (r && map.current?.worldAt(r.left + r.width / 2, r.top + r.height / 2)) || { x: 0, y: 0 };
+  };
   const dockBack = (k: PanelKey) =>
     setOuts((o) => {
       const n = new Set(o);
@@ -647,6 +662,59 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       );
     return render(() => popOut(key));
   };
+  /** The map or graybox (or Play Mode), here or in a window of its own. */
+  const dockView = (node: ReactNode): ReactNode => {
+    if (!outs.has('view'))
+      return (
+        <>
+          {node}
+          <button className="icon-btn small lvl-popbtn-view" aria-label="Open the map in its own window" title="Open the 2D map / 3D graybox in its own window, to put on another screen" onClick={() => popOut('view')}>
+            ⧉
+          </button>
+        </>
+      );
+    return (
+      <>
+        <div className="lvl-view-out" role="note">
+          <p>
+            <strong>{playing ? 'Play Mode' : mode === '3d' ? 'The 3D graybox' : 'The 2D map'}</strong> is in its own window.
+          </p>
+          <button className="tb-btn small" onClick={() => viewWin?.focus()}>
+            Show it
+          </button>
+          <button className="tb-btn small" onClick={() => dockBack('view')}>
+            Put it back here
+          </button>
+        </div>
+        <PopOut key="pop-view" id="view" title={`${level.name} — ${floor.name}`} width={1280} height={820} className="lvl lvl-popout" onWindow={setViewWin} onClose={() => dockBack('view')} onBlocked={() => onSay('The new window was blocked: allow pop-ups for the studio, then try again.')}>
+          <div className="popout-bar">
+            <strong>{level.name}</strong>
+            <span className="muted">{floor.name}</span>
+            {!playing && (
+              <div role="group" aria-label="View" className="view-toggle">
+                <button className={mode === '2d' ? 'on' : ''} aria-pressed={mode === '2d'} onClick={() => setMode('2d')}>
+                  2D map
+                </button>
+                <button className={mode === '3d' ? 'on' : ''} aria-pressed={mode === '3d'} onClick={() => open3D()}>
+                  3D graybox
+                </button>
+              </div>
+            )}
+            {!playing && (
+              <button className="tb-btn small" onClick={() => (mode === '3d' ? box.current : map.current)?.frame(selection.length ? selection : undefined)}>
+                Frame
+              </button>
+            )}
+            <span className="grow" />
+            <button className="tb-btn small" onClick={() => dockBack('view')}>
+              Put it back
+            </button>
+          </div>
+          <div className="lvl-centre lvl-centre-out">{node}</div>
+        </PopOut>
+      </>
+    );
+  };
   const crumbs = pathTo(set, level.id);
   const codes = floorCodes(level);
   const selectedRoom = selected && assetOf(set, selected, global).kind === 'space' ? selected : undefined;
@@ -1020,6 +1088,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         }}
       />)}
       <div className="lvl-centre">
+        {dockView(
+          <div className="lvl-view">
         {asking && mode === '2d' && (
           <div
             className="lvl-ask"
@@ -1137,6 +1207,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             />
           </Suspense>
         )}
+          </div>,
+        )}
         {!playing && isStructure(level) && showGenerate && (
           dock('generate', 'Generate', (pop) => <GeneratePanel
             {...(pop ? { onPopOut: pop } : {})}
@@ -1245,8 +1317,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onClose={() => setShowPrefabs(false)}
             onSay={onSay}
             onPlace={(prefab) => {
-              const r = document.querySelector('.lvl-centre')?.getBoundingClientRect();
-              const at = (r && map.current?.worldAt(r.left + r.width / 2, r.top + r.height / 2)) || { x: 0, y: 0 };
+              const at = viewCentre();
               const out = placePrefab(project, level.id, floor.id, prefab, at, global);
               if (!out.ids.length) {
                 onSay(out.problems[0] ?? `Nothing of ${prefab.name} could go here.`);
@@ -1416,8 +1487,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           onClose={() => setNewStructure(false)}
           onCreate={(choice) => {
             // In the middle of what is in view.
-            const r = document.querySelector('.lvl-centre')?.getBoundingClientRect();
-            const at = (r && map.current?.worldAt(r.left + r.width / 2, r.top + r.height / 2)) || { x: 0, y: 0 };
+            const at = viewCentre();
             const made = createStructure(project, { ...choice, parentId: level.id, floorId: floor.id, at }, global);
             setNewStructure(false);
             if (!made.id) return;

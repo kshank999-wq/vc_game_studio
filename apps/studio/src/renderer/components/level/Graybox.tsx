@@ -132,15 +132,17 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
 
   useEffect(() => {
     const el = host.current;
+    // The window it is drawn in: this one, or one of its own (popped out to another screen).
+    const win = el?.ownerDocument.defaultView ?? window;
     if (!el) return;
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, canvas: (el?.ownerDocument ?? document).createElement('canvas') });
     } catch {
       setFailed(true);
       return;
     }
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setPixelRatio(Math.min(2, win.devicePixelRatio || 1));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setClearColor('#0b0a07');
@@ -178,7 +180,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
       camera.updateProjectionMatrix();
       render();
     };
-    const observer = new ResizeObserver(resize);
+    const observer = new win.ResizeObserver(resize);
     observer.observe(el);
     three.current = { renderer, scene, camera, controls, content, handles, overlay, badges, grid, render, sun };
     resize();
@@ -424,6 +426,7 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     const t = three.current;
     if (!t) return;
     const el = t.renderer.domElement;
+    const win = el.ownerDocument.defaultView ?? window;
     let down: { x: number; y: number; drag: { ids: string[]; start: THREE.Vector3 } | null; moved: boolean } | null = null;
     // A handle being dragged: which, on what item, and where along its line it was picked up.
     let held: { handle: Handle; id: string; from: number; x: number; y: number } | null = null;
@@ -533,14 +536,14 @@ export const Graybox = forwardRef<GrayboxApi, Props>((props, ref) => {
     };
     const onLeave = () => latest.current.onHover(null);
     el.addEventListener('pointerdown', onDown, { capture: true });
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    win.addEventListener('pointermove', onMove);
+    win.addEventListener('pointerup', onUp);
     el.addEventListener('pointerleave', onLeave);
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     return () => {
       el.removeEventListener('pointerdown', onDown, { capture: true });
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
+      win.removeEventListener('pointermove', onMove);
+      win.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointerleave', onLeave);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

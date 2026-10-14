@@ -7553,6 +7553,45 @@ kbd {
 .lvl-popbtn-inspector {
   grid-area: right;
 }
+.lvl-view {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lvl-popbtn-view {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  opacity: 0.75;
+}
+.lvl-popbtn-view:hover {
+  opacity: 1;
+}
+.lvl-view-out {
+  flex: 1 1 auto;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted, #9a927f);
+  background: var(--ground);
+}
+.lvl-view-out p {
+  margin: 0;
+}
+.lvl.lvl-popout > .lvl-centre-out {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.popout-bar .view-toggle {
+  margin-left: 8px;
+}
 .popout-root {
   position: fixed;
   inset: 0;

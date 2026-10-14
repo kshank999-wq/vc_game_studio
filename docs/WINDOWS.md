@@ -30,11 +30,17 @@ back to the graph.
 
 ## Levels panels in their own windows
 
-In the Levels tab, the library, the inspector, the structure graph, the generator and prefabs each have ⧉ to open them in a window of their own, to drag onto another monitor.
+In the Levels tab, the 2D map / 3D graybox, the library, the inspector, the structure graph, the generator and prefabs each have ⧉ to open them in a window of their own, to drag onto another monitor.
+
+The map's window:
+
+- has its own **2D map / 3D graybox** switch and **Frame**;
+- is where Play Mode plays while it is out, with the keys, the mouse look and the frame rate of that window;
+- leaves a note here (**Show it**, **Put it back here**), and the panels take the room.
 
 These are not separate copies of the studio. The panel keeps running in the main window, with the same project and the same undo, and is only drawn in the other window. So it is live both ways: select on the map and the inspector window shows it; place from the library window and it lands on the map.
 
-The window takes the studio's look and theme. **Put it back**, closing the window, or closing the studio docks the panel again.
+The window takes the studio's look and theme. Shortcuts pressed in any of these windows (Delete, undo, the tools) work as if pressed in the main one, and a question the studio asks ("Delete this room?") brings the main window forward. **Put it back**, closing the window, or closing the studio docks the panel again.
 
 In the desktop app:
 
@@ -43,5 +49,5 @@ In the desktop app:
 
 In a browser, allow pop-ups for the studio; if a window is blocked, the studio says so and the panel stays where it was.
 
-Drag-and-drop between windows isn't supported: in the library window, click an asset and then click on the map.
+Drag-and-drop between windows isn't supported: click an asset in the library, then click on the map, whichever windows they are in.
 

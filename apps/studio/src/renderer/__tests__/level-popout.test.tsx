@@ -81,4 +81,21 @@ describe('Levels panels in windows of their own', () => {
     await waitFor(() => expect(document.body.textContent).toMatch(/The new window was blocked/));
     expect(document.querySelector('.lvl > .lvl-left')).not.toBeNull();
   });
+
+  it('the map goes out too: a note here, the map over there, and back', async () => {
+    const wins = fakeWindows();
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: 'Open the map in its own window' }));
+    await waitFor(() => expect(wins[0]?.document.querySelector('.lvl-centre-out .lvl-view')).toBeTruthy());
+    expect(screen.getByRole('note').textContent).toContain('The 2D map is in its own window.');
+    expect(document.querySelector('.lvl-view')).toBeNull();
+    const other = wins[0]!.document;
+    // The window has its own 2D / 3D switch.
+    expect(within(other.body).getByRole('button', { name: '3D graybox' })).toBeTruthy();
+    fireEvent.click(within(other.body).getByRole('button', { name: 'Put it back' }));
+    await waitFor(() => expect(document.querySelector('.lvl-view')).not.toBeNull());
+  });
 });

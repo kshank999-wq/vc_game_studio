@@ -8,11 +8,13 @@ import { createPortal } from 'react-dom';
  * window's styles and theme copied across and kept in step. Closing the
  * window docks the panel again; so does closing or reloading this one.
  */
-export const PopOut = ({ id, title, width = 420, height = 760, className, onClose, onBlocked, children }: { id: string; title: string; width?: number; height?: number; className?: string; onClose: () => void; onBlocked?: () => void; children: ReactNode }) => {
+export const PopOut = ({ id, title, width = 420, height = 760, className, onClose, onBlocked, onWindow, children }: { id: string; title: string; width?: number; height?: number; className?: string; onClose: () => void; onBlocked?: () => void; onWindow?: (w: Window | null) => void; children: ReactNode }) => {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const win = useRef<Window | null>(null);
   const closing = useRef(onClose);
   closing.current = onClose;
+  const told = useRef(onWindow);
+  told.current = onWindow;
   useEffect(() => {
     const left = Math.max(0, (window.screenX ?? 0) + (window.outerWidth ?? 1200) - width - 40);
     const top = Math.max(0, (window.screenY ?? 0) + 60);
@@ -26,12 +28,31 @@ export const PopOut = ({ id, title, width = 420, height = 760, className, onClos
     const doc = w.document;
     doc.title = `${title} — VC Game Studio`;
     // This window's styles, its fonts and theme, and any added later (lazy views bring their own).
+    // The rules themselves go across (a blank window doesn't load this one's stylesheet files);
+    // a sheet whose rules can't be read (the web fonts) goes across as a link.
+    const inline = (sheet: CSSStyleSheet | null) => {
+      try {
+        const rules = sheet?.cssRules;
+        if (!rules) return false;
+        const st = doc.createElement('style');
+        st.textContent = Array.from(rules, (r) => r.cssText).join('\n');
+        doc.head.appendChild(st);
+        return true;
+      } catch {
+        return false;
+      }
+    };
     const copy = (node: Node) => {
       if (node instanceof HTMLLinkElement && node.rel === 'stylesheet') {
-        const l = doc.createElement('link');
-        l.rel = 'stylesheet';
-        l.href = node.href;
-        doc.head.appendChild(l);
+        const asLink = () => {
+          const l = doc.createElement('link');
+          l.rel = 'stylesheet';
+          l.href = node.href;
+          doc.head.appendChild(l);
+        };
+        if (node.sheet) {
+          if (!inline(node.sheet)) asLink();
+        } else node.addEventListener('load', () => inline(node.sheet) || asLink(), { once: true });
       } else if (node instanceof HTMLStyleElement) {
         const st = doc.createElement('style');
         st.textContent = node.textContent;
@@ -59,6 +80,20 @@ export const PopOut = ({ id, title, width = 420, height = 760, className, onClos
     root.className = `popout-root${className ? ` ${className}` : ''}`;
     doc.body.appendChild(root);
     setHost(root);
+    told.current?.(w);
+    // Shortcuts pressed over there (Delete, undo, the tools) reach the studio here, as if pressed here;
+    // typing in a field stays in the field.
+    const typing = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      return !!el && typeof el.tagName === 'string' && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable);
+    };
+    const forward = (e: KeyboardEvent) => {
+      if (typing(e.target) || e.defaultPrevented) return;
+      const copy = new KeyboardEvent(e.type, { key: e.key, code: e.code, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, altKey: e.altKey, repeat: e.repeat, bubbles: true, cancelable: true });
+      if (!window.dispatchEvent(copy)) e.preventDefault();
+    };
+    w.addEventListener('keydown', forward);
+    w.addEventListener('keyup', forward);
     // Closed over there: back in here.
     const gone = () => closing.current();
     w.addEventListener('pagehide', gone);
@@ -66,6 +101,9 @@ export const PopOut = ({ id, title, width = 420, height = 760, className, onClos
     const leave = () => w.close();
     window.addEventListener('pagehide', leave);
     return () => {
+      told.current?.(null);
+      w.removeEventListener('keydown', forward);
+      w.removeEventListener('keyup', forward);
       window.clearInterval(poll);
       headWatch.disconnect();
       themeWatch.disconnect();

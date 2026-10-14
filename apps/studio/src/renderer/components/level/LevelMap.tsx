@@ -245,6 +245,8 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
 
   const beginWindowDrag = (d: Drag) => {
     setDrag(d);
+    // The window the map is in: this one, or its own (popped out to another screen).
+    const win = root.current?.ownerDocument.defaultView ?? window;
     const move = (e: PointerEvent) => {
       const cur = dragRef.current;
       if (!cur) return;
@@ -296,9 +298,9 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       }
     };
     const up = (e: PointerEvent) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
+      win.removeEventListener('pointermove', move);
+      win.removeEventListener('pointerup', up);
+      win.removeEventListener('pointercancel', up);
       const cur = dragRef.current;
       const done = previewRef.current;
       setDrag(null);
@@ -328,9 +330,9 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       }
       if (done) props.onCommit(done);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    win.addEventListener('pointermove', move);
+    win.addEventListener('pointerup', up);
+    win.addEventListener('pointercancel', up);
   };
 
   const onBackgroundDown = (e: React.PointerEvent) => {
@@ -476,8 +478,9 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       e.preventDefault();
       e.stopPropagation();
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    const win = root.current?.ownerDocument.defaultView ?? window;
+    win.addEventListener('keydown', onKey, true);
+    return () => win.removeEventListener('keydown', onKey, true);
   });
 
   const onRouteDown = (e: React.PointerEvent, link: TravelLink) => {
@@ -508,8 +511,9 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       e.stopPropagation();
     };
     // Captured before the designer's own keys, which would delete the selection.
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    const win = root.current?.ownerDocument.defaultView ?? window;
+    win.addEventListener('keydown', onKey, true);
+    return () => win.removeEventListener('keydown', onKey, true);
   });
 
   const onCornerDown = (e: React.PointerEvent, item: LevelItem, index: number) => {

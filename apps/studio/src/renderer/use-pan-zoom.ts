@@ -60,6 +60,8 @@ export const useDragPan = (view: View, setView: (update: (view: View) => View) =
     if (e.button !== 0 && e.button !== 1) return;
     if (e.button === 1) e.preventDefault();
     const start = { x: e.clientX, y: e.clientY, panX: viewRef.current.panX, panY: viewRef.current.panY };
+    // The window the pointer is in: this one, or a view popped out to another screen.
+    const win = (e.nativeEvent.view as Window | null) ?? window;
     let moved = false;
     const move = (m: PointerEvent) => {
       const dx = m.clientX - start.x;
@@ -68,13 +70,13 @@ export const useDragPan = (view: View, setView: (update: (view: View) => View) =
       setView((v) => ({ ...v, panX: start.panX + dx, panY: start.panY + dy }));
     };
     const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
+      win.removeEventListener('pointermove', move);
+      win.removeEventListener('pointerup', up);
+      win.removeEventListener('pointercancel', up);
       if (!moved) onClick?.();
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    win.addEventListener('pointermove', move);
+    win.addEventListener('pointerup', up);
+    win.addEventListener('pointercancel', up);
   };
 };

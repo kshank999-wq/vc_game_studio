@@ -154,14 +154,17 @@ export const PlayMode = (props: Props) => {
   useEffect(() => {
     const el = host.current;
     if (!el) return;
+    // The window it is drawn in: this one, or one of its own (popped out to another screen).
+    const win = el.ownerDocument.defaultView ?? window;
+    const doc = el.ownerDocument;
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, canvas: doc.createElement('canvas') });
     } catch {
       setFailed(true);
       return;
     }
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setPixelRatio(Math.min(2, win.devicePixelRatio || 1));
     renderer.shadowMap.enabled = true;
     renderer.setClearColor('#07060a');
     el.appendChild(renderer.domElement);
@@ -194,15 +197,15 @@ export const PlayMode = (props: Props) => {
       camera.aspect = Math.max(1, width) / Math.max(1, height);
       camera.updateProjectionMatrix();
     };
-    const observer = new ResizeObserver(resize);
+    const observer = new win.ResizeObserver(resize);
     observer.observe(el);
     resize();
-    const lockChange = () => setLocked(document.pointerLockElement === renderer.domElement);
-    document.addEventListener('pointerlockchange', lockChange);
+    const lockChange = () => setLocked(doc.pointerLockElement === renderer.domElement);
+    doc.addEventListener('pointerlockchange', lockChange);
     return () => {
       observer.disconnect();
-      document.removeEventListener('pointerlockchange', lockChange);
-      if (document.pointerLockElement === renderer.domElement) document.exitPointerLock?.();
+      doc.removeEventListener('pointerlockchange', lockChange);
+      if (doc.pointerLockElement === renderer.domElement) doc.exitPointerLock?.();
       renderer.dispose();
       renderer.domElement.remove();
       three.current = null;
@@ -292,11 +295,13 @@ export const PlayMode = (props: Props) => {
   // ------------------------------------------------------------ input
 
   useEffect(() => {
+    const win = host.current?.ownerDocument.defaultView ?? window;
+    const doc = win.document;
     const down = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       if (e.ctrlKey || e.metaKey) return;
       // Rebinding a control takes the next key itself.
-      if (document.querySelector('.play-bind.listening')) return;
+      if (doc.querySelector('.play-bind.listening') || document.querySelector('.play-bind.listening')) return;
       const action = actionOfKey(latest.current.controls, e.code);
       if (e.code === 'Escape') {
         e.preventDefault();
@@ -316,20 +321,20 @@ export const PlayMode = (props: Props) => {
     };
     const blur = () => held.current.clear();
     const move = (e: MouseEvent) => {
-      if (document.pointerLockElement === three.current?.renderer.domElement) {
+      if (doc.pointerLockElement === three.current?.renderer.domElement) {
         mouse.current.dx += e.movementX;
         mouse.current.dy += e.movementY;
       }
     };
-    window.addEventListener('keydown', down, true);
-    window.addEventListener('keyup', up, true);
-    window.addEventListener('blur', blur);
-    window.addEventListener('mousemove', move);
+    win.addEventListener('keydown', down, true);
+    win.addEventListener('keyup', up, true);
+    win.addEventListener('blur', blur);
+    win.addEventListener('mousemove', move);
     return () => {
-      window.removeEventListener('keydown', down, true);
-      window.removeEventListener('keyup', up, true);
-      window.removeEventListener('blur', blur);
-      window.removeEventListener('mousemove', move);
+      win.removeEventListener('keydown', down, true);
+      win.removeEventListener('keyup', up, true);
+      win.removeEventListener('blur', blur);
+      win.removeEventListener('mousemove', move);
     };
   }, []);
 
@@ -359,13 +364,15 @@ export const PlayMode = (props: Props) => {
   };
 
   useEffect(() => {
-    if (paused && document.pointerLockElement) document.exitPointerLock?.();
+    const doc = host.current?.ownerDocument ?? document;
+    if (paused && doc.pointerLockElement) doc.exitPointerLock?.();
     held.current.clear();
   }, [paused]);
 
   // A screen puzzle wants the mouse.
   useEffect(() => {
-    if (hud.screen && document.pointerLockElement) document.exitPointerLock?.();
+    const doc = host.current?.ownerDocument ?? document;
+    if (hud.screen && doc.pointerLockElement) doc.exitPointerLock?.();
     held.current.clear();
   }, [hud.screen]);
 
@@ -373,11 +380,13 @@ export const PlayMode = (props: Props) => {
 
   useEffect(() => {
     let raf = 0;
+    // Its own window's frames: a popped-out view keeps moving while this window is in the background.
+    const win = host.current?.ownerDocument.defaultView ?? window;
     let last = performance.now();
     let padWas = new Set<Action>();
     let hudAt = 0;
     const loop = (now: number) => {
-      raf = requestAnimationFrame(loop);
+      raf = win.requestAnimationFrame(loop);
       // Slow frames still move at the real speed (the controller sub-steps); a long stall doesn't teleport.
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
@@ -500,8 +509,8 @@ export const PlayMode = (props: Props) => {
       else if (labels.current && labels.current.childElementCount) labels.current.replaceChildren();
       t.renderer.render(t.scene, t.camera);
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    raf = win.requestAnimationFrame(loop);
+    return () => win.cancelAnimationFrame(raf);
     // The loop reads everything through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hud.world, hud.gone, hud.open, hud.cinematic, hud.scene, hud.over, hud.spawned, hud.enabled]);
@@ -819,7 +828,7 @@ const drawLabels = (root: HTMLDivElement | null, camera: THREE.PerspectiveCamera
   for (const s of shown) {
     let el = existing.get(s.key);
     if (!el) {
-      el = document.createElement('div');
+      el = root.ownerDocument.createElement('div');
       el.dataset.key = s.key;
       root.appendChild(el);
     }
