@@ -84,6 +84,31 @@ describe('the Structure Creator (structure spec MVP 1)', () => {
     expect((screen.getByRole('spinbutton', { name: 'Seed' }) as HTMLInputElement).value).toBe(seed);
   });
 
+  it('dresses what it lays out in a theme, and dresses the rooms again without moving a wall (structure spec V2)', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: '+ Structure', exact: true } as never));
+    const dialog = screen.getByRole('dialog', { name: 'New structure' });
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Apartment block/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create structure' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    const panel = screen.getByRole('region', { name: 'Generate a layout' });
+    expect((within(panel).getByRole('combobox', { name: 'Theme' }) as HTMLSelectElement).value).toBe('residential');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Preview' }));
+    expect(within(panel).getByRole('status').textContent).toMatch(/dressed with \d+ props, \d+ lights/);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Accept' }));
+    const rooms = within(screen.getByRole('region', { name: 'Structure graph' })).getByText(/rooms ·/).textContent!;
+    // Now as a ruin, rooms only: the same rooms, dressed again.
+    fireEvent.change(within(panel).getByRole('combobox', { name: 'Theme' }), { target: { value: 'ruin' } });
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Dress rooms only' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Preview' }));
+    expect(within(panel).getByRole('status').textContent).toMatch(/the rooms as they are; dressed with .* replaces \d+ generated before/);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Accept' }));
+    expect(within(screen.getByRole('region', { name: 'Structure graph' })).getByText(/rooms ·/).textContent).toBe(rooms);
+  });
+
   it('plays as a scene: a walkthrough, objectives, and things put in a room (structure spec MVP 3)', async () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     render(<App />);

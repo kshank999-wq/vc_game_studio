@@ -162,6 +162,45 @@ structure, the last 20, with:
 
 Each generated item carries its run's id (`generated`).
 
+## Procedural themes (spec V2)
+
+A theme dresses a layout as somewhere. The Generate panel's **Theme** starts from the structure's type, and you can change it:
+
+| Theme | Walls | Lights | Dressing |
+| --- | --- | --- | --- |
+| None | as drawn | none | bare rooms |
+| Ancient tomb / temple | stone | flickering torches on the walls | sarcophagi, urns, altars, statues, inscriptions; traps in the passages |
+| Gothic castle | stone | torches | long tables, armouries, bunks, cells, stores |
+| Modern office | neutral | ceiling lamps | desks and chairs, meeting tables, server racks, reception |
+| Residential | wood | ceiling lamps | beds, tables, shelves, front desks |
+| Industrial | metal | harsh lamps | machines, pipe runs, crates and barrels, consoles |
+| Sci-fi facility | metal | cold light | consoles, machines, med bays, quarters |
+| Ruin / dungeon | stone | torches | sarcophagi, rubble, barricades, many traps |
+
+What goes in a room depends on what the room is for: its name first (a Server Room gets racks and a console, a Crypt a sarcophagus), then its kind (room or corridor). A big room takes more.
+
+**Ruin** and **Traps** set how much of it there is, from 0 to 100%; each theme has its own starting point.
+
+- Ruin puts rubble in a room or a barricade across a passage. Both are breakable, so the player can clear them.
+- Traps put a spike or dart trap in a room or passage. It fires in a cycle (2 to 4 seconds, active for 1).
+
+**What dressing never does:**
+
+- It never moves a wall. It uses its own random stream from the seed, so changing the theme leaves the layout exactly as it was.
+- It never puts anything in a doorway, on the stairs, by a lift or ladder, or on top of something already there.
+
+The same seed and theme always dress the same way.
+
+**Dress rooms only.** Tick it to keep the layout and dress only the rooms. This works for rooms drawn by hand too:
+
+- Lay out picks which rooms: the structure, this floor, or the selected room.
+- What an earlier dressing put there is replaced, unless you moved, changed or locked it; then it stays, and the preview says so.
+- Dressing with theme None takes it all out again.
+
+Regenerating a layout leaves alone the dressing inside rooms that stay.
+
+Everything dressing makes is tagged `dressing` and recorded as part of its run, like the rest of the generator's work. It goes to the engines like anything placed by hand: furniture as solids, lights with their colour and flicker, traps with their cycle.
+
 ## Floors (spec §8)
 
 - **Codes.** Every floor has a code: B2 and B1 below ground, G, then 2, 3 … and R for the roof. The floor picker and the inspector's Floors section show them.
@@ -449,11 +488,12 @@ A plain building map can be made a structure from here.
 - `apps/studio/src/renderer/model/handoff/structures.ts` builds the structure manifest (`structureManifest`); `levelRevisions` in `handoff/levels.ts` gives re-export its revisions.
 - `apps/studio/src/renderer/model/level/sample-structure.ts` is the Old Tomb and its walk (`withTomb`, `tombWalk`), for the tests and the engine checks (`scripts/godot-check/check_structure.gd`, `scripts/unity-structure-check/`, `scripts/unreal-check/structure_check.cpp`).
 - Play Mode (`model/level/play.ts`) plays the door rules, the objectives and completion, and what a structure remembers (`leaveLevel`, `PlaceMemory` in the play world's `places`).
-- `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, the rule presets and each structure type's room names.
+- `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, `proposeDressing` (dress rooms only), the rule presets and each structure type's room names.
+- `apps/studio/src/renderer/model/level/themes.ts` holds the procedural themes: `THEMES`, `defaultTheme`, `dressRooms` and `undress`.
 - Changes elsewhere:
   - `Level.structure` and `Floor.kind` are in `model/level/types.ts`;
   - the footprint asset is in `model/level/library.ts`;
   - `syncBuildings` (in `model/level/hierarchy.ts`) leaves basements and the roof out of a mass's count;
   - preflight takes the structure's issues (`model/level/validate.ts`).
 - The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph and the walkthrough), `GeneratePanel.tsx` (the generator), `StructureSection.tsx` (the inspector's Structure and As a scene sections) and `PlaceInRoom.tsx`.
-- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.
+- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-themes.test.ts`, `model/__tests__/structure-library.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.

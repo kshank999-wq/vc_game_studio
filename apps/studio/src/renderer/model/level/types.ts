@@ -488,7 +488,14 @@ export interface GeneratorSettings {
   density: number;
   /** The grid the generator works on. */
   cell: number;
+  /** What the rooms are dressed as (V2 procedural themes), and how ruined and trapped; none when absent. */
+  theme?: ThemeId;
+  decay?: number;
+  traps?: number;
 }
+
+/** A procedural theme (structure spec V2): see themes.ts. */
+export type ThemeId = 'none' | 'ancient' | 'gothic' | 'modern' | 'residential' | 'industrial' | 'scifi' | 'ruin';
 
 /** A layout the generator made (structure spec §13): enough to make it again and to know what it made. */
 export interface GenerationRun {

@@ -5,7 +5,8 @@ import { boundsOf } from './hierarchy';
 import { guid, levelsOf, placeAsset, removeItems, withSet } from './level';
 import { floorKindOf, footprintOf, insidePolygon, structureGraph } from './structure';
 import { travelPoints } from './travel';
-import type { AssetDefinition, Floor, GenerationRun, GeneratorSettings, LayoutRules, Level, LevelItem, LevelSet, ParamValue, StructureType } from './types';
+import { defaultTheme, DRESSING, dressRooms, undress, type Dressed } from './themes';
+import type { AssetDefinition, Floor, GenerationRun, GeneratorSettings, LayoutRules, Level, LevelItem, LevelSet, ParamValue, StructureType, ThemeId } from './types';
 
 /**
  * The structure generator (structure spec §6): an editable layout proposed
@@ -19,7 +20,7 @@ import type { AssetDefinition, Floor, GenerationRun, GeneratorSettings, LayoutRu
  * can't fit is reported, not left disconnected.
  */
 
-export const GENERATOR_VERSION = 'structure-gen-1';
+export const GENERATOR_VERSION = 'structure-gen-2';
 
 export const LAYOUT_RULES: readonly { id: LayoutRules; label: string; hint: string }[] = [
   { id: 'linear', label: 'Linear', hint: 'One corridor through each floor, rooms off it.' },
@@ -33,7 +34,7 @@ export const LAYOUT_RULES: readonly { id: LayoutRules; label: string; hint: stri
 
 /** Good starting settings for a kind of structure. */
 export const defaultGenerator = (type: StructureType | undefined): GeneratorSettings => {
-  const base: GeneratorSettings = { mode: 'plan', rules: 'branching', roomMin: 4, roomMax: 8, corridor: 2, entrances: 1, chamber: 8, deadEnds: 1, secrets: 1, fill: false, density: 1, cell: 1 };
+  const base: GeneratorSettings = { mode: 'plan', rules: 'branching', roomMin: 4, roomMax: 8, corridor: 2, entrances: 1, chamber: 8, deadEnds: 1, secrets: 1, fill: false, density: 1, cell: 1, theme: defaultTheme(type) };
   switch (type) {
     case 'pyramid':
       return { ...base, mode: 'path', rules: 'puzzleChain', roomMin: 4, roomMax: 9, chamber: 9, deadEnds: 2, secrets: 1 };
@@ -324,6 +325,8 @@ export interface Proposal {
   kept: { id: string; why: string }[];
   problems: string[];
   counts: { rooms: number; corridors: number; doors: number; connectors: number };
+  /** What the theme dressed the rooms with (V2 procedural themes). */
+  dressing?: Dressed['counts'];
 }
 
 interface FloorPlan {
@@ -383,6 +386,12 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
       removable.delete(i.id);
       kept.push({ id: i.id, why: `${i.name} holds ${holds.name}, placed by hand.` });
     }
+  }
+  // Dressing in a room that stays, stays with it.
+  for (const i of onTargets) {
+    if (!removable.has(i.id) || !i.tags?.includes(DRESSING)) continue;
+    const room = set.items.find((r) => r.levelId === level.id && r.floorId === i.floorId && !removable.has(r.id) && assetOf(set, r, global).kind === 'space' && contains(frameOf(set, r, global), { x: i.x, y: i.y }));
+    if (room) removable.delete(i.id);
   }
   if (area?.generated && !area.locked) removable.add(area.id);
   const removed = [...removable];
@@ -647,6 +656,17 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     }
   }
 
+  // Dress what it made in the theme: its own random stream, so the walls don't move with the theme.
+  let dressing: Dressed['counts'] | undefined;
+  if (s.theme && s.theme !== 'none') {
+    const s5 = levelsOf(next);
+    const rooms = made.filter((mid) => { const it = s5.items.find((i) => i.id === mid); return !!it && assetOf(s5, it, global).kind === 'space'; });
+    const d = dressRooms(next, rooms, { theme: s.theme, seed: req.seed, ...(s.decay !== undefined ? { decay: s.decay } : {}), ...(s.traps !== undefined ? { traps: s.traps } : {}), ...(global ? { global } : {}) }, (i) => ({ ...i, generated: runId }));
+    next = d.project;
+    made.push(...d.made);
+    dressing = d.counts;
+  }
+
   // The run, recorded with what it made as it made it.
   const finalSet = levelsOf(next);
   const run: GenerationRun = {
@@ -660,7 +680,56 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     acceptedAt: '',
     items: finalSet.items.filter((i) => i.generated === runId).map((i) => ({ id: i.id, hash: hashOf(i) })),
   };
-  return { project: next, run, made, removed, kept, problems, counts };
+  return { project: next, run, made, removed, kept, problems, counts, ...(dressing ? { dressing } : {}) };
+};
+
+export interface DressRequest {
+  levelId: string;
+  /** The rooms to dress: drawn by hand or generated. */
+  roomIds: string[];
+  theme: ThemeId;
+  seed: number;
+  decay?: number;
+  traps?: number;
+}
+
+/**
+ * Dress rooms only (V2 procedural themes): furniture, lights, ruin and traps
+ * in a theme, for rooms drawn by hand as much as generated ones. What an
+ * earlier dressing put there and nobody has changed since is replaced; what
+ * was changed or locked is kept. Accepted like a layout, as one run.
+ */
+export const proposeDressing = (project: Project, req: DressRequest, global?: readonly AssetDefinition[]): Proposal => {
+  const set = levelsOf(project);
+  const level = set.levels.find((l) => l.id === req.levelId)!;
+  const old = recorded(level);
+  const kept: { id: string; why: string }[] = [];
+  const unchanged = (i: LevelItem) => !!i.generated && (!old.has(i.id) || old.get(i.id) === hashOf(i));
+  const roomIds = req.roomIds.filter((id) => { const r = set.items.find((i) => i.id === id); return !!r && r.levelId === level.id && assetOf(set, r, global).kind === 'space'; });
+  const un = undress(project, roomIds, unchanged, global);
+  for (const i of set.items) {
+    if (!i.tags?.includes(DRESSING) || un.removed.includes(i.id) || !roomIds.some((rid) => { const r = set.items.find((x) => x.id === rid)!; return r.floorId === i.floorId && contains(frameOf(set, r, global), { x: i.x, y: i.y }); })) continue;
+    kept.push({ id: i.id, why: i.locked ? `${i.name} is locked.` : `${i.name} was changed since it was dressed.` });
+  }
+  const runId = guid();
+  const before = new Map(levelsOf(un.project).items.filter((i) => roomIds.includes(i.id)).map((i) => [i.id, hashOf(i)]));
+  const d = dressRooms(un.project, roomIds, { theme: req.theme, seed: req.seed, ...(req.decay !== undefined ? { decay: req.decay } : {}), ...(req.traps !== undefined ? { traps: req.traps } : {}), ...(global ? { global } : {}) }, (i) => ({ ...i, generated: runId }));
+  const after = levelsOf(d.project);
+  const problems = roomIds.length ? [] : ['Pick the rooms to dress.'];
+  if (roomIds.length && !d.made.length && req.theme !== 'none') problems.push('Nothing fitted: the rooms are too small or already full.');
+  // A generated room whose walls the theme changed is recorded again, so it still counts as unchanged.
+  const restamped = after.items.filter((i) => before.has(i.id) && i.generated && before.get(i.id) !== hashOf(i));
+  const run: GenerationRun = {
+    id: runId,
+    seed: req.seed,
+    algorithmVersion: GENERATOR_VERSION,
+    settings: { ...defaultGenerator(level.structure?.type), theme: req.theme, ...(req.decay !== undefined ? { decay: req.decay } : {}), ...(req.traps !== undefined ? { traps: req.traps } : {}) },
+    floorIds: [...new Set(roomIds.map((id) => after.items.find((i) => i.id === id)!.floorId))],
+    lockedElementIds: kept.map((k) => k.id),
+    acceptedAt: '',
+    items: [...after.items.filter((i) => i.generated === runId), ...restamped].map((i) => ({ id: i.id, hash: hashOf(i) })),
+  };
+  return { project: d.project, run, made: d.made, removed: un.removed, kept, problems, counts: { rooms: 0, corridors: 0, doors: 0, connectors: 0 }, dressing: d.counts };
 };
 
 /** Accept a proposal (one undo step): the layout stays, and the run is recorded on the structure. */

@@ -47,7 +47,7 @@ import { NewStructureDialog } from './NewStructureDialog';
 import { StructurePanel } from './StructurePanel';
 import type { FloorStack } from '../../model/level/stack';
 import { GeneratePanel, type GenerateAsk } from './GeneratePanel';
-import { acceptLayout, proposeLayout, type Proposal } from '../../model/level/generate';
+import { acceptLayout, proposeDressing, proposeLayout, type Proposal } from '../../model/level/generate';
 import { createStructure, floorCodes, isStructure, updateStructure } from '../../model/level/structure';
 
 // three.js is big: it loads the first time the graybox is opened.
@@ -1033,6 +1033,11 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onPreview={(ask: GenerateAsk) => {
               const floorIds = ask.scope === 'structure' ? level.floors.map((f) => f.id) : [floor.id];
               const areaId = ask.scope === 'area' && selected ? selected.id : undefined;
+              if (ask.dressOnly) {
+                const roomIds = areaId ? [areaId] : set.items.filter((i) => i.levelId === level.id && floorIds.includes(i.floorId) && assetOf(set, i, global).kind === 'space' && assetOf(set, i, global).role !== 'footprint').map((i) => i.id);
+                setPreview(proposeDressing(project, { levelId: level.id, roomIds, theme: ask.settings.theme ?? 'none', seed: ask.seed, ...(ask.settings.decay !== undefined ? { decay: ask.settings.decay } : {}), ...(ask.settings.traps !== undefined ? { traps: ask.settings.traps } : {}) }, global));
+                return;
+              }
               const made = proposeLayout(project, { levelId: level.id, floorIds, ...(areaId ? { areaId } : {}), seed: ask.seed, settings: ask.settings }, global);
               setPreview(made);
             }}
@@ -1041,7 +1046,11 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               const next = updateStructure(acceptLayout(preview), level.id, { seed: preview.run.seed });
               setPreview(null);
               onCommit(next);
-              onSay(`Layout accepted: ${preview.counts.rooms} rooms and ${preview.counts.doors} doors. Edit them as you like; regenerating replaces only what you leave as it was.`);
+              onSay(
+                preview.counts.rooms || preview.counts.corridors
+                  ? `Layout accepted: ${preview.counts.rooms} rooms and ${preview.counts.doors} doors. Edit them as you like; regenerating replaces only what you leave as it was.`
+                  : `Dressing accepted: ${preview.made.length} things in the rooms. Move or change any of them and dressing again keeps it.`,
+              );
             }}
             onReject={() => setPreview(null)}
             onDrawRoute={() => {
