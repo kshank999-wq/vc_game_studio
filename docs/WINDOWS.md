@@ -49,5 +49,5 @@ In the desktop app:
 
 In a browser, allow pop-ups for the studio; if a window is blocked, the studio says so and the panel stays where it was.
 
-Drag-and-drop between windows isn't supported: click an asset in the library, then click on the map, whichever windows they are in.
+**Dragging between windows.** Drag an asset from the library, or a prefab from Prefabs, onto the 2D map or the 3D graybox in any window, and it is placed where you drop it. It works from the library window onto the map window on another screen, and the other way round. This uses the system's own drag and drop, so the dragged tile follows the pointer across the screens. Clicking an asset and then clicking on the map still works too. Anything else dropped on the map (a file, a link) is ignored.
 

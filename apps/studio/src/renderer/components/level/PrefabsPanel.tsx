@@ -2,6 +2,9 @@ import { useRef, useState } from 'react';
 import { fetchCatalog, fetchListed, readPrefab, safeUrl, starterPrefabs, type Catalog, type CatalogEntry, type Fetcher, type Prefab } from '../../model/level/prefabs';
 import { setPreferences, usePreferences } from '../../preferences';
 
+/** What a dragged prefab carries: its id. */
+export const PREFAB_DRAG = 'application/x-vcgs-prefab';
+
 const browserFetch: Fetcher = async (url) => {
   const r = await fetch(url, { credentials: 'omit', redirect: 'follow' });
   return { ok: r.ok, status: r.status, text: () => r.text() };
@@ -97,7 +100,17 @@ export const PrefabsPanel = ({
     else onSay(got.problems[0] ?? 'It couldn’t be downloaded.');
   };
   const row = (p: Prefab, own: boolean) => (
-    <li key={p.id} className="lvl-prefab">
+    <li
+      key={p.id}
+      className="lvl-prefab"
+      draggable
+      title="Drag onto the map to place it there"
+      onDragStart={(e) => {
+        e.dataTransfer.setData(PREFAB_DRAG, p.id);
+        e.dataTransfer.setData('text/plain', p.name);
+        e.dataTransfer.effectAllowed = 'copy';
+      }}
+    >
       <div className="lvl-prefab-text">
         <strong>{p.name}</strong>
         <span className="muted">

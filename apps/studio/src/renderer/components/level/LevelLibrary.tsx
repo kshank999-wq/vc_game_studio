@@ -80,6 +80,9 @@ const Lock = ({ closed }: { closed: boolean }) => (
   </svg>
 );
 
+/** What a dragged library asset carries: its id. */
+export const ASSET_DRAG = 'application/x-vcgs-asset';
+
 interface Props {
   /** The maps navigator (spec V2 §6), above the library. */
   navigator?: React.ReactNode;
@@ -92,6 +95,8 @@ interface Props {
   /** The asset picked up, if any. */
   active: string | null;
   onPick: (assetId: string, e: React.PointerEvent) => void;
+  /** A drag began (the browser's own, which crosses windows): the click-to-place pick is dropped. */
+  onDragStart?: () => void;
   tab: 'library' | 'outliner';
   onTab: (tab: 'library' | 'outliner') => void;
   selection: readonly string[];
@@ -144,7 +149,19 @@ export const LevelLibrary = (props: Props) => {
   };
   const assetRow = (a: AssetDefinition) => (
     <div key={a.id} className={`lvl-asset${props.active === a.id ? ' on' : ''}`} title={a.description}>
-      <button className="lvl-asset-pick" onPointerDown={(e) => props.onPick(a.id, e)} aria-label={`Place ${a.name}`}>
+      <button
+        className="lvl-asset-pick"
+        onPointerDown={(e) => props.onPick(a.id, e)}
+        aria-label={`Place ${a.name}`}
+        // Dragged onto the map (in this window or another, on another screen): placed where it is dropped.
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(ASSET_DRAG, a.id);
+          e.dataTransfer.setData('text/plain', a.name);
+          e.dataTransfer.effectAllowed = 'copy';
+          props.onDragStart?.();
+        }}
+      >
         {a.model?.thumbnail ? <img src={a.model.thumbnail} alt="" className="lvl-asset-thumb" width={18} height={18} /> : <AssetIcon asset={a} />}
         <span className="lvl-asset-name">{a.name}</span>
         {a.source !== 'starter' && <span className={`lvl-asset-src${a.model ? ' size' : ''}`}>{a.model ? `${a.size.w < 1 ? Math.round(a.size.w * 100) + ' cm' : Math.round(a.size.w * 10) / 10 + ' m'}${a.source === 'project' ? ' · project' : ''}` : a.source === 'global' ? 'mine' : 'project'}{a.version > 1 ? ` · v${a.version}` : ''}</span>}

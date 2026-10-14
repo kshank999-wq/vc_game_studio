@@ -34,7 +34,7 @@ import type { ConfirmRequest } from '../canvas/StoryCanvas';
 import { puzzleOverlay, puzzlesOf, puzzlesOnMap } from '../../model/level/puzzles';
 import { forgetAsset, promoteAsset, useGlobalAssets } from './global-library';
 import type { GrayboxApi } from './Graybox';
-import { AssetIcon, LevelLibrary } from './LevelLibrary';
+import { ASSET_DRAG, AssetIcon, LevelLibrary } from './LevelLibrary';
 import { LevelInspector } from './LevelInspector';
 import { LevelMap, type MapApi, type MapTool } from './LevelMap';
 import type { Axes, Tool3d } from './gizmo';
@@ -50,11 +50,11 @@ import { GeneratePanel, type GenerateAsk } from './GeneratePanel';
 import { acceptLayout, entranceAt, groundFloorOf, guidedOrder, laidOut, proposeDressing, proposeLayout, stairsAt, type Proposal } from '../../model/level/generate';
 import { importPlan } from '../../model/level/cad';
 import { ImportPlanDialog } from './ImportPlanDialog';
-import { PrefabsPanel } from './PrefabsPanel';
+import { PREFAB_DRAG, PrefabsPanel } from './PrefabsPanel';
 import { TeamDialog } from './TeamDialog';
 import { PopOut } from '../PopOut';
 import { claim as claimLevel, handOut, release as releaseLevel, sendBackName, workingCopyOf } from '../../model/level/coop';
-import { makePrefab, makeStructurePrefab, placePrefab, prefabsOf, prefabText, removePrefab, savePrefab } from '../../model/level/prefabs';
+import { makePrefab, makeStructurePrefab, placePrefab, prefabsOf, prefabText, removePrefab, savePrefab, starterPrefabs, type Prefab } from '../../model/level/prefabs';
 import { downloadText, fileNameFor, serialize } from '../../files';
 import { getPreferences } from '../../preferences';
 import { createStructure, floorCodes, isStructure, updateStructure } from '../../model/level/structure';
@@ -274,8 +274,15 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
     setTool('select');
     setPick({ assetId, clientX: e.clientX, clientY: e.clientY, startX: e.clientX, startY: e.clientY, moved: false, sticky: false });
     const where = mode;
+    // The browser took the drag over (a drag that can cross windows): the drop places it, not this.
+    const cancel = () => {
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      if (!pickRef.current?.sticky) setPick(null);
+    };
     const up = (u: PointerEvent) => {
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
       const p = pickRef.current;
       if (!p) return;
       if (!p.moved) {
@@ -288,6 +295,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       setPick(null);
     };
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
   };
   const picking = !!pick;
   useEffect(() => {
@@ -661,6 +669,39 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         </>
       );
     return render(() => popOut(key));
+  };
+  const placePrefabAt = (prefab: Prefab, at: Point) => {
+    const out = placePrefab(project, level.id, floor.id, prefab, at, global);
+    if (!out.ids.length) {
+      onSay(out.problems[0] ?? `Nothing of ${prefab.name} could go here.`);
+      return;
+    }
+    onCommit(out.project);
+    setSelection(out.ids);
+    const brought = [out.added.objects ? `${out.added.objects} story ${out.added.objects === 1 ? 'object' : 'objects'}` : '', out.added.assets ? `${out.added.assets} ${out.added.assets === 1 ? 'asset' : 'assets'}` : ''].filter(Boolean).join(' and ');
+    onSay(`${prefab.name} placed: ${out.ids.length} pieces${brought ? `, bringing ${brought}` : ''}.${out.problems.length ? ` ${out.problems.join(' ')}` : ''}`);
+  };
+  /** Something dragged in, from this window or another (another screen): a library asset or a prefab. */
+  const dragKind = (e: React.DragEvent) => (e.dataTransfer.types.includes(ASSET_DRAG) ? 'asset' : e.dataTransfer.types.includes(PREFAB_DRAG) ? 'prefab' : null);
+  const onViewDragOver = (e: React.DragEvent) => {
+    if (playing || !dragKind(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+  const onViewDrop = (e: React.DragEvent) => {
+    const kind = dragKind(e);
+    if (playing || !kind) return;
+    e.preventDefault();
+    const at = (mode === '3d' ? box.current : map.current)?.worldAt(e.clientX, e.clientY);
+    if (!at) return;
+    if (kind === 'asset') {
+      setPick(null);
+      place(e.dataTransfer.getData(ASSET_DRAG), at);
+      return;
+    }
+    const id = e.dataTransfer.getData(PREFAB_DRAG);
+    const prefab = [...prefabsOf(project), ...starterPrefabs()].find((x) => x.id === id);
+    if (prefab) placePrefabAt(prefab, at);
   };
   /** The map or graybox (or Play Mode), here or in a window of its own. */
   const dockView = (node: ReactNode): ReactNode => {
@@ -1063,6 +1104,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         global={global}
         active={pick?.assetId ?? null}
         onPick={onPickAsset}
+        onDragStart={() => setPick(null)}
         tab={leftTab}
         onTab={setLeftTab}
         selection={selection}
@@ -1089,7 +1131,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       />)}
       <div className="lvl-centre">
         {dockView(
-          <div className="lvl-view">
+          <div className="lvl-view" onDragOver={onViewDragOver} onDrop={onViewDrop}>
         {asking && mode === '2d' && (
           <div
             className="lvl-ask"
@@ -1316,18 +1358,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             {...(isStructure(level) ? { structureName: level.name } : {})}
             onClose={() => setShowPrefabs(false)}
             onSay={onSay}
-            onPlace={(prefab) => {
-              const at = viewCentre();
-              const out = placePrefab(project, level.id, floor.id, prefab, at, global);
-              if (!out.ids.length) {
-                onSay(out.problems[0] ?? `Nothing of ${prefab.name} could go here.`);
-                return;
-              }
-              onCommit(out.project);
-              setSelection(out.ids);
-              const brought = [out.added.objects ? `${out.added.objects} story ${out.added.objects === 1 ? 'object' : 'objects'}` : '', out.added.assets ? `${out.added.assets} ${out.added.assets === 1 ? 'asset' : 'assets'}` : ''].filter(Boolean).join(' and ');
-              onSay(`${prefab.name} placed: ${out.ids.length} pieces${brought ? `, bringing ${brought}` : ''}.${out.problems.length ? ` ${out.problems.join(' ')}` : ''}`);
-            }}
+            onPlace={(prefab) => placePrefabAt(prefab, viewCentre())}
             onSave={(name) => {
               const pre = makePrefab(project, selection, { name, ...(getPreferences().authorName ? { author: getPreferences().authorName } : {}) }, global);
               if (!pre) {

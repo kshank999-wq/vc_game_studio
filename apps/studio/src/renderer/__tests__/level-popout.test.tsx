@@ -98,4 +98,23 @@ describe('Levels panels in windows of their own', () => {
     fireEvent.click(within(other.body).getByRole('button', { name: 'Put it back' }));
     await waitFor(() => expect(document.querySelector('.lvl-view')).not.toBeNull());
   });
+
+  it('a library asset or a prefab dragged onto the map (from any window) goes where it is dropped', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
+    await opened();
+    const view = document.querySelector('.lvl-view')!;
+    const carrying = (type: string, id: string) => ({ types: [type], getData: (t: string) => (t === type ? id : ''), dropEffect: 'none' });
+    // jsdom lays nothing out: the map is 0 × 0 at the corner, so the drop goes there.
+    const over = fireEvent.dragOver(view, { clientX: 0, clientY: 0, dataTransfer: carrying('application/x-vcgs-asset', 'prop.crate') });
+    expect(over).toBe(false);
+    fireEvent.drop(view, { clientX: 0, clientY: 0, dataTransfer: carrying('application/x-vcgs-asset', 'prop.crate') });
+    await waitFor(() => expect(document.querySelector('.lvl-status')!.textContent).toMatch(/Crate/));
+    fireEvent.drop(view, { clientX: 0, clientY: 0, dataTransfer: carrying('application/x-vcgs-prefab', 'starter.guard-post') });
+    await waitFor(() => expect(document.body.textContent).toMatch(/Guard post placed: \d+ pieces/));
+    // Anything else (a link, a file) isn't taken.
+    expect(fireEvent.dragOver(view, { clientX: 0, clientY: 0, dataTransfer: carrying('text/uri-list', 'https://example.com') })).toBe(true);
+  });
 });
+
