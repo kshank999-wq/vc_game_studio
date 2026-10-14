@@ -50,6 +50,10 @@ import { GeneratePanel, type GenerateAsk } from './GeneratePanel';
 import { acceptLayout, proposeDressing, proposeLayout, type Proposal } from '../../model/level/generate';
 import { importPlan } from '../../model/level/cad';
 import { ImportPlanDialog } from './ImportPlanDialog';
+import { PrefabsPanel } from './PrefabsPanel';
+import { makePrefab, makeStructurePrefab, placePrefab, prefabsOf, prefabText, removePrefab, savePrefab } from '../../model/level/prefabs';
+import { downloadText } from '../../files';
+import { getPreferences } from '../../preferences';
 import { createStructure, floorCodes, isStructure, updateStructure } from '../../model/level/structure';
 
 // three.js is big: it loads the first time the graybox is opened.
@@ -142,6 +146,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [newWorld, setNewWorld] = useState(false);
   const [newStructure, setNewStructure] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [showPrefabs, setShowPrefabs] = useState(false);
   const [showStructure, setShowStructure] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
   const [preview, setPreview] = useState<Proposal | null>(null);
@@ -713,6 +718,9 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             Generate
           </button>
         )}
+        <button className={`tb-btn small${showPrefabs ? ' on' : ''}`} aria-pressed={showPrefabs} onClick={() => setShowPrefabs((v) => !v)} title="Prefabs: save pieces of a level to place again, here or in another project, and open prefab catalogs (structure spec V2)">
+          Prefabs
+        </button>
         {isStructure(level) && (
           <button className="tb-btn small" onClick={() => setImporting(true)} title="Import a floor plan from CAD (DXF or SVG) onto this floor: rooms, doors, stairs and the footprint (structure spec V2)">
             Import plan
@@ -1071,6 +1079,55 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onClose={() => {
               setPreview(null);
               setShowGenerate(false);
+            }}
+          />
+        )}
+        {!playing && showPrefabs && (
+          <PrefabsPanel
+            prefabs={prefabsOf(project)}
+            selected={selection.length}
+            {...(isStructure(level) ? { structureName: level.name } : {})}
+            onClose={() => setShowPrefabs(false)}
+            onSay={onSay}
+            onPlace={(prefab) => {
+              const r = document.querySelector('.lvl-centre')?.getBoundingClientRect();
+              const at = (r && map.current?.worldAt(r.left + r.width / 2, r.top + r.height / 2)) || { x: 0, y: 0 };
+              const out = placePrefab(project, level.id, floor.id, prefab, at, global);
+              if (!out.ids.length) {
+                onSay(out.problems[0] ?? `Nothing of ${prefab.name} could go here.`);
+                return;
+              }
+              onCommit(out.project);
+              setSelection(out.ids);
+              const brought = [out.added.objects ? `${out.added.objects} story ${out.added.objects === 1 ? 'object' : 'objects'}` : '', out.added.assets ? `${out.added.assets} ${out.added.assets === 1 ? 'asset' : 'assets'}` : ''].filter(Boolean).join(' and ');
+              onSay(`${prefab.name} placed: ${out.ids.length} pieces${brought ? `, bringing ${brought}` : ''}.${out.problems.length ? ` ${out.problems.join(' ')}` : ''}`);
+            }}
+            onSave={(name) => {
+              const pre = makePrefab(project, selection, { name, ...(getPreferences().authorName ? { author: getPreferences().authorName } : {}) }, global);
+              if (!pre) {
+                onSay('Select something to save as a prefab.');
+                return;
+              }
+              onCommit(savePrefab(project, pre));
+              onSay(`Saved “${pre.name}” as a prefab: ${pre.items.length} pieces${pre.objects.length ? `, with ${pre.objects.map((o) => o.name).join(', ')}` : ''}.`);
+            }}
+            onSaveStructure={(name) => {
+              const pre = makeStructurePrefab(project, level.id, { name, ...(getPreferences().authorName ? { author: getPreferences().authorName } : {}) }, global);
+              if (!pre) {
+                onSay('There is nothing in this structure to save yet.');
+                return;
+              }
+              onCommit(savePrefab(project, pre));
+              onSay(`Saved “${pre.name}” as a prefab: every floor, ${pre.items.length} pieces.`);
+            }}
+            onExport={(prefab) => downloadText(`${prefab.name.replace(/[^\w -]+/g, '').trim() || 'prefab'}.vcgsprefab.json`, prefabText(prefab), 'application/json')}
+            onImport={(prefab) => {
+              onCommit(savePrefab(project, prefab));
+              onSay(`${prefab.name} is in this project’s prefabs. Place it where you like.`);
+            }}
+            onRemove={(prefab) => {
+              onCommit(removePrefab(project, prefab.id));
+              onSay(`Removed the prefab “${prefab.name}”. What was placed from it stays.`);
             }}
           />
         )}

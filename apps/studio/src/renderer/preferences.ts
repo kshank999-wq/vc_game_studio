@@ -34,6 +34,8 @@ export interface Preferences {
   /** Your name and role, on your comments and in each thing's edit history (spec §16). */
   authorName: string;
   authorRole: string;
+  /** Prefab catalogs (structure spec V2): the addresses of the index files to list prefabs from. */
+  prefabCatalogs: string[];
 }
 
 export interface PlayControlPrefs {
@@ -60,6 +62,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   playControls: { keys: {}, pad: {}, lookSpeed: 1, invertY: false, deadzone: 0.18 },
   authorName: '',
   authorRole: '',
+  prefabCatalogs: [],
 };
 
 /** Who you are in comments and history: your name (or "You") and role. */

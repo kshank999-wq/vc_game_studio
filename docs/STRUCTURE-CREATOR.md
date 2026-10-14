@@ -248,6 +248,67 @@ Problems are reported rather than left broken, for example:
 - a room outside the footprint is named;
 - a shape that crosses itself becomes a rectangle round it.
 
+## Prefabs and catalogs (spec V2)
+
+A prefab is a piece of a level kept to place again, in this project or another: a guard post, a lever and the gate it works, a locked vault with its key. **Prefabs** on the Level Designer's toolbar opens them; it works on any map, not only structures.
+
+**Saving one.**
+
+- **Save the selection** takes what is selected and what belongs with it:
+  - the doors in its rooms;
+  - what is inside its rooms;
+  - whatever a chosen lever or plate works.
+- On a structure's map, **Save the whole structure** takes every floor, each piece marked with its floor's code (B1, G, 1…).
+
+A prefab carries what it needs to work where it lands:
+
+- its items, kept round its centre;
+- the project or personal assets they are made of;
+- the story objects they point at: the key a door needs, what a chest holds, the scene a trigger starts.
+
+**Placing one.**
+
+- It goes in the middle of the view, as one change.
+- Every piece gets a new GUID, a serial and a name not yet used on the map.
+- What one part works or acts on is the copy of it, so the copied lever lifts the copied gate.
+- Story objects and assets join the project only if it hasn't them; placing it again shares them rather than doubling them.
+- A structure prefab goes onto the floors with the same codes. Floors the structure lacks are named, and what was on them is left out.
+
+**Starters.** The studio comes with a few: Guard post, Lever and gate, Locked vault (with its key) and Trapped passage. They are built from the starter library each time, so they are always current.
+
+**Files.** **File** saves a prefab as a `.vcgsprefab.json` package (format `vcgs-prefab`, version 1). **Open a prefab file…** reads one into the project's prefabs, after checking that:
+
+- it is a prefab;
+- it isn't from a newer studio;
+- every piece has what a piece must have;
+- it is under 4 MB and 5000 pieces.
+
+It is only data; nothing in it runs.
+
+**Catalogs (marketplace hooks).** A catalog is an index file at an https address (or a server on this computer).
+
+- Add its address and it is kept with your preferences; it is fetched only when you open it.
+- Each listed prefab is either:
+  - a package to **Download**: checked against the SHA-256 the catalog lists, refused if it differs, then kept in the project;
+  - a page to **Get it** from, with its price if it has one, opened in your browser. This is the hook for a store: the studio never takes payment itself.
+- Entries without a safe address, or without a SHA-256 for their package, are left out, and the panel says how many.
+
+The catalog format:
+
+```json
+{
+  "format": "vcgs-prefab-catalog",
+  "version": 1,
+  "name": "Tomb kits",
+  "prefabs": [
+    { "id": "treasury", "name": "Treasury", "description": "…", "author": "A. Maker", "license": "CC-BY-4.0", "tags": ["tomb"], "url": "packs/treasury.json", "sha256": "<64 hex digits>" },
+    { "id": "deluxe", "name": "Deluxe crypt", "page": "https://example.com/deluxe", "price": "$4" }
+  ]
+}
+```
+
+A package's `url` is relative to the catalog or absolute; its `sha256` is the hash of the file as served.
+
 ## Floors (spec §8)
 
 - **Codes.** Every floor has a code: B2 and B1 below ground, G, then 2, 3 … and R for the roof. The floor picker and the inspector's Floors section show them.
@@ -537,6 +598,7 @@ A plain building map can be made a structure from here.
 - Play Mode (`model/level/play.ts`) plays the door rules, the objectives and completion, and what a structure remembers (`leaveLevel`, `PlaceMemory` in the play world's `places`).
 - `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, `proposeDressing` (dress rooms only), the rule presets and each structure type's room names.
 - `apps/studio/src/renderer/model/level/cad.ts` holds CAD plan import: `parseDxf`, `parseSvg`, `guessRole`, `guessUnits`, `readPlan` and `importPlan`. The dialog is `components/level/ImportPlanDialog.tsx`.
+- `apps/studio/src/renderer/model/level/prefabs.ts` holds prefabs and catalogs: `makePrefab`, `makeStructurePrefab`, `placePrefab`, `readPrefab`, `starterPrefabs`, `readCatalog`, `fetchCatalog` and `fetchListed`. `insertItems` in `level.ts` puts copies down with new GUIDs. The panel is `components/level/PrefabsPanel.tsx`.
 - `apps/studio/src/renderer/model/level/themes.ts` holds the procedural themes: `THEMES`, `defaultTheme`, `dressRooms` and `undress`.
 - Changes elsewhere:
   - `Level.structure` and `Floor.kind` are in `model/level/types.ts`;
@@ -544,4 +606,4 @@ A plain building map can be made a structure from here.
   - `syncBuildings` (in `model/level/hierarchy.ts`) leaves basements and the roof out of a mass's count;
   - preflight takes the structure's issues (`model/level/validate.ts`).
 - The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph and the walkthrough), `GeneratePanel.tsx` (the generator), `StructureSection.tsx` (the inspector's Structure and As a scene sections) and `PlaceInRoom.tsx`.
-- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-themes.test.ts`, `model/__tests__/structure-cad.test.ts`, `model/__tests__/structure-library.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.
+- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts`, `model/__tests__/structure-themes.test.ts`, `model/__tests__/structure-cad.test.ts`, `model/__tests__/structure-prefabs.test.ts`, `__tests__/level-prefabs.test.tsx`, `model/__tests__/structure-library.test.ts`, `model/__tests__/structure-gameplay.test.ts`, `model/__tests__/structure-handoff.test.ts` and `__tests__/structure-creator.test.tsx`.

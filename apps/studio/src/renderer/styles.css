@@ -12913,6 +12913,55 @@ button.bible-dual-col:hover {
   background: var(--panel, var(--ground));
 }
 
+.lvl-prefabs-body {
+  overflow: auto;
+  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lvl-prefabs-body h4 {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+.lvl-prefabs-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px;
+}
+.lvl-prefab-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lvl-prefab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.lvl-prefab-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+.lvl-prefab-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .lvl-generate-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;

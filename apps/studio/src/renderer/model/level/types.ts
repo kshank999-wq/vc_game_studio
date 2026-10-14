@@ -638,4 +638,6 @@ export interface LevelSet {
   notes?: PlayNote[];
   /** Travel links (spec V2 §13): roads, rivers, routes and transitions between places. */
   travel?: TravelLink[];
+  /** The project's prefabs (structure spec V2): see prefabs.ts. */
+  prefabs?: import('./prefabs').Prefab[];
 }

@@ -675,6 +675,49 @@ export const duplicateItems = (project: Project, ids: readonly string[], offset:
   return { project: withSet(project, revalidate({ ...set, items: made }, copies.map((c) => c.id))), ids: ids.map((id) => idMap.get(id)).filter((id): id is string => !!id) };
 };
 
+/**
+ * Put copies of these items on a map (a prefab, structure spec V2): each gets
+ * a new GUID, a serial and a name not yet used there; doors keep their rooms,
+ * groups stay together, and what one part works or acts on is the copy of it.
+ * `floorOf` says which floor each goes on (null leaves it out).
+ */
+export const insertItems = (project: Project, levelId: string, templates: readonly LevelItem[], floorOf: (item: LevelItem) => string | null, offset: Point = { x: 0, y: 0 }): { project: Project; ids: string[]; idMap: Map<string, string> } => {
+  let set = levelsOf(project);
+  const placed = templates.filter((t) => floorOf(t) !== null);
+  const idMap = new Map(placed.map((i) => [i.id, guid()]));
+  const groupMap = new Map<string, string>();
+  const copies: LevelItem[] = [];
+  for (const o of placed) {
+    const def = findAsset(o.assetId, set.assets);
+    const { serial, counters } = next(set, def?.naming ?? 'prop');
+    set = { ...set, counters };
+    const copy: LevelItem = {
+      ...o,
+      id: idMap.get(o.id)!,
+      levelId,
+      floorId: floorOf(o)!,
+      serial,
+      name: uniqueName({ ...set, items: [...set.items, ...copies] }, levelId, o.name),
+      x: Math.round((o.x + offset.x) * 1000) / 1000,
+      y: Math.round((o.y + offset.y) * 1000) / 1000,
+    };
+    delete copy.exportName;
+    delete copy.generated;
+    delete copy.invalid;
+    if (o.host) {
+      if (idMap.has(o.host.id)) copy.host = { ...o.host, id: idMap.get(o.host.id)! };
+      else delete copy.host;
+    }
+    if (o.groupId) {
+      if (!groupMap.has(o.groupId)) groupMap.set(o.groupId, guid());
+      copy.groupId = groupMap.get(o.groupId)!;
+    }
+    copies.push(remapItemRefs(copy, idMap));
+  }
+  const made = [...set.items, ...copies];
+  return { project: withSet(project, revalidate({ ...set, items: made }, copies.map((c) => c.id))), ids: copies.map((c) => c.id), idMap };
+};
+
 /** What removing these items takes with it: the doors and windows in rooms being removed. */
 export const removalOf = (project: Project, ids: readonly string[]): LevelItem[] => {
   const set = levelsOf(project);
