@@ -142,7 +142,7 @@ export const NewStructureDialog = ({ units, scenes, onCreate, onClose }: { units
         </div>
         <p className="pref-hint">
           {formatLength(v.w, units)} × {formatLength(v.d, units)}, {v.above + v.below + (v.roof ? 1 : 0)} floors {formatLength(v.floorHeight, units)} high
-          {v.step ? `, each floor up drawn in ${formatLength(v.step, units)} on every side` : ''}. Every floor gets a footprint you can reshape by its corners. Nothing is generated yet: draw its rooms, doors and stairs.
+          {v.step ? `, each floor up drawn in ${formatLength(v.step, units)} on every side` : ''}. Every floor gets a footprint you can reshape by its corners. Then draw its rooms, doors and stairs, or Generate them.
         </p>
         <div className="dialog-actions">
           <button type="button" className="tb-btn" onClick={onClose}>

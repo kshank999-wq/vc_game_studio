@@ -45,7 +45,9 @@ import { removeTravel, travelById, TRAVEL_KINDS } from '../../model/level/travel
 import { NewWorldDialog } from './NewWorldDialog';
 import { NewStructureDialog } from './NewStructureDialog';
 import { StructurePanel } from './StructurePanel';
-import { createStructure, floorCodes, isStructure } from '../../model/level/structure';
+import { GeneratePanel, type GenerateAsk } from './GeneratePanel';
+import { acceptLayout, proposeLayout, type Proposal } from '../../model/level/generate';
+import { createStructure, floorCodes, isStructure, updateStructure } from '../../model/level/structure';
 
 // three.js is big: it loads the first time the graybox is opened.
 const Graybox = lazy(() => import('./Graybox'));
@@ -135,6 +137,10 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [newWorld, setNewWorld] = useState(false);
   const [newStructure, setNewStructure] = useState(false);
   const [showStructure, setShowStructure] = useState(true);
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [preview, setPreview] = useState<Proposal | null>(null);
+  // A preview is of the project as it was: an undo, an edit elsewhere or another map drops it.
+  useEffect(() => setPreview(null), [project, levelId]);
   // A room being detailed (spec V2 §2, §7): the map frames it, the rest of the floor dims, the library offers room things.
   const [focusRoom, setFocusRoomState] = useState<string | null>(null);
   focusRoomRef.current = focusRoom;
@@ -577,6 +583,10 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
 
   const selected = selection.length === 1 ? set.items.find((i) => i.id === selection[0]) : undefined;
   const floors = [...level.floors].sort((a, b) => b.elevation - a.elevation);
+  // A generated layout being previewed (structure spec §6) is shown in place of the project until it is accepted or rejected.
+  const shown = preview?.project ?? project;
+  const shownSet = levelsOf(shown);
+  const held = () => onSay('Accept or reject the generated layout first.');
   const picked = pick && findAsset(pick.assetId, set.assets, global);
   const crumbs = pathTo(set, level.id);
   const codes = floorCodes(level);
@@ -690,6 +700,11 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         {isStructure(level) && (
           <button className={`tb-btn small${showStructure ? ' on' : ''}`} aria-pressed={showStructure} onClick={() => setShowStructure((v) => !v)} title="The structure graph: rooms on every floor, and how they connect">
             Structure graph
+          </button>
+        )}
+        {isStructure(level) && (
+          <button className={`tb-btn small${showGenerate ? ' on' : ''}`} aria-pressed={showGenerate} onClick={() => setShowGenerate((v) => !v)} title="Generate a layout from a seed: plan-first or along a route you draw (structure spec §6)">
+            Generate
           </button>
         )}
         <div role="group" aria-label="View" className="view-toggle">
@@ -936,13 +951,13 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         ) : mode === '2d' ? (
           <LevelMap
             ref={map}
-            project={project}
+            project={shown}
             levelId={level.id}
             floorId={floor.id}
             global={global}
-            selection={selection}
-            onSelect={setSelection}
-            onCommit={commitItems}
+            selection={preview ? preview.made : selection}
+            onSelect={preview ? () => {} : setSelection}
+            onCommit={preview ? held : commitItems}
             view={view}
             setView={setView}
             hidden={hidden}
@@ -964,7 +979,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             <Graybox
               ref={box}
               badges={badges}
-              project={project}
+              project={shown}
               levelId={level.id}
               floorId={floor.id}
               allFloors={view3d.allFloors}
@@ -975,9 +990,9 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               collision={view3d.collision}
               walkable={view3d.walkable}
               global={global}
-              selection={selection}
-              onSelect={setSelection}
-              onCommit={commitItems}
+              selection={preview ? preview.made : selection}
+              onSelect={preview ? () => {} : setSelection}
+              onCommit={preview ? held : commitItems}
               placing={pick?.sticky ? pick.assetId : null}
               onPlace={putDown}
               onHover={setHover}
@@ -985,9 +1000,44 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             />
           </Suspense>
         )}
+        {!playing && isStructure(level) && showGenerate && (
+          <GeneratePanel
+            key={level.id}
+            level={level}
+            floorId={floor.id}
+            units={set.settings.units}
+            areaName={selected && ['space', 'volume'].includes(assetOf(set, selected, global).kind) && assetOf(set, selected, global).role !== 'footprint' ? selected.name : undefined}
+            proposal={preview}
+            onPreview={(ask: GenerateAsk) => {
+              const floorIds = ask.scope === 'structure' ? level.floors.map((f) => f.id) : [floor.id];
+              const areaId = ask.scope === 'area' && selected ? selected.id : undefined;
+              const made = proposeLayout(project, { levelId: level.id, floorIds, ...(areaId ? { areaId } : {}), seed: ask.seed, settings: ask.settings }, global);
+              setPreview(made);
+            }}
+            onAccept={() => {
+              if (!preview) return;
+              const next = updateStructure(acceptLayout(preview), level.id, { seed: preview.run.seed });
+              setPreview(null);
+              onCommit(next);
+              onSay(`Layout accepted: ${preview.counts.rooms} rooms and ${preview.counts.doors} doors. Edit them as you like; regenerating replaces only what you leave as it was.`);
+            }}
+            onReject={() => setPreview(null)}
+            onDrawRoute={() => {
+              setPreview(null);
+              setMode('2d');
+              setTool('route');
+              setRouteKind('progression');
+              onSay('Click the way in, then each chamber along the route; Enter or a double-click ends it.');
+            }}
+            onClose={() => {
+              setPreview(null);
+              setShowGenerate(false);
+            }}
+          />
+        )}
         {!playing && isStructure(level) && showStructure && (
           <StructurePanel
-            set={set}
+            set={shownSet}
             levelId={level.id}
             floorId={floor.id}
             global={global}

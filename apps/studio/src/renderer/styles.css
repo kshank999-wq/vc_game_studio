@@ -12674,7 +12674,7 @@ button.bible-dual-col:hover {
 .lvl-structure {
   flex: 0 0 auto;
   max-height: 42%;
-  min-height: 150px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border);
@@ -12819,4 +12819,63 @@ button.bible-dual-col:hover {
 .lvl-structure-node:focus-visible circle {
   stroke: var(--text, #fff);
   stroke-width: 2.5;
+}
+
+.lvl-generate {
+  flex: 0 0 auto;
+  max-height: 34%;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--panel, var(--ground));
+}
+
+.lvl-generate-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.lvl-generate-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  padding: 8px 10px;
+  align-content: start;
+}
+
+.lvl-generate-fields .view-toggle {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.lvl-generate-fields .lvl-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.lvl-generate-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border-left: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.lvl-generate-sum {
+  margin: 0;
+}
+
+.lvl-generate-notes {
+  border-left: 0;
+  padding: 0;
+  max-height: 140px;
+}
+
+/* With the generator open too, the structure graph gives the map room. */
+.lvl-generate + .lvl-structure {
+  max-height: 24%;
 }

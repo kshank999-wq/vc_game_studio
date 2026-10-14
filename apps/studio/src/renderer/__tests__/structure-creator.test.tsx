@@ -54,4 +54,33 @@ describe('the Structure Creator (structure spec MVP 1)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Structure graph' }));
     expect(screen.getByRole('region', { name: 'Structure graph' })).toBeTruthy();
   });
+
+  it('generates a layout: a preview first, rejected leaves nothing, accepted keeps it (structure spec §6)', async () => {
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: '+ Structure', exact: true } as never));
+    const dialog = screen.getByRole('dialog', { name: 'New structure' });
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Apartment block/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create structure' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    const panel = screen.getByRole('region', { name: 'Generate a layout' });
+    expect((within(panel).getByRole('combobox', { name: 'Rules' }) as HTMLSelectElement).value).toBe('linear');
+    const rooms = () => within(screen.getByRole('region', { name: 'Structure graph' })).getByText(/rooms ·/).textContent!;
+    expect(rooms()).toMatch(/^0 rooms/);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Preview' }));
+    expect(within(panel).getByRole('status').textContent).toMatch(/^Preview, seed \d+: \d+ rooms/);
+    // The preview shows in the structure graph, but isn't in the project yet.
+    expect(rooms()).not.toMatch(/^0 rooms/);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reject' }));
+    expect(rooms()).toMatch(/^0 rooms/);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Preview' }));
+    const seed = within(panel).getByRole('status').textContent!.match(/seed (\d+)/)![1];
+    fireEvent.click(within(panel).getByRole('button', { name: 'Accept' }));
+    expect(rooms()).not.toMatch(/^0 rooms/);
+    expect(within(screen.getByRole('region', { name: 'Structure graph' })).getByRole('list', { name: 'Structure issues' }).textContent).toContain('Every room can be reached');
+    // The seed it was made with is the structure's now.
+    expect((screen.getByRole('spinbutton', { name: 'Seed' }) as HTMLInputElement).value).toBe(seed);
+  });
 });

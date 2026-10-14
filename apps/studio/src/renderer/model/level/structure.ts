@@ -308,7 +308,7 @@ export const footprintOf = (set: LevelSet, level: Level, floorId: string, global
   return item ? corners(frameOf(set, item, global)) : undefined;
 };
 
-const insidePolygon = (p: Point, poly: readonly Point[], tolerance = 0.05): boolean => {
+export const insidePolygon = (p: Point, poly: readonly Point[], tolerance = 0.05): boolean => {
   if (pointInPolygon(p, poly)) return true;
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i]!;

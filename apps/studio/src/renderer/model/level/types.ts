@@ -303,6 +303,11 @@ export interface LevelItem {
   puzzles?: PuzzleBinding[];
   /** Why a regeneration left it out of place (spec §5.3): flagged, never deleted. */
   invalid?: string;
+  /**
+   * Made by the structure generator (structure spec §6): the run's id. A run
+   * replaces only what an earlier run made and nobody has changed since.
+   */
+  generated?: string;
   notes?: string;
 }
 
@@ -411,6 +416,50 @@ export interface Level {
   references?: ReferenceImage[];
   /** Made with the Structure Creator (structure spec): what the structure is. */
   structure?: StructureInfo;
+  /** The layouts the structure generator made and the designer accepted (structure spec §13 GenerationRun), newest last. */
+  generation?: GenerationRun[];
+}
+
+/** How the generator lays a floor out (structure spec §6 rule presets). */
+export type LayoutRules = 'linear' | 'branching' | 'hub' | 'maze' | 'chokepoints' | 'puzzleChain' | 'openPlan';
+
+/** The generator's settings (structure spec §5 generator configuration). Lengths in metres. */
+export interface GeneratorSettings {
+  /** Plan-first: whole floor plates. Path-first: rooms around the route drawn on each floor. */
+  mode: 'plan' | 'path';
+  rules: LayoutRules;
+  roomMin: number;
+  roomMax: number;
+  corridor: number;
+  /** Ways in from outside, on the ground floor. */
+  entrances: number;
+  /** Path-first: a chamber's size at each point of the route. */
+  chamber: number;
+  /** Path-first: side passages that end in a dead end, and branches behind a secret door. */
+  deadEnds: number;
+  secrets: number;
+  /** Path-first: fill the rest of the floor with rooms too. */
+  fill: boolean;
+  /** How much of each floor becomes rooms (0.05 to 1); below 1 the rest stays unplanned. */
+  density: number;
+  /** The grid the generator works on. */
+  cell: number;
+}
+
+/** A layout the generator made (structure spec §13): enough to make it again and to know what it made. */
+export interface GenerationRun {
+  id: string;
+  seed: number;
+  algorithmVersion: string;
+  settings: GeneratorSettings;
+  /** The floors it laid out, and the space or volume it was kept to, if any (a wing, a room). */
+  floorIds: string[];
+  areaId?: string;
+  /** What it kept: locked items, items placed by hand, generated items changed since. */
+  lockedElementIds: string[];
+  acceptedAt: string;
+  /** What it made, as it made it: an item that no longer matches is the designer's now. */
+  items: { id: string; hash: string }[];
 }
 
 export type ReferenceKind = 'map' | 'floorPlan' | 'heightmap' | 'photo';

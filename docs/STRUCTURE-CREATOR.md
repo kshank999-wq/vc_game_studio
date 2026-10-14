@@ -16,8 +16,8 @@ other map (spec §3, §12). Nothing is kept twice.
 | Phase | What | Status |
 |---|---|---|
 | MVP 1: Authoring core | Structures from presets, footprints, floors from basements to the roof, rooms, walls, doors and stairs (the Level Designer's own), the structure graph, validation, save and load | **Built** |
-| MVP 2: Generation | Seeded plan-first and path-first layouts, previews to accept or reject, locked rooms, regenerating part of a structure | Next |
-| MVP 3: Gameplay | Door rules (one-way, timed, secret, breakable), the structure as a scene with entry and exit conditions and state that stays on re-entry, puzzles, items and characters placed in rooms, solvability (the key before its door, softlocks) | Planned |
+| MVP 2: Generation | Seeded plan-first and path-first layouts, previews to accept or reject, locked rooms, regenerating part of a structure | **Built** |
+| MVP 3: Gameplay | Door rules (one-way, timed, secret, breakable), the structure as a scene with entry and exit conditions and state that stays on re-entry, puzzles, items and characters placed in rooms, solvability (the key before its door, softlocks) | Next |
 | MVP 4: Graybox and handoff | Stacked floors and cutaways in 3D, rough play through a structure, a structure manifest for Godot, Unity and Unreal, re-export by id | Planned |
 
 Much of what the spec asks for was already in the Level Designer. MVP 1
@@ -59,6 +59,8 @@ Every value can be changed before it is made:
 - whether it has a roof;
 - the scene it plays as.
 
+Nothing is laid out yet: draw the rooms, or **Generate** them.
+
 **Create structure** puts its mass where the map is in view, and opens the
 structure on its ground floor.
 
@@ -73,6 +75,91 @@ footprints:
 | Floor 3 | 3 | 12 m | 28 × 28 m |
 
 Its mass on the level is 60 × 60 × 18 m, three storeys.
+
+## Generating a layout (spec §6)
+
+On a structure, **Generate** in the toolbar opens the generator under the
+map. It proposes a layout from a seed, inside each floor's footprint. Every
+room, corridor and door it makes is an ordinary Level Designer item,
+editable like any other.
+
+**What to lay out:**
+
+- the whole structure;
+- this floor;
+- inside a selected space or volume: a wing, or a generated room to divide up.
+
+**Plan-first** lays out whole floor plates with a rule preset:
+
+| Rules | What it makes |
+|---|---|
+| Linear | One corridor through the floor, rooms off it |
+| Branching | A main corridor with side corridors off it |
+| Hub and spoke | A central hall with corridors out to the walls |
+| Maze | Rooms opening into rooms, with a few loops |
+| Chokepoints | One way through, single doors, dead ends (survival horror) |
+| Puzzle chain | Chambers one after another (Chamber 1, 2 …) with clue rooms off the chain |
+| Open plan | A few large spaces joined by wide openings |
+
+How plan-first lays out the floors:
+
+- **Stair core.** A stair core stands at the same place on every floor laid out. It goes where the stairs of floors kept come up, or where a stairwell already is, else the middle. Stairs in it rise to the floor above.
+- **Traversal style.** A step-free structure also gets a lift through every floor. A ladders structure gets ladders instead of stairs.
+- **Ways in.** The ground floor gets its ways in on outside walls: a corridor first, the south side first.
+- **Roof.** The roof is laid out as open roof areas round the stair house.
+- **Density.** Density leaves part of each floor unplanned. At 100%, rooms grow to close the gaps between them, so neighbours share walls to put doors in.
+
+**Path-first** builds round the route drawn on each floor. Draw it with
+**Draw the route**, which switches to the Route tool for a **Progression
+path**: click the way in, then each chamber along the way. Then:
+
+- **Chambers.** Each point of the route gets a chamber. The first is the entrance (Entrance Hall in a pyramid), the last the final chamber (Relic Chamber).
+- **Passages.** Passages join the chambers in route order: across, then along.
+- **Dead ends and secret branches.** These go off chambers along the way. A secret branch is behind a door named **Secret door** and tagged `secret`. For now that is all a secret door is; MVP 3 gives it its rules.
+- **The way in.** It is through the first chamber. A passage is cut out to the nearest outside wall if the chamber doesn't reach one.
+- **Between floors.** Where a chamber stands over a chamber on the next floor, a shaft with a ladder joins them.
+- **Floors without a route.** These are left empty, and the generator says so.
+- **Filling the rest.** **Fill the rest with rooms** fills the rest of each floor too.
+
+**Preview, Accept, Regenerate, Reject.** A layout is a preview first. The map,
+the 3D graybox and the structure graph show it, and editing waits.
+
+- **Accept** keeps it in one undo step, records the run and makes its seed the structure's.
+- **Regenerate** tries a new seed, unless **Keep the seed** is ticked.
+- **Reject** drops it.
+
+The same seed, settings and generator version always give the same layout.
+
+**Your work stays (spec §3, §6).** A layout replaces only what an earlier
+layout made and nobody has changed since. These are kept, and listed with
+the reason:
+
+- rooms and anything else placed by hand;
+- locked items;
+- generated items edited since: moved, resized, renamed, a door's settings changed;
+- generated rooms holding something placed by hand.
+
+New rooms are laid out round what is kept and joined to it by doors.
+
+**Reported, never left broken.** The generator says what it couldn't do, for
+example:
+
+- a footprint too small for its rooms;
+- a route point outside the footprint;
+- no place for a stair core on every floor;
+- floors whose chambers don't line up.
+
+Anything it made that couldn't be reached is taken out again, not left disconnected.
+
+**The record (spec §13 GenerationRun).** Each accepted layout is kept on the
+structure, the last 20, with:
+
+- its seed, its settings and the generator's version;
+- the floors and area it laid out;
+- what it kept;
+- what it made, with a fingerprint of each item as made. An item that no longer matches its fingerprint has been changed by you.
+
+Each generated item carries its run's id (`generated`).
 
 ## Floors (spec §8)
 
@@ -134,7 +221,7 @@ With nothing selected, the inspector's **Structure** section has:
 - how its floors are reached;
 - the scene it plays as;
 - tags and author;
-- the generator's seed, used from MVP 2: the same seed gives the same layout.
+- the generator's seed: the same seed gives the same layout.
 
 A plain building map can be made a structure from here.
 
@@ -145,10 +232,11 @@ A plain building map can be made a structure from here.
   - floor kinds and codes, basements and the roof;
   - `createStructure`;
   - the structure graph (`structureGraph`) and validation (`structureIssues`).
+- `apps/studio/src/renderer/model/level/generate.ts` holds the generator: `proposeLayout`, `acceptLayout`, the rule presets and each structure type's room names.
 - Changes elsewhere:
   - `Level.structure` and `Floor.kind` are in `model/level/types.ts`;
   - the footprint asset is in `model/level/library.ts`;
   - `syncBuildings` (in `model/level/hierarchy.ts`) leaves basements and the roof out of a mass's count;
   - preflight takes the structure's issues (`model/level/validate.ts`).
-- The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph) and `StructureSection.tsx` (the inspector).
-- Tests: `model/__tests__/structure.test.ts` and `__tests__/structure-creator.test.tsx`.
+- The UI is in `apps/studio/src/renderer/components/level/`: `NewStructureDialog.tsx`, `StructurePanel.tsx` (the graph), `GeneratePanel.tsx` (the generator) and `StructureSection.tsx` (the inspector).
+- Tests: `model/__tests__/structure.test.ts`, `model/__tests__/structure-generate.test.ts` and `__tests__/structure-creator.test.tsx`.
