@@ -45,9 +45,9 @@ The window takes the studio's look and theme. Shortcuts pressed in any of these 
 In the desktop app:
 
 - only these panel windows may open (any other link still goes to your browser);
-- each window comes back where you last put it.
+- each window, the map's included, comes back where you last put it and at the size you left it.
 
-In a browser, allow pop-ups for the studio; if a window is blocked, the studio says so and the panel stays where it was.
+In a browser, each window (the map's too) also reopens where you last put it and at its last size, remembered on this computer. Allow pop-ups for the studio; if a window is blocked, the studio says so and the panel stays where it was.
 
 **Dragging between windows.** Drag an asset from the library, or a prefab from Prefabs, onto the 2D map or the 3D graybox in any window, and it is placed where you drop it. It works from the library window onto the map window on another screen, and the other way round. This uses the system's own drag and drop, so the dragged tile follows the pointer across the screens. Clicking an asset and then clicking on the map still works too. Anything else dropped on the map (a file, a link) is ignored.
 

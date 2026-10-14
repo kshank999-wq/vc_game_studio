@@ -16,9 +16,11 @@ export const PopOut = ({ id, title, width = 420, height = 760, className, onClos
   const told = useRef(onWindow);
   told.current = onWindow;
   useEffect(() => {
-    const left = Math.max(0, (window.screenX ?? 0) + (window.outerWidth ?? 1200) - width - 40);
-    const top = Math.max(0, (window.screenY ?? 0) + 60);
-    const w = window.open('', `vcgs-panel-${id}`, `popup=yes,width=${width},height=${height},left=${left},top=${top}`);
+    // Where it was last time (the desktop app also keeps this itself); else beside this window.
+    const last = readPlace(id);
+    const left = last?.x ?? Math.max(0, (window.screenX ?? 0) + (window.outerWidth ?? 1200) - width - 40);
+    const top = last?.y ?? Math.max(0, (window.screenY ?? 0) + 60);
+    const w = window.open('', `vcgs-panel-${id}`, `popup=yes,width=${last?.w ?? width},height=${last?.h ?? height},left=${left},top=${top}`);
     if (!w) {
       onBlocked?.();
       closing.current();
@@ -97,13 +99,33 @@ export const PopOut = ({ id, title, width = 420, height = 760, className, onClos
     // Closed over there: back in here.
     const gone = () => closing.current();
     w.addEventListener('pagehide', gone);
-    const poll = window.setInterval(() => w.closed && gone(), 500);
+    // Moved or resized: remembered for next time (windows say nothing when moved, so look now and then).
+    let was = '';
+    const note = () => {
+      if (w.closed) return;
+      const place = { x: w.screenX, y: w.screenY, w: w.outerWidth, h: w.outerHeight };
+      if (!place.w || !place.h) return;
+      const key = JSON.stringify(place);
+      if (key !== was) {
+        was = key;
+        writePlace(id, place);
+      }
+    };
+    const poll = window.setInterval(() => {
+      if (w.closed) gone();
+      else note();
+    }, 500);
+    w.addEventListener('resize', note);
+    w.addEventListener('beforeunload', note);
     const leave = () => w.close();
     window.addEventListener('pagehide', leave);
     return () => {
       told.current?.(null);
+      note();
       w.removeEventListener('keydown', forward);
       w.removeEventListener('keyup', forward);
+      w.removeEventListener('resize', note);
+      w.removeEventListener('beforeunload', note);
       window.clearInterval(poll);
       headWatch.disconnect();
       themeWatch.disconnect();
@@ -115,4 +137,32 @@ export const PopOut = ({ id, title, width = 420, height = 760, className, onClos
     // The window is made once per pop-out.
   }, []);
   return host ? createPortal(children, host) : null;
+};
+
+/** Where a pop-out window was (screen pixels), kept on this computer. */
+interface Place {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const PLACE_KEY = (id: string) => `vcgs.popout.${id}`;
+
+export const readPlace = (id: string): Place | null => {
+  try {
+    const p = JSON.parse(localStorage.getItem(PLACE_KEY(id)) ?? 'null') as Place | null;
+    // Only a sensible size; a monitor since unplugged still gives a size the window can open at.
+    return p && [p.x, p.y, p.w, p.h].every((n) => Number.isFinite(n)) && p.w >= 200 && p.h >= 150 ? p : null;
+  } catch {
+    return null;
+  }
+};
+
+const writePlace = (id: string, p: Place) => {
+  try {
+    localStorage.setItem(PLACE_KEY(id), JSON.stringify(p));
+  } catch {
+    // Storage full or off: it opens beside the main window next time.
+  }
 };

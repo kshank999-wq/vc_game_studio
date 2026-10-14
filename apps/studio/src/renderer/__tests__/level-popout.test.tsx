@@ -116,5 +116,32 @@ describe('Levels panels in windows of their own', () => {
     // Anything else (a link, a file) isn't taken.
     expect(fireEvent.dragOver(view, { clientX: 0, clientY: 0, dataTransfer: carrying('text/uri-list', 'https://example.com') })).toBe(true);
   });
+
+  it('remembers where the map window was: it opens there next time', async () => {
+    const features: string[] = [];
+    const wins: Window[] = [];
+    vi.spyOn(window, 'open').mockImplementation((_u, _n, f) => {
+      features.push(String(f));
+      const fr = document.createElement('iframe');
+      document.body.appendChild(fr);
+      wins.push(fr.contentWindow!);
+      return fr.contentWindow;
+    });
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
+    await opened();
+    fireEvent.click(screen.getByRole('button', { name: 'Open the map in its own window' }));
+    await waitFor(() => expect(wins).toHaveLength(1));
+    // Moved to the second screen and made bigger.
+    for (const [k, v] of Object.entries({ screenX: 1920, screenY: 40, outerWidth: 1500, outerHeight: 900 })) Object.defineProperty(wins[0]!, k, { value: v, configurable: true });
+    await waitFor(() => expect(JSON.parse(localStorage.getItem('vcgs.popout.view') ?? 'null')).toEqual({ x: 1920, y: 40, w: 1500, h: 900 }), { timeout: 2000 });
+    fireEvent.click(within(wins[0]!.document.body).getByRole('button', { name: 'Put it back' }));
+    await waitFor(() => expect(document.querySelector('.lvl-view')).not.toBeNull());
+    // Out again: where it was.
+    fireEvent.click(screen.getByRole('button', { name: 'Open the map in its own window' }));
+    await waitFor(() => expect(features).toHaveLength(2));
+    expect(features[1]).toBe('popup=yes,width=1500,height=900,left=1920,top=40');
+  });
 });
 
