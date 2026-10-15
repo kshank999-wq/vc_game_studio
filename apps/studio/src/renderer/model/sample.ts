@@ -244,6 +244,18 @@ export const sunkenVault = (): Project => {
   p = setValue(p, design.mechanic!, 'byEffect', true);
   const lit = addEvent(p, caveMouth, 'action', { label: 'Light the lantern' })!;
   p = updateEvent(lit.project, caveMouth, lit.id, { effects: [{ kind: 'enableMechanic', ref: design.mechanic! }] });
+  // At the cave mouth, once the lantern is lit: Mara won't go first (her lines play when she's talked to in the level).
+  let atMouth: string | undefined;
+  for (const [kind, speaker, text, direction] of [
+    ['action', null, 'Rain hammers the rocks. Cold air breathes out of the dark.', ''],
+    ['dialogue', mara, 'Lit. You go first.', 'holding out the lantern'],
+    ['dialogue', explorer, 'It’s only water.', ''],
+    ['dialogue', mara, 'It’s never only water.', ''],
+  ] as const) {
+    const line = addLine(p, caveMouth, kind, atMouth, speaker);
+    p = updateLine(line.project, line.id, { text, direction });
+    atMouth = line.id;
+  }
   // Finding the key starts the quest, and its seal tells the Order's story (else the vault door does).
   p = setValue(p, design.quest!, 'byEffect', true);
   p = setValue(p, design.lore!, 'rule', { match: 'all', items: [{ kind: 'visited', ref: vaultDoor, op: 'visited' }] });

@@ -15,7 +15,8 @@ describe('expected paths in the preview', () => {
     const p = sunkenVault();
     let committed: Project | null = null;
     const { rerender } = render(<PlayView project={p} onNavigate={() => {}} onCommit={(next) => (committed = next)} />);
-    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    // On to the first choice (Mara's lines at the cave mouth come first).
+    for (let i = 0; i < 10 && !document.querySelector('.play-option:not(:disabled)'); i++) fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Paths' }));
     const panel = screen.getByRole('dialog', { name: 'Expected paths' });
     expect(within(panel).getByLabelText('Paths checked').textContent).toBe('All 2 paths still go their way.');

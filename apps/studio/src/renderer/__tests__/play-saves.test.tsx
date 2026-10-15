@@ -18,7 +18,8 @@ describe('saved games in the preview', () => {
   it('saves in a slot, and loading carries on from there; Step back undoes a load', () => {
     const p = sunkenVault();
     render(<PlayView project={p} onNavigate={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    // On to the first choice (Mara's lines at the cave mouth come first).
+    for (let i = 0; i < 10 && !document.querySelector('.play-option:not(:disabled)'); i++) fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
     fireEvent.click(document.querySelector('.play-option:not(:disabled)')!);
     const saved = lines();
     fireEvent.click(screen.getByRole('button', { name: 'Saves' }));

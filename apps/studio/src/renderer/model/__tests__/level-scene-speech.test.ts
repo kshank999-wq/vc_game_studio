@@ -47,4 +47,15 @@ describe('a scene in the 3D Play Mode', () => {
     const again = interactWith(project, startLevelPlay(project, levelId), npc);
     expect(skipScene(again).scene).toBeUndefined();
   });
+
+  it('in the sample, Mara at the cave mouth says The Cave Mouth, and still tops up the lantern', () => {
+    const project = sunkenVault();
+    const levelId = project.levels!.levels[0]!.id;
+    const mara = project.levels!.items.find((i) => i.name === 'Mara')!;
+    const s = interactWith(project, startLevelPlay(project, levelId), mara.id);
+    expect(s.scene?.title).toBe('SC-01 The Cave Mouth');
+    expect(s.scene?.speech?.map((b) => b.map((v) => `${v.speaker}: ${v.text}`))).toEqual([['Mara: Lit. You go first.'], ['The Explorer: It’s only water.'], ['Mara: It’s never only water.']]);
+    expect(s.message?.text).toBe('Your light is full again.');
+  });
 });
+

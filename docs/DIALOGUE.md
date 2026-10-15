@@ -141,6 +141,9 @@ after the last, carries on. **▶ Again** replays the line, **Skip the scene**
 leaves it, and **🔊 Voices** turns the takes off (the same setting as the
 play-through's). Lines on a choice's branch play in the story's play-through,
 where the choice is made.
+In the sample, Mara at the cave mouth is linked to **SC-01 The Cave Mouth**:
+talk to her in the level's Play Mode and she says its three lines (and tops
+up your lantern).
 
 The audio is kept on this computer, in the app's own storage; the project
 file keeps which take each line has (its name, size and length). Open the

@@ -21,7 +21,7 @@ describe('Bible filters', () => {
     const characters = applyFilters(p, viewGroups(p, 'characters'), [{ kind: 'vo', value: 'has' }], issues);
     expect(names(characters).sort()).toEqual(['Mara', 'The Explorer']);
     const todo = applyFilters(p, viewGroups(p, 'dialogue'), [{ kind: 'vo', value: 'todo' }], issues);
-    expect(names(todo).length).toBe(3);
+    expect(names(todo).length).toBe(6);
     expect(applyFilters(p, viewGroups(p, 'dialogue'), [{ kind: 'vo', value: 'recorded' }], issues)).toEqual([]);
   });
 
@@ -53,6 +53,6 @@ describe('Bible filters', () => {
     expect(byScene.map((g) => g.label)).toEqual(expect.arrayContaining(['SC-03 The Vault Door']));
     expect(regroup(p, characters, 'none', issues)).toHaveLength(1);
     expect(groupChoices(characters.flatMap((g) => g.entries))).toContain('role');
-    expect(scenesIn(p, viewGroups(p, 'dialogue').flatMap((g) => g.entries)).map((s) => s.name)).toEqual(['The Vault Door']);
+    expect(scenesIn(p, viewGroups(p, 'dialogue').flatMap((g) => g.entries)).map((s) => s.name)).toEqual(['The Cave Mouth', 'The Vault Door']);
   });
 });
