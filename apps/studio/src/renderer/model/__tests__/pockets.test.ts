@@ -8,7 +8,7 @@ import { levelIssues } from '../level/validate';
 import { createProject } from '../project';
 import type { LayoutRules } from '../level/types';
 
-const office = (hall: boolean) => {
+const office = (hall: boolean | 'inside') => {
   const base = addLevel(createProject('Test'), 'City');
   const lv = levelsOf(base.project).levels[0]!;
   const made = createStructure(base.project, { parentId: lv.id, floorId: lv.floors[0]!.id, at: { x: 0, y: 0 }, type: 'office', seed: 5 });
@@ -16,7 +16,9 @@ const office = (hall: boolean) => {
   const ground = groundFloorOf(level)!;
   const s = levelsOf(made.project);
   const f = frameOf(s, s.items.find((i) => i.levelId === made.id && i.floorId === ground.id && assetOf(s, i).role === 'footprint')!);
-  const p = hall ? addHallway(made.project, made.id, ground.id, [{ x: f.x - f.w / 2 + 4, y: f.y }, { x: f.x + f.w / 4, y: f.y }, { x: f.x + f.w / 4, y: f.y + f.d / 2 }], 2.4384).project : made.project;
+  // An L to the outside wall, or (inside) one that stops well short of every wall.
+  const line = hall === 'inside' ? [{ x: f.x - f.w / 4, y: f.y - 2 }, { x: f.x + f.w / 4, y: f.y - 2 }, { x: f.x + f.w / 4, y: f.y + 3 }] : [{ x: f.x - f.w / 2 + 4, y: f.y }, { x: f.x + f.w / 4, y: f.y }, { x: f.x + f.w / 4, y: f.y + f.d / 2 }];
+  const p = hall ? addHallway(made.project, made.id, ground.id, line, 2.4384).project : made.project;
   return { p, id: made.id, ground: ground.id, f };
 };
 
@@ -74,6 +76,37 @@ describe('doors open onto the hallway first', () => {
         const i = halls.length + k;
         if (Number.isFinite(byWall[i]!)) expect(byDoor[i], `seed ${seed}: ${r.name}`).toBe(byWall[i]);
       });
+    }
+  });
+});
+
+describe('a way out from the hallway', () => {
+  it('keeps the way in drawn at the hallway’s end, making no second one', () => {
+    const { p, id, ground } = office(true);
+    for (let seed = 1; seed <= 6; seed++) {
+      const pr = proposeLayout(p, { levelId: id, floorIds: [ground], seed, settings: { ...defaultGenerator('office'), rules: 'hallways', theme: 'none', entrances: 1 }, noCore: true });
+      const s = levelsOf(acceptLayout(pr));
+      expect(s.items.filter((i) => i.levelId === id && i.floorId === ground && i.name === 'Way in'), `seed ${seed}`).toHaveLength(1);
+    }
+  });
+
+  it('cuts a passage out to the outside wall from a hallway that stops short of it, and puts the way in there', () => {
+    const { p, id, ground, f } = office('inside');
+    expect(levelsOf(p).items.some((i) => i.name === 'Way in')).toBe(false);
+    for (let seed = 1; seed <= 12; seed++) {
+      const pr = proposeLayout(p, { levelId: id, floorIds: [ground], seed, settings: { ...defaultGenerator('office'), rules: 'hallways', theme: 'none', entrances: 1 }, noCore: true });
+      const s = levelsOf(acceptLayout(pr));
+      const passages = s.items.filter((i) => pr.made.includes(i.id) && i.assetId === 'space.corridor');
+      expect(passages, `seed ${seed}`).toHaveLength(1);
+      const way = s.items.filter((i) => pr.made.includes(i.id) && i.name === 'Way in');
+      expect(way, `seed ${seed}`).toHaveLength(1);
+      const at = frameOf(s, way[0]!);
+      // On the outside wall, at the passage's end.
+      const P = frameOf(s, passages[0]!);
+      expect(contains(P, at), `seed ${seed}`).toBe(true);
+      const edge = Math.min(Math.abs(at.x - (f.x - f.w / 2)), Math.abs(at.x - (f.x + f.w / 2)), Math.abs(at.y - (f.y - f.d / 2)), Math.abs(at.y - (f.y + f.d / 2)));
+      expect(edge, `seed ${seed}`).toBeLessThan(0.01);
+      expect(levelIssues(acceptLayout(pr)).filter((v) => v.levelId === id && v.severity === 'error').map((v) => v.message), `seed ${seed}`).toEqual([]);
     }
   });
 });

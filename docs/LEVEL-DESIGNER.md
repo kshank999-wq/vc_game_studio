@@ -102,7 +102,7 @@ later.
 
 **Hallways.**
 - **Hallway** (H) asks how wide: **4 ft**, **8 ft**, or any width in the map's units (remembered for next time). Then click along where it runs: each run goes straight along or across the map, Enter or a double-click finishes it, Backspace takes back a point, Esc drops it. The width beside the tools changes it.
-- Each straight run is a corridor space; at a turn the earlier run takes the corner and an opening joins them. They are ordinary spaces: move, resize or delete them like any other.
+- Each straight run is a corridor space; at a turn the earlier run takes the corner and an opening joins them. An end drawn up to the building's outside wall gets a **Way in** door there. They are ordinary spaces: move, resize or delete them like any other.
 - In a structure, **Fill with rooms** then lays the floor out round the hallways (the generator's **Around the hallways** rules), as a preview to accept, regenerate or reject.
 
 **Spaces and volumes of any shape (spec §3.1).**

@@ -1,5 +1,5 @@
 import type { Project } from '../types';
-import type { Point } from './geometry';
+import { assetOf, contains, corners, frameOf, type Point } from './geometry';
 import { levelsOf, placeAsset, withSet } from './level';
 import type { AssetDefinition, LevelItem } from './types';
 
@@ -99,6 +99,29 @@ export const addHallway = (project: Project, levelId: string, floorId: string, p
     set(id, { x: r.x, y: r.y, size: { ...item.size, w: r.w, d: r.d, ...(floor?.height ? { h: floor.height } : {}) } });
     ids.push(id);
   });
+  // An end drawn up to the building's outside wall: a way in there.
+  const line = squaredLine(points);
+  const s0 = levelsOf(next);
+  const footprints = s0.items.filter((i) => i.levelId === levelId && i.floorId === floorId && assetOf(s0, i, global).role === 'footprint').map((i) => frameOf(s0, i, global));
+  const outerEnd = (end: Point, from: Point) => {
+    const len = Math.hypot(end.x - from.x, end.y - from.y) || 1;
+    const dir = { x: (end.x - from.x) / len, y: (end.y - from.y) / len };
+    // Inside just short of it, outside just past it: it runs into the wall.
+    return footprints.some((f) => contains(f, { x: end.x - dir.x * 0.3, y: end.y - dir.y * 0.3 }) && !contains(f, { x: end.x + dir.x * 0.3, y: end.y + dir.y * 0.3 }) && nearEdge(f, end));
+  };
+  const doorsOut: Point[] = [];
+  if (line.length >= 2) {
+    if (outerEnd(line[line.length - 1]!, line[line.length - 2]!)) doorsOut.push(line[line.length - 1]!);
+    if (outerEnd(line[0]!, line[1]!)) doorsOut.push(line[0]!);
+  }
+  for (const at of doorsOut) {
+    const placed = placeAsset(next, levelId, floorId, 'arch.door', at, { global, name: 'Way in' });
+    const id = placed.ids[0];
+    if (!id) continue;
+    next = placed.project;
+    set(id, { x: at.x, y: at.y });
+    ids.push(id);
+  }
   // Where runs meet: an opening as wide as the hallway allows.
   const wide = Math.max(0.9, Math.min(3, width - 0.4));
   for (const j of joints) {
@@ -111,4 +134,16 @@ export const addHallway = (project: Project, levelId: string, floorId: string, p
     ids.push(id);
   }
   return { project: next, ids };
+};
+
+/** Whether a point is on (within a few centimetres of) a frame's edge. */
+const nearEdge = (f: ReturnType<typeof frameOf>, p: Point, within = 0.35): boolean => {
+  const pts = f.outline ? f.outline.map((q) => ({ x: f.x + q.x, y: f.y + q.y })) : corners(f);
+  return pts.some((a, i) => {
+    const b = pts[(i + 1) % pts.length]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(a.x + dx * t - p.x, a.y + dy * t - p.y) <= within;
+  });
 };

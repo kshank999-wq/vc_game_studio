@@ -39,7 +39,13 @@ describe('hallways drawn as a line', () => {
     const halls = set.items.filter((i) => hall.ids.includes(i.id) && i.assetId === 'space.corridor');
     expect(halls).toHaveLength(2);
     expect(frameOf(set, halls[0]!).d).toBeCloseTo(2.4384, 5);
-    const opening = set.items.find((i) => hall.ids.includes(i.id) && i.assetId === 'arch.door')!;
+    const opening = set.items.find((i) => hall.ids.includes(i.id) && i.assetId === 'arch.door' && i.name === 'Opening')!;
+    // Drawn up to the outside wall: a way in at that end, in a wall.
+    const wayIn = set.items.filter((i) => hall.ids.includes(i.id) && i.name === 'Way in');
+    expect(wayIn).toHaveLength(1);
+    expect(wayIn[0]!.host).toBeTruthy();
+    expect(wayIn[0]!.invalid).toBeUndefined();
+    expect(frameOf(set, wayIn[0]!).y).toBeCloseTo(f.y + f.d / 2, 5);
     expect(opening.host).toBeTruthy();
     expect(opening.params?.swing).toBe('open archway');
 

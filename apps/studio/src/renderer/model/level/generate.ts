@@ -733,7 +733,7 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
       // Path-first lays out only the floors with a route: a pyramid is mostly solid.
       problems.push(`${floor.name} has no route drawn, so nothing was laid out there. Draw a Progression path on it, or lay it out plan-first.`);
     } else {
-      layPlan(g, box, els, s.rules, rand, N, minC, maxC, cw, roomName, plan.core, s.density);
+      layPlan(g, box, els, s.rules, rand, N, minC, maxC, cw, roomName, plan.core, s.density, isGround && !areaPoly ? { ...(level.structure?.entrance ? { near: level.structure.entrance } : {}) } : undefined);
     }
     // Rooms grow into the gaps beside them (a full floor), so they share walls to put doors in.
     const pathFloor = s.mode === 'path' && routes(floor).length > 0;
@@ -745,7 +745,15 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     if (isGround && !isRoof && !areaPoly) {
       // Path-first: the way in is the route's first chamber, by a passage out to the edge if it is inside.
       if (pathFloor) entranceFromRoute(plan, cw, N.corridor, doorMin, problems);
-      else entrancesFor(plan, s.entrances, doorMin, problems, level.structure?.entrance, s.rules === 'hallways');
+      else {
+        // Ways in already there, kept (one the Hallway tool put at a hallway's end, or placed by hand): fewer to make.
+        const fp = footprintOf(set, level, floor.id, global);
+        const ins = fp ? set.items.filter((i) => i.levelId === level.id && i.floorId === floor.id && !removable.has(i.id) && assetOf(set, i, global).role === 'door' && (() => {
+          const at = frameOf(set, i, global);
+          return onBoundary(at, fp);
+        })()).length : 0;
+        if (s.entrances - ins > 0) entrancesFor(plan, s.entrances - ins, doorMin, problems, level.structure?.entrance, s.rules === 'hallways');
+      }
     }
     plans.push(plan);
   }
@@ -1001,12 +1009,17 @@ export const acceptLayout = (proposal: Proposal, now = new Date().toISOString())
 
 // ---------------------------------------------------------------- plan-first (spec §6)
 
-const layPlan = (g: Grid, box: Rect, els: Element[], rules: LayoutRules, rand: () => number, N: (typeof NAMES)[StructureType], minC: number, maxC: number, cw: number, roomName: () => string, core: Rect | undefined, density: number) => {
+const layPlan = (g: Grid, box: Rect, els: Element[], rules: LayoutRules, rand: () => number, N: (typeof NAMES)[StructureType], minC: number, maxC: number, cw: number, roomName: () => string, core: Rect | undefined, density: number, wayOut?: { near?: Point }) => {
   const horizontal = box.w >= box.h;
   const corridor = (R: Rect) => {
     mark(g, R);
     els.push({ rect: R, kind: 'corridor', name: N.corridor });
   };
+  // Around the hallways, on the floor with the way in: the hallways reach the outside, by a passage if they don't already.
+  if (rules === 'hallways' && wayOut) {
+    const out = passageOut(g, els, cw, wayOut.near);
+    if (out) corridor(out);
+  }
   if (rules === 'linear' || rules === 'branching') {
     // The spine: along the long way, past the core (or through the middle).
     let fixed: number;
@@ -1043,6 +1056,71 @@ const layPlan = (g: Grid, box: Rect, els: Element[], rules: LayoutRules, rand: (
   }
   const big = rules === 'openPlan';
   for (const e of fillRooms(g, box, rand, big ? Math.max(minC, Math.round(maxC / 2)) : minC, big ? maxC * 2 : maxC, 'room', roomName, density)) els.push(e);
+};
+
+/** On an outline's edge (within 5 cm). */
+const onBoundary = (p: Point, poly: readonly Point[]) =>
+  poly.some((a, i) => {
+    const b = poly[(i + 1) % poly.length]!;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1)));
+    return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y))) <= 0.05;
+  });
+
+/**
+ * A passage from a hallway drawn by hand out to the floor's outside wall,
+ * when none reaches it: straight out of a hallway's side, as wide as a
+ * corridor, the shortest one there is (or the one coming out nearest the way
+ * in the designer set). Null when a hallway already reaches the outside, or
+ * no passage fits.
+ */
+const passageOut = (g: Grid, els: Element[], cw: number, near?: Point): Rect | null => {
+  const halls = els.filter((e) => e.hall);
+  if (!halls.length) return null;
+  const outside = (c: number, r: number) => !isInside(g, c, r);
+  // Already out: a hallway side with a door's width of outside along it.
+  const reaches = (R: Rect) => {
+    const runs = [
+      Array.from({ length: R.w }, (_, k) => outside(R.c + k, R.r - 1)),
+      Array.from({ length: R.w }, (_, k) => outside(R.c + k, R.r + R.h)),
+      Array.from({ length: R.h }, (_, k) => outside(R.c - 1, R.r + k)),
+      Array.from({ length: R.h }, (_, k) => outside(R.c + R.w, R.r + k)),
+    ];
+    return runs.some((run) => {
+      let n = 0;
+      for (const o of run) if ((n = o ? n + 1 : 0) >= 2) return true;
+      return false;
+    });
+  };
+  if (halls.some((h) => reaches(h.rect))) return null;
+  const width = Math.max(2, cw);
+  const want = near ? cellOf(g, near) : null;
+  let best: { R: Rect; score: number } | null = null;
+  for (const h of halls) {
+    const R = h.rect;
+    const along = (lo: number, len: number) => {
+      // The middle of the side, and either way along it, so a passage fits past what is in the way.
+      const mid = lo + Math.floor((len - width) / 2);
+      return [...new Set([mid, lo, lo + len - width])].filter((k) => k >= lo && k + width <= lo + len);
+    };
+    const tries: { horizontal: boolean; fixed: number; from: number; step: 1 | -1 }[] = [
+      ...along(R.c, R.w).flatMap((c) => [{ horizontal: false, fixed: c, from: R.r - 1, step: -1 as const }, { horizontal: false, fixed: c, from: R.r + R.h, step: 1 as const }]),
+      ...along(R.r, R.h).flatMap((r) => [{ horizontal: true, fixed: r, from: R.c - 1, step: -1 as const }, { horizontal: true, fixed: r, from: R.c + R.w, step: 1 as const }]),
+    ];
+    for (const t of tries) {
+      const b = bandFrom(g, t.horizontal, t.fixed, width, t.from, t.step, 999);
+      if (!b) continue;
+      // It must come out at the outside wall, not stop at something kept.
+      const endC = t.horizontal ? (t.step > 0 ? b.c + b.w : b.c - 1) : b.c;
+      const endR = t.horizontal ? b.r : t.step > 0 ? b.r + b.h : b.r - 1;
+      const ok = Array.from({ length: width }, (_, k) => (t.horizontal ? outside(endC, endR + k) : outside(endC + k, endR))).every(Boolean);
+      if (!ok) continue;
+      const len = t.horizontal ? b.w : b.h;
+      const mid = { c: b.c + b.w / 2, r: b.r + b.h / 2 };
+      const score = want ? Math.hypot(mid.c - want.c, mid.r - want.r) : len;
+      if (!best || score < best.score) best = { R: b, score };
+    }
+  }
+  return best?.R ?? null;
 };
 
 // ---------------------------------------------------------------- path-first (spec §6)
@@ -1321,12 +1399,13 @@ const entrancesFor = (plan: FloorPlan, count: number, doorMin: number, problems:
   });
   const used = new Set<number>();
   options.sort((a, b) => a.rank - b.rank || b.y - a.y);
-  // The one the designer set goes first: the outside wall nearest it.
+  // The one the designer set goes first: the outside wall nearest it (around the hallways, of a hallway or its passage out, if there is one).
   if (near && options.length) {
-    const first = options.reduce((m, o) => (o.d < m.d ? o : m));
+    const pool = halls && options.some((o) => o.rank === 0) ? options.filter((o) => o.rank === 0) : options;
+    const first = pool.reduce((m, o) => (o.d < m.d ? o : m));
     options.splice(options.indexOf(first), 1);
     options.unshift(first);
-    if (first.d > 3) problems.push(`The way in couldn’t go exactly where you set it: it is ${first.d.toFixed(1)} m away, on the nearest outside wall of a room.`);
+    if (first.d > 3) problems.push(pool !== options ? `The way in is on the hallway, ${first.d.toFixed(1)} m from where you set it: its outside wall nearest there.` : `The way in couldn’t go exactly where you set it: it is ${first.d.toFixed(1)} m away, on the nearest outside wall of a room.`);
   }
   for (const o of options) {
     if (plan.entrances.length >= count) break;
