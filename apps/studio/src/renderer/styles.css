@@ -13659,3 +13659,27 @@ button.bible-dual-col:hover {
     justify-content: flex-start;
   }
 }
+
+/* ------------------------------------------------------------ play-through voices */
+.play-heard {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px;
+}
+.play-replay {
+  opacity: 0.55;
+  margin-top: 2px;
+}
+.play-heard:hover .play-replay,
+.play-replay:focus-visible {
+  opacity: 1;
+}
+.play-line.speaking .play-said {
+  color: var(--text);
+  text-shadow: 0 0 12px rgba(255, 220, 140, 0.25);
+}
+.play-speaking {
+  font-size: 0.85em;
+}

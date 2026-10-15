@@ -126,6 +126,13 @@ When the audio comes back, upload it and the line is marked **recorded**.
 - **Download takes (.zip)** gives every take named for its line as the
   engines play it, under `audio/vo/` — drop the folder into your game.
 
+**In the play-through** the takes play as their lines come up: one after
+another when a step brings several, both voices together for dual dialogue,
+cut off when you go on (as a game does when the player skips). The line
+speaking is marked 🔊; ▶ beside a line plays it again. **🔊 Voices** in the
+play-through's bar turns them off (remembered). Lines without a take are
+read, not heard.
+
 The audio is kept on this computer, in the app's own storage; the project
 file keeps which take each line has (its name, size and length). Open the
 project on another computer and the lines still read *recorded*, with

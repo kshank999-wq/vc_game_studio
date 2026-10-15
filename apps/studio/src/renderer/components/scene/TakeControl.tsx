@@ -72,10 +72,15 @@ export const TakeControl = ({ project, lineId, onCommit, compact = false }: { pr
     playing = { audio, url, stop: () => setIsPlaying(false) };
     audio.onended = () => stopPlaying();
     setIsPlaying(true);
-    audio.play().catch(() => {
+    const refused = () => {
       stopPlaying();
       setError('This browser can’t play that file.');
-    });
+    };
+    try {
+      void audio.play()?.catch(refused);
+    } catch {
+      refused();
+    }
   };
 
   const who = line.text.trim().slice(0, 40) || 'this line';

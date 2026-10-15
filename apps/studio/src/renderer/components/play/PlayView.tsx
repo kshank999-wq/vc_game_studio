@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTakesPlayer } from './takes-player';
 import type { Destination } from '../../model/details';
 import { interactionsOf, statesOf, varTypeOf } from '../../model/details';
 import { fromNumber, toNumber } from '../../model/rules';
@@ -26,18 +27,31 @@ interface Props {
 
 const isTyping = (target: EventTarget | null) => target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 
-const VoiceView = ({ voice }: { voice: Voice }) => (
-  <div className="play-line">
+const VoiceView = ({ voice, speaking }: { voice: Voice; speaking?: boolean }) => (
+  <div className={`play-line${speaking ? ' speaking' : ''}`}>
     <div className="play-speaker">
       {voice.speaker?.toUpperCase() ?? 'NO SPEAKER'}
       {voice.from && <span className="play-vo">{voice.from === voice.speaker ? ' (V.O.)' : ` (V.O., ${voice.from.toUpperCase()})`}</span>}
+      {speaking && (
+        <span className="play-speaking" aria-label="Speaking">
+          {' '}
+          🔊
+        </span>
+      )}
     </div>
     {voice.direction && <div className="play-direction">({voice.direction})</div>}
     <div className="play-said">{voice.text ? <Inline text={voice.text} /> : '…'}</div>
   </div>
 );
 
-const EntryView = ({ entry }: { entry: Entry }) => {
+/** How a line plays aloud: what is speaking now, and hearing a line again. */
+interface Voices {
+  speaking: ReadonlySet<string>;
+  hasTake: (lineId: string) => boolean;
+  replay: (entry: Entry) => void;
+}
+
+const EntryView = ({ entry, voices }: { entry: Entry; voices?: Voices }) => {
   switch (entry.kind) {
     case 'heading':
       return (
@@ -46,16 +60,28 @@ const EntryView = ({ entry }: { entry: Entry }) => {
           {entry.sub && <div className="play-sub">{entry.sub}</div>}
         </div>
       );
-    case 'line':
+    case 'line': {
+      const heard = voices && (voices.hasTake(entry.lineId) || (entry.with && voices.hasTake(entry.with.lineId)));
       // Dual dialogue: both voices at once, side by side as the script sets them.
-      return entry.with ? (
+      const said = entry.with ? (
         <div className="play-dual" role="group" aria-label="Spoken at the same time">
-          <VoiceView voice={entry} />
-          <VoiceView voice={entry.with} />
+          <VoiceView voice={entry} speaking={voices?.speaking.has(entry.lineId)} />
+          <VoiceView voice={entry.with} speaking={voices?.speaking.has(entry.with.lineId)} />
         </div>
       ) : (
-        <VoiceView voice={entry} />
+        <VoiceView voice={entry} speaking={voices?.speaking.has(entry.lineId)} />
       );
+      return heard ? (
+        <div className="play-heard">
+          {said}
+          <button type="button" className="icon-btn small play-replay" aria-label={`Hear “${entry.text.slice(0, 40)}” again`} title="Play the recorded take again" onClick={() => voices!.replay(entry)}>
+            ▶
+          </button>
+        </div>
+      ) : (
+        said
+      );
+    }
     case 'action':
       return (
         <div className="play-action">
@@ -957,6 +983,9 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
   /** A screen puzzle up in free play (puzzle spec §8): solved, its interaction is used. */
   const [onScreen, setOnScreen] = useState<{ objectId: string; interactionId: string } | null>(null);
   const transcript = useRef<HTMLDivElement>(null);
+  const voices = useTakesPlayer(project, play.log);
+  const anyTakes = project.lines.some((l) => l.take);
+  const voiceView: Voices | undefined = anyTakes && voices.on ? { speaking: voices.speaking, hasTake: (id) => project.lines.some((l) => l.id === id && !!l.take), replay: voices.replay } : undefined;
   const [codexOpen, setCodexOpen] = useState(false);
   const [savesOpen, setSavesOpen] = useState(false);
   const [pathsOpen, setPathsOpen] = useState(false);
@@ -1101,6 +1130,11 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
           >
             Paths{pathsFailing > 0 && <span className="play-codex-new play-paths-failing"> · {pathsFailing} ✗</span>}
           </button>
+          {anyTakes && (
+            <button className={`tb-btn small${voices.on ? ' on' : ''}`} aria-pressed={voices.on} title="Play the recorded takes as the lines come up" onClick={() => voices.setOn(!voices.on)}>
+              {voices.on ? '🔊 Voices' : '🔇 Voices'}
+            </button>
+          )}
           {hasCodex && (
             <button className={`tb-btn small${codexOpen ? ' on' : ''}`} aria-pressed={codexOpen} title="The codex: quests and lore found (C)" onClick={() => (setCodexOpen(!codexOpen), setSavesOpen(false), setPathsOpen(false))}>
               Codex{fresh > 0 && <span className="play-codex-new"> · {fresh} new</span>}
@@ -1144,7 +1178,7 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
         )}
         <div className="play-transcript" ref={transcript} aria-live="polite">
           {play.log.map((entry, i) => (
-            <EntryView key={i} entry={entry} />
+            <EntryView key={i} entry={entry} voices={voiceView} />
           ))}
         </div>
         <div className="play-prompt">
