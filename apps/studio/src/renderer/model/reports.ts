@@ -65,6 +65,21 @@ const slug = (project: Project, scene: StoryObject): string => {
 
 const speakerName = (project: Project, id: string | null) => (id ? project.objects[id]?.name ?? '?' : 'No speaker');
 
+/** These lines' subtitles as the engines get them, in story order (scene code, then place in the scene), and their time on screen. */
+const subtitlesOf = (project: Project, lines: readonly DialogueLine[]) => {
+  const said = lines
+    .filter((l) => l.text.trim())
+    .sort((a, b) => String(project.objects[a.sceneId]?.data.code ?? '').localeCompare(String(project.objects[b.sceneId]?.data.code ?? ''), undefined, { numeric: true }) || a.order - b.order)
+    .map((l) => ({ line: l, ...lineSubtitle(project, l) }));
+  return { said, onScreen: said.reduce((t, s) => t + s.seconds, 0) };
+};
+
+/** How long a subtitle shows, as a report says it: "1.5s (take)" when it is the take's length. */
+const showsFor = (s: { line: DialogueLine; seconds: number }) => `${secondsLabel(s.seconds)}${s.line.take?.seconds ? ' (take)' : ''}`;
+
+/** "4 lines · 6.2s on screen". */
+const onScreenLabel = (n: number, seconds: number) => `${n} line${n === 1 ? '' : 's'} · ${secondsLabel(seconds)} on screen`;
+
 /** A line's subtitle as the engines get it, and how long it shows: "Mara: Lit. You go first. (1.5s)". */
 const subtitleCell = (project: Project, line: DialogueLine): string => {
   if (!line.text.trim()) return '';
@@ -82,18 +97,14 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
       for (const c of of(project, 'character')) {
         const own = lines.filter((l) => l.speakerId === c.id);
         // Their subtitles, as the engines get them, in story order.
-        const said = own
-          .filter((l) => l.text.trim())
-          .sort((a, b) => String(project.objects[a.sceneId]?.data.code ?? '').localeCompare(String(project.objects[b.sceneId]?.data.code ?? ''), undefined, { numeric: true }) || a.order - b.order)
-          .map((l) => ({ line: l, ...lineSubtitle(project, l) }));
-        const onScreen = said.reduce((t, s) => t + s.seconds, 0);
+        const { said, onScreen } = subtitlesOf(project, own);
         blocks.push({ kind: 'h2', text: c.name, note: c.data.code });
         blocks.push({
           kind: 'kv',
           rows: [
             ...fieldRows(c),
             ['Lines', `${own.length} (${own.filter((l) => l.vo === 'recorded').length} recorded)`],
-            ...(said.length ? [['Subtitles', `${said.length} line${said.length === 1 ? '' : 's'} · ${secondsLabel(onScreen)} on screen`] as [string, string]] : []),
+            ...(said.length ? [['Subtitles', onScreenLabel(said.length, onScreen)] as [string, string]] : []),
           ],
         });
         if (c.notes) blocks.push({ kind: 'p', text: c.notes });
@@ -101,7 +112,7 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
           blocks.push({
             kind: 'table',
             columns: ['Scene', '#', 'Subtitle', 'Shows for'],
-            rows: said.map((s) => [String(project.objects[s.line.sceneId]?.data.code ?? ''), String(s.line.order), s.subtitle, `${secondsLabel(s.seconds)}${s.line.take?.seconds ? ' (take)' : ''}`]),
+            rows: said.map((s) => [String(project.objects[s.line.sceneId]?.data.code ?? ''), String(s.line.order), s.subtitle, showsFor(s)]),
           });
         const uses = whereUsed(project, c.id);
         if (uses.length) blocks.push({ kind: 'table', columns: ['Where', 'What'], rows: uses.map((u) => [u.label, u.detail]) });
@@ -147,15 +158,14 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
           .filter(([, v]) => v);
         const dialogue = sceneLines(project, s.id).filter((l) => l.kind === 'dialogue');
         // Its subtitles, as the engines get them, in the order the scene says them.
-        const said = dialogue.filter((l) => l.text.trim()).map((l) => ({ line: l, ...lineSubtitle(project, l) }));
-        const onScreen = said.reduce((t, x) => t + x.seconds, 0);
+        const { said, onScreen } = subtitlesOf(project, dialogue);
         if (dialogue.length) contents.push(['Dialogue', `${dialogue.length} line${dialogue.length === 1 ? '' : 's'}${said.length ? ` · subtitles ${secondsLabel(onScreen)} on screen` : ''}`]);
         if (contents.length) blocks.push({ kind: 'table', columns: ['Category', 'Contents'], rows: contents as string[][] });
         if (said.length)
           blocks.push({
             kind: 'table',
             columns: ['#', 'Subtitle', 'Shows for'],
-            rows: said.map((x) => [String(x.line.order), x.subtitle, `${secondsLabel(x.seconds)}${x.line.take?.seconds ? ' (take)' : ''}`]),
+            rows: said.map((x) => [String(x.line.order), x.subtitle, showsFor(x)]),
           });
         const tracks = sceneTimeline(project, s.id);
         if (tracks[0]!.events.length) {
@@ -170,8 +180,24 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
     case 'locations':
       for (const e of of(project, 'environment')) {
         blocks.push({ kind: 'h2', text: e.name, note: e.data.code });
-        blocks.push({ kind: 'kv', rows: [...fieldRows(e), ['Scenes', scenesOf(project, e.id)], ['Asset notes', String(e.data.assetNotes ?? '')]].filter(([, v]) => v) as [string, string][] });
+        // What is said here: the lines of every scene set here or that holds it, as the engines subtitle them.
+        const here = new Set(
+          Object.values(project.objects)
+            .filter((s) => s.type === 'scene' && (s.data.locationId === e.id || project.connections.some((c) => c.kind === 'contains' && c.sourceId === s.id && c.targetId === e.id)))
+            .map((s) => s.id),
+        );
+        const { said, onScreen } = subtitlesOf(project, lines.filter((l) => here.has(l.sceneId)));
+        blocks.push({
+          kind: 'kv',
+          rows: [...fieldRows(e), ['Scenes', scenesOf(project, e.id)], ['Asset notes', String(e.data.assetNotes ?? '')], ['Subtitles', said.length ? onScreenLabel(said.length, onScreen) : '']].filter(([, v]) => v) as [string, string][],
+        });
         if (e.notes) blocks.push({ kind: 'p', text: e.notes });
+        if (said.length)
+          blocks.push({
+            kind: 'table',
+            columns: ['Scene', '#', 'Subtitle', 'Shows for'],
+            rows: said.map((s) => [String(project.objects[s.line.sceneId]?.data.code ?? ''), String(s.line.order), s.subtitle, showsFor(s)]),
+          });
       }
       break;
     case 'props':

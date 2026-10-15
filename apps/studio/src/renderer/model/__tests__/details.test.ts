@@ -137,6 +137,16 @@ describe('the Game Bible', () => {
     expect(contents && contents.kind === 'table' && contents.rows.find((r) => r[0] === 'Dialogue')).toEqual(['Dialogue', '1 line · subtitles 2.6s on screen']);
     const sampleScenes = buildReport(sunkenVault(), 'scenes').blocks.filter((b) => b.kind === 'table' && b.columns[1] === 'Subtitle');
     expect(sampleScenes.flatMap((b) => (b.kind === 'table' ? b.rows : [])).find((r) => r[1]?.startsWith('Mara: Water’s'))).toEqual(['2', 'Mara: Water’s holding it shut. There’s a lever somewhere.', '2.5s (take)']);
+    // The location reports: what is said there, from every scene set there.
+    const places = buildReport(sunkenVault(), 'locations').blocks;
+    const chamber = places.find((b) => b.kind === 'table' && b.columns[2] === 'Subtitle');
+    expect(chamber && chamber.kind === 'table' && chamber.rows.map((r) => r[2])).toEqual([
+      'Mara: Water’s holding it shut. There’s a lever somewhere.',
+      'The Explorer: Stand back. I’ll find it.',
+      'Mara: Not like that.',
+    ]);
+    const chamberKv = places.find((b) => b.kind === 'kv' && b.rows.some(([k]) => k === 'Subtitles'));
+    expect(chamberKv && chamberKv.kind === 'kv' && chamberKv.rows.find(([k]) => k === 'Subtitles')![1]).toBe('3 lines · 5.4s on screen');
     // Recorded lines show for their take's length, and say so.
     const sample = buildReport(sunkenVault(), 'characters').blocks.find((b) => b.kind === 'table' && b.columns[2] === 'Subtitle');
     expect(sample && sample.kind === 'table' && sample.rows[0]).toEqual(['SC-01', '2', 'Mara: Lit. You go first.', '1.5s (take)']);

@@ -239,6 +239,10 @@ time on screen ("4 lines · 6.2s on screen"). Each **scene breakdown** (Print /
 Export → Scene breakdowns) lists the scene's subtitles in the order it says
 them, with the same times, and its Dialogue row gives the scene's subtitle time
 on screen ("3 lines · subtitles 4.2s on screen").
+Each **location report** (Print / Export → Locations / environments) lists
+what is said there: the subtitles of every scene set at that location or that
+holds it, with the same times, and their total on screen ("3 lines · 5.4s on
+screen").
 
 **Try it in the engine** before your game has its own screens, as Godot's
 `play_story.tscn` does. Each player shows the scene one beat at a time in a
