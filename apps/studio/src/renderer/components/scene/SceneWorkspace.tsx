@@ -26,6 +26,8 @@ import type { PaletteDrag } from '../canvas/StoryCanvas';
 import { Symbol } from '../Symbol';
 import { AddMenu, NameEdit, dropCategory, sceneRefusal, symbolColor, DIALOGUE_NEEDS } from './parts';
 import { ScriptEditor, ScriptFooter } from './ScriptEditor';
+import { BeatBoard } from './BeatBoard';
+import { ScriptExportDialog, type ScriptExportKind } from './ScriptExportDialog';
 import { timelineSummary } from '../../model/timeline';
 import { ElementDetail } from '../detail/ElementDetail';
 import type { Destination } from '../../model/details';
@@ -113,6 +115,9 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
       setFocusLine(props.focusLine);
     }
   }, [props.focusLine]);
+  // The Dialogue tab: the script as written, or its beats to put in order.
+  const [scriptView, setScriptView] = useState<'script' | 'beats'>('script');
+  const [exporting, setExporting] = useState<ScriptExportKind | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
   // Escape goes back from an element to the list (unless a field in it is being typed in).
@@ -326,7 +331,37 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                 <SceneMap project={project} sceneId={sceneId} onCommit={props.onCommit} onSay={props.onSay} onOpenElement={setDetail} />
               </Suspense>
             )}
-            {tab === 'Dialogue' && <ScriptEditor project={project} sceneId={sceneId} onCommit={props.onCommit} focusLine={focusLine} />}
+            {tab === 'Dialogue' && (
+              <div className="script-bar">
+                <div role="tablist" aria-label="Script view" className="scene-tabs">
+                  <button role="tab" aria-selected={scriptView === 'script'} className={scriptView === 'script' ? 'on' : ''} onClick={() => setScriptView('script')}>
+                    Script
+                  </button>
+                  <button role="tab" aria-selected={scriptView === 'beats'} className={scriptView === 'beats' ? 'on' : ''} onClick={() => setScriptView('beats')} title="Put the scene's dialogue and action in order">
+                    Beats
+                  </button>
+                </div>
+                <div className="grow" />
+                <button type="button" className="tb-btn small" onClick={() => setExporting('script')} title="The script as a screenplay: Fountain, or printed">
+                  Export script…
+                </button>
+                <button type="button" className="tb-btn small" onClick={() => setExporting('recording')} title="Every line in order, numbered, for the voice actors">
+                  Recording script…
+                </button>
+              </div>
+            )}
+            {tab === 'Dialogue' && scriptView === 'script' && <ScriptEditor project={project} sceneId={sceneId} onCommit={props.onCommit} focusLine={focusLine} />}
+            {tab === 'Dialogue' && scriptView === 'beats' && (
+              <BeatBoard
+                project={project}
+                sceneId={sceneId}
+                onCommit={props.onCommit}
+                onOpen={(lineId) => {
+                  setScriptView('script');
+                  setFocusLine(lineId);
+                }}
+              />
+            )}
             {tab === 'Notes' && (
               <textarea
                 key={`notes:${sceneId}`}
@@ -338,7 +373,8 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
               />
             )}
           </div>
-          {tab === 'Dialogue' && <ScriptFooter project={project} sceneId={sceneId} onCommit={props.onCommit} />}
+          {tab === 'Dialogue' && scriptView === 'script' && <ScriptFooter project={project} sceneId={sceneId} onCommit={props.onCommit} />}
+          {exporting && <ScriptExportDialog project={project} sceneId={sceneId} kind={exporting} onClose={() => setExporting(null)} />}
         </section>
       </div>
 

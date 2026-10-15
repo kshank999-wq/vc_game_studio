@@ -28,6 +28,7 @@ import { createProject, ensurePlayerLane } from './model/project';
 import { createFromSetup, updateSetup } from './model/setup';
 import { SetupWizard } from './components/setup/lazy';
 import { Guide, guideSeen, markGuideSeen } from './components/help/lazy';
+import { ScriptExportDialog } from './components/scene/ScriptExportDialog';
 import { KindsDialog } from './components/kinds/lazy';
 import { REPORTS, type ReportKey } from './model/reports';
 import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './edition';
@@ -106,7 +107,7 @@ export const App = () => {
   const routeRef = useRef<Route>({ view: 'graph' });
   const [toast, setToast] = useState<string | null>(null);
   const [ask, setAsk] = useState<ConfirmRequest | null>(null);
-  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | 'newGame' | 'setup' | 'guide' | 'kinds' | null>(null);
+  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | 'newGame' | 'setup' | 'guide' | 'kinds' | 'script' | 'recording' | null>(null);
   // Re-render when the license changes: an activation turns saving on, a lapse turns it off.
   useAccess();
   const [recent, setRecent] = useState<Recent[]>(() => recentFiles());
@@ -728,6 +729,9 @@ export const App = () => {
           label: 'Export',
           submenu: [
             { label: 'Engine handoff…', shortcut: 'Mod+E', onClick: () => openEngine() },
+            { kind: 'heading', label: 'SCRIPT' },
+            { label: 'Script (Fountain, print)…', onClick: () => setDialog('script') },
+            { label: 'Recording script for voice actors…', onClick: () => setDialog('recording') },
             { kind: 'heading', label: 'PRODUCTION REPORTS' },
             ...REPORTS.map((r): MenuItem => ({ label: r.label, onClick: () => openBible(undefined, r.key) })),
           ],
@@ -1230,6 +1234,9 @@ export const App = () => {
         {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
         {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
         {dialog === 'kinds' && <KindsDialog project={project} onCommit={commit} onClose={() => setDialog(null)} />}
+        {(dialog === 'script' || dialog === 'recording') && (
+          <ScriptExportDialog project={project} sceneId={route.view === 'scene' ? route.sceneId : null} kind={dialog} onClose={() => setDialog(null)} />
+        )}
         {dialog === 'guide' && (
           <Guide
             onClose={() => {

@@ -53,6 +53,61 @@ voiceover whose cinematic or object was deleted. Taking a character out of a
 scene leaves their lines without a speaker; taking out an object leaves its
 voiceover without a source — both are then flagged.
 
+## The scene as a script
+
+A scene reads like a page of a screenplay. Its **heading** is its first line —
+`INT. HOTEL — DAY`: inside or outside, the place, the time — set in the
+scene's Dialogue tab (type it, or pick from the three menus above). Under it
+you write the scene as you would any screenplay: **action** saying what
+happens, then each character's cue and what they say, parentheticals,
+transitions. Everything said belongs to a character, or is voiceover from
+something in the scene (above).
+
+### Beats: putting it in order
+
+The Dialogue tab has two views, **Script** and **Beats**. Beats shows the
+scene one card per beat: a line of action, a speech (its cue, its
+parenthetical, and a speech spoken at the same time beside it), or a
+transition. When the dialogue isn't in the right order:
+
+- **drag** a card to where it belongs, or
+- use its **↑ ↓** arrows, or select it and press **Alt+↑ / Alt+↓**.
+
+The script, the timeline, the play-through and the engines all follow the new
+order. Dialogue you placed on the timeline by hand keeps its places, filled in
+the new order. Each dialogue card shows its line number in the recording
+script. Double-click a card (or press Enter) to write it in the script.
+
+### Exporting the script
+
+**Export script…** (in the Dialogue tab, or **File → Export → Script**) gives
+the screenplay, this scene or every scene in story order (left to right along
+the story graph; scenes with nothing written are left out):
+
+- **Download .fountain** — Fountain, the plain-text screenplay format that
+  Final Draft, Highland, WriterSolo and VC Writer open. Scene numbers are the
+  scene codes; dual dialogue, emphasis, (V.O.) and (CONT’D) come through.
+- **Download page (.html)** or **Print…** — set in Courier 12 with the usual
+  screenplay margins, a title page first.
+
+### The recording script
+
+**Recording script…** (in the Dialogue tab, or **File → Export → Recording
+script for voice actors**) is how the script runs for the voice actors: each
+scene's heading and what is going on, the action between lines for context,
+and every line in the order it plays, numbered, with its cue, its direction,
+whether it's recorded yet, and the **file name the engines play it by**
+(`sc_03_line_02`), so the takes come back named to drop straight in.
+
+- **Lines for: Everyone** — the whole session, with a table of lines and
+  words per voice.
+- **Lines for: one character** — their sides: only their lines, each with
+  the line before it to come in on.
+
+Download it as a page to print or send (.html), as a spreadsheet for the
+studio (.csv: file, take, scene, cue, voice, direction, line, cue in,
+status), or print it.
+
 ## In the engines
 
 Each exported line carries `speaker` (the character, if any) and, for
