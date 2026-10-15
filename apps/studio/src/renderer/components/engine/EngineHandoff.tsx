@@ -1,8 +1,9 @@
 import { CommentsHistory } from '../collab/CommentsHistory';
+import { takeSummary } from '../../model/audio-takes';
 import { openCount } from '../../model/collab';
 import { useEffect, useMemo, useState } from 'react';
 import type { Destination } from '../../model/details';
-import { ENGINES, hunksOf, lineDiff, planHandoff, recordExport, reviewSend, setTarget, type Row, type SendFile, type SendReview } from '../../model/handoff';
+import { ENGINES, gatherTakes, hunksOf, lineDiff, planHandoff, recordExport, reviewSend, setTarget, takesNote, type Row, type SendFile, type SendReview } from '../../model/handoff';
 import { levelsOf } from '../../model/level/level';
 import type { OutputGroup } from '../../model/handoff/engines';
 import { packageFor, type EnginePackage } from '../../model/handoff/package';
@@ -33,7 +34,7 @@ const STATUS_LABEL = { ready: 'Ready', changed: 'Changed', issue: 'Issue' } as c
 interface SendTarget {
   label: string;
   read: (paths: readonly string[]) => Promise<Record<string, string | null>>;
-  write: (files: readonly { path: string; content: string }[]) => Promise<number>;
+  write: (files: readonly { path: string; content: string | Uint8Array }[]) => Promise<number>;
   /** The desktop folder's path, to remember as the project folder. */
   folder?: string;
   /** Whether the last export's record describes this folder (to notice edits made in the engine). */
@@ -148,9 +149,13 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
   const writeReviewed = async (dest: SendTarget, r: SendReview, keepEdited: boolean) => {
     const kept = keepEdited ? r.edited : [];
     const written = await dest.write(r.files.filter((f) => !kept.includes(f.path)).map((f) => ({ path: f.path, content: f.content })));
+    // The recorded takes go with the code: audio, written as it is (never reviewed as text).
+    const takes = await gatherTakes(plan.takes, adapter.takesAsWav);
+    if (takes.files.length) await dest.write(takes.files);
     onReplace(recordExport(dest.folder ? setTarget(project, { projectFolder: dest.folder }) : project, plan, undefined, kept));
     const custom = r.kept ? ` Kept your custom code in ${r.kept} ${r.kept === 1 ? 'place' : 'places'}.` : '';
-    onSay(`Sent ${written} files to ${dest.label}.${kept.length ? ` Left ${kept.length} as ${engineName} had ${kept.length === 1 ? 'it' : 'them'}.` : ''}${custom}`);
+    const voices = plan.takes.length ? ` With ${takesNote(takes)}.` : '';
+    onSay(`Sent ${written} files to ${dest.label}.${kept.length ? ` Left ${kept.length} as ${engineName} had ${kept.length === 1 ? 'it' : 'them'}.` : ''}${custom}${voices}`);
   };
 
   /** Look at what is there first: writing over an earlier export is reviewed, and never replaces custom code or engine edits silently. */
@@ -194,7 +199,9 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
       onSay('This page is shown inside another page, which isn’t allowed to save files. Open the studio in its own tab, or use the desktop app.');
       return;
     }
-    const pkg = await packageFor(adapter.id, project.name, output.files);
+    const takes = await gatherTakes(plan.takes, adapter.takesAsWav);
+    if (takes.missing.length || takes.unconverted.length) onSay(`The package has ${takesNote(takes)}.`);
+    const pkg = await packageFor(adapter.id, project.name, [...output.files, ...takes.files]);
     if (bridge?.savePackage) {
       const path = await bridge.savePackage(pkg.fileName, pkg.bytes);
       if (!path) return;
@@ -557,9 +564,19 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
               </button>
             ))}
           </div>
-          <pre className="code" aria-label={file?.path}>
-            {file?.content}
-          </pre>
+          {row?.id === 'takes' ? (
+            <ul className="code takes-files" aria-label="Recorded takes">
+              {plan.takes.map((t) => (
+                <li key={t.path}>
+                  <span className="mono">{t.path}</span> <span className="muted">· {takeSummary(t.line.take!)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <pre className="code" aria-label={file?.path}>
+              {file?.content}
+            </pre>
+          )}
           {file && onCommit && (
             <details className="code-comments" open={openCount(project, { kind: 'code', id: file.path }) > 0 || undefined}>
               <summary>

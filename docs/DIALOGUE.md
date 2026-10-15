@@ -170,3 +170,20 @@ voiceover, `from` (the key of the cinematic or object) and `from_name`.
 
 Play the voiceover from the object in your game (an audio source on the radio
 prop) by its `from` key.
+
+### Recorded takes
+
+The engine handoff takes each line's recorded take with it, named for the
+line (`sc_03_line_02`), and every engine's line data says where it is. They
+show on the handoff screen as **Recorded takes (N)**, and go with every send:
+to the project folder, a folder the browser may write to, or in the download.
+
+| Engine | Where the takes go | How a line's is played |
+|---|---|---|
+| Godot | `vcgs/generated/vo/<line>.mp3` (Godot imports them) | `play_story.tscn` plays them; `VCGSDialogue.audio(line_id)` gives an `AudioStream` |
+| Unity | `Assets/VCGS/Generated/Resources/VCGS/vo/` | `StoryWalker.Voice(game, lineId)` gives the `AudioClip` |
+| Unreal | `VCGS/SourceAudio/vo/<line>.wav` (converted to WAV) | run `import_vo.py` once per export: sound waves in `/Game/VCGS/VO`; the scene flow component plays them (`bPlayVoices`), `GetLineAudio` names one |
+| JSON | `vcgs/vo/<line>.<ext>` | each line's `audio`, relative to `story.json` |
+
+A take whose audio isn't on this computer is left out, and the studio says
+so; the line still names where it would go.

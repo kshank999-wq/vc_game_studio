@@ -1419,7 +1419,7 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
   // A line with emphasis carries it as BBCode for a RichTextLabel; a dual line names the one it is spoken with.
   const bbcode = (text: string) => markupInline(text, (run, st) => `${st.bold ? '[b]' : ''}${st.italic ? '[i]' : ''}${st.underline ? '[u]' : ''}${run}${st.underline ? '[/u]' : ''}${st.italic ? '[/i]' : ''}${st.bold ? '[/b]' : ''}`);
   const table = Object.fromEntries(
-    ir.lines.map((l) => [l.id, { scene: l.scene, speaker: l.speaker ?? '', ...(l.from ? { from: l.from, from_name: l.from_name ?? '' } : {}), text: l.text, direction: l.direction, vo: l.vo, ...(l.styled ? { bbcode: bbcode(l.styled) } : {}), ...(l.dual ? { dual_with: l.dual } : {}) }]),
+    ir.lines.map((l) => [l.id, { scene: l.scene, speaker: l.speaker ?? '', ...(l.from ? { from: l.from, from_name: l.from_name ?? '' } : {}), text: l.text, direction: l.direction, vo: l.vo, ...(l.styled ? { bbcode: bbcode(l.styled) } : {}), ...(l.dual ? { dual_with: l.dual } : {}), ...(l.audio ? { audio: `res://${root}/${l.audio}` } : {}) }]),
   );
   const dialoguePath = add(
     'dialogue/dialogue_table.gd',
@@ -1434,7 +1434,14 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
       `const SPEAKERS := ${gd(Object.fromEntries(ir.characters.map((c) => [c.ident.key, c.name])))}`,
       '',
       'static func line(line_id: String) -> Dictionary:',
-      '\treturn LINES.get(line_id, {})',
+      '\treturn LINES.get(line_id, {})',,
+      '',
+      '## The line\'s recorded take (vo/<line>.mp3 beside this folder), or null when it has none or it isn\'t imported.',
+      'static func audio(line_id: String) -> AudioStream:',
+      '\tvar path := str(line(line_id).get("audio", ""))',
+      '\tif path == "" or not ResourceLoader.exists(path):',
+      '\t\treturn null',
+      '\treturn load(path) as AudioStream',
     ].join('\n'),
   );
   // Production files live under a .gdignore so Godot doesn't import them.
@@ -2040,6 +2047,8 @@ export const godot: EngineAdapter = {
     'Call VCGSRules.reset(GameState) when a new game begins.',
     'To try the story at once, run play_story.tscn (or any scene’s .tscn) in the generated folder.',
     'To walk a level, run levels/play_<level>.tscn; in your game, instance levels/<level>.tscn and put your player in the “player” group.',
+    'Recorded takes go in vo/ beside the generated scripts (Godot imports them); play_story.tscn plays them, and VCGSDialogue.audio(line_id) gives you a line’s.',
   ],
   generate: generateGodot,
+  takesDir: (outputPath) => outputPath.replace(/^res:\/\//, '').replace(/\/+$/, '') || 'vcgs/generated',
 };

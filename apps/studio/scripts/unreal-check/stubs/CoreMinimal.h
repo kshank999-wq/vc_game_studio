@@ -62,6 +62,8 @@ public:
     virtual ~UObject() {}
 };
 
+template <typename T> T* LoadObject(UObject*, const TCHAR*) { return nullptr; }
+
 struct FLogCategory {};
 static FLogCategory LogTemp;
 #define UE_LOG(Category, Verbosity, Format, ...) ((void)(Category), (void)sizeof(Format))

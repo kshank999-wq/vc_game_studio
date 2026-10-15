@@ -207,6 +207,13 @@ namespace UnityEngine
         public string text = "";
     }
 
+    public sealed class AudioClip : Object { }
+
+    public static class Resources
+    {
+        public static T Load<T>(string path) where T : Object => null;
+    }
+
     public class Collider : Component { }
 
     public sealed class BoxCollider : Collider

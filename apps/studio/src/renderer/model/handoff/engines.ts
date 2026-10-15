@@ -49,6 +49,10 @@ export interface EngineAdapter {
   /** A line for adapters still to come. */
   plan?: string;
   generate?: (ir: HandoffIR, outputPath: string, options?: GenerateOptions) => EngineOutput;
+  /** Where the recorded takes go in the engine project: the folder that holds vo/… (project-relative). */
+  takesDir?: (outputPath: string) => string;
+  /** The engine imports takes as WAV only: they are converted on the way. */
+  takesAsWav?: boolean;
 }
 
 export interface GenerateOptions {

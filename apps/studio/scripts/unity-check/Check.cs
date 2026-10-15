@@ -49,6 +49,10 @@ static class Check
         player.DualRequested += (a, b) => duals.Add((a, b));
         player.DialogueRequested += l => singles.Add(l);
         player.Start();
+        // Recorded takes: each line knows where its take is under Resources, and the voice loads from there.
+        if (story.Audio("sc_03_line_02") != "VCGS/vo/sc_03_line_02") Fail("Mara's line should have its take at VCGS/vo/sc_03_line_02, got " + story.Audio("sc_03_line_02"));
+        if (StoryWalker.Voice(game, "sc_03_line_02") != null) Fail("the stub Resources loads nothing");
+        Console.WriteLine("takes: " + story.Audio("sc_03_line_02") + ", " + story.Audio("sc_01_line_03"));
         if (!game.Visited.Contains(Scenes.Sc03TheVaultDoor)) Fail("starting the scene should mark it visited");
         // Reaching the vault door reveals the Order's story.
         if (string.Join(",", game.KnownLore) != Lore.TheDrownedOrder || story.LoreEntry(Lore.TheDrownedOrder).name != "The Drowned Order") Fail("the vault door should reveal The Drowned Order, got " + string.Join(",", game.KnownLore));

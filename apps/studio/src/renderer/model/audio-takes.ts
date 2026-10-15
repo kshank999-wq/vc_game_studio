@@ -111,7 +111,8 @@ export const getAudio = async (id: string): Promise<Blob | undefined> => {
   const stored = await storedAudio(id);
   if (stored) return stored;
   const url = await sampleUrl(id);
-  const blob = url ? await fetchBlob(url) : undefined;
+  // Tests have no server to fetch the app's files from: the sample's takes read as not here.
+  const blob = url && import.meta.env?.MODE !== 'test' ? await fetchBlob(url) : undefined;
   if (blob) memory.set(id, blob);
   return blob;
 };
@@ -239,6 +240,10 @@ export const takeFiles = async (project: Project, lineIds?: readonly string[]): 
   }
   return { files, missing };
 };
+
+/** Where a line's take goes in an engine project, under the takes folder: vo/sc_03_line_02.mp3. */
+export const takeFileOf = (project: Project, line: DialogueLine): string | undefined =>
+  line.kind === 'dialogue' && line.take && line.text.trim() ? `vo/${lineKey(project, line)}.${takeExt(line.take)}` : undefined;
 
 /** A take's size and length, short: 1.2 MB · 3.4 s. */
 export const takeSummary = (take: AudioTake): string => {

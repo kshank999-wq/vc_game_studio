@@ -9,6 +9,9 @@ import { buildIR } from './ir';
 import { levelChanges, levelRevisions, type IrLevel, type LevelChanges } from './levels';
 import { levelIssues } from '../level/validate';
 import { fileHash } from './review';
+import { takePlan, takesRow, type TakeFile } from './takes';
+
+export { gatherTakes, takesNote } from './takes';
 
 /**
  * Every engine VC Game Studio hands off to: Godot, Unity, Unreal, and plain
@@ -55,13 +58,15 @@ export interface Handoff {
   /** The levels as they go to the engine, and what changed in them since the last export. */
   levels: IrLevel[];
   levelChanges: LevelChanges;
+  /** The recorded takes, and where each goes in the engine project. */
+  takes: TakeFile[];
 }
 
 /** What handing the project to its engine would produce right now, and how that compares with last time. */
 export const planHandoff = (project: Project): Handoff => {
   const target = targetOf(project);
   const adapter = engineById(target.engine);
-  if (!adapter.available || !adapter.generate) return { adapter, target, output: null, rows: [], changed: 0, issues: [], blocking: [], levels: [], levelChanges: { added: [], changed: [], removed: [], same: 0 } };
+  if (!adapter.available || !adapter.generate) return { adapter, target, output: null, rows: [], changed: 0, issues: [], blocking: [], levels: [], levelChanges: { added: [], changed: [], removed: [], same: 0 }, takes: [] };
   const ir = buildIR(project);
   const output = adapter.generate(ir, target.outputPath, { placeholderScenes: target.placeholderScenes !== false });
   const last = project.handoff?.last?.engine === target.engine ? project.handoff.last : undefined;
@@ -74,7 +79,9 @@ export const planHandoff = (project: Project): Handoff => {
       .map((i) => ({ id: levelOf.get(i.id) ?? i.levelId, message: i.message })),
   ];
   const issueOf = new Map(found.map((i) => [i.id, i.message]));
-  const rows: Row[] = output.elements.map((e) => {
+  const takes = takePlan(project, adapter, target.outputPath);
+  const takesElement = takesRow(takes);
+  const rows: Row[] = [...output.elements, ...(takesElement ? [takesElement] : [])].map((e) => {
     const issue = issueOf.get(e.id);
     const status: Status = issue ? 'issue' : last?.fingerprints[e.id] === e.fingerprint ? 'ready' : 'changed';
     return { ...e, status, ...(issue ? { issue } : {}) };
@@ -97,6 +104,7 @@ export const planHandoff = (project: Project): Handoff => {
     blocking,
     levels: ir.levels,
     levelChanges: levelChanges(ir.levels, last?.levelItems),
+    takes,
   };
 };
 
@@ -130,7 +138,7 @@ export const recordExport = (project: Project, handoff: Handoff, at = new Date()
   const last: ExportRecord = {
     at,
     engine: handoff.target.engine,
-    fingerprints: Object.fromEntries(handoff.output.elements.map((e) => [e.id, e.fingerprint])),
+    fingerprints: Object.fromEntries(handoff.rows.map((e) => [e.id, e.fingerprint])),
     files: handoff.output.files.length,
     levelItems: levelRevisions(handoff.levels),
     fileHashes: Object.fromEntries(

@@ -9,13 +9,14 @@
 interface DirHandle {
   name: string;
   getDirectoryHandle: (name: string, options?: { create?: boolean }) => Promise<DirHandle>;
-  getFileHandle: (name: string, options?: { create?: boolean }) => Promise<{ getFile: () => Promise<File>; createWritable: () => Promise<{ write: (data: string) => Promise<void>; close: () => Promise<void> }> }>;
+  getFileHandle: (name: string, options?: { create?: boolean }) => Promise<{ getFile: () => Promise<File>; createWritable: () => Promise<{ write: (data: string | Uint8Array) => Promise<void>; close: () => Promise<void> }> }>;
 }
 
 export interface FolderAccess {
   name: string;
   read: (paths: readonly string[]) => Promise<Record<string, string | null>>;
-  write: (files: readonly { path: string; content: string }[]) => Promise<number>;
+  /** Text, or the bytes of a binary file (a recorded take). */
+  write: (files: readonly { path: string; content: string | Uint8Array }[]) => Promise<number>;
 }
 
 const picker = () => (globalThis as { showDirectoryPicker?: (options?: { mode?: 'readwrite' }) => Promise<DirHandle> }).showDirectoryPicker;

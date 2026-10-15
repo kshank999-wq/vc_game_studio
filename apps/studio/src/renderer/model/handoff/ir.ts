@@ -1,3 +1,4 @@
+import { takeFileOf } from '../audio-takes';
 import { buildCast, type IrCast } from './cast';
 import { recipeOf } from '../crafting';
 import { creditLine, creditsOf } from '../credits';
@@ -347,6 +348,8 @@ export interface IrLine {
   styled?: string;
   /** Dual dialogue: the line this one is spoken at the same time as. */
   dual?: string;
+  /** Its recorded take, where it goes under the engine's takes folder: vo/sc_03_line_02.mp3. */
+  audio?: string;
 }
 
 export interface IrEvent {
@@ -904,6 +907,7 @@ export const buildIR = (given: Project): HandoffIR => {
         order: l.order,
         ...(hasInline(l.text) ? { styled: l.text } : {}),
         ...((partner) => (partner ? { dual: lineId(project.objects[l.sceneId]!.data.code ?? '', partner.order) } : {}))(dualWith(project, l.id)),
+        ...((audio) => (audio ? { audio } : {}))(takeFileOf(project, l)),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     levels,

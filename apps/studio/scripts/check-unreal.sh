@@ -78,6 +78,11 @@ done
 echo "plugin sources compile against the stubs"
 
 python3 -m py_compile "$work/Content/VCGS/Generated/import_datatables.py"
+# Recorded takes: the importer, and each line naming its sound wave.
+python3 -m py_compile "$work/Content/VCGS/Generated/import_vo.py"
+grep -q '"audio": "/Game/VCGS/VO/sc_03_line_02.sc_03_line_02"' "$work/Content/VCGS/Generated/story.json" || { echo "story.json should name Mara's take"; exit 1; }
+grep -q '/Game/VCGS/VO/sc_03_line_02.sc_03_line_02' "$work/Content/VCGS/Generated/DataTables/Lines.csv" || { echo "DT_Lines should carry Mara's take"; exit 1; }
+echo "takes: import_vo.py, story.json and DT_Lines name the sound waves"
 echo "import_datatables.py compiles"
 # The level builder runs against a stand-in for Unreal's Python API.
 python3 "$here/unreal-check/check_build_level.py" "$work"

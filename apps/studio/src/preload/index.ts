@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('vcgs', {
   desktop: true,
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('vcgs:pick-folder'),
   checkFolder: (folder: string): Promise<{ exists: boolean; engineProject: boolean; unity?: boolean; unreal?: boolean }> => ipcRenderer.invoke('vcgs:check-folder', folder),
-  writeFiles: (folder: string, files: { path: string; content: string }[]): Promise<{ written: number }> =>
+  writeFiles: (folder: string, files: { path: string; content: string | Uint8Array }[]): Promise<{ written: number }> =>
     ipcRenderer.invoke('vcgs:write-files', folder, files),
   readFiles: (folder: string, paths: string[]): Promise<Record<string, string | null>> => ipcRenderer.invoke('vcgs:read-files', folder, paths),
   savePackage: (suggestedName: string, bytes: Uint8Array): Promise<string | null> => ipcRenderer.invoke('vcgs:save-package', suggestedName, bytes),

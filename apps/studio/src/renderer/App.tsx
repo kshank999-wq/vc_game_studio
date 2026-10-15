@@ -186,10 +186,12 @@ export const App = () => {
     let live = true;
     const timer = setTimeout(() => {
       void loadHandoff()
-        .then(({ planHandoff, recordExport }) => {
+        .then(async ({ planHandoff, recordExport, gatherTakes }) => {
           const plan = planHandoff(project);
           if (!live || !plan.output || plan.changed === 0 || plan.blocking.length) return;
-          return bridge.writeFiles(target.projectFolder, plan.output.files).then(() => studio.replace(recordExport(project, plan)));
+          // The recorded takes go too.
+          const takes = await gatherTakes(plan.takes, plan.adapter.takesAsWav);
+          return bridge.writeFiles(target.projectFolder, [...plan.output.files, ...takes.files]).then(() => studio.replace(recordExport(project, plan)));
         })
         .catch((error: unknown) => say(error instanceof Error ? error.message : 'Export on save failed.'));
     }, 1200);

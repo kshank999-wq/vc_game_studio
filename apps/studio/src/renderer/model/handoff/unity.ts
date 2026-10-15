@@ -207,7 +207,8 @@ export const generateUnity = (ir: HandoffIR, outputPath: string): EngineOutput =
 
   // A line with emphasis also carries it as TextMeshPro rich text.
   const tmp = (text: string) => markupInline(text, (run, st) => `${st.bold ? '<b>' : ''}${st.italic ? '<i>' : ''}${st.underline ? '<u>' : ''}${run}${st.underline ? '</u>' : ''}${st.italic ? '</i>' : ''}${st.bold ? '</b>' : ''}`);
-  const lines = ir.lines.map((l) => (l.styled ? { ...l, rich: tmp(l.styled) } : l));
+  // A line's take is in Resources/VCGS/vo, loaded by its path there without the extension.
+  const lines = ir.lines.map((l) => ({ ...l, ...(l.styled ? { rich: tmp(l.styled) } : {}), ...(l.audio ? { audio: `VCGS/${l.audio.replace(/\.[^./]+$/, '')}` } : {}) }));
   const storyPath = put(`${root}/story.json`, JSON.stringify({ ...JSON_FORMAT, generator: 'VC Game Studio', ...withoutNotes(ir), lines }, null, 2), 'generated', 'text');
   const keysPath = put(`${root}/StoryKeys.cs`, storyKeys(ir), 'generated', 'script');
   put(`${root}/README.md`, README(ir, root), 'generated', 'text');
@@ -341,11 +342,13 @@ export const unity: EngineAdapter = {
   language: 'C# · ScriptableObjects',
   available: true,
   defaultOutputPath: 'Assets/VCGS/Generated',
+  takesDir: (outputPath) => `${outputPath.replace(/\/+$/, '') || 'Assets/VCGS/Generated'}/Resources/VCGS`,
   runtimeName: 'VCGS Runtime for Unity',
   setup: [
     'Add a GameObject with VcgsGame to your first scene and give it Assets/VCGS/Generated/story.json.',
     'Put VcgsSceneFlow (with its scene key) in each scene, and VcgsInteractable on each usable object.',
     'For a level, open its scene and run VCGS › Update level from data…, choosing Assets/VCGS/Generated/Levels/<level>.json; run it again after each export.',
+    'Recorded takes go in Resources/VCGS/vo: play a line’s with StoryWalker.Voice(game, lineId) on an AudioSource when DialogueRequested fires.',
   ],
   generate: generateUnity,
 };

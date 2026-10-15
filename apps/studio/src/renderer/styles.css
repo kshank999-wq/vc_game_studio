@@ -13687,3 +13687,11 @@ button.bible-dual-col:hover {
   font-size: 11.5px;
   color: var(--muted);
 }
+.takes-files {
+  list-style: none;
+  margin: 0;
+  padding: 10px 12px;
+}
+.takes-files li {
+  padding: 2px 0;
+}

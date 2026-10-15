@@ -289,6 +289,8 @@ namespace VCGS
         public string ItemName(string key) => ItemDefs.TryGetValue(key ?? "", out var i) ? D.Str(i, "name") : "";
         /// <summary>A line's speaker key ("" for none).</summary>
         public string Speaker(string lineId) => Lines.TryGetValue(lineId ?? "", out var l) ? D.Str(l, "speaker") : "";
+        /// <summary>Where a line's recorded take is under Resources ("VCGS/vo/sc_03_line_02"), or "" when it has none.</summary>
+        public string Audio(string lineId) => Lines.TryGetValue(lineId ?? "", out var l) ? D.Str(l, "audio") : "";
     }
 }
 `,
@@ -1769,6 +1771,13 @@ namespace VCGS
             game.MarkPicked(choice + ":" + D.Str(o, "key"));
             Rules.Apply(D.Get(o, "effects"), game);
             return D.Str(o, "to");
+        }
+
+        /// <summary>A line's recorded take, to play on an AudioSource (null when it has none): handed off into Resources/VCGS/vo.</summary>
+        public static UnityEngine.AudioClip Voice(GameState game, string lineId)
+        {
+            var path = game.Story.Audio(lineId);
+            return path == "" ? null : UnityEngine.Resources.Load<UnityEngine.AudioClip>(path);
         }
 
         /// <summary>The words of a line and who says them.</summary>

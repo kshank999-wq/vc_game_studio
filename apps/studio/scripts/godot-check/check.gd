@@ -245,6 +245,11 @@ func _initialize() -> void:
 	print("dual on screen: ", player.text().replace("\n", " | "))
 	if not player.text().begins_with("MARA  (listening)") or not player.text().contains("at the same time") or not player.text().contains("THE EXPLORER  (wading forward)\nStand back."):
 		fail("the player should show both voices at once, got " + player.text())
+	# Their takes play together: both imported as audio, both players going.
+	var take = VCGSDialogue.audio("sc_03_line_02")
+	print("take: ", take.get_class() if take else "none", " · voices playing: ", player._players.size())
+	if not take is AudioStream or player._players.size() != 2:
+		fail("Mara's take should be imported and both voices should play")
 	for i in 2:
 		player.press(0)
 	var free_play: Array = player.labels()

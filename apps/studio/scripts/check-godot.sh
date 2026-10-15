@@ -22,6 +22,9 @@ gen="$work/vcgs/generated"
 grep -q "Task for Audio: The key needs a heavy bronze clink" "$gen/TASKS.md" || { echo "TASKS.md should list the key's task"; exit 1; }
 grep -q "_Mara_[0-9]*: TODO(VCGS) Task for Gameplay programmer" "$gen/levels/sunken_vault.gd" || { echo "the level script should carry Mara's task"; exit 1; }
 echo "tasks: $(grep -c '^- ' "$gen/TASKS.md") open"
+# Recorded takes: the handoff puts each beside the generated folder, as vo/<line>.mp3 (here, the sample's own).
+mkdir -p "$gen/vo"
+cp "$here/../src/renderer/assets/sample-takes/"*.mp3 "$gen/vo/"
 "${GODOT:?Set GODOT to a Godot 4 binary}" --headless --path "$work" --import > /dev/null 2>&1 || true
 "$GODOT" --headless --path "$work" -s check.gd
 # The puzzle runtime (puzzle spec §6–§10): the sample with the built-in puzzle templates.

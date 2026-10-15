@@ -15,7 +15,7 @@ export interface EnginePackage {
   steps: string[];
 }
 
-type File = { path: string; content: string };
+type File = { path: string; content: string | Uint8Array };
 
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'game';
 
@@ -82,13 +82,14 @@ const guidIn = (meta: string): string | null => /^guid:\s*([0-9a-f]{32})\s*$/m.e
  * files; a file without one gets a GUID of its own.
  */
 export const unityPackage = async (files: readonly File[], date = new Date()): Promise<Uint8Array<ArrayBuffer>> => {
-  const metas = new Map(files.filter((f) => f.path.endsWith('.meta')).map((f) => [f.path.slice(0, -5), f.content]));
+  const metas = new Map(files.filter((f) => f.path.endsWith('.meta') && typeof f.content === 'string').map((f) => [f.path.slice(0, -5), f.content as string]));
   const assets = new Map(files.filter((f) => !f.path.endsWith('.meta')).map((f) => [f.path, f.content]));
   const entries: { name: string; data: Uint8Array }[] = [];
   for (const path of [...new Set([...metas.keys(), ...assets.keys()])].sort()) {
     const meta = metas.get(path) ?? `fileFormatVersion: 2\nguid: ${guidFor(path)}\n`;
     const guid = guidIn(meta) ?? guidFor(path);
-    if (assets.has(path)) entries.push({ name: `${guid}/asset`, data: encoder.encode(assets.get(path)!) });
+    const asset = assets.get(path);
+    if (asset !== undefined) entries.push({ name: `${guid}/asset`, data: typeof asset === 'string' ? encoder.encode(asset) : asset });
     entries.push({ name: `${guid}/asset.meta`, data: encoder.encode(meta) });
     entries.push({ name: `${guid}/pathname`, data: encoder.encode(path) });
   }

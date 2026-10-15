@@ -13,7 +13,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 interface File {
   path: string;
-  content: string;
+  content: string | Uint8Array;
 }
 
 const inside = (root: string, path: string): string | null => {
@@ -90,11 +90,14 @@ export const registerHandoff = (getWindow: () => BrowserWindow | null): void => 
     const root = resolve(folder);
     let written = 0;
     for (const file of files as File[]) {
-      if (typeof file?.path !== 'string' || typeof file?.content !== 'string') continue;
+      // Text, or the bytes of a recorded take.
+      const binary = (file?.content as unknown) instanceof Uint8Array;
+      if (typeof file?.path !== 'string' || (typeof file?.content !== 'string' && !binary)) continue;
       const target = inside(root, file.path);
       if (!target) throw new Error(`Refused to write outside the project: ${file.path}`);
       await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, file.content, 'utf8');
+      if (binary) await writeFile(target, Buffer.from(file.content as Uint8Array));
+      else await writeFile(target, file.content as string, 'utf8');
       written++;
     }
     return { written };

@@ -181,6 +181,8 @@ struct VCGS_API FVcgsLineRow : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS", meta = (MultiLine = true)) FString Rich;
     /** Dual dialogue: the line this one is spoken at the same time as. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString DualWith;
+    /** Its recorded take: the sound wave's asset path (import_vo.py brings the takes in), empty when it has none. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Audio;
 };
 `,
 
@@ -451,6 +453,8 @@ public:
     /** Pick an option of a choice on the graph; returns the node it leads to (empty if it can't be picked). */
     UFUNCTION(BlueprintCallable, Category = "VCGS|Story") FString ChooseOnGraph(const FString& Choice, int32 Option);
     UFUNCTION(BlueprintPure, Category = "VCGS|Story") void GetLine(const FString& LineId, FString& Speaker, FString& Text, FString& Direction) const;
+    /** A line's recorded take, as the sound wave's asset path (empty when it has none). Load it with LoadObject<USoundBase>. */
+    UFUNCTION(BlueprintPure, Category = "VCGS|Story") FString GetLineAudio(const FString& LineId) const;
 
     /** The core's playthrough, for C++ (null until a story is loaded). */
     vcgs::GameState* State() const { return Game.get(); }
@@ -911,6 +915,11 @@ void UVcgsSubsystem::GetLine(const FString& LineId, FString& Speaker, FString& T
     Text = ToF(Line.Text);
     Direction = ToF(Line.Direction);
 }
+
+FString UVcgsSubsystem::GetLineAudio(const FString& LineId) const
+{
+    return Game ? ToF(vcgs::StoryWalker::GetLine(*Game, ToStd(LineId)).Audio) : FString();
+}
 `,
 
   'Source/VCGS/Public/VcgsCodexHUD.h': `${RUNTIME_HEAD}
@@ -1289,6 +1298,8 @@ class VCGS_API UVcgsSceneFlowComponent : public UActorComponent
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") FString SceneKey;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") bool bStartOnBeginPlay = true;
+    /** Play each line's recorded take (imported by import_vo.py) as it comes up. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") bool bPlayVoices = true;
 
     /** Every event as it starts: its kind and label. */
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsEventSignature OnEventStarted;
@@ -1327,6 +1338,8 @@ protected:
 private:
     UVcgsSubsystem* Subsystem() const;
     std::unique_ptr<vcgs::ScenePlayer> Player;
+    /** A line's take, played in 2D when bPlayVoices is on and it has been imported. */
+    void PlayVoice(const std::string& Audio);
 };
 `,
 
@@ -1336,6 +1349,8 @@ private:
 #include "VcgsSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 using VcgsConvert::ToF;
 using VcgsConvert::ToStd;
@@ -1359,6 +1374,12 @@ void UVcgsSceneFlowComponent::EndPlay(const EEndPlayReason::Type Reason)
     Super::EndPlay(Reason);
 }
 
+void UVcgsSceneFlowComponent::PlayVoice(const std::string& Audio)
+{
+    if (!bPlayVoices || Audio.empty()) return;
+    if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, *ToF(Audio))) UGameplayStatics::PlaySound2D(this, Sound);
+}
+
 void UVcgsSceneFlowComponent::StartScene()
 {
     UVcgsSubsystem* Story = Subsystem();
@@ -1379,12 +1400,15 @@ void UVcgsSceneFlowComponent::StartScene()
     Player->OnDialogue = [this, Game](const std::string& LineId)
     {
         const vcgs::StoryWalker::Line Line = vcgs::StoryWalker::GetLine(*Game, LineId);
+        PlayVoice(Line.Audio);
         OnDialogue.Broadcast(ToF(LineId), ToF(Line.Speaker), ToF(Line.Text), ToF(Line.Direction));
     };
     Player->OnDual = [this, Game](const std::string& LineId, const std::string& WithLineId)
     {
         const vcgs::StoryWalker::Line Line = vcgs::StoryWalker::GetLine(*Game, LineId);
         const vcgs::StoryWalker::Line With = vcgs::StoryWalker::GetLine(*Game, WithLineId);
+        PlayVoice(Line.Audio);
+        PlayVoice(With.Audio);
         OnDualDialogue.Broadcast(ToF(LineId), ToF(Line.Speaker), ToF(Line.Text), ToF(Line.Direction), ToF(WithLineId), ToF(With.Speaker), ToF(With.Text), ToF(With.Direction));
     };
     Player->OnCinematic = [this](const std::string& Key) { OnCinematic.Broadcast(ToF(Key)); };
@@ -1617,9 +1641,49 @@ export const dataTables = (ir: HandoffIR): Record<string, { struct: string; csv:
         ),
       ),
     },
-    Lines: { struct: 'VcgsLineRow', csv: csv(['---', 'Scene', 'Speaker', 'From', 'FromName', 'Text', 'Direction', 'Vo', 'Rich', 'DualWith'], ir.lines.map((l) => [l.id, l.scene, l.speaker ?? '', l.from ?? '', l.from_name ?? '', l.text, l.direction, l.vo, l.styled ? richText(l.styled) : '', l.dual ?? ''])) },
+    Lines: { struct: 'VcgsLineRow', csv: csv(['---', 'Scene', 'Speaker', 'From', 'FromName', 'Text', 'Direction', 'Vo', 'Rich', 'DualWith', 'Audio'], ir.lines.map((l) => [l.id, l.scene, l.speaker ?? '', l.from ?? '', l.from_name ?? '', l.text, l.direction, l.vo, l.styled ? richText(l.styled) : '', l.dual ?? '', l.audio ? voSound(l.id) : ''])) },
   };
 };
+
+/** The sound wave a line's take becomes, as an asset path. */
+const voSound = (lineId: string): string => `/Game/VCGS/VO/${lineId}.${lineId}`;
+
+/** Brings the takes in: VCGS/SourceAudio/vo/*.wav (beside the .uproject) as sound waves in /Game/VCGS/VO. */
+const importVoScript = () => `# Generated by VC Game Studio. Run it in the Unreal Editor (Tools > Execute
+# Python Script, with the Python Editor Script Plugin on) after each export:
+# it imports the recorded takes the handoff put in VCGS/SourceAudio/vo as
+# sound waves in /Game/VCGS/VO, named for their lines, replacing the old ones.
+import os
+import unreal
+
+SOURCE = os.path.join(unreal.Paths.project_dir(), "VCGS", "SourceAudio", "vo")
+DESTINATION = "/Game/VCGS/VO"
+
+
+def takes():
+    if not os.path.isdir(SOURCE):
+        return []
+    return sorted(f for f in os.listdir(SOURCE) if f.lower().endswith(".wav"))
+
+
+def import_takes(files):
+    tasks = []
+    for name in files:
+        task = unreal.AssetImportTask()
+        task.filename = os.path.join(SOURCE, name)
+        task.destination_path = DESTINATION
+        task.destination_name = os.path.splitext(name)[0]
+        task.replace_existing = True
+        task.automated = True
+        task.save = True
+        tasks.append(task)
+    if tasks:
+        unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(tasks)
+    return len(tasks)
+
+
+unreal.log("VCGS: imported %d takes into %s" % (import_takes(takes()), DESTINATION))
+`;
 
 const importScript = (root: string, structs: Record<string, string>) => `# Generated by VC Game Studio. Run it in the Unreal Editor (Tools > Execute
 # Python Script, with the Python Editor Script Plugin on) after each export:
@@ -1728,7 +1792,10 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
   for (const [name, content] of Object.entries(PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
   if (ir.levels.length) for (const [name, content] of Object.entries(LEVEL_PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
 
-  const storyPath = put(`${root}/story.json`, JSON.stringify({ ...JSON_FORMAT, generator: 'VC Game Studio', ...withoutNotes(ir) }, null, 2), 'generated');
+  // A line's take is a sound wave once import_vo.py has brought it in: story.json names that asset.
+  const storyIr = { ...withoutNotes(ir), lines: ir.lines.map((l) => (l.audio ? { ...l, audio: voSound(l.id) } : l)) };
+  const storyPath = put(`${root}/story.json`, JSON.stringify({ ...JSON_FORMAT, generator: 'VC Game Studio', ...storyIr }, null, 2), 'generated');
+  if (ir.lines.some((l) => l.audio)) put(`${root}/import_vo.py`, importVoScript(), 'generated');
   const keysPath = put(`${SOURCE}/Public/Generated/VcgsStoryKeys.h`, storyKeysHeader(ir), 'generated');
   const tables = dataTables(ir);
   const tablePaths: Record<string, string> = {};
@@ -1820,6 +1887,10 @@ export const unreal: EngineAdapter = {
     'Enable the VCGS plugin, and add Content/VCGS/Generated to Additional Non-Asset Directories to Package.',
     'Add a UVcgsSceneFlowComponent (with its scene key) to each story level; run import_datatables.py for the DataTables.',
     'For a level, open the map it belongs in and run Levels/build_level.py (Tools > Execute Python Script); run it again after each export.',
+    'Recorded takes arrive as WAV in VCGS/SourceAudio/vo: run import_vo.py to make them sound waves (/Game/VCGS/VO); the scene flow plays them.',
   ],
   generate: generateUnreal,
+  // Raw audio can't live in Content: the takes go beside it, as WAV, for import_vo.py to bring in.
+  takesDir: () => 'VCGS/SourceAudio',
+  takesAsWav: true,
 };

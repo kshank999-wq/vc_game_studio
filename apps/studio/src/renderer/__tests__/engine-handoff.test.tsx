@@ -152,7 +152,7 @@ describe('sending levels to the engine', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
       await screen.findByText('game/');
       fireEvent.click(screen.getByText('SEND TO GODOT'));
-      await waitFor(() => expect(says.at(-1)).toMatch(/^Sent \d+ files to game\. Kept your custom code in 1 place\.$/));
+      await waitFor(() => expect(says.at(-1)).toMatch(/^Sent \d+ files to game\. Kept your custom code in 1 place\. With .*take/));
       expect(disk[rules]).toContain('var mine := 1');
     } finally {
       delete (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker;

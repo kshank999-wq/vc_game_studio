@@ -2546,6 +2546,8 @@ ${UNREAL_PUZZLES}
             std::string Speaker;
             std::string Text;
             std::string Direction;
+            /** Its recorded take: the sound's asset path (/Game/VCGS/VO/<line>.<line>), empty when it has none. */
+            std::string Audio;
         };
 
         /** The words of a line and who says them. */
@@ -2556,7 +2558,7 @@ ${UNREAL_PUZZLES}
             // Voiceover: from a cinematic or an object (a radio, a TV, a speaker), overheard.
             const std::string from = l["from_name"].Str();
             if (!from.empty()) who = who.empty() ? from + " (V.O.)" : who + " (V.O., " + from + ")";
-            return {who, l["text"].Str(), l["direction"].Str()};
+            return {who, l["text"].Str(), l["direction"].Str(), l["audio"].Str()};
         }
     }
 }
