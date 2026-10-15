@@ -3000,7 +3000,9 @@ namespace VCGS
     /// The story as a plain on-screen player shows it (as Godot's debug player
     /// does): each line, action and cinematic with Continue, a choice's options,
     /// an encounter's Win and Lose, and on into the next scene. Speak says which
-    /// lines to hear now (one, or two at once for dual dialogue).
+    /// lines to hear now (one, or two at once for dual dialogue), and Subtitles
+    /// says what they say, one row a voice, until SubtitleSeconds run out (the
+    /// time to read them, or the takes' length once HoldSubtitles gives it).
     /// </summary>
     public sealed class DebugStory
     {
@@ -3011,8 +3013,53 @@ namespace VCGS
         /// <summary>What can be done now, in order (the first is what Continue or Enter does).</summary>
         public readonly List<string> Labels = new List<string>();
         public event Action<List<string>> Speak;
+        /// <summary>The subtitles on screen now: "Mara: Stand back.", one row a voice.</summary>
+        public readonly List<string> Subtitles = new List<string>();
+        /// <summary>How long the subtitles stay up from now.</summary>
+        public float SubtitleSeconds { get; private set; }
 
         public DebugStory(GameState game) { this.game = game; }
+
+        /// <summary>A line as a subtitle: who says it (and from where, for a voiceover), then what they say.</summary>
+        public static string Subtitle(GameState game, string lineId)
+        {
+            var (who, text, _) = StoryWalker.Line(game, lineId);
+            return who == "" ? text : who + ": " + text;
+        }
+
+        /// <summary>Time enough to read a subtitle: a second, and a twentieth of one a letter; two at the least.</summary>
+        public static float ReadingSeconds(string text) => Math.Max(2f, 1f + 0.05f * text.Length);
+
+        /// <summary>Keep the subtitles up this long (the takes' length, once they are playing).</summary>
+        public void HoldSubtitles(float seconds)
+        {
+            if (Subtitles.Count > 0 && seconds > 0) SubtitleSeconds = seconds;
+        }
+
+        /// <summary>Time passes: the subtitles go when their time is up.</summary>
+        public void Tick(float seconds)
+        {
+            if (Subtitles.Count == 0) return;
+            SubtitleSeconds -= seconds;
+            if (SubtitleSeconds <= 0)
+            {
+                Subtitles.Clear();
+                SubtitleSeconds = 0;
+            }
+        }
+
+        void Say(List<string> lineIds)
+        {
+            Subtitles.Clear();
+            SubtitleSeconds = 0;
+            foreach (var id in lineIds)
+            {
+                var row = Subtitle(game, id);
+                Subtitles.Add(row);
+                SubtitleSeconds = Math.Max(SubtitleSeconds, ReadingSeconds(row));
+            }
+            Speak?.Invoke(lineIds);
+        }
 
         void Show(string text, params (string label, Action act)[] options)
         {
@@ -3062,12 +3109,12 @@ namespace VCGS
             player.DialogueRequested += id =>
             {
                 Show(Line(id), Continue());
-                Speak?.Invoke(new List<string> { id });
+                Say(new List<string> { id });
             };
             player.DualRequested += (first, second) =>
             {
                 Show(Line(first) + "\n\n    ‖ at the same time ‖\n\n" + Line(second), Continue());
-                Speak?.Invoke(new List<string> { first, second });
+                Say(new List<string> { first, second });
             };
             player.CinematicRequested += key => Show("[Cinematic] " + NameIn(game.Story.Cinematics, key), Continue());
             player.FreePlayStarted += ends => Show("[Free play] " + (ends == "" ? "Play on, then carry on." : ends), ("Done", () => player.Advance()));
@@ -3106,6 +3153,8 @@ namespace VCGS
         [SerializeField] string sceneKey = "";
         [Tooltip("Play each line's recorded take as it comes up.")]
         [SerializeField] bool playVoices = true;
+        [Tooltip("Show what each voice says as a subtitle while its take plays.")]
+        [SerializeField] bool showSubtitles = true;
 
         public DebugStory Story { get; private set; }
         readonly List<AudioSource> voices = new List<AudioSource>();
@@ -3130,6 +3179,7 @@ namespace VCGS
             foreach (var v in voices) v.Stop();
             if (!playVoices || VcgsGame.Instance == null) return;
             var n = 0;
+            var longest = 0f;
             foreach (var id in lineIds)
             {
                 var clip = StoryWalker.Voice(VcgsGame.Instance.State, id);
@@ -3137,8 +3187,29 @@ namespace VCGS
                 while (voices.Count <= n) voices.Add(gameObject.AddComponent<AudioSource>());
                 voices[n].clip = clip;
                 voices[n].Play();
+                longest = Math.Max(longest, clip.length);
                 n++;
             }
+            // The subtitles stay up as long as the takes play (else the time to read them).
+            Story.HoldSubtitles(longest);
+        }
+
+        void Update()
+        {
+            if (Story != null) Story.Tick(Time.deltaTime);
+        }
+
+        /// <summary>The subtitles, centred above the box: a row a voice, white on a dark band.</summary>
+        void DrawSubtitles(float top)
+        {
+            if (!showSubtitles || Story.Subtitles.Count == 0) return;
+            var style = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 18, alignment = TextAnchor.MiddleCenter };
+            var w = Math.Min(900f, Screen.width - 40f);
+            var h = 30f * Story.Subtitles.Count + 12f;
+            var band = new Rect((Screen.width - w) / 2f, top - h - 12f, w, h);
+            GUI.Box(band, "");
+            for (var i = 0; i < Story.Subtitles.Count; i++)
+                GUI.Label(new Rect(band.x + 8f, band.y + 6f + 30f * i, band.width - 16f, 30f), Story.Subtitles[i], style);
         }
 
         void OnGUI()
@@ -3150,6 +3221,7 @@ namespace VCGS
                 if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.Space) { Story.Do(0); e.Use(); }
                 else if (e.keyCode >= KeyCode.Alpha1 && e.keyCode <= KeyCode.Alpha9) { Story.Do(e.keyCode - KeyCode.Alpha1); e.Use(); }
             }
+            DrawSubtitles(Screen.height * 0.55f);
             var w = Math.Min(640f, Screen.width - 40f);
             GUILayout.BeginArea(new Rect((Screen.width - w) / 2f, Screen.height * 0.55f, w, Screen.height * 0.42f));
             var style = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 16 };

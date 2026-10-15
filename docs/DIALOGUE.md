@@ -194,6 +194,17 @@ box (a line, an action, a cinematic, with Continue; a choice's options; an
 encounter's Win and Lose) and carries on into the next scene. Each line's take
 plays as it comes up, and a dual-dialogue pair's two takes play together.
 
+**Subtitles** show what each voice says while its take plays, centred just
+above the box, white on a dark band: who says it, then the line ("Mara: Water's
+holding it shut."; a voiceover reads "Radio (V.O.): …"), a row a voice, so a
+dual-dialogue pair gets two. They stay up as long as the longer take; a line
+without a take (or with voices off) keeps its subtitle up long enough to read,
+a second and a twentieth of one a letter, two at the least. Each player has a
+switch to turn them off: Godot `show_subtitles`, Unity **Show Subtitles**,
+Unreal `bShowSubtitles`. For your own screens: Godot `subtitles()` and
+`subtitle_seconds()`, Unity `DebugStory.Subtitles` and `SubtitleSeconds`,
+Unreal `GetSubtitles()` (or `vcgs::DebugStory::Subtitles`).
+
 - **Unity:** add **VcgsDebugPlayer** next to VcgsGame, set its scene (as in
   `StoryKeys.Scenes`) and press Play. Enter or Space carries on; 1–9 pick an
   option. The takes play on AudioSources it adds; untick **Play Voices** for

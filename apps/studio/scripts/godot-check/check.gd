@@ -250,6 +250,16 @@ func _initialize() -> void:
 	print("take: ", take.get_class() if take else "none", " · voices playing: ", player._players.size())
 	if not take is AudioStream or player._players.size() != 2:
 		fail("Mara's take should be imported and both voices should play")
+	# Their subtitles: a row a voice, up for as long as the longer take plays.
+	var longest := maxf(take.get_length(), VCGSDialogue.audio("sc_03_line_03").get_length()) if take is AudioStream else 0.0
+	print("subtitles: ", " | ".join(player.subtitles()), " · %.2fs (takes %.2fs)" % [player.subtitle_seconds(), longest])
+	if player.subtitles().size() != 2 or not player.subtitles()[0].begins_with("Mara: ") or player.subtitles()[1] != "The Explorer: Stand back. I’ll find it.":
+		fail("the subtitles should be Mara's line then the Explorer's, got " + " | ".join(player.subtitles()))
+	if longest <= 0.0 or absf(player.subtitle_seconds() - longest) > 0.01 or not player._subtitle_panel.visible:
+		fail("the subtitles should show for as long as the longer take")
+	player._process(longest + 0.1)
+	if not player.subtitles().is_empty() or player._subtitle_panel.visible:
+		fail("the subtitles should go when the takes end")
 	for i in 2:
 		player.press(0)
 	var free_play: Array = player.labels()

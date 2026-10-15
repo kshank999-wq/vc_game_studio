@@ -207,7 +207,7 @@ namespace UnityEngine
         public string text = "";
     }
 
-    public sealed class AudioClip : Object { }
+    public sealed class AudioClip : Object { public float length; }
 
     public sealed class AudioSource : Behaviour
     {
@@ -348,12 +348,15 @@ namespace UnityEngine
         public static int height = 720;
     }
 
+    public enum TextAnchor { UpperLeft, UpperCenter, MiddleCenter }
+
     public sealed class GUIStyle
     {
         public bool wordWrap;
         public int fontSize;
+        public TextAnchor alignment;
         public GUIStyle() { }
-        public GUIStyle(GUIStyle other) { wordWrap = other.wordWrap; fontSize = other.fontSize; }
+        public GUIStyle(GUIStyle other) { wordWrap = other.wordWrap; fontSize = other.fontSize; alignment = other.alignment; }
     }
 
     public sealed class GUISkin
@@ -368,6 +371,7 @@ namespace UnityEngine
         public static GUISkin skin = new GUISkin();
         public static bool Button(Rect position, string text) => false;
         public static void Box(Rect position, string text) { }
+        public static void Label(Rect position, string text, GUIStyle style) { }
         public static void SetNextControlName(string name) { }
         public static void FocusControl(string name) { }
         public static string GetNameOfFocusedControl() => "";

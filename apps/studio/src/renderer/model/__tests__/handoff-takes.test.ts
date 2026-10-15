@@ -34,14 +34,18 @@ describe('recorded takes in the engine handoff', () => {
     expect(fileOf(unreal, 'Content/VCGS/Generated/import_vo.py')).toContain('DESTINATION = "/Game/VCGS/VO"');
   });
 
-  it('Unity and Unreal each get a debug player that plays the takes', () => {
+  it('Unity and Unreal each get a debug player that plays the takes, and every debug player subtitles them', () => {
     const unity = planHandoff(forEngine('unity')).output!.files;
     const player = unity.find((f) => f.path.endsWith('/VcgsDebugPlayer.cs'))!.content as string;
     expect(player).toContain('StoryWalker.Voice(VcgsGame.Instance.State, id)');
+    expect(player).toContain('Story.HoldSubtitles(longest)');
     expect(unity.find((f) => f.path.endsWith('README.md'))!.content).toContain('VcgsDebugPlayer');
     const unreal = planHandoff(forEngine('unreal')).output!.files;
     const hud = unreal.find((f) => f.path.endsWith('/Private/VcgsDebugHUD.cpp'))!.content as string;
     expect(hud).toContain('UGameplayStatics::SpawnSound2D(this, Sound)');
+    expect(hud).toContain('Debug->HoldSubtitles(Longest)');
+    const godot = planHandoff(forEngine('godot')).output!.files.find((f) => f.path.endsWith('/debug_player.gd'))!;
+    expect(godot.content).toContain('func subtitles() -> Array[String]:');
     expect(unreal.find((f) => f.path.endsWith('/Public/VcgsCore.h'))!.content).toContain('class DebugStory');
     expect(unreal.find((f) => f.path.endsWith('README.md'))!.content).toContain('AVcgsDebugHUD');
   });

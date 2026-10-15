@@ -150,4 +150,5 @@ struct FMath
 {
     static double Sqrt(double v) { return std::sqrt(v); }
     template <typename T> static T Max(T a, T b) { return a < b ? b : a; }
+    template <typename T> static T Min(T a, T b) { return b < a ? b : a; }
 };

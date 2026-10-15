@@ -432,6 +432,15 @@ int main()
         std::printf("debug HUD: %s · %s\n", Join(spoken, " | ").c_str(), Join(debug.Labels, ", ").c_str());
         if (Join(spoken, ",") != "sc_03_line_02+sc_03_line_03") Fail("the debug HUD should speak Mara's and the Explorer's takes together, got " + Join(spoken, ","));
         if (debug.Text.find("at the same time") == std::string::npos || debug.Labels.empty() || debug.Labels[0] != "Continue") Fail("the debug HUD should show both lines with Continue, got " + debug.Text);
+        // Their subtitles: a row a voice, up for the time to read them, or the takes' length once they play.
+        std::printf("subtitles: %s · %.2fs\n", Join(debug.Subtitles, " | ").c_str(), debug.SubtitleSeconds);
+        if (debug.Subtitles.size() != 2 || debug.Subtitles[0].rfind("Mara: ", 0) != 0 || debug.Subtitles[1] != "The Explorer: Stand back. I’ll find it.") Fail("the subtitles should be Mara's line then the Explorer's, got " + Join(debug.Subtitles, " | "));
+        if (std::fabs(debug.SubtitleSeconds - vcgs::DebugStory::ReadingSeconds(debug.Subtitles[0])) > 0.001f || std::fabs(debug.SubtitleSeconds - 3.85f) > 0.001f) Fail("the subtitles should stay up long enough to read Mara's, the longer (as in Unity: 3.85s)");
+        debug.HoldSubtitles(4.5f);
+        debug.Tick(4.f);
+        if (debug.Subtitles.size() != 2) Fail("the subtitles should stay up while the takes play");
+        debug.Tick(1.f);
+        if (!debug.Subtitles.empty()) Fail("the subtitles should go when the takes end");
         if (vcgs::StoryWalker::GetLine(debugGame, "sc_03_line_02").Audio != "/Game/VCGS/VO/sc_03_line_02.sc_03_line_02") Fail("Mara's line should name its imported sound");
         // On through the scene, always taking the first option: it ends into a cinematic (not a scene), so it says where the story goes.
         for (int i = 0; i < 20 && !debug.Labels.empty(); i++) debug.Do(0);

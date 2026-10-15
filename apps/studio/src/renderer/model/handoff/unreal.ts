@@ -1286,8 +1286,8 @@ class UVcgsSubsystem;
  * Each line, action and cinematic shows in a box at the bottom with what can
  * be done; Space or Enter does the first, 1–9 pick an option (a choice's, or
  * Win and Lose). Each line's recorded take (imported by import_vo.py) plays as
- * it comes up, both at once for dual dialogue. The codex (C) works as in
- * AVcgsCodexHUD.
+ * it comes up, both at once for dual dialogue, with what it says as a
+ * subtitle for as long as it plays. The codex (C) works as in AVcgsCodexHUD.
  */
 UCLASS()
 class VCGS_API AVcgsDebugHUD : public AVcgsCodexHUD
@@ -1299,11 +1299,15 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") FString SceneKey;
     /** Play each line's recorded take as it comes up. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") bool bPlayVoices = true;
+    /** Show what each voice says as a subtitle while its take plays. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") bool bShowSubtitles = true;
 
     /** What the box shows now. */
     UFUNCTION(BlueprintPure, Category = "VCGS") FString GetDebugText() const;
     /** What can be done now, in order (the first is what Space or Enter does). */
     UFUNCTION(BlueprintPure, Category = "VCGS") TArray<FString> GetDebugOptions() const;
+    /** The subtitles up now, a row a voice ("Mara: Stand back."); empty when none. */
+    UFUNCTION(BlueprintPure, Category = "VCGS") TArray<FString> GetSubtitles() const;
     /** Do what the option at this place does. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") void DebugDo(int32 Option);
     /** Play this scene from its start. */
@@ -1318,6 +1322,8 @@ private:
     bool EnsureStory();
     /** Hear these lines: the last ones stop, and each line's take plays at once. */
     void Say(const std::vector<std::string>& LineIds);
+    /** The subtitles, centred above the box (Top is the box's top): white on a dark band. */
+    void DrawSubtitles(float Top);
     UPROPERTY() TArray<UAudioComponent*> Voices;
 };
 `,
@@ -1362,11 +1368,44 @@ void AVcgsDebugHUD::Say(const std::vector<std::string>& LineIds)
     Voices.Reset();
     UVcgsSubsystem* Story = StorySubsystem();
     if (!bPlayVoices || !Story || !Story->State()) return;
+    float Longest = 0.f;
     for (const std::string& LineId : LineIds)
     {
         const std::string Audio = vcgs::StoryWalker::GetLine(*Story->State(), LineId).Audio;
         if (Audio.empty()) continue;
-        if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, *ToF(Audio))) Voices.Add(UGameplayStatics::SpawnSound2D(this, Sound));
+        if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, *ToF(Audio)))
+        {
+            Voices.Add(UGameplayStatics::SpawnSound2D(this, Sound));
+            Longest = FMath::Max(Longest, Sound->GetDuration());
+        }
+    }
+    // The subtitles stay up as long as the takes play (else the time to read them).
+    if (Debug) Debug->HoldSubtitles(Longest);
+}
+
+TArray<FString> AVcgsDebugHUD::GetSubtitles() const
+{
+    TArray<FString> Rows;
+    if (Debug) for (const std::string& Row : Debug->Subtitles) Rows.Add(ToF(Row));
+    return Rows;
+}
+
+void AVcgsDebugHUD::DrawSubtitles(float Top)
+{
+    if (!bShowSubtitles || !Debug || Debug->Subtitles.empty()) return;
+    const float Rows = static_cast<float>(Debug->Subtitles.size());
+    const float Width = FMath::Min(900.f, Canvas->ClipX - 48.f);
+    const float Height = 26.f * Rows + 12.f;
+    const float Left = (Canvas->ClipX - Width) / 2.f;
+    const float BandTop = Top - Height - 12.f;
+    DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.7f), Left, BandTop, Width, Height);
+    float Y = BandTop + 6.f;
+    for (const std::string& Row : Debug->Subtitles)
+    {
+        float TextWidth = 0.f, TextHeight = 0.f;
+        GetTextSize(ToF(Row), TextWidth, TextHeight);
+        DrawText(ToF(Row), FLinearColor::White, Left + FMath::Max(8.f, (Width - TextWidth) / 2.f), Y);
+        Y += 26.f;
     }
 }
 
@@ -1401,6 +1440,7 @@ void AVcgsDebugHUD::DrawHUD()
         DrawText(TEXT("VCGS: no story loaded; export it from VC Game Studio."), FLinearColor::White, 24.f, Canvas->ClipY - 48.f);
         return;
     }
+    Debug->Tick(GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.f);
     if (PlayerOwner)
     {
         static const FKey Digits[] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine};
@@ -1418,6 +1458,7 @@ void AVcgsDebugHUD::DrawHUD()
     Rows.push_back(Row);
     const float Height = 36.f + 20.f * static_cast<float>(Rows.size() + Debug->Labels.size());
     const float Top = Canvas->ClipY - Height - 24.f;
+    DrawSubtitles(Top);
     DrawRect(FLinearColor(0.05f, 0.04f, 0.03f, 0.92f), 24.f, Top, Canvas->ClipX - 48.f, Height);
     float Y = Top + 12.f;
     for (const std::string& Text : Rows)
@@ -1919,7 +1960,8 @@ for your own UMG widget.
 To play the story through, set **AVcgsDebugHUD** as the HUD class instead (it
 has the codex too) and set its SceneKey: each line shows in a box and its
 recorded take plays (run \`import_vo.py\` first), both at once for dual
-dialogue. Space or Enter carries on; 1–9 pick an option.
+dialogue, with what it says as a subtitle while it plays. Space or Enter
+carries on; 1–9 pick an option.
 
 The game state lives in the \`UVcgsSubsystem\` (flags, items, arcs and the rest,
 all Blueprint-callable). Quests start and complete by their rules (\`OnQuestStarted\`,

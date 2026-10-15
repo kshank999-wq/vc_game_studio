@@ -176,8 +176,8 @@ same text is \`new Codex(state).Text()\` for your own UI.
 
 To play the story through before then, add **VcgsDebugPlayer** next to
 VcgsGame and set its scene: each line shows on screen and its recorded take
-plays (Resources/VCGS/vo), both at once for dual dialogue. Enter or Space
-carries on; 1–9 pick an option.
+plays (Resources/VCGS/vo), both at once for dual dialogue, with what it says
+as a subtitle while it plays. Enter or Space carries on; 1–9 pick an option.
 
 The Characters, Items, Locations and Cinematics folders hold a ScriptableObject
 per element, for designers to find in the Project window. So do Lore, Quests,

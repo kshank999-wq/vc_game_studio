@@ -2567,7 +2567,9 @@ ${UNREAL_PUZZLES}
      * The story as a plain on-screen player shows it (as Godot's and Unity's
      * debug players do): each line, action and cinematic with Continue, a
      * choice's options, an encounter's Win and Lose, and on into the next scene.
-     * Speak says which lines to hear now (one, or two at once for dual dialogue).
+     * Speak says which lines to hear now (one, or two at once for dual dialogue),
+     * and Subtitles says what they say, one row a voice, until SubtitleSeconds
+     * run out (the time to read them, or the takes' length once HoldSubtitles gives it).
      */
     class DebugStory
     {
@@ -2576,6 +2578,38 @@ ${UNREAL_PUZZLES}
         /** What can be done now, in order (the first is what Continue or Enter does). */
         std::vector<std::string> Labels;
         std::function<void(const std::vector<std::string>&)> Speak;
+        /** The subtitles on screen now: "Mara: Stand back.", one row a voice. */
+        std::vector<std::string> Subtitles;
+        /** How long the subtitles stay up from now. */
+        float SubtitleSeconds = 0.f;
+
+        /** A line as a subtitle: who says it (and from where, for a voiceover), then what they say. */
+        static std::string Subtitle(const GameState& game, const std::string& lineId)
+        {
+            const StoryWalker::Line l = StoryWalker::GetLine(game, lineId);
+            return l.Speaker.empty() ? l.Text : l.Speaker + ": " + l.Text;
+        }
+
+        /** Time enough to read a subtitle: a second, and a twentieth of one a letter; two at the least. */
+        static float ReadingSeconds(const std::string& text) { return std::max(2.f, 1.f + 0.05f * static_cast<float>(Letters(text))); }
+
+        /** Keep the subtitles up this long (the takes' length, once they are playing). */
+        void HoldSubtitles(float seconds)
+        {
+            if (!Subtitles.empty() && seconds > 0.f) SubtitleSeconds = seconds;
+        }
+
+        /** Time passes: the subtitles go when their time is up. */
+        void Tick(float seconds)
+        {
+            if (Subtitles.empty()) return;
+            SubtitleSeconds -= seconds;
+            if (SubtitleSeconds <= 0.f)
+            {
+                Subtitles.clear();
+                SubtitleSeconds = 0.f;
+            }
+        }
 
         explicit DebugStory(GameState& state) : game(state) {}
         DebugStory(const DebugStory&) = delete;
@@ -2615,6 +2649,26 @@ ${UNREAL_PUZZLES}
         /** The scene to play next: started once the one playing has returned, never from inside its own callbacks. */
         std::string pending;
         bool hasPending = false;
+
+        /** Letters, not bytes: UTF-8 continuation bytes don't count (as Unity's and Godot's lengths don't). */
+        static size_t Letters(const std::string& text)
+        {
+            size_t n = 0;
+            for (unsigned char c : text) if ((c & 0xC0) != 0x80) n++;
+            return n;
+        }
+
+        void Say(const std::vector<std::string>& lineIds)
+        {
+            Subtitles.clear();
+            SubtitleSeconds = 0.f;
+            for (const std::string& id : lineIds)
+            {
+                Subtitles.push_back(Subtitle(game, id));
+                SubtitleSeconds = std::max(SubtitleSeconds, ReadingSeconds(Subtitles.back()));
+            }
+            if (Speak) Speak(lineIds);
+        }
 
         void Show(const std::string& text, std::vector<std::pair<std::string, std::function<void()>>> options = {})
         {
@@ -2671,12 +2725,12 @@ ${UNREAL_PUZZLES}
             player->OnDialogue = [this](const std::string& id)
             {
                 Show(Line(id), {Continue()});
-                if (Speak) Speak({id});
+                Say({id});
             };
             player->OnDual = [this](const std::string& first, const std::string& second)
             {
                 Show(Line(first) + "\n\n    || at the same time ||\n\n" + Line(second), {Continue()});
-                if (Speak) Speak({first, second});
+                Say({first, second});
             };
             player->OnCinematic = [this](const std::string& key) { Show("[Cinematic] " + NameIn(game.StoryData.Cinematics, key), {Continue()}); };
             player->OnFreePlay = [this](const std::string& ends) { Show("[Free play] " + (ends.empty() ? std::string("Play on, then carry on.") : ends), {{"Done", [this] { player->Advance(); }}}); };

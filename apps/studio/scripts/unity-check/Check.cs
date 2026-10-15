@@ -100,6 +100,15 @@ static class Check
         Console.WriteLine("debug player: " + string.Join(" | ", spoken) + " · " + string.Join(", ", debug.Labels));
         if (string.Join(",", spoken) != "sc_03_line_02+sc_03_line_03") Fail("the debug player should speak Mara's and the Explorer's takes together, got " + string.Join(",", spoken));
         if (!debug.Text.Contains("at the same time") || debug.Labels.Count == 0 || debug.Labels[0] != "Continue") Fail("the debug player should show both lines with Continue, got " + debug.Text);
+        // Their subtitles: a row a voice, up for the time to read them, or the takes' length once they play.
+        Console.WriteLine("subtitles: " + string.Join(" | ", debug.Subtitles) + " · " + debug.SubtitleSeconds + "s");
+        if (debug.Subtitles.Count != 2 || !debug.Subtitles[0].StartsWith("Mara: ") || debug.Subtitles[1] != "The Explorer: Stand back. I’ll find it.") Fail("the subtitles should be Mara's line then the Explorer's, got " + string.Join(" | ", debug.Subtitles));
+        if (Math.Abs(debug.SubtitleSeconds - DebugStory.ReadingSeconds(debug.Subtitles[0])) > 0.001f) Fail("the subtitles should stay up long enough to read Mara's, the longer");
+        debug.HoldSubtitles(4.5f);
+        debug.Tick(4f);
+        if (debug.Subtitles.Count != 2) Fail("the subtitles should stay up while the takes play");
+        debug.Tick(1f);
+        if (debug.Subtitles.Count != 0) Fail("the subtitles should go when the takes end");
 
         // Rules can ask about quests and lore.
         var asks = new Dictionary<string, object> { ["match"] = "all", ["items"] = new List<object> {
