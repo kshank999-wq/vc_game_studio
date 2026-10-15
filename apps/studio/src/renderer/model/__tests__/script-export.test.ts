@@ -140,6 +140,32 @@ describe('the recording script', () => {
     expect(csv[0]).toMatch(/^File,Take,Scene/);
   });
 
+  it('each line has its subtitle, as the engines get it, and how long it shows', () => {
+    const { p } = setup();
+    const r = recordingScript(p);
+    const lines = r.scenes[0]!.items.flatMap((i) => (i.kind === 'line' ? [i] : []));
+    const ir = buildIR(p);
+    // The same subtitle, and the same time, as the handoff gives each engine.
+    for (const l of lines) {
+      const handed = ir.lines.find((x) => x.id === l.key)!;
+      expect([l.subtitle, l.subtitleSeconds]).toEqual([handed.subtitle, handed.subtitle_seconds]);
+    }
+    expect(lines[1]!.subtitle).toMatch(/^Mara: /);
+    // A voiceover's names where it plays from.
+    expect(lines[2]!.subtitle).toMatch(/^Radio \(V\.O\.\): /);
+    const html = recordingHtml(r);
+    expect(html).toContain(`<b>Subtitle</b> · ${lines[1]!.subtitleSeconds}s: ${lines[1]!.subtitle}`);
+    const csv = recordingCsv(r).trim().split('\n');
+    expect(csv[0]).toMatch(/,Status,Subtitle,Subtitle seconds$/);
+    expect(csv[2]).toContain(`${lines[1]!.subtitle},${lines[1]!.subtitleSeconds}`);
+  });
+
+  it('a recorded line’s subtitle shows for its take’s length', () => {
+    const sample = sunkenVault();
+    const mara = recordingScript(sample).scenes.flatMap((s) => s.items).find((i) => i.kind === 'line' && i.key === 'sc_03_line_02');
+    expect(mara && mara.kind === 'line' && [mara.subtitle, mara.subtitleSeconds]).toEqual(['Mara: Water’s holding it shut. There’s a lever somewhere.', 2.5]);
+  });
+
   it('for one actor: only their lines, each with the line before it', () => {
     const { p, mara } = setup();
     const r = recordingScript(p, { characterId: mara });

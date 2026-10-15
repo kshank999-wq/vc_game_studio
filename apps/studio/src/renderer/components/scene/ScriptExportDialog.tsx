@@ -5,6 +5,7 @@ import { zip } from '../../model/handoff/zip';
 import { TakeControl } from './TakeControl';
 import { usePreferences } from '../../preferences';
 import { projectFountain, recordingCsv, recordingHtml, recordingScript, scriptFileName, scriptHtml } from '../../model/script-export';
+import { secondsLabel } from '../../model/subtitles';
 import type { Project } from '../../model/types';
 
 export type ScriptExportKind = 'script' | 'recording' | 'takes';
@@ -113,7 +114,7 @@ export const ScriptExportDialog = ({
           {kind === 'script'
             ? 'Each scene as a screenplay: its heading, what happens, and who says what, in the order of its beats. Fountain opens in Final Draft, Highland, WriterSolo and VC Writer.'
             : kind === 'recording'
-              ? 'For the voice actors: every line in the order it plays, numbered, with how it’s said and the file name the engines play it by. For one actor, just their lines, each with the line before it to come in on.'
+              ? 'For the voice actors: every line in the order it plays, numbered, with how it’s said, the file name the engines play it by and its subtitle. For one actor, just their lines, each with the line before it to come in on.'
               : 'Upload each recorded take and its line is marked recorded. Drop in a whole session at once: files named for their lines (as the recording script names them) go to their lines.'}
         </p>
         <div className="setup-row script-export-opts">
@@ -174,6 +175,9 @@ export const ScriptExportDialog = ({
                         {i.direction && <span className="dir"> ({i.direction})</span>} <span className="key mono">{i.key}</span>
                       </div>
                       <div className="say">{i.text}</div>
+                      <div className="takes-subtitle muted">
+                        Subtitle · {secondsLabel(i.subtitleSeconds)}: {i.subtitle}
+                      </div>
                     </div>
                     <TakeControl project={project} lineId={i.lineId} onCommit={onCommit} />
                   </li>

@@ -97,7 +97,11 @@ script for voice actors**) is how the script runs for the voice actors: each
 scene's heading and what is going on, the action between lines for context,
 and every line in the order it plays, numbered, with its cue, its direction,
 whether it's recorded yet, and the **file name the engines play it by**
-(`sc_03_line_02`), so the takes come back named to drop straight in.
+(`sc_03_line_02`), so the takes come back named to drop straight in. Under
+each line is its **subtitle** as the engines get it ("Subtitle · 2.5s: Mara:
+Water's holding it shut."), with how long it shows: the take's length once it
+is recorded, else the time to read it. The **Takes** list shows it too, so the
+subtitle team can check each against its take.
 
 - **Lines for: Everyone** — the whole session, with a table of lines and
   words per voice.
@@ -106,7 +110,7 @@ whether it's recorded yet, and the **file name the engines play it by**
 
 Download it as a page to print or send (.html), as a spreadsheet for the
 studio (.csv: file, take, scene, cue, voice, direction, line, cue in,
-status), or print it.
+status, subtitle, subtitle seconds), or print it.
 
 ### Recorded takes
 

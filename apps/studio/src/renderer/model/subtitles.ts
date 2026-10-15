@@ -1,3 +1,6 @@
+import { plainInline } from './inline';
+import type { DialogueLine, Project } from './types';
+
 /**
  * Subtitles for spoken lines: who says it (and from where, for a voiceover),
  * then what they say, and how long to show it. The play-through and Play Mode
@@ -29,3 +32,12 @@ const srtTime = (seconds: number): string => {
 
 /** A take's subtitle as an .srt file: one cue, from the start for as long as it shows. */
 export const srtFile = (subtitle: string, seconds: number): string => `1\n${srtTime(0)} --> ${srtTime(seconds)}\n${subtitle}\n`;
+
+/** A line's subtitle and how long it shows, as the handoff, the recording script and the players give it. */
+export const lineSubtitle = (project: Project, line: DialogueLine): { subtitle: string; seconds: number } => {
+  const subtitle = subtitleText(subtitleWho(project.objects[line.speakerId ?? '']?.name ?? null, line.voiceFrom ? project.objects[line.voiceFrom]?.name : undefined), plainInline(line.text));
+  return { subtitle, seconds: subtitleSeconds(subtitle, line.take?.seconds) };
+};
+
+/** Seconds as the scripts show them: "2.5s". */
+export const secondsLabel = (seconds: number): string => `${Math.round(seconds * 100) / 100}s`;

@@ -1,5 +1,6 @@
 import { toKey } from './keys';
 import { markupInline, plainInline } from './inline';
+import { lineSubtitle, secondsLabel } from './subtitles';
 import { continues, cueLabel, sceneHeading, sceneLines, saidBy } from './scene';
 import { hasExtension } from './screenplay';
 import type { DialogueLine, Project, StoryObject } from './types';
@@ -291,6 +292,9 @@ export interface RecordingLine {
   together?: boolean;
   /** What comes just before it in the scene, for an actor reading one part. */
   before?: { cue: string; text: string };
+  /** Its subtitle, as the engines get it ("Mara: Lit. You go first."), and how long it shows: the take's length, else the time to read it. */
+  subtitle: string;
+  subtitleSeconds: number;
 }
 
 export interface RecordingScene {
@@ -365,6 +369,7 @@ export const recordingScript = (project: Project, options: { sceneIds?: readonly
           ...(line.voiceFrom && project.objects[line.voiceFrom] ? { from: project.objects[line.voiceFrom]!.name } : {}),
           ...(line.dual && !line.joined ? { together: true } : {}),
           ...(who && before ? { before } : {}),
+          ...(({ subtitle, seconds }) => ({ subtitle, subtitleSeconds: seconds }))(lineSubtitle(project, line)),
         });
       }
       before = { cue, text: plainInline(line.text) };
@@ -410,6 +415,8 @@ h2 { font-family: 'Courier Prime', 'Courier New', monospace; font-size: 12pt; ma
 .meta { text-align: right; font-size: 8.5pt; color: #666; white-space: nowrap; }
 .key { font-family: 'IBM Plex Mono', monospace; }
 .done { color: #2a7a2a; }
+.subtitle { font-size: 9pt; color: #555; margin-top: 0.25em; }
+.subtitle b { font-weight: 600; color: #333; }
 `;
 
 /** The recording script as a page to print or hand to the studio. */
@@ -424,7 +431,7 @@ export const recordingHtml = (script: RecordingScript): string => {
         .map((i) =>
           i.kind === 'action'
             ? `<p class="act">${esc(i.text)}</p>`
-            : `<div class="line"><div class="no">${i.take}</div><div>${i.before ? `<div class="before">after ${esc(i.before.cue)}: “${esc(i.before.text)}”</div>` : ''}<span class="cue">${esc(i.cue)}</span>${i.together ? ' <span class="dir">(at the same time as the line above)</span>' : ''}${i.direction ? ` <span class="dir">(${esc(i.direction)})</span>` : ''}<div class="say">${esc(i.text)}</div></div><div class="meta"><div class="key">${esc(i.key)}</div><div class="${i.vo === 'recorded' ? 'done' : ''}">${VO_STATUS[i.vo]}</div></div></div>`,
+            : `<div class="line"><div class="no">${i.take}</div><div>${i.before ? `<div class="before">after ${esc(i.before.cue)}: “${esc(i.before.text)}”</div>` : ''}<span class="cue">${esc(i.cue)}</span>${i.together ? ' <span class="dir">(at the same time as the line above)</span>' : ''}${i.direction ? ` <span class="dir">(${esc(i.direction)})</span>` : ''}<div class="say">${esc(i.text)}</div><div class="subtitle"><b>Subtitle</b> · ${secondsLabel(i.subtitleSeconds)}: ${esc(i.subtitle)}</div></div><div class="meta"><div class="key">${esc(i.key)}</div><div class="${i.vo === 'recorded' ? 'done' : ''}">${VO_STATUS[i.vo]}</div></div></div>`,
         )
         .join('\n');
       return `<h2><span>${esc(s.heading)}</span><span>${esc(s.code)}</span></h2>${s.setting ? `<p class="setting">${esc(s.setting)}</p>` : ''}\n${items}`;
@@ -438,10 +445,10 @@ const csvCell = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` 
 /** The recording script as a spreadsheet: one row per line, its file name first. */
 export const recordingCsv = (script: RecordingScript): string =>
   [
-    ['File', 'Take', 'Scene', 'Heading', 'Cue', 'Voice', 'Plays from', 'Direction', 'Line', 'Cue in', 'Status'].join(','),
+    ['File', 'Take', 'Scene', 'Heading', 'Cue', 'Voice', 'Plays from', 'Direction', 'Line', 'Cue in', 'Status', 'Subtitle', 'Subtitle seconds'].join(','),
     ...script.scenes.flatMap((s) =>
       s.items.flatMap((i) =>
-        i.kind === 'line' ? [[i.key, String(i.take), s.code || s.name, s.heading, i.cue, i.voice, i.from ?? '', i.direction, i.text, i.before ? `${i.before.cue}: ${i.before.text}` : '', VO_STATUS[i.vo]].map(csvCell).join(',')] : [],
+        i.kind === 'line' ? [[i.key, String(i.take), s.code || s.name, s.heading, i.cue, i.voice, i.from ?? '', i.direction, i.text, i.before ? `${i.before.cue}: ${i.before.text}` : '', VO_STATUS[i.vo], i.subtitle, String(i.subtitleSeconds)].map(csvCell).join(',')] : [],
       ),
     ),
   ].join('\n') + '\n';

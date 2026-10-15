@@ -1,5 +1,5 @@
 import { takeFileOf } from '../audio-takes';
-import { subtitleSeconds, subtitleText, subtitleWho } from '../subtitles';
+import { lineSubtitle } from '../subtitles';
 import { buildCast, type IrCast } from './cast';
 import { recipeOf } from '../crafting';
 import { creditLine, creditsOf } from '../credits';
@@ -913,9 +913,7 @@ export const buildIR = (given: Project): HandoffIR => {
         ...(hasInline(l.text) ? { styled: l.text } : {}),
         ...((partner) => (partner ? { dual: lineId(project.objects[l.sceneId]!.data.code ?? '', partner.order) } : {}))(dualWith(project, l.id)),
         ...((audio) => (audio ? { audio } : {}))(takeFileOf(project, l)),
-        ...((subtitle) => ({ subtitle, subtitle_seconds: subtitleSeconds(subtitle, l.take?.seconds) }))(
-          subtitleText(subtitleWho(project.objects[l.speakerId ?? '']?.name ?? null, l.voiceFrom ? project.objects[l.voiceFrom]?.name : undefined), plainInline(l.text)),
-        ),
+        ...(({ subtitle, seconds }) => ({ subtitle, subtitle_seconds: seconds }))(lineSubtitle(project, l)),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     levels,
