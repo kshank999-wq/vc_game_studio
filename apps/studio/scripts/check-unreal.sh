@@ -80,6 +80,9 @@ echo "plugin sources compile against the stubs"
 python3 -m py_compile "$work/Content/VCGS/Generated/import_datatables.py"
 # Recorded takes: the importer, and each line naming its sound wave.
 python3 -m py_compile "$work/Content/VCGS/Generated/import_vo.py"
+# Each take's subtitle: an .srt beside it, and import_vo.py gives it to the sound wave.
+grep -q 'Mara: Water' "$work/VCGS/SourceAudio/vo/sc_03_line_02.srt" || { echo "Mara's take should have her subtitle beside it"; exit 1; }
+python3 -I "$here/unreal-check/check_import_vo.py" "$work"
 grep -q '"audio": "/Game/VCGS/VO/sc_03_line_02.sc_03_line_02"' "$work/Content/VCGS/Generated/story.json" || { echo "story.json should name Mara's take"; exit 1; }
 grep -q '/Game/VCGS/VO/sc_03_line_02.sc_03_line_02' "$work/Content/VCGS/Generated/DataTables/Lines.csv" || { echo "DT_Lines should carry Mara's take"; exit 1; }
 echo "takes: import_vo.py, story.json and DT_Lines name the sound waves"

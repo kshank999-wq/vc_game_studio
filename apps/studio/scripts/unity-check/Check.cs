@@ -103,7 +103,10 @@ static class Check
         // Their subtitles: a row a voice, up for the time to read them, or the takes' length once they play.
         Console.WriteLine("subtitles: " + string.Join(" | ", debug.Subtitles) + " · " + debug.SubtitleSeconds + "s");
         if (debug.Subtitles.Count != 2 || !debug.Subtitles[0].StartsWith("Mara: ") || debug.Subtitles[1] != "The Explorer: Stand back. I’ll find it.") Fail("the subtitles should be Mara's line then the Explorer's, got " + string.Join(" | ", debug.Subtitles));
-        if (Math.Abs(debug.SubtitleSeconds - DebugStory.ReadingSeconds(debug.Subtitles[0])) > 0.001f) Fail("the subtitles should stay up long enough to read Mara's, the longer");
+        // As the handoff gives them: the longer take's length (Mara's, 2.5s); the time to read one only when a line has none.
+        if (Math.Abs(debug.SubtitleSeconds - 2.5f) > 0.001f || Math.Abs(story.SubtitleSeconds("sc_03_line_03") - 2f) > 0.001f) Fail("the subtitles should stay up as long as the longer take, as the handoff gives it (2.5s), got " + debug.SubtitleSeconds);
+        if (story.Subtitle("sc_03_line_02") != debug.Subtitles[0]) Fail("the subtitle should be the handoff's");
+        if (Math.Abs(DebugStory.ReadingSeconds(debug.Subtitles[0]) - 3.85f) > 0.001f) Fail("the time to read Mara's should be 3.85s, as in Unreal and the studio");
         debug.HoldSubtitles(4.5f);
         debug.Tick(4f);
         if (debug.Subtitles.Count != 2) Fail("the subtitles should stay up while the takes play");

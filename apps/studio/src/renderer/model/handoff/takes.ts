@@ -1,6 +1,8 @@
 import { getAudio, takeFileOf } from '../audio-takes';
 import type { DialogueLine, Project } from '../types';
-import { fingerprint, type EngineAdapter } from './engines';
+import { srtFile } from '../subtitles';
+import { fingerprint, type EngineAdapter, type GeneratedFile } from './engines';
+import type { IrLine } from './ir';
 
 /**
  * The recorded takes, handed off with the code: each line's audio in the
@@ -29,17 +31,29 @@ export const takePlan = (project: Project, adapter: EngineAdapter, outputPath: s
   });
 };
 
-/** The handoff screen's row for the takes: what goes where, and a fingerprint that changes when a take does. */
-export const takesRow = (plan: TakeFile[]) =>
+/**
+ * Each take's subtitle as an .srt file beside it (vo/sc_03_line_02.srt): one
+ * cue, "Mara: …", for as long as the take plays. The line data carries the
+ * same subtitle; these are for tools that read subtitle files.
+ */
+export const subtitleFiles = (plan: readonly TakeFile[], lines: readonly IrLine[]): GeneratedFile[] =>
+  plan.flatMap((t) => {
+    const id = /([^/]+)\.[^./]+$/.exec(t.path)?.[1];
+    const line = lines.find((l) => l.id === id);
+    return line ? [{ path: withExt(t.path, 'srt'), content: srtFile(line.subtitle, line.subtitle_seconds), kind: 'generated' as const }] : [];
+  });
+
+/** The handoff screen's row for the takes: what goes where, and a fingerprint that changes when a take or its subtitle does. */
+export const takesRow = (plan: TakeFile[], subtitles: readonly GeneratedFile[] = []) =>
   plan.length
     ? {
         id: 'takes',
         label: `Recorded takes (${plan.length})`,
         symbol: 'dialogue' as const,
         group: 'People + words' as const,
-        generates: `${plan.length} audio file${plan.length === 1 ? '' : 's'} → ${plan[0]!.path.replace(/\/[^/]+$/, '/')}`,
-        files: plan.map((t) => t.path),
-        fingerprint: fingerprint(plan.map((t) => `${t.path}:${t.line.take!.id}:${t.line.take!.bytes}`).join('|')),
+        generates: `${plan.length} audio file${plan.length === 1 ? '' : 's'}${subtitles.length ? ' + subtitles (.srt)' : ''} → ${plan[0]!.path.replace(/\/[^/]+$/, '/')}`,
+        files: [...plan.map((t) => t.path), ...subtitles.map((f) => f.path)],
+        fingerprint: fingerprint([...plan.map((t) => `${t.path}:${t.line.take!.id}:${t.line.take!.bytes}`), ...subtitles.map((f) => `${f.path}:${f.content}`)].join('|')),
       }
     : null;
 

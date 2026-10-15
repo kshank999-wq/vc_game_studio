@@ -2549,6 +2549,9 @@ ${UNREAL_PUZZLES}
             std::string Direction;
             /** Its recorded take: the sound's asset path (/Game/VCGS/VO/<line>.<line>), empty when it has none. */
             std::string Audio;
+            /** Its subtitle as the handoff gives it ("Mara: Lit. You go first."), and how long it shows: the take's length, else the time to read it. */
+            std::string Subtitle;
+            float SubtitleSeconds = 0.f;
         };
 
         /** The words of a line and who says them. */
@@ -2559,7 +2562,7 @@ ${UNREAL_PUZZLES}
             // Voiceover: from a cinematic or an object (a radio, a TV, a speaker), overheard.
             const std::string from = l["from_name"].Str();
             if (!from.empty()) who = who.empty() ? from + " (V.O.)" : who + " (V.O., " + from + ")";
-            return {who, l["text"].Str(), l["direction"].Str(), l["audio"].Str()};
+            return {who, l["text"].Str(), l["direction"].Str(), l["audio"].Str(), l["subtitle"].Str(), static_cast<float>(l["subtitle_seconds"].Num())};
         }
     }
 
@@ -2587,6 +2590,7 @@ ${UNREAL_PUZZLES}
         static std::string Subtitle(const GameState& game, const std::string& lineId)
         {
             const StoryWalker::Line l = StoryWalker::GetLine(game, lineId);
+            if (!l.Subtitle.empty()) return l.Subtitle;
             return l.Speaker.empty() ? l.Text : l.Speaker + ": " + l.Text;
         }
 
@@ -2665,7 +2669,9 @@ ${UNREAL_PUZZLES}
             for (const std::string& id : lineIds)
             {
                 Subtitles.push_back(Subtitle(game, id));
-                SubtitleSeconds = std::max(SubtitleSeconds, ReadingSeconds(Subtitles.back()));
+                // How long, as the handoff gives it (the take's length, else the time to read it).
+                const float handed = StoryWalker::GetLine(game, id).SubtitleSeconds;
+                SubtitleSeconds = std::max(SubtitleSeconds, handed > 0.f ? handed : ReadingSeconds(Subtitles.back()));
             }
             if (Speak) Speak(lineIds);
         }

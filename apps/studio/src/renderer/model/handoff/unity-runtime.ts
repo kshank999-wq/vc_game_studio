@@ -291,6 +291,10 @@ namespace VCGS
         public string Speaker(string lineId) => Lines.TryGetValue(lineId ?? "", out var l) ? D.Str(l, "speaker") : "";
         /// <summary>Where a line's recorded take is under Resources ("VCGS/vo/sc_03_line_02"), or "" when it has none.</summary>
         public string Audio(string lineId) => Lines.TryGetValue(lineId ?? "", out var l) ? D.Str(l, "audio") : "";
+        /// <summary>A line's subtitle: who says it, then the words ("Mara: Lit. You go first."); "" for an unknown line.</summary>
+        public string Subtitle(string lineId) => Lines.TryGetValue(lineId ?? "", out var l) ? D.Str(l, "subtitle") : "";
+        /// <summary>How long a line's subtitle shows: its take's length, else the time to read it (0 for an unknown line).</summary>
+        public float SubtitleSeconds(string lineId) => Lines.TryGetValue(lineId ?? "", out var l) ? (float)D.Num(l, "subtitle_seconds") : 0f;
     }
 }
 `,
@@ -3023,6 +3027,8 @@ namespace VCGS
         /// <summary>A line as a subtitle: who says it (and from where, for a voiceover), then what they say.</summary>
         public static string Subtitle(GameState game, string lineId)
         {
+            var handed = game.Story.Subtitle(lineId);
+            if (handed != "") return handed;
             var (who, text, _) = StoryWalker.Line(game, lineId);
             return who == "" ? text : who + ": " + text;
         }
@@ -3056,7 +3062,9 @@ namespace VCGS
             {
                 var row = Subtitle(game, id);
                 Subtitles.Add(row);
-                SubtitleSeconds = Math.Max(SubtitleSeconds, ReadingSeconds(row));
+                // How long, as the handoff gives it (the take's length, else the time to read it).
+                var handed = game.Story.SubtitleSeconds(id);
+                SubtitleSeconds = Math.Max(SubtitleSeconds, handed > 0 ? handed : ReadingSeconds(row));
             }
             Speak?.Invoke(lineIds);
         }

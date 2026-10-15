@@ -6,6 +6,7 @@ import { unityPackage } from '../handoff/package';
 import { encodeWav, gatherTakes, takePlan } from '../handoff/takes';
 import { gunzipSync } from 'node:zlib';
 import { sunkenVault } from '../sample';
+import { srtFile, subtitleText, subtitleWho } from '../subtitles';
 import type { EngineId, Project } from '../types';
 
 const forEngine = (engine: EngineId): Project => setTarget(sunkenVault(), { engine });
@@ -30,7 +31,7 @@ describe('recorded takes in the engine handoff', () => {
     expect(unity.lines.find((l: { id: string }) => l.id === 'sc_03_line_02').audio).toBe('VCGS/vo/sc_03_line_02');
     const unreal = forEngine('unreal');
     expect(JSON.parse(fileOf(unreal, 'Content/VCGS/Generated/story.json')).lines.find((l: { id: string }) => l.id === 'sc_03_line_02').audio).toBe('/Game/VCGS/VO/sc_03_line_02.sc_03_line_02');
-    expect(fileOf(unreal, 'Content/VCGS/Generated/DataTables/Lines.csv').split('\n')[0]).toMatch(/,Audio$/);
+    expect(fileOf(unreal, 'Content/VCGS/Generated/DataTables/Lines.csv').split('\n')[0]).toMatch(/,Audio,/);
     expect(fileOf(unreal, 'Content/VCGS/Generated/import_vo.py')).toContain('DESTINATION = "/Game/VCGS/VO"');
   });
 
@@ -50,11 +51,44 @@ describe('recorded takes in the engine handoff', () => {
     expect(unreal.find((f) => f.path.endsWith('README.md'))!.content).toContain('AVcgsDebugHUD');
   });
 
+  it('subtitles: every line has one in every engine’s data, and each take an .srt beside it', () => {
+    const mara = buildIR(sunkenVault()).lines.find((l) => l.id === 'sc_03_line_02')!;
+    expect(mara.subtitle).toBe('Mara: Water’s holding it shut. There’s a lever somewhere.');
+    // Its take's length; a line without a take, the time to read it.
+    expect(mara.subtitle_seconds).toBe(2.5);
+    const sample = sunkenVault();
+    const untaken = buildIR({ ...sample, lines: sample.lines.map(({ take: _t, ...l }) => l) }).lines.find((l) => l.id === 'sc_03_line_02')!;
+    expect(untaken.subtitle_seconds).toBe(Math.round(Math.max(2, 1 + 0.05 * [...untaken.subtitle].length) * 100) / 100);
+    expect(fileOf(forEngine('godot'), 'vcgs/generated/dialogue/dialogue_table.gd')).toContain('"subtitle": "Mara: Water’s holding it shut. There’s a lever somewhere.", "subtitle_seconds": 2.5');
+    const story = (engine: EngineId, path: string) => JSON.parse(fileOf(forEngine(engine), path)).lines.find((l: { id: string }) => l.id === 'sc_03_line_02');
+    expect(story('unity', 'Assets/VCGS/Generated/story.json').subtitle).toBe(mara.subtitle);
+    expect(story('unreal', 'Content/VCGS/Generated/story.json').subtitle_seconds).toBe(2.5);
+    expect(fileOf(forEngine('unreal'), 'Content/VCGS/Generated/DataTables/Lines.csv').split('\n')[0]).toMatch(/,Audio,Subtitle,SubtitleSeconds$/);
+    expect(fileOf(forEngine('unreal'), 'Content/VCGS/Generated/import_vo.py')).toContain('wave.set_editor_property("subtitles", [cue])');
+    expect(fileOf(forEngine('custom'), 'vcgs/vo/sc_03_line_02.srt')).toBe('1\n00:00:00,000 --> 00:00:02,500\nMara: Water’s holding it shut. There’s a lever somewhere.\n');
+    expect(fileOf(forEngine('unity'), 'Assets/VCGS/Generated/Resources/VCGS/vo/sc_03_line_02.srt')).toContain('Mara: Water’s');
+    expect(fileOf(forEngine('unreal'), 'VCGS/SourceAudio/vo/sc_03_line_02.srt')).toContain('Mara: Water’s');
+    // The takes row counts the subtitle files, and changes when a subtitle does.
+    const p = forEngine('godot');
+    const row = planHandoff(p).rows.find((r) => r.id === 'takes')!;
+    expect(row.generates).toContain('+ subtitles (.srt)');
+    expect(row.files).toContain('vcgs/generated/vo/sc_03_line_02.srt');
+    const reworded = { ...p, lines: p.lines.map((l) => (l.take && l.text.startsWith('Water’s') ? { ...l, text: 'Water’s holding it.' } : l)) };
+    expect(planHandoff(reworded).rows.find((r) => r.id === 'takes')!.fingerprint).not.toBe(row.fingerprint);
+  });
+
+  it('an .srt’s times, and a voiceover’s subtitle', () => {
+    expect(srtFile('Radio (V.O.): Hello.', 3725.25)).toBe('1\n00:00:00,000 --> 01:02:05,250\nRadio (V.O.): Hello.\n');
+    expect(subtitleText(subtitleWho('Mara', 'Radio'), 'Hi.')).toBe('Mara (V.O., Radio): Hi.');
+    expect(subtitleText(subtitleWho(null), 'Hi.')).toBe('Hi.');
+  });
+
   it('the handoff screen lists them as a row of their own, which changes when a take does', () => {
     const p = forEngine('godot');
     const row = planHandoff(p).rows.find((r) => r.id === 'takes')!;
     expect(row.label).toBe('Recorded takes (6)');
-    expect(row.files).toHaveLength(6);
+    // The six takes, and a subtitle file beside each.
+    expect(row.files).toHaveLength(12);
     const line = p.lines.find((l) => l.take)!;
     const changed = attachTake(p, line.id, { ...line.take!, id: 'take_new', bytes: 99 });
     expect(planHandoff(changed).rows.find((r) => r.id === 'takes')!.fingerprint).not.toBe(row.fingerprint);

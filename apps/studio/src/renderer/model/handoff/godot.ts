@@ -1419,7 +1419,7 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
   // A line with emphasis carries it as BBCode for a RichTextLabel; a dual line names the one it is spoken with.
   const bbcode = (text: string) => markupInline(text, (run, st) => `${st.bold ? '[b]' : ''}${st.italic ? '[i]' : ''}${st.underline ? '[u]' : ''}${run}${st.underline ? '[/u]' : ''}${st.italic ? '[/i]' : ''}${st.bold ? '[/b]' : ''}`);
   const table = Object.fromEntries(
-    ir.lines.map((l) => [l.id, { scene: l.scene, speaker: l.speaker ?? '', ...(l.from ? { from: l.from, from_name: l.from_name ?? '' } : {}), text: l.text, direction: l.direction, vo: l.vo, ...(l.styled ? { bbcode: bbcode(l.styled) } : {}), ...(l.dual ? { dual_with: l.dual } : {}), ...(l.audio ? { audio: `res://${root}/${l.audio}` } : {}) }]),
+    ir.lines.map((l) => [l.id, { scene: l.scene, speaker: l.speaker ?? '', ...(l.from ? { from: l.from, from_name: l.from_name ?? '' } : {}), text: l.text, direction: l.direction, vo: l.vo, ...(l.styled ? { bbcode: bbcode(l.styled) } : {}), ...(l.dual ? { dual_with: l.dual } : {}), ...(l.audio ? { audio: `res://${root}/${l.audio}` } : {}), subtitle: l.subtitle, subtitle_seconds: l.subtitle_seconds }]),
   );
   const dialoguePath = add(
     'dialogue/dialogue_table.gd',
@@ -1437,6 +1437,13 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
       '\treturn LINES.get(line_id, {})',,
       '',
       '## The line\'s recorded take (vo/<line>.mp3 beside this folder), or null when it has none or it isn\'t imported.',
+      '## A line\'s subtitle ("Mara: Lit. You go first.") and how long it shows: its take\'s length, else the time to read it.',
+      'static func subtitle(line_id: String) -> String:',
+      '\treturn str(line(line_id).get("subtitle", ""))',
+      '',
+      'static func subtitle_seconds(line_id: String) -> float:',
+      '\treturn float(line(line_id).get("subtitle_seconds", 0.0))',
+      '',
       'static func audio(line_id: String) -> AudioStream:',
       '\tvar path := str(line(line_id).get("audio", ""))',
       '\tif path == "" or not ResourceLoader.exists(path):',

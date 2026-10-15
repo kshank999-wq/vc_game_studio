@@ -435,7 +435,10 @@ int main()
         // Their subtitles: a row a voice, up for the time to read them, or the takes' length once they play.
         std::printf("subtitles: %s · %.2fs\n", Join(debug.Subtitles, " | ").c_str(), debug.SubtitleSeconds);
         if (debug.Subtitles.size() != 2 || debug.Subtitles[0].rfind("Mara: ", 0) != 0 || debug.Subtitles[1] != "The Explorer: Stand back. I’ll find it.") Fail("the subtitles should be Mara's line then the Explorer's, got " + Join(debug.Subtitles, " | "));
-        if (std::fabs(debug.SubtitleSeconds - vcgs::DebugStory::ReadingSeconds(debug.Subtitles[0])) > 0.001f || std::fabs(debug.SubtitleSeconds - 3.85f) > 0.001f) Fail("the subtitles should stay up long enough to read Mara's, the longer (as in Unity: 3.85s)");
+        // As the handoff gives them: the longer take's length (Mara's, 2.5s); the time to read one only when a line has none.
+        if (std::fabs(debug.SubtitleSeconds - 2.5f) > 0.001f || std::fabs(vcgs::StoryWalker::GetLine(debugGame, "sc_03_line_03").SubtitleSeconds - 2.f) > 0.001f) Fail("the subtitles should stay up as long as the longer take, as the handoff gives it (2.5s)");
+        if (vcgs::StoryWalker::GetLine(debugGame, "sc_03_line_02").Subtitle != debug.Subtitles[0]) Fail("the subtitle should be the handoff's");
+        if (std::fabs(vcgs::DebugStory::ReadingSeconds(debug.Subtitles[0]) - 3.85f) > 0.001f) Fail("the time to read Mara's should be 3.85s, as in Unity and the studio");
         debug.HoldSubtitles(4.5f);
         debug.Tick(4.f);
         if (debug.Subtitles.size() != 2) Fail("the subtitles should stay up while the takes play");

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { takeSource } from '../../model/audio-takes';
+import { subtitleWho as whoOf } from '../../model/subtitles';
 import type { Entry, Voice } from '../../model/play';
 import type { Project } from '../../model/types';
 
@@ -48,11 +49,7 @@ export interface Subtitle {
 }
 
 /** Who a voice is, as a subtitle names them: "Mara", "Radio (V.O.)", "Mara (V.O., Radio)"; "" for nobody. */
-export const subtitleWho = (voice: Voice): string => {
-  if (!voice.from) return voice.speaker ?? '';
-  if (!voice.speaker || voice.from === voice.speaker) return `${voice.from} (V.O.)`;
-  return `${voice.speaker} (V.O., ${voice.from})`;
-};
+export const subtitleWho = (voice: Voice): string => whoOf(voice.speaker, voice.from);
 
 /** The subtitles for these voices (one beat), keeping those speaking now, in their order. */
 export const subtitlesFor = (voices: readonly Voice[], speaking: ReadonlySet<string>): Subtitle[] =>

@@ -250,6 +250,9 @@ func _initialize() -> void:
 	print("take: ", take.get_class() if take else "none", " · voices playing: ", player._players.size())
 	if not take is AudioStream or player._players.size() != 2:
 		fail("Mara's take should be imported and both voices should play")
+	# The handoff's subtitles: each line's, and how long it shows (its take's length).
+	if VCGSDialogue.subtitle("sc_03_line_02") != player.subtitles()[0] or absf(VCGSDialogue.subtitle_seconds("sc_03_line_02") - 2.5) > 0.001:
+		fail("the dialogue table should carry Mara's subtitle and her take's length, got %s · %s" % [VCGSDialogue.subtitle("sc_03_line_02"), VCGSDialogue.subtitle_seconds("sc_03_line_02")])
 	# Their subtitles: a row a voice, up for as long as the longer take plays.
 	var longest := maxf(take.get_length(), VCGSDialogue.audio("sc_03_line_03").get_length()) if take is AudioStream else 0.0
 	print("subtitles: ", " | ".join(player.subtitles()), " · %.2fs (takes %.2fs)" % [player.subtitle_seconds(), longest])

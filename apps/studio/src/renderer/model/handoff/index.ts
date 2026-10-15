@@ -9,7 +9,7 @@ import { buildIR } from './ir';
 import { levelChanges, levelRevisions, type IrLevel, type LevelChanges } from './levels';
 import { levelIssues } from '../level/validate';
 import { fileHash } from './review';
-import { takePlan, takesRow, type TakeFile } from './takes';
+import { subtitleFiles, takePlan, takesRow, type TakeFile } from './takes';
 
 export { gatherTakes, takesNote } from './takes';
 
@@ -68,7 +68,7 @@ export const planHandoff = (project: Project): Handoff => {
   const adapter = engineById(target.engine);
   if (!adapter.available || !adapter.generate) return { adapter, target, output: null, rows: [], changed: 0, issues: [], blocking: [], levels: [], levelChanges: { added: [], changed: [], removed: [], same: 0 }, takes: [] };
   const ir = buildIR(project);
-  const output = adapter.generate(ir, target.outputPath, { placeholderScenes: target.placeholderScenes !== false });
+  const generated = adapter.generate(ir, target.outputPath, { placeholderScenes: target.placeholderScenes !== false });
   const last = project.handoff?.last?.engine === target.engine ? project.handoff.last : undefined;
   // The levels' preflight counts too: an item's issue is shown on its level's row.
   const levelOf = new Map(ir.levels.flatMap((l) => l.items.map((i) => [i.guid, l.guid] as const)));
@@ -80,7 +80,10 @@ export const planHandoff = (project: Project): Handoff => {
   ];
   const issueOf = new Map(found.map((i) => [i.id, i.message]));
   const takes = takePlan(project, adapter, target.outputPath);
-  const takesElement = takesRow(takes);
+  // Each take's subtitle goes beside it, with the generated files.
+  const subtitles = subtitleFiles(takes, ir.lines);
+  const output = subtitles.length ? { ...generated, files: [...generated.files, ...subtitles] } : generated;
+  const takesElement = takesRow(takes, subtitles);
   const rows: Row[] = [...output.elements, ...(takesElement ? [takesElement] : [])].map((e) => {
     const issue = issueOf.get(e.id);
     const status: Status = issue ? 'issue' : last?.fingerprints[e.id] === e.fingerprint ? 'ready' : 'changed';

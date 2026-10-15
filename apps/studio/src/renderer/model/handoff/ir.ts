@@ -1,4 +1,5 @@
 import { takeFileOf } from '../audio-takes';
+import { subtitleSeconds, subtitleText, subtitleWho } from '../subtitles';
 import { buildCast, type IrCast } from './cast';
 import { recipeOf } from '../crafting';
 import { creditLine, creditsOf } from '../credits';
@@ -350,6 +351,10 @@ export interface IrLine {
   dual?: string;
   /** Its recorded take, where it goes under the engine's takes folder: vo/sc_03_line_02.mp3. */
   audio?: string;
+  /** Its subtitle: who says it (and from where, for a voiceover), then the words: "Mara: Lit. You go first." */
+  subtitle: string;
+  /** How long the subtitle shows: the take's length when known, else the time to read it. */
+  subtitle_seconds: number;
 }
 
 export interface IrEvent {
@@ -908,6 +913,9 @@ export const buildIR = (given: Project): HandoffIR => {
         ...(hasInline(l.text) ? { styled: l.text } : {}),
         ...((partner) => (partner ? { dual: lineId(project.objects[l.sceneId]!.data.code ?? '', partner.order) } : {}))(dualWith(project, l.id)),
         ...((audio) => (audio ? { audio } : {}))(takeFileOf(project, l)),
+        ...((subtitle) => ({ subtitle, subtitle_seconds: subtitleSeconds(subtitle, l.take?.seconds) }))(
+          subtitleText(subtitleWho(project.objects[l.speakerId ?? '']?.name ?? null, l.voiceFrom ? project.objects[l.voiceFrom]?.name : undefined), plainInline(l.text)),
+        ),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     levels,

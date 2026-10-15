@@ -199,6 +199,24 @@ to the project folder, a folder the browser may write to, or in the download.
 A take whose audio isn't on this computer is left out, and the studio says
 so; the line still names where it would go.
 
+**Subtitles go with them.** Every line in every engine's data has its
+`subtitle` (who says it, then the words: "Mara: Water's holding it shut.
+There's a lever somewhere."; a voiceover reads "Radio (V.O.): …") and
+`subtitle_seconds` (the take's length when the studio knows it, else the time
+to read it: a second, and a twentieth of one a letter, two at the least).
+Each take also gets an `.srt` beside it (`vo/sc_03_line_02.srt`, one cue for
+the take's length) for tools that read subtitle files. The handoff screen's
+**Recorded takes** row counts them, and changes when a line's words do.
+
+| Engine | A line's subtitle |
+|---|---|
+| Godot | `VCGSDialogue.subtitle(line_id)` and `subtitle_seconds(line_id)` |
+| Unity | `story.Subtitle(lineId)` and `story.SubtitleSeconds(lineId)` (story.json) |
+| Unreal | `GetLineSubtitle` on the subsystem, DT_Lines' `Subtitle` and `SubtitleSeconds` columns; `import_vo.py` puts it on each sound wave too (its Subtitles), so Unreal's own subtitles show it while the take plays |
+| JSON | each line's `subtitle` and `subtitle_seconds` |
+
+The debug players show these subtitles as handed off.
+
 **Try it in the engine** before your game has its own screens, as Godot's
 `play_story.tscn` does. Each player shows the scene one beat at a time in a
 box (a line, an action, a cinematic, with Continue; a choice's options; an
