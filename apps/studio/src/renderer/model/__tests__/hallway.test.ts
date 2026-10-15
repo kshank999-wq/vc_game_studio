@@ -60,6 +60,28 @@ describe('hallways drawn as a line', () => {
       });
     const doors = made2.filter((i) => i.assetId === 'arch.door');
     expect(doors.filter(onEdge).length).toBeGreaterThanOrEqual(5);
+    // Flush: a room beside a hallway shares its wall exactly, no sliver of gap or overlap (the hallway is 8 ft, off the grid).
+    const box = (i: (typeof halls)[number]) => {
+      const F = frameOf(after, i);
+      return { minX: F.x - F.w / 2, maxX: F.x + F.w / 2, minY: F.y - F.d / 2, maxY: F.y + F.d / 2 };
+    };
+    let beside = 0;
+    for (const room of made2.filter((i) => i.assetId === 'space.room')) {
+      const r = box(room);
+      for (const h of halls.map(box)) {
+        const acrossY = Math.min(r.maxY, h.maxY) - Math.max(r.minY, h.minY) > 0.1;
+        const acrossX = Math.min(r.maxX, h.maxX) - Math.max(r.minX, h.minX) > 0.1;
+        for (const gap of [acrossY ? r.minX - h.maxX : NaN, acrossY ? h.minX - r.maxX : NaN, acrossX ? r.minY - h.maxY : NaN, acrossX ? h.minY - r.maxY : NaN]) {
+          // On the same wall line (anything under half a cell apart); further is an empty pocket, not a sliver.
+          if (Number.isNaN(gap) || Math.abs(gap) > 0.5) continue;
+          beside++;
+          expect(Math.abs(gap)).toBeLessThan(1e-6);
+        }
+      }
+    }
+    expect(beside).toBeGreaterThanOrEqual(5);
+    // And every door made is in a wall.
+    expect(made2.filter((i) => i.assetId === 'arch.door' && i.invalid).map((i) => i.invalid)).toEqual([]);
     // Nothing made left unjoined.
     expect(pr.problems.join(' ')).not.toMatch(/couldn’t be joined/);
   });

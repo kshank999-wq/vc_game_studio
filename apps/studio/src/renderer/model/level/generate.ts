@@ -89,7 +89,26 @@ interface Grid {
   inside: Uint8Array;
   /** 1 where it is taken: by a kept room, or something placed this run. */
   taken: Uint8Array;
+  /**
+   * Grid lines moved onto a kept hallway's real edges (drawn at any width, they
+   * needn't fall on the grid): what is laid out along those lines, and the
+   * doors in them, sit flush with the hallway.
+   */
+  xs?: Map<number, number>;
+  ys?: Map<number, number>;
 }
+
+/** Where a grid line (or a point between lines) is in plan, after any line moved onto a hallway's edge. */
+const lineAt = (g: Grid, v: number, vertical: boolean): number => {
+  const base = vertical ? g.x0 : g.y0;
+  const moved = vertical ? g.xs : g.ys;
+  const of = (k: number) => moved?.get(k) ?? base + k * g.cell;
+  const lo = Math.floor(v);
+  const t = v - lo;
+  return t < 1e-9 ? of(lo) : of(lo) + (of(lo + 1) - of(lo)) * t;
+};
+const gx = (g: Grid, c: number) => lineAt(g, c, true);
+const gy = (g: Grid, r: number) => lineAt(g, r, false);
 
 const at = (g: Grid, c: number, r: number) => r * g.cols + c;
 const isFree = (g: Grid, c: number, r: number) => c >= 0 && r >= 0 && c < g.cols && r < g.rows && g.inside[at(g, c, r)] === 1 && g.taken[at(g, c, r)] === 0;
@@ -104,7 +123,13 @@ const mark = (g: Grid, R: Rect) => {
 const unmark = (g: Grid, R: Rect) => {
   for (let r = R.r; r < R.r + R.h; r++) for (let c = R.c; c < R.c + R.w; c++) if (c >= 0 && r >= 0 && c < g.cols && r < g.rows) g.taken[at(g, c, r)] = 0;
 };
-const toPlan = (g: Grid, R: Rect) => ({ x: g.x0 + (R.c + R.w / 2) * g.cell, y: g.y0 + (R.r + R.h / 2) * g.cell, w: R.w * g.cell, d: R.h * g.cell });
+const toPlan = (g: Grid, R: Rect) => {
+  const x0 = gx(g, R.c);
+  const x1 = gx(g, R.c + R.w);
+  const y0 = gy(g, R.r);
+  const y1 = gy(g, R.r + R.h);
+  return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, w: x1 - x0, d: y1 - y0 };
+};
 const cellOf = (g: Grid, p: Point) => ({ c: Math.floor((p.x - g.x0) / g.cell), r: Math.floor((p.y - g.y0) / g.cell) });
 
 /** The free cells' bounding box. */
@@ -497,7 +522,21 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
       const d = i.rotation % 180 === 0 ? f.d : f.w;
       const c = Math.round((f.x - w / 2 - g.x0) / cell);
       const r = Math.round((f.y - d / 2 - g.y0) / cell);
-      els.push({ rect: { c, r, w: Math.round(w / cell), h: Math.round(d / cell) }, kind: 'kept', name: i.name, keptId: i.id, hall: assetOf(set, i, global).role === 'corridor' });
+      const hall = assetOf(set, i, global).role === 'corridor';
+      const rect = { c, r, w: Math.round(w / cell), h: Math.round(d / cell) };
+      els.push({ rect, kind: 'kept', name: i.name, keptId: i.id, hall });
+      // A hallway drawn at its own width: the grid lines along its sides move onto them (half a cell at most).
+      if (hall) {
+        g.xs ??= new Map();
+        g.ys ??= new Map();
+        const put = (m: Map<number, number>, k: number, v: number) => {
+          if (!m.has(k)) m.set(k, v);
+        };
+        put(g.xs, rect.c, f.x - w / 2);
+        put(g.xs, rect.c + rect.w, f.x + w / 2);
+        put(g.ys, rect.r, f.y - d / 2);
+        put(g.ys, rect.r + rect.h, f.y + d / 2);
+      }
     }
     const keptCount = els.length;
     if (corePlan) {
@@ -575,8 +614,8 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
   // Doors: mid-way along each shared wall (or an outside wall for an entrance).
   const door = (plan: FloorPlan, vertical: boolean, line: number, along: number, name: string, open: boolean, secret?: boolean, wall = 0) => {
     const g = plan.grid;
-    const x = vertical ? g.x0 + line * g.cell : g.x0 + along * g.cell;
-    const y = vertical ? g.y0 + along * g.cell : g.y0 + line * g.cell;
+    const x = gx(g, vertical ? line : along);
+    const y = gy(g, vertical ? along : line);
     // An opening as wide as its wall allows (to 3 m), leaving 0.4 m each side.
     const wide = open ? Math.max(1.2, Math.min(3, wall * g.cell - 0.8)) : 0;
     const id = put(plan.floor.id, 'arch.door', x, y, name, open ? { w: wide } : undefined, open ? { swing: 'open archway' } : secret ? { secret: true } : undefined, secret ? { tags: ['secret'] } : undefined);
@@ -1053,8 +1092,8 @@ const entrancesFor = (plan: FloorPlan, count: number, doorMin: number, problems:
           const lo = (side.vertical ? R.r : R.c) + best[0] + doorMin / 2;
           const hi = (side.vertical ? R.r : R.c) + best[1] - doorMin / 2;
           along = Math.max(lo, Math.min(hi, want));
-          const px = side.vertical ? g.x0 + side.line * g.cell : g.x0 + along * g.cell;
-          const py = side.vertical ? g.y0 + along * g.cell : g.y0 + side.line * g.cell;
+          const px = gx(g, side.vertical ? side.line : along);
+          const py = gy(g, side.vertical ? along : side.line);
           d = Math.hypot(px - near.x, py - near.y);
         }
         options.push({ el: i, vertical: side.vertical, line: side.line, along, rank, y: side.vertical ? along : side.line, d });

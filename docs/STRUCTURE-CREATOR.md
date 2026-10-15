@@ -84,7 +84,7 @@ map. It proposes a layout from a seed, inside each floor's footprint. Every
 room, corridor and door it makes is an ordinary Level Designer item,
 editable like any other.
 
-**Around the hallways.** Draw hallways first with the **Hallway** tool (see LEVEL-DESIGNER.md), then **Fill with rooms**, or choose the **Around the hallways** rules: the generator makes no corridors of its own, fills the floor with rooms round the ones drawn, and gives each room beside a hallway a door onto it (rooms further in open through their neighbours). The hallways count as one way round the floor, and the way in can go through one.
+**Around the hallways.** Draw hallways first with the **Hallway** tool (see LEVEL-DESIGNER.md), then **Fill with rooms**, or choose the **Around the hallways** rules: the generator makes no corridors of its own, fills the floor with rooms round the ones drawn, and gives each room beside a hallway a door onto it (rooms further in open through their neighbours). The hallways count as one way round the floor, and the way in can go through one. The rooms beside a hallway sit flush against it whatever its width (an 8 ft hallway is off the 1 m grid): the grid lines along its sides move onto its walls, so those rooms, their neighbours and the doors between them all line up with it. A pocket too small for any room can be left empty.
 
 **Pyramids.** A pyramid mass is a square pyramid in the graybox and Play Mode (seen from above, its edges run to the point), a four-sided point in Godot, a mesh of its own in Unity, and a cone in Unreal (which has no pyramid shape: the preflight says so).
 
