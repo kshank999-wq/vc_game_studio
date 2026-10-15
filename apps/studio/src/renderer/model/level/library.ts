@@ -230,7 +230,7 @@ export const STARTER: readonly AssetDefinition[] = [
     { id: 'struct.tower', name: 'Tower', kind: 'solid', role: 'building', naming: 'architecture', size: [8, 8, 24], proxy: 'cylinder', params: [opens('building'), ...storeys(6, 4)], engine: MASS, description: 'A tall round tower.' },
     { id: 'struct.castle', name: 'Castle section', kind: 'solid', role: 'building', naming: 'architecture', size: [30, 20, 12], proxy: 'box', params: [opens('building'), ...storeys(3, 4)], engine: MASS, description: 'A keep or a wing of a castle.' },
     { id: 'struct.temple', name: 'Temple', kind: 'solid', role: 'building', naming: 'architecture', size: [24, 36, 14], proxy: 'box', params: [opens('building'), ...storeys(1, 14)], engine: MASS, description: 'A temple or church: one tall hall.' },
-    { id: 'struct.pyramid', name: 'Pyramid', kind: 'solid', role: 'building', naming: 'architecture', size: [60, 60, 40], proxy: 'wedge', params: [opens('building'), ...storeys(4, 10)], engine: MASS, description: 'A pyramid. Open it for its chambers.' },
+    { id: 'struct.pyramid', name: 'Pyramid', kind: 'solid', role: 'building', naming: 'architecture', size: [60, 60, 40], proxy: 'pyramid', params: [opens('building'), ...storeys(4, 10)], engine: MASS, description: 'A pyramid. Open it for its chambers.' },
     { id: 'struct.dungeonModule', name: 'Dungeon module', kind: 'solid', role: 'building', naming: 'architecture', size: [24, 24, 4], proxy: 'box', params: [opens('interior'), ...storeys(1, 4)], engine: MASS, description: 'A section of dungeon to open and fill.' },
   ]),
   ...group('spaces', [

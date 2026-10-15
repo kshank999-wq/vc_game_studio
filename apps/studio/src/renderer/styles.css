@@ -13283,3 +13283,113 @@ button.bible-dual-col:hover {
   gap: 4px;
   margin-top: 6px;
 }
+
+/* The Hallway tool's width dialog. */
+.lvl-hall-dialog {
+  width: min(380px, calc(100vw - 32px));
+}
+.lvl-hall-widths {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line, #3a342a);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+.lvl-hall-widths label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lvl-hall-widths .inp.small {
+  width: 80px;
+}
+
+/* The library: a flyout from the maps panel's right edge, over the map; locked out, beside it. */
+.lvl-fly-tab {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+  writing-mode: vertical-rl;
+  rotate: 180deg;
+  padding: 14px 6px;
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 6px 0 0 6px;
+  background: var(--panel);
+  color: var(--text-soft);
+  font: 600 12px var(--font-ui, inherit);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.lvl-fly-tab:hover {
+  color: var(--gold-hi);
+  border-color: var(--gold-lo);
+}
+.lvl-fly {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 6;
+  width: 300px;
+  max-width: calc(100% - 40px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.45);
+  animation: lvl-fly-in 0.16s ease-out;
+}
+.lvl-fly.pinned {
+  box-shadow: none;
+  animation: none;
+}
+.lvl-fly.ghost {
+  opacity: 0.25;
+  pointer-events: none;
+}
+@keyframes lvl-fly-in {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+}
+.lvl.lib-pinned .lvl-centre {
+  padding-left: 300px;
+}
+.lvl-lib {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.lvl-fly-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.lvl-fly-head .grow {
+  flex: 1;
+}
+.lvl-pin.on {
+  color: var(--gold-hi);
+}
+.lvl-left-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  border-top: 1px solid var(--border);
+}

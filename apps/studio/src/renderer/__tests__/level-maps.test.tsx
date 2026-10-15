@@ -4,6 +4,13 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { resetPreferences } from '../preferences';
 
+/** The library slides out from the maps panel's edge: open it, if it isn't. */
+const openLibrary = () => {
+  const tab = screen.queryByRole('button', { name: 'Open the library' });
+  if (tab) fireEvent.click(tab);
+};
+
+
 const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull(), { timeout: 5000 });
 
 beforeAll(() => {
@@ -40,6 +47,7 @@ describe('worlds, regions and child maps in the Level Designer (spec V2)', () =>
     expect(within(nav).getByRole('button', { name: 'The Drowned Coast, world' })).toBeTruthy();
 
     // The world's library is the world's tools; a region on the world, opened as its own map, its size.
+    openLibrary();
     expect(screen.queryByRole('button', { name: 'Place Exterior zone' })).toBeNull();
     expect(screen.getByText('World and region tools')).toBeTruthy();
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Place Region' }), { button: 0, clientX: 10, clientY: 10 });
@@ -74,6 +82,7 @@ describe('worlds, regions and child maps in the Level Designer (spec V2)', () =>
     fireEvent.click(within(screen.getByRole('dialog', { name: 'New world' })).getByRole('button', { name: 'Create world' }));
     const map = screen.getByRole('application', { name: 'Level map' });
     const place = (asset: string, x: number, y: number) => {
+      openLibrary();
       fireEvent.pointerDown(screen.getByRole('button', { name: `Place ${asset}` }), { button: 0, clientX: 10, clientY: 10 });
       act(() => {
         window.dispatchEvent(new PointerEvent('pointerup', { clientX: 10, clientY: 10 }));
@@ -107,6 +116,7 @@ describe('worlds, regions and child maps in the Level Designer (spec V2)', () =>
     await opened();
     // Double-click the room in the navigator.
     fireEvent.doubleClick(screen.getByRole('button', { name: 'Vault Chamber, room' }));
+    openLibrary();
     expect(screen.getByText('Room detail tools')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Place Room' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Place Table' })).toBeTruthy();

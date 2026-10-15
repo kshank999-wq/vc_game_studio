@@ -215,6 +215,9 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
       if (UNSCRIPTED[def.role]) {
         add({ id: item.id, levelId: item.levelId, severity: 'warning', engine: true, message: `${item.name} goes to ${engineName} as ${UNSCRIPTED[def.role]} marker.`, export: 'It is placed with its settings, but what it does is left to the game’s own code.' });
       }
+      if (engine === 'unreal' && def.proxy === 'pyramid') {
+        add({ id: item.id, levelId: item.levelId, severity: 'warning', engine: true, message: `${item.name} goes to Unreal as a cone.`, export: 'Unreal’s basic shapes have no pyramid; it is a cone the same size, to swap for your own mesh.' });
+      }
       if (engine === 'unreal' && def.proxy === 'wedge') {
         add({ id: item.id, levelId: item.levelId, severity: 'warning', engine: true, message: `${item.name} goes to Unreal as a sloped box.`, export: 'Unreal’s basic shapes have no wedge; the ramp is a box tilted to the same slope.' });
       }

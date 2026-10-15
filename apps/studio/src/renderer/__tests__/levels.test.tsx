@@ -7,6 +7,13 @@ import { createProject } from '../model/project';
 import { sunkenVault } from '../model/sample';
 import { resetPreferences } from '../preferences';
 
+/** The library slides out from the maps panel's edge: open it, if it isn't. */
+const openLibrary = () => {
+  const tab = screen.queryByRole('button', { name: 'Open the library' });
+  if (tab) fireEvent.click(tab);
+};
+
+
 /** Lazy views: wait until nothing is loading. */
 // The first import of a lazy view (three.js among them) can take a few seconds on a busy machine.
 const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull(), { timeout: 5000 });
@@ -40,6 +47,7 @@ describe('the Level Designer', () => {
     expect(screen.getByRole('button', { name: /to check/ }).textContent).toContain('1 to check');
 
     // Click a room in the library, then click the map to put it down.
+    openLibrary();
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Place Room' }), { button: 0, clientX: 10, clientY: 10 });
     act(() => {
       window.dispatchEvent(new PointerEvent('pointerup', { clientX: 10, clientY: 10 }));
@@ -152,7 +160,6 @@ describe('the Level Designer', () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(p));
     const { container } = render(<App />);
     await openLevels();
-    fireEvent.click(screen.getByRole('tab', { name: /Outliner/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Supply crate$/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Save changes to Supply crate' }));
     expect(screen.queryByRole('button', { name: 'Save changes to Supply crate' })).toBeNull();
@@ -190,7 +197,6 @@ describe('the Level Designer', () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(sunkenVault()));
     const { container } = render(<App />);
     await openLevels();
-    fireEvent.click(screen.getByRole('tab', { name: /Outliner/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Silt Camp$/ }));
     expect(container.querySelector('.lvl-pivot')).toBeNull();
     fireEvent.change(screen.getByRole('combobox', { name: 'Pivot' }), { target: { value: 'North-west corner' } });
@@ -233,7 +239,6 @@ describe('the Level Designer', () => {
     expect(container.querySelector('.lvl-right-head')!.textContent).toContain('INV_SiltCamp_VaultKey_001');
 
     // Select the vault chamber from the outliner; its scene link opens the scene.
-    fireEvent.click(screen.getByRole('tab', { name: /Outliner/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Vault Chamber$/ }));
     fireEvent.click(screen.getByRole('button', { name: /SC-\d+ The Vault Door/ }));
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toContain('The Vault Door');

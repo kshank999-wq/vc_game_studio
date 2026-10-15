@@ -23,7 +23,6 @@ afterEach(() => {
 });
 
 const select = (name: string) => {
-  fireEvent.click(screen.getByRole('tab', { name: /Outliner/ }));
   fireEvent.click(screen.getAllByRole('button', { name }).find((b) => b.classList.contains('lvl-row-name'))!);
 };
 

@@ -30,6 +30,7 @@ export const LAYOUT_RULES: readonly { id: LayoutRules; label: string; hint: stri
   { id: 'chokepoints', label: 'Chokepoints', hint: 'Survival horror: one way through, single doors, dead ends.' },
   { id: 'puzzleChain', label: 'Puzzle chain', hint: 'Chambers one after another, with clue rooms off the chain.' },
   { id: 'openPlan', label: 'Open plan', hint: 'A few large spaces joined by wide openings.' },
+  { id: 'hallways', label: 'Around the hallways', hint: 'Rooms round the hallways you drew, each with a door onto one.' },
 ];
 
 /** Good starting settings for a kind of structure. */
@@ -158,6 +159,8 @@ interface Element {
   name: string;
   /** A kept room's item id (it gets doors, it isn't made). */
   keptId?: string;
+  /** A kept corridor (a hallway drawn by hand): rooms can open onto it. */
+  hall?: boolean;
   /** Path-first: where it is in the route (chambers and passages), for linking along the route only. */
   route?: number;
   secret?: boolean;
@@ -494,7 +497,7 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
       const d = i.rotation % 180 === 0 ? f.d : f.w;
       const c = Math.round((f.x - w / 2 - g.x0) / cell);
       const r = Math.round((f.y - d / 2 - g.y0) / cell);
-      els.push({ rect: { c, r, w: Math.round(w / cell), h: Math.round(d / cell) }, kind: 'kept', name: i.name, keptId: i.id });
+      els.push({ rect: { c, r, w: Math.round(w / cell), h: Math.round(d / cell) }, kind: 'kept', name: i.name, keptId: i.id, hall: assetOf(set, i, global).role === 'corridor' });
     }
     const keptCount = els.length;
     if (corePlan) {
@@ -533,7 +536,7 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     if (isGround && !isRoof && !areaPoly) {
       // Path-first: the way in is the route's first chamber, by a passage out to the edge if it is inside.
       if (pathFloor) entranceFromRoute(plan, cw, N.corridor, doorMin, problems);
-      else entrancesFor(plan, s.entrances, doorMin, problems, level.structure?.entrance);
+      else entrancesFor(plan, s.entrances, doorMin, problems, level.structure?.entrance, s.rules === 'hallways');
     }
     plans.push(plan);
   }
@@ -928,19 +931,25 @@ const connect = (plan: FloorPlan, rules: LayoutRules, rand: () => number, doorMi
     join(a, b);
   };
   for (const l of plan.links) join(l.a, l.b);
+  // Around the hallways: the hallways drawn are one way round the floor (they open into each other as drawn).
+  if (rules === 'hallways') {
+    const halls = els.map((e, i) => (e.hall ? i : -1)).filter((i) => i >= 0);
+    for (const i of halls.slice(1)) join(i, halls[0]!);
+  }
   // Open spaces (the roof's zones) join what they touch by being open.
   if (roof) {
     for (const e of edges) if (els[e.a]!.kind === 'zone' || els[e.b]!.kind === 'zone') join(e.a, e.b);
   }
-  const corridorish = (i: number) => els[i]!.kind === 'corridor' || els[i]!.kind === 'hub';
+  // Around the hallways: the hallways drawn are the corridors.
+  const corridorish = (i: number) => els[i]!.kind === 'corridor' || els[i]!.kind === 'hub' || (rules === 'hallways' && !!els[i]!.hall);
   const shuffled = [...edges];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
   }
   if (!path && !roof) {
-    if (rules === 'linear' || rules === 'branching' || rules === 'hub') {
-      for (const e of edges) if (corridorish(e.a) && corridorish(e.b)) link(e.a, e.b, true);
+    if (rules === 'linear' || rules === 'branching' || rules === 'hub' || rules === 'hallways') {
+      for (const e of edges) if (corridorish(e.a) && corridorish(e.b) && (e.a >= keptCount || e.b >= keptCount)) link(e.a, e.b, true);
       // Each room opens onto the corridor it shares the longest wall with.
       els.forEach((el, i) => {
         if (corridorish(i) || el.kind === 'kept') return;
@@ -980,7 +989,7 @@ const connect = (plan: FloorPlan, rules: LayoutRules, rand: () => number, doorMi
   }
   // Whatever is still apart joins the rest through any shared wall; what can't be reached is left out.
   const anchor = () => {
-    const kept = els.findIndex((e) => e.kind === 'core' || e.kind === 'hub' || e.kind === 'corridor' || e.kind === 'chamber');
+    const kept = els.findIndex((e) => e.kind === 'core' || e.kind === 'hub' || e.kind === 'corridor' || e.kind === 'chamber' || (rules === 'hallways' && e.hall));
     return kept >= 0 ? kept : 0;
   };
   for (let pass = 0; pass < els.length; pass++) {
@@ -1008,13 +1017,14 @@ const connect = (plan: FloorPlan, rules: LayoutRules, rand: () => number, doorMi
 };
 
 /** The ways in (spec §6 entrances): corridors first, then halls, then rooms, on an outside wall, the south first. */
-const entrancesFor = (plan: FloorPlan, count: number, doorMin: number, problems: string[], near?: Point) => {
+const entrancesFor = (plan: FloorPlan, count: number, doorMin: number, problems: string[], near?: Point, halls = false) => {
   const g = plan.grid;
   const options: { el: number; vertical: boolean; line: number; along: number; rank: number; y: number; d: number }[] = [];
   plan.elements.forEach((e, i) => {
-    if (e.kind === 'kept' || e.kind === 'zone') return;
+    // Around the hallways: a hallway drawn can be the way in.
+    if ((e.kind === 'kept' && !(halls && e.hall)) || e.kind === 'zone') return;
     const R = e.rect;
-    const rank = e.kind === 'corridor' ? 0 : e.kind === 'hub' || e.kind === 'chamber' ? 1 : e.kind === 'room' ? 2 : 3;
+    const rank = e.kind === 'corridor' || e.hall ? 0 : e.kind === 'hub' || e.kind === 'chamber' ? 1 : e.kind === 'room' ? 2 : 3;
     const sides: { vertical: boolean; line: number; cells: [number, number][] }[] = [
       { vertical: false, line: R.r + R.h, cells: Array.from({ length: R.w }, (_, k) => [R.c + k, R.r + R.h] as [number, number]) },
       { vertical: false, line: R.r, cells: Array.from({ length: R.w }, (_, k) => [R.c + k, R.r - 1] as [number, number]) },

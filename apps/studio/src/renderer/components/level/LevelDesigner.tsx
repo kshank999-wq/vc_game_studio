@@ -22,7 +22,7 @@ import {
   withGroups,
 } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
-import type { AssetCategory, AssetDefinition, Perspective, TravelKind } from '../../model/level/types';
+import type { AssetCategory, AssetDefinition, LayoutRules, Perspective, TravelKind } from '../../model/level/types';
 import { levelIssues } from '../../model/level/validate';
 import { pointNear, startPoint } from '../../model/level/play';
 import type { PlayWorld } from '../../model/play';
@@ -39,6 +39,8 @@ import { LevelInspector } from './LevelInspector';
 import { LevelMap, type MapApi, type MapTool } from './LevelMap';
 import type { Axes, Tool3d } from './gizmo';
 import { formatLength } from './units';
+import { HallwayDialog } from './HallwayDialog';
+import { boxOf, edgeLines, snapBox, snapsByEdge } from '../../model/level/edges';
 import { syncBuildings, opensAsMap, scaleOf, childOfItem, createWorld, duplicateMap, kindLabel, kindOf, mapsOwnedBy, openChildMap, pathTo, removalOfMap, removeMap, updateMap, addChildMap } from '../../model/level/hierarchy';
 import { MapNavigator } from './MapNavigator';
 import { removeTravel, travelById, TRAVEL_KINDS } from '../../model/level/travel';
@@ -47,7 +49,7 @@ import { NewStructureDialog } from './NewStructureDialog';
 import { StructurePanel } from './StructurePanel';
 import type { FloorStack } from '../../model/level/stack';
 import { GeneratePanel, type GenerateAsk } from './GeneratePanel';
-import { acceptLayout, entranceAt, groundFloorOf, guidedOrder, laidOut, proposeDressing, proposeLayout, stairsAt, type Proposal } from '../../model/level/generate';
+import { acceptLayout, defaultGenerator, entranceAt, groundFloorOf, guidedOrder, laidOut, proposeDressing, proposeLayout, stairsAt, type Proposal } from '../../model/level/generate';
 import { importPlan } from '../../model/level/cad';
 import { ImportPlanDialog } from './ImportPlanDialog';
 import { PREFAB_DRAG, PrefabsPanel } from './PrefabsPanel';
@@ -99,6 +101,17 @@ const OUTLINE_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.ex
 
 /** The Levels panels that can go into windows of their own. */
 type PanelKey = 'library' | 'inspector' | 'graph' | 'generate' | 'prefabs' | 'view';
+/** How wide the Hallway tool draws, kept on this computer. */
+const HALL_KEY = 'vcgs.hallway.width';
+/** Whether the library is locked out beside the map, kept on this computer. */
+const LIB_PIN_KEY = 'vcgs.levels.libraryPinned';
+
+const PinIcon = ({ on }: { on: boolean }) => (
+  <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+    <path d="M6 2h4l-.5 4 2.5 2.5H4L6.5 6z" fill={on ? 'currentColor' : 'none'} />
+    <path d="M8 8.5V14" />
+  </svg>
+);
 const PANEL_KEYS: readonly PanelKey[] = ['view', 'library', 'inspector', 'graph', 'generate', 'prefabs'];
 const PANEL_NAMES: Record<PanelKey, string> = { view: 'the map', library: 'the library', inspector: 'the properties', graph: 'the structure graph', generate: 'the generator', prefabs: 'prefabs' };
 
@@ -173,11 +186,41 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const [tool, setTool] = useState<MapTool>('select');
   const [drawAsset, setDrawAsset] = useState('space.room');
   const [routeKind, setRouteKind] = useState<TravelKind>('road');
+  // The Hallway tool: how wide (asked when it is picked, remembered), and what was just drawn (to fill round).
+  const [hallWidth, setHallWidth] = useState(() => {
+    try {
+      const n = Number(localStorage.getItem(HALL_KEY));
+      return n > 0 ? n : 2.4384;
+    } catch {
+      return 2.4384;
+    }
+  });
+  const [askHall, setAskHall] = useState(false);
+  const [hallDrawn, setHallDrawn] = useState(false);
+  const [genStart, setGenStart] = useState<{ n: number; rules: LayoutRules } | null>(null);
   const [pick, setPick] = useState<Pick | null>(null);
   const pickRef = useRef<Pick | null>(null);
   const focusRoomRef = useRef<string | null>(null);
   pickRef.current = pick;
-  const [leftTab, setLeftTab] = useState<'library' | 'outliner'>('library');
+  // The library: a flyout from the maps panel's right edge, open while picking, or locked out beside the map.
+  const [libPinned, setLibPinned] = useState(() => {
+    try {
+      return localStorage.getItem(LIB_PIN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [libOpen, setLibOpen] = useState(false);
+  const [libGhost, setLibGhost] = useState(false);
+  const pinLib = (on: boolean) => {
+    setLibPinned(on);
+    if (on) setLibOpen(true);
+    try {
+      localStorage.setItem(LIB_PIN_KEY, on ? '1' : '0');
+    } catch {
+      // It opens unlocked next time.
+    }
+  };
   const [hidden, setHidden] = useState<ReadonlySet<AssetCategory>>(() => new Set());
   const [overlays, setOverlays] = useState({ story: true, dims: true, ghost: true, puzzles: false, cast: false });
   // The puzzle shown on the map (spec V2 §14): one, or every puzzle with a part here ('').
@@ -325,8 +368,16 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const place = (assetId: string, at: Point) => {
     const { project: p, levelId: lid, floorId: fid } = latest.current;
     if (!lid || !fid) return;
-    const placed = placeAsset(withAsset(p, assetId), lid, fid, assetId, at, { global });
+    let placed = placeAsset(withAsset(p, assetId), lid, fid, assetId, at, { global });
     if (!placed.ids.length) return;
+    // Put down beside a room, a hallway or a building: flush against it.
+    const s1 = levelsOf(placed.project);
+    const made = s1.items.find((i) => i.id === placed.ids[0]);
+    const tol = map.current?.snapTolerance() ?? 0;
+    if (made && placed.ids.length === 1 && tol > 0 && snapsByEdge(s1, made, global)) {
+      const sn = snapBox(boxOf(s1, made, global), edgeLines(s1, lid, fid, placed.ids, global), tol);
+      if (sn.dx || sn.dy) placed = { ...placed, project: moveItems(placed.project, placed.ids, sn.dx, sn.dy, global, true) };
+    }
     onCommit(placed.project);
     setSelection(placed.ids);
     const def = findAsset(assetId, levelsOf(placed.project).assets, global);
@@ -548,7 +599,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
     const made = saveToLibrary(project, selection, name, global);
     if (!made.assetId) return;
     onCommit(made.project);
-    setLeftTab('library');
+    setLibOpen(true);
     onSay(`Saved “${name}” to the project library.`);
   };
 
@@ -601,6 +652,19 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
     });
   };
 
+  /** Rooms round the hallways drawn on this floor: a preview from the generator's "Around the hallways" rules. */
+  const fillRound = () => {
+    setHallDrawn(false);
+    if (!level || !floor) return;
+    setTool('select');
+    const last = level.generation?.[level.generation.length - 1];
+    const settings = { ...defaultGenerator(level.structure?.type), ...(last?.settings ?? {}), rules: 'hallways' as const, mode: 'plan' as const };
+    setGenStart((g) => ({ n: (g?.n ?? 0) + 1, rules: 'hallways' }));
+    setShowGenerate(true);
+    const seed = Math.floor(Math.random() * 1e6) + 1;
+    setPreview(proposeLayout(project, { levelId: level.id, floorIds: [floor.id], seed, settings, ...(level.floors.length > 1 && !level.structure?.stairs ? { noCore: true } : {}) }, global));
+  };
+
   /** The outline tool draws spaces and volumes; it starts with a plain room if something else was being drawn. */
   const outlineTool = () => {
     setTool((t) => (t === 'outline' ? 'select' : 'outline'));
@@ -623,7 +687,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       const key = e.key.toLowerCase();
       const { project: p, selection: sel, floorId: fid, levelId: lid } = latest.current;
       if (e.key === 'Escape') {
-        if (pickRef.current) setPick(null);
+        if (libOpen && !libPinned) setLibOpen(false);
+        else if (pickRef.current) setPick(null);
         else if (tool !== 'select') setTool('select');
         else setSelection([]);
         return;
@@ -660,6 +725,15 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       else if (!mod && key === 'd') setTool((t) => (t === 'draw' ? 'select' : 'draw'));
       else if (!mod && key === 'o') outlineTool();
       else if (!mod && key === 't') setTool((t) => (t === 'route' ? 'select' : 'route'));
+      else if (!mod && key === 'l') {
+        if (libPinned || libOpen) {
+          pinLib(false);
+          setLibOpen(false);
+        } else setLibOpen(true);
+      } else if (!mod && key === 'h') {
+        if (tool === 'hallway') setTool('select');
+        else setAskHall(true);
+      }
       else if (!mod && key === 'v') setTool('select');
     };
     window.addEventListener('keydown', onKey);
@@ -741,6 +815,108 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       );
     return render(() => popOut(key));
   };
+  /** The library (a flyout, or a window of its own) and the maps-and-outliner panel: one component, two parts. */
+  const libraryPart = (part: 'library' | 'outliner', head?: ReactNode) => (
+    <LevelLibrary
+        part={part}
+        {...(head ? { head } : {})}
+        navigator={part === 'library' ? undefined : (
+          <MapNavigator
+            set={set}
+            global={global}
+            levelId={level.id}
+            floorId={floor.id}
+            selection={selection}
+            onOpen={openMap}
+            onFocusRoom={setFocusRoom}
+            onLocate={(id) => {
+              const item = set.items.find((i) => i.id === id);
+              if (!item) return;
+              if (item.floorId !== floor.id) setFloorId(item.floorId);
+              setSelection([id]);
+              setTimeout(() => (mode === '3d' ? box.current : map.current)?.frame([id]), 0);
+            }}
+            onNewWorld={() => setNewWorld(true)}
+            onNewChild={(pid) => {
+              const made = addChildMap(project, pid);
+              onCommit(made.project);
+              openMap(made.id, undefined, undefined, made.project);
+            }}
+            onToggle={(lid, what) => {
+              const l = set.levels.find((x) => x.id === lid);
+              if (l) onCommit(updateMap(project, lid, { [what]: l[what] ? undefined : true }));
+            }}
+            onRename={(lid, name) => onCommit(updateMap(project, lid, { name }))}
+            onDuplicate={(lid) => {
+              const made = duplicateMap(project, lid);
+              if (made.id) onCommit(made.project);
+            }}
+            onDelete={deleteMap}
+          />
+        )}
+        set={set}
+        scale={focusRoom ? 'room' : scaleOf(kindOf(level))}
+        levelId={level.id}
+        floorId={floor.id}
+        global={global}
+        active={pick?.assetId ?? null}
+        onPick={(id, e) => {
+          onPickAsset(id, e);
+          // Picked from the flyout: it slides back in once the press is over, out of the map's way.
+          if (part === 'library' && !libPinned && !outs.has('library')) (e.currentTarget.ownerDocument.defaultView ?? window).addEventListener('pointerup', () => setLibOpen(false), { once: true });
+        }}
+        onDragStart={() => {
+          setPick(null);
+          // Dragged from the flyout: it fades while the drag goes on (taken away, the drag would stop), then slides in.
+          if (part === 'library' && !libPinned && !outs.has('library')) {
+            setLibGhost(true);
+            window.addEventListener('dragend', () => {
+              setLibGhost(false);
+              setLibOpen(false);
+            }, { once: true });
+          }
+        }}
+        selection={selection}
+        onSelect={(ids) => setSelection(ids)}
+        hidden={hidden}
+        onToggleLayer={(c) =>
+          setHidden((h) => {
+            const n = new Set(h);
+            if (n.has(c)) n.delete(c);
+            else n.add(c);
+            return n;
+          })
+        }
+        onToggleItem={(id, what) => {
+          const item = set.items.find((i) => i.id === id);
+          if (item) onCommit(updateItem(project, id, { [what]: item[what] ? undefined : true }, global));
+        }}
+        onDeleteAsset={deleteAsset}
+        onSay={onSay}
+        onPromote={(a) => {
+          promoteAsset(a);
+          onSay(`${a.name} is in your library now, for every project on this computer.`);
+        }}
+      />
+  );
+  const libHead = (
+    <div className="lvl-fly-head">
+      <strong>Library</strong>
+      <span className="grow" />
+      <button className={`icon-btn small lvl-pin${libPinned ? ' on' : ''}`} aria-pressed={libPinned} aria-label={libPinned ? 'Let the library slide back in' : 'Keep the library out'} title={libPinned ? 'Unlock: it slides back in after you pick something' : 'Lock it out: it stays open beside the map'} onClick={() => pinLib(!libPinned)}>
+        <PinIcon on={libPinned} />
+      </button>
+      <button className="icon-btn small" aria-label="Open the library in its own window" title="Open in its own window, to put on another screen" onClick={() => popOut('library')}>
+        ⧉
+      </button>
+      <button className="icon-btn small" aria-label="Close the library" title="Slide it back in (L)" onClick={() => {
+        pinLib(false);
+        setLibOpen(false);
+      }}>
+        ×
+      </button>
+    </div>
+  );
   const placePrefabAt = (prefab: Prefab, at: Point) => {
     const out = placePrefab(project, level.id, floor.id, prefab, at, global);
     if (!out.ids.length) {
@@ -833,7 +1009,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
   const focusedRoom = focusRoom ? set.items.find((i) => i.id === focusRoom) : undefined;
 
   return (
-    <div className={`lvl${pick ? ' is-placing' : ''}${playing ? ' playing' : ''}${outs.has('library') ? ' left-out' : ''}${outs.has('inspector') ? ' right-out' : ''}`}>
+    <div className={`lvl${pick ? ' is-placing' : ''}${playing ? ' playing' : ''}${libPinned && !outs.has('library') && !playing ? ' lib-pinned' : ''}${outs.has('inspector') ? ' right-out' : ''}`}>
       <div className="lvl-bar" role="toolbar" aria-label="Level tools">
         {playing ? (
           <>
@@ -992,7 +1168,15 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               <button className={tool === 'outline' ? 'on' : ''} aria-pressed={tool === 'outline'} onClick={outlineTool} title="Click the corners of a space or volume of any shape; click the first corner, double-click or press Enter to close it (O)">
                 Outline
               </button>
+              <button className={tool === 'hallway' ? 'on' : ''} aria-pressed={tool === 'hallway'} onClick={() => (tool === 'hallway' ? setTool('select') : setAskHall(true))} title="Draw a hallway: give its width, then click along where it runs; Enter or a double-click finishes it. Then fill the floor with rooms round it (H)">
+                Hallway
+              </button>
             </div>
+            {tool === 'hallway' && (
+              <button className="tb-btn small lvl-hall-width" onClick={() => setAskHall(true)} title="Change how wide the hallway is">
+                {formatLength(hallWidth, set.settings.units)} wide
+              </button>
+            )}
             {tool === 'route' && (
               <select className="inp small lvl-pick" aria-label="Route kind" value={routeKind} onChange={(e) => setRouteKind(e.target.value as TravelKind)}>
                 {TRAVEL_KINDS.map((k) => (
@@ -1133,74 +1317,16 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         </>
         )}
       </div>
-      {dock('library', 'Library', () => <LevelLibrary
-        navigator={
-          <MapNavigator
-            set={set}
-            global={global}
-            levelId={level.id}
-            floorId={floor.id}
-            selection={selection}
-            onOpen={openMap}
-            onFocusRoom={setFocusRoom}
-            onLocate={(id) => {
-              const item = set.items.find((i) => i.id === id);
-              if (!item) return;
-              if (item.floorId !== floor.id) setFloorId(item.floorId);
-              setSelection([id]);
-              setTimeout(() => (mode === '3d' ? box.current : map.current)?.frame([id]), 0);
-            }}
-            onNewWorld={() => setNewWorld(true)}
-            onNewChild={(pid) => {
-              const made = addChildMap(project, pid);
-              onCommit(made.project);
-              openMap(made.id, undefined, undefined, made.project);
-            }}
-            onToggle={(lid, what) => {
-              const l = set.levels.find((x) => x.id === lid);
-              if (l) onCommit(updateMap(project, lid, { [what]: l[what] ? undefined : true }));
-            }}
-            onRename={(lid, name) => onCommit(updateMap(project, lid, { name }))}
-            onDuplicate={(lid) => {
-              const made = duplicateMap(project, lid);
-              if (made.id) onCommit(made.project);
-            }}
-            onDelete={deleteMap}
-          />
-        }
-        set={set}
-        scale={focusRoom ? 'room' : scaleOf(kindOf(level))}
-        levelId={level.id}
-        floorId={floor.id}
-        global={global}
-        active={pick?.assetId ?? null}
-        onPick={onPickAsset}
-        onDragStart={() => setPick(null)}
-        tab={leftTab}
-        onTab={setLeftTab}
-        selection={selection}
-        onSelect={(ids) => setSelection(ids)}
-        hidden={hidden}
-        onToggleLayer={(c) =>
-          setHidden((h) => {
-            const n = new Set(h);
-            if (n.has(c)) n.delete(c);
-            else n.add(c);
-            return n;
-          })
-        }
-        onToggleItem={(id, what) => {
-          const item = set.items.find((i) => i.id === id);
-          if (item) onCommit(updateItem(project, id, { [what]: item[what] ? undefined : true }, global));
-        }}
-        onDeleteAsset={deleteAsset}
-        onSay={onSay}
-        onPromote={(a) => {
-          promoteAsset(a);
-          onSay(`${a.name} is in your library now, for every project on this computer.`);
-        }}
-      />)}
+      {libraryPart('outliner')}
+      {outs.has('library') && dock('library', 'Library', () => libraryPart('library'))}
       <div className="lvl-centre">
+        {!playing && !outs.has('library') && (libOpen || libPinned ? (
+          <div className={`lvl-fly${libPinned ? ' pinned' : ''}${libGhost ? ' ghost' : ''}`}>{libraryPart('library', libHead)}</div>
+        ) : (
+          <button className="lvl-fly-tab" aria-label="Open the library" title="The library: what to put on the map (L)" onClick={() => setLibOpen(true)}>
+            Library
+          </button>
+        ))}
         {reopen && (
           <div className="lvl-reopen" role="note" aria-label="Windows from last time">
             <span>
@@ -1224,7 +1350,18 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
           </div>
         )}
         {dockView(
-          <div className="lvl-view" onDragOver={onViewDragOver} onDrop={onViewDrop}>
+          <div className="lvl-view" onDragOver={onViewDragOver} onDrop={onViewDrop} onPointerDownCapture={() => libOpen && !libPinned && setLibOpen(false)}>
+        {hallDrawn && !preview && isStructure(level) && mode === '2d' && (
+          <div className="lvl-reopen lvl-hall-fill" role="note" aria-label="Hallway drawn">
+            <span>Hallway drawn. Draw more, or fill {floor.name} with rooms round the hallways.</span>
+            <button className="tb-btn small primary" onClick={fillRound}>
+              Fill with rooms
+            </button>
+            <button className="tb-btn small" onClick={() => setHallDrawn(false)}>
+              Not now
+            </button>
+          </div>
+        )}
         {asking && mode === '2d' && (
           <div
             className="lvl-ask"
@@ -1304,6 +1441,10 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             tool={tool}
             drawAsset={drawAsset}
             routeKind={routeKind}
+            hallWidth={hallWidth}
+            onHallway={() => {
+              if (isStructure(level)) setHallDrawn(true);
+            }}
             focusRoom={focusRoom}
             placing={pick?.sticky ? pick.assetId : null}
             onPlace={putDown}
@@ -1347,7 +1488,8 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
         {!playing && isStructure(level) && showGenerate && (
           dock('generate', 'Generate', (pop) => <GeneratePanel
             {...(pop ? { onPopOut: pop } : {})}
-            key={level.id}
+            key={`${level.id}:${genStart?.n ?? 0}`}
+            {...(genStart ? { start: { rules: genStart.rules } } : {})}
             level={level}
             floorId={floor.id}
             units={set.settings.units}
@@ -1582,6 +1724,25 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             onCommit(merged);
             setShowTeam(false);
             onSay(`Merged ${level.name}: ${taken} ${taken === 1 ? 'change' : 'changes'} taken${kept ? `, ${kept} kept as you had ${kept === 1 ? 'it' : 'them'}` : ''}. Undo takes the merge back.`);
+          }}
+        />
+      )}
+      {askHall && (
+        <HallwayDialog
+          width={hallWidth}
+          units={set.settings.units}
+          onClose={() => setAskHall(false)}
+          onPick={(w) => {
+            setHallWidth(w);
+            try {
+              localStorage.setItem(HALL_KEY, String(w));
+            } catch {
+              // It asks again next time.
+            }
+            setAskHall(false);
+            setMode('2d');
+            setTool('hallway');
+            onSay('Click along where the hallway runs; Enter or a double-click finishes it.');
           }}
         />
       )}

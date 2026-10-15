@@ -1898,7 +1898,7 @@ VCGS_WINS = False
 # (/Game/VCGS/Levels/<map>), saved, for UVcgsSubsystem to stream in on each level transition.
 BUILD_EACH_AS_MAP = False
 MAPS = "/Game/VCGS/Levels"
-SHAPES = {"box": "/Engine/BasicShapes/Cube.Cube", "cylinder": "/Engine/BasicShapes/Cylinder.Cylinder", "sphere": "/Engine/BasicShapes/Sphere.Sphere", "cone": "/Engine/BasicShapes/Cone.Cone", "wedge": "/Engine/BasicShapes/Cube.Cube"}
+SHAPES = {"box": "/Engine/BasicShapes/Cube.Cube", "cylinder": "/Engine/BasicShapes/Cylinder.Cylinder", "sphere": "/Engine/BasicShapes/Sphere.Sphere", "cone": "/Engine/BasicShapes/Cone.Cone", "pyramid": "/Engine/BasicShapes/Cone.Cone", "wedge": "/Engine/BasicShapes/Cube.Cube"}
 
 
 def to_unreal(v):
@@ -2021,7 +2021,7 @@ def place_piece(item, piece, index, with_mesh, report, role=""):
         length = math.hypot(size[2], size[1])
         scale = unreal.Vector(length, size[0], 0.1)
         rotation = unreal.Rotator(0.0, math.degrees(math.atan2(size[1], size[2])), turn)
-    elif shape in ("cylinder", "sphere"):
+    elif shape in ("cylinder", "sphere", "pyramid"):
         scale = unreal.Vector(size[2], size[0], size[1])
         rotation = unreal.Rotator(0.0, 0.0, turn)
     else:

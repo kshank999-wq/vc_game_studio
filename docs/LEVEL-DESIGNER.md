@@ -17,10 +17,11 @@ adds the scale above a level: worlds, regions and the maps inside them. See
 | Navigator (left, top) | Every map, World › Region › Level › Building › Floor › Room (spec V2 §6). Click to see a map (on the map open now if it sits there, else it opens), double-click or ▸ to open it; search, favourites, each map's status, and ⋯ for a new map inside, rename, favourite, hide, lock, duplicate and delete. |
 | Breadcrumbs (toolbar) | Where you are, from the top map down to the floor and the room selected; click one to go there, ↑ (or Alt+↑) for the parent map. |
 | Toolbar | Level and floor pickers (with **+ New level** and **+ Floor above**), **2D map / 3D graybox**, the Select and Draw tools, overlays, snapping, **Frame**, and **Preflight**. |
-| Library (left) | The starter catalog in every category in spec §4.2, plus the project's own assets and "my library". Drag an asset onto the map or the graybox, or click it and then click where it goes. Search matches names and descriptions. |
+| Maps and outliner (left) | The maps navigator above the outliner of what is on this floor. |
+| Library (flyout) | A **Library** tab on the right edge of the maps panel (or L) slides it out over the map. Picking something slides it back in once the press is over (a drag fades it until the drop); a click on the map or Esc closes it too. The pin locks it out: it stays open beside the map, which moves over to make room, and stays locked next time. ⧉ opens it in a window of its own. The starter catalog in every category in spec §4.2, plus the project's own assets and "my library". Drag an asset onto the map or the graybox, or click it and then click where it goes. Search matches names and descriptions. |
 | Outliner (left, second tab) | Everything on this floor by layer. Each layer can be hidden; each item can be hidden or locked. |
 | Map / graybox (middle) | The same items drawn top-down or in 3D. A status line shows the pointer's position and the selection's name, export name, GUID and size. |
-| Windows of their own | ⧉ on the 2D map / 3D graybox (top right of it), the library (bottom right of it), the inspector (top right), the structure graph, the generator and prefabs opens each in a window of its own, to put on another screen. The map's window has its own 2D map / 3D graybox switch and Frame, and Play Mode plays there when it is out. It stays live: select on the map and the inspector window follows, place from the library or prefabs window and it lands on the map. Drag an asset or a prefab from any window onto the map or graybox in any other, and it goes where you drop it. **Put it back**, or closing that window, docks it again; the map takes the room while it is out. The desktop app remembers where each window was. |
+| Windows of their own | ⧉ on the 2D map / 3D graybox (top right of it), the library (in its flyout's header), the inspector (top right), the structure graph, the generator and prefabs opens each in a window of its own, to put on another screen. The map's window has its own 2D map / 3D graybox switch and Frame, and Play Mode plays there when it is out. It stays live: select on the map and the inspector window follows, place from the library or prefabs window and it lands on the map. Drag an asset or a prefab from any window onto the map or graybox in any other, and it goes where you drop it. **Put it back**, or closing that window, docks it again; the map takes the room while it is out. The desktop app remembers where each window was. |
 | Inspector (right) | The authoritative place to edit (spec §6). With nothing selected it shows the level: its floors, story links, units, grid and naming. With several items selected it shows align, distribute, rotate, mirror, group, duplicate, save to library and delete. |
 
 ## The Level lane on the story graph
@@ -92,11 +93,17 @@ later.
   - Click to select; Shift-click adds to the selection.
   - Drag to move.
   - Drag the eight handles to resize: the opposite edge stays put and sizes snap to the grid.
+  - **Edges snap together.** A room, hallway, building or other block moved, resized, dragged out with **Draw** or put down from the library near another's edge goes flush against it (or lines up with it), so they share a wall and a door can go through; a dashed blue guide shows the edge it caught. It works whatever the sizes (a 2.44 m hallway beside a 5.3 m room), where the grid alone can't. Edges within about a grid square (or 12 pixels) catch; hold Alt to place freely.
   - Drag the round handle to rotate, in 15° steps (Shift for free rotation).
   - Shift-drag empty ground to select an area.
 - **Floor below** shows the floor underneath, ghosted.
 - **Sizes** labels the selected item's width and depth in the project's units (metres or feet).
 - **Story** badges every space linked to a scene with its code (SC-01…) and joins them in story order.
+
+**Hallways.**
+- **Hallway** (H) asks how wide: **4 ft**, **8 ft**, or any width in the map's units (remembered for next time). Then click along where it runs: each run goes straight along or across the map, Enter or a double-click finishes it, Backspace takes back a point, Esc drops it. The width beside the tools changes it.
+- Each straight run is a corridor space; at a turn the earlier run takes the corner and an opening joins them. They are ordinary spaces: move, resize or delete them like any other.
+- In a structure, **Fill with rooms** then lays the floor out round the hallways (the generator's **Around the hallways** rules), as a preview to accept, regenerate or reject.
 
 **Spaces and volumes of any shape (spec §3.1).**
 - **Outline** (O) draws a space corner by corner, snapped to the grid. Close it by clicking the first corner, double-clicking, or pressing Enter. Backspace takes back the last corner; Escape drops the outline. An outline whose edges would cross is not made.

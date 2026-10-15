@@ -9,6 +9,8 @@ import { boundsOf as mapBoundsOf, itemsInRoom } from '../../model/level/hierarch
 import { referenceDepth, referencesOf } from '../../model/level/references';
 import { roleOf, type PuzzleOverlay } from '../../model/level/puzzles';
 import { addTravel, moveTravelPoint, travelLabel, travelLength, travelPoints } from '../../model/level/travel';
+import { addHallway, hallwayRuns, squareUp } from '../../model/level/hallway';
+import { boxOf, edgeLines, mergeBox, snapBox, snapEdges, snapsByEdge, type Box, type Guide } from '../../model/level/edges';
 import type { Project } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
 import type { View } from '../../view';
@@ -22,10 +24,12 @@ export interface MapApi {
   worldAt: (clientX: number, clientY: number) => Point | null;
   /** Bring these items (or the whole floor) into view. */
   frame: (ids?: readonly string[]) => void;
+  /** How near (in plan) an edge has to come to snap to another, at this zoom. */
+  snapTolerance: () => number;
 }
 
 /** Select and move; drag out a rectangle; click the corners of a freeform outline; or draw a route between places. */
-export type MapTool = 'select' | 'draw' | 'outline' | 'route';
+export type MapTool = 'select' | 'draw' | 'outline' | 'route' | 'hallway';
 
 interface Props {
   project: Project;
@@ -44,6 +48,10 @@ interface Props {
   drawAsset: string;
   /** What the route tool draws (spec V2 §5). */
   routeKind?: TravelKind;
+  /** How wide the hallway tool draws (metres). */
+  hallWidth?: number;
+  /** A hallway was just drawn: its corridors and openings. */
+  onHallway?: (ids: string[]) => void;
   /** A room being detailed (spec V2 §7): the rest of the floor dims and stays put. */
   focusRoom?: string | null;
   /** An asset picked up from the library: the next click puts it down. */
@@ -59,6 +67,14 @@ interface Props {
   /** Points the guided generator asks for (the way in, the stairs), drawn as pins. */
   markers?: readonly { x: number; y: number; label: string }[];
 }
+
+/** An item made to fill a box (its size along its own axes, turned square to the map), centred in it. */
+const fitBox = (project: Project, id: string, rotation: number, b: Box): Project => {
+  const across = ((rotation % 180) + 180) % 180 === 90;
+  const w = Math.round((b.maxX - b.minX) * 1000) / 1000;
+  const d = Math.round((b.maxY - b.minY) * 1000) / 1000;
+  return placeAt(resizeItem(project, id, across ? { w: d, d: w } : { w, d }), id, { x: Math.round(((b.minX + b.maxX) / 2) * 1000) / 1000, y: Math.round(((b.minY + b.maxY) / 2) * 1000) / 1000 });
+};
 
 type Drag =
   | { kind: 'move'; ids: string[]; start: Point; moved: boolean }
@@ -174,6 +190,22 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   const [draftCorners, setDraftCorners] = useState<Point[]>([]);
   // The route being drawn (spec V2 §5): its points, and the items its ends are on.
   const [draftRoute, setDraftRoute] = useState<{ points: Point[]; from?: string } | null>(null);
+  // The hallway being drawn: its points, squared up along the axes.
+  const [draftHall, setDraftHall] = useState<Point[] | null>(null);
+  // Edges snapped to while dragging (rooms, hallways and buildings pull flush), drawn as guides.
+  const [guides, setGuides] = useState<Guide[]>([]);
+  const [drawBox, setDrawBox] = useState<Box | null>(null);
+  /** A rectangle dragged out: edges near a neighbour's edge go flush against it, the others to the grid. */
+  const drawnBox = (start: Point, at: Point, tol: number) => {
+    const s = levelsOf(project);
+    const grid = boundsOf([{ x: snap(s, start.x, undefined, levelId), y: snap(s, start.y, undefined, levelId) }, { x: snap(s, at.x, undefined, levelId), y: snap(s, at.y, undefined, levelId) }]);
+    if (!(tol > 0)) return { box: grid, guides: [] as Guide[] };
+    const raw = boundsOf([start, at]);
+    const sn = snapEdges(raw, { minX: true, maxX: true, minY: true, maxY: true }, edgeLines(s, levelId, floorId, [], global), tol);
+    return { box: mergeBox(sn.box, sn.hit, grid), guides: sn.guides };
+  };
+  /** How near an edge has to come to snap to it: a few pixels on screen, whatever the zoom. Alt held: no edge snapping. */
+  const edgeTol = (e: { altKey: boolean }) => (e.altKey ? 0 : Math.max(12 / scale, 0.75 * mapGrid(set, levelId)));
   const [pointer, setPointer] = useState<Point | null>(null);
   const shown = preview ?? project;
   const set = levelsOf(shown);
@@ -224,6 +256,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       return toWorld(clientX, clientY);
     },
     frame: frameIds,
+    snapTolerance: () => Math.max(12 / scale, 0.75 * mapGrid(set, levelId)),
   }));
 
   const items = useMemo(
@@ -255,7 +288,21 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
         const dx = at.x - cur.start.x;
         const dy = at.y - cur.start.y;
         const moved = cur.moved || Math.hypot(dx, dy) * scale > 3;
-        if (moved) setPreview(moveItems(project, cur.ids, dx, dy, global));
+        if (moved) {
+          let next = moveItems(project, cur.ids, dx, dy, global);
+          // Flush against a neighbour's edge, if one is near where it is dragged (the grid for a way that isn't).
+          const raw = moveItems(project, cur.ids, dx, dy, global, true);
+          const s1 = levelsOf(raw);
+          const movers = s1.items.filter((i) => cur.ids.includes(i.id) && snapsByEdge(s1, i, global));
+          const tol = edgeTol(e);
+          if (movers.length && tol > 0) {
+            const box = boundsOf(movers.flatMap((i) => { const b = boxOf(s1, i, global); return [{ x: b.minX, y: b.minY }, { x: b.maxX, y: b.maxY }]; }));
+            const sn = snapBox(box, edgeLines(levelsOf(project), levelId, floorId, cur.ids, global), tol);
+            if (sn.hitX || sn.hitY) next = moveItems(project, cur.ids, sn.hitX ? dx + sn.dx : dx, sn.hitY ? dy + sn.dy : dy, global, { x: sn.hitX, y: sn.hitY });
+            setGuides(sn.guides);
+          } else setGuides([]);
+          setPreview(next);
+        }
         if (moved !== cur.moved) setDrag({ ...cur, moved });
       } else if (cur.kind === 'resize') {
         const f = cur.frame;
@@ -267,7 +314,28 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
         const dd = h.ly ? Math.max(step, snap(s, f.d + h.ly * d0.y, undefined, levelId)) : f.d;
         // The opposite edge stays where it is.
         const shift = toPlan({ ...f, x: 0, y: 0 }, (h.lx * (w - f.w)) / 2, (h.ly * (dd - f.d)) / 2);
-        setPreview(placeAt(resizeItem(project, cur.id, { w, d: dd }, global), cur.id, { x: Math.round((f.x + shift.x) * 1000) / 1000, y: Math.round((f.y + shift.y) * 1000) / 1000 }));
+        let next = placeAt(resizeItem(project, cur.id, { w, d: dd }, global), cur.id, { x: Math.round((f.x + shift.x) * 1000) / 1000, y: Math.round((f.y + shift.y) * 1000) / 1000 });
+        // The edge being pulled snaps onto a neighbour's edge, if one is near.
+        const item = levelsOf(next).items.find((i) => i.id === cur.id);
+        const tol = edgeTol(e);
+        if (item && tol > 0 && snapsByEdge(levelsOf(next), item, global)) {
+          const b0 = boundsOf(corners(f));
+          const b1 = boxOf(levelsOf(next), item, global);
+          // Where the edge is dragged to, before the grid: what is near that snaps.
+          const wr = h.lx ? Math.max(0.1, f.w + h.lx * d0.x) : f.w;
+          const dr = h.ly ? Math.max(0.1, f.d + h.ly * d0.y) : f.d;
+          const sr = toPlan({ ...f, x: 0, y: 0 }, (h.lx * (wr - f.w)) / 2, (h.ly * (dr - f.d)) / 2);
+          const braw = boundsOf(corners({ ...f, w: wr, d: dr, x: f.x + sr.x, y: f.y + sr.y }));
+          const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+          const moved = { minX: !near(b0.minX, braw.minX), maxX: !near(b0.maxX, braw.maxX), minY: !near(b0.minY, braw.minY), maxY: !near(b0.maxY, braw.maxY) };
+          const sn = snapEdges(braw, moved, edgeLines(s, levelId, floorId, [cur.id], global), tol);
+          setGuides(sn.guides);
+          if (sn.guides.length) {
+            // Edges that caught on a neighbour go there; the rest stay on the grid.
+            next = fitBox(next, cur.id, item.rotation, mergeBox(sn.box, sn.hit, b1));
+          }
+        } else setGuides([]);
+        setPreview(next);
       } else if (cur.kind === 'routePoint') {
         setPreview(moveTravelPoint(project, cur.id, cur.index, snapPoint(at)));
         if (!cur.moved) setDrag({ ...cur, moved: true });
@@ -294,6 +362,13 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
         props.onSelect([...new Set([...cur.base, ...hit])]);
         setDrag({ ...cur, at });
       } else {
+        if (cur.kind === 'draw') {
+          const tol = edgeTol(e);
+          const s = levelsOf(project);
+          const sn = drawnBox(cur.start, at, tol);
+          setGuides(sn.guides);
+          setDrawBox(sn.box);
+        }
         setDrag({ ...cur, at });
       }
     };
@@ -305,10 +380,13 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       const done = previewRef.current;
       setDrag(null);
       setPreview(null);
+      setGuides([]);
+      setDrawBox(null);
       if (cur?.kind === 'draw') {
         const at = toWorld(e.clientX, e.clientY);
         const s = levelsOf(project);
-        const b = boundsOf([{ x: snap(s, cur.start.x, undefined, levelId), y: snap(s, cur.start.y, undefined, levelId) }, { x: snap(s, at.x, undefined, levelId), y: snap(s, at.y, undefined, levelId) }]);
+        // Drawn up against a neighbour: its edges snap flush.
+        const b = drawnBox(cur.start, at, edgeTol(e)).box;
         const w = b.maxX - b.minX;
         const h = b.maxY - b.minY;
         if (w >= 0.5 && h >= 0.5) {
@@ -352,6 +430,10 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     }
     if (e.button === 0 && props.tool === 'route') {
       addRoutePoint(snapPoint(at));
+      return;
+    }
+    if (e.button === 0 && props.tool === 'hallway') {
+      addHallPoint(snapPoint(at));
       return;
     }
     if (e.button === 0 && e.shiftKey) {
@@ -462,6 +544,52 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     }
     setDraftRoute({ ...draftRoute, points: [...draftRoute.points, p] });
   };
+
+  // ------------------------------------------------------------ drawing a hallway
+
+  const hallAhead = (points: Point[], at: Point | null) => (at && points.length ? [...points, squareUp(points[points.length - 1]!, snapPoint(at))] : points);
+
+  const finishHall = (points: Point[]) => {
+    setDraftHall(null);
+    if (points.length < 2) return;
+    const made = addHallway(project, levelId, floorId, points, props.hallWidth ?? 2.4384, global);
+    if (!made.ids.length) return;
+    props.onCommit(made.project);
+    props.onSelect(made.ids.filter((id) => levelsOf(made.project).items.find((i) => i.id === id)?.assetId === 'space.corridor'));
+    props.onHallway?.(made.ids);
+  };
+
+  /** A point along the hallway: straight on from the last, along or across the map. */
+  const addHallPoint = (p: Point) => {
+    if (!draftHall) {
+      setDraftHall([p]);
+      return;
+    }
+    const q = squareUp(draftHall[draftHall.length - 1]!, p);
+    const last = draftHall[draftHall.length - 1]!;
+    if (Math.hypot(last.x - q.x, last.y - q.y) < 1e-6) return;
+    setDraftHall([...draftHall, q]);
+  };
+
+  // While a hallway is drawn: Enter or a double-click ends it, Backspace takes back a point, Escape drops it.
+  useEffect(() => {
+    if (props.tool !== 'hallway') {
+      if (draftHall) setDraftHall(null);
+      return;
+    }
+    if (!draftHall) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') finishHall(draftHall);
+      else if (e.key === 'Backspace' || e.key === 'Delete') setDraftHall(draftHall.length > 1 ? draftHall.slice(0, -1) : null);
+      else if (e.key === 'Escape') setDraftHall(null);
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const win = root.current?.ownerDocument.defaultView ?? window;
+    win.addEventListener('keydown', onKey, true);
+    return () => win.removeEventListener('keydown', onKey, true);
+  });
 
   // While a route is drawn: Enter or a double-click ends it where it is, Backspace takes back a point, Escape drops it.
   useEffect(() => {
@@ -757,6 +885,11 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
           const ly = f.d / 2 - (f.d / steps) * (s + 1);
           return <polyline key={s} points={pointsAttr([toPlan(f, -f.w / 2, ly), toPlan(f, f.w / 2, ly)])} stroke={color} strokeOpacity={0.5} strokeWidth={px(1)} />;
         })}
+        {def.proxy === 'pyramid' && (
+          // Seen from above: its edges run from the corners up to the point in the middle.
+          <polyline points={pointsAttr([toPlan(f, -f.w / 2, -f.d / 2), toPlan(f, f.w / 2, f.d / 2)])} stroke={color} strokeOpacity={0.7} strokeWidth={px(1.2)} />
+        )}
+        {def.proxy === 'pyramid' && <polyline points={pointsAttr([toPlan(f, f.w / 2, -f.d / 2), toPlan(f, -f.w / 2, f.d / 2)])} stroke={color} strokeOpacity={0.7} strokeWidth={px(1.2)} />}
         {arrow && (
           <polyline points={pointsAttr([toPlan(f, 0, f.d * 0.35), toPlan(f, 0, -f.d * 0.35), toPlan(f, -f.w * 0.2, -f.d * 0.2), toPlan(f, 0, -f.d * 0.35), toPlan(f, f.w * 0.2, -f.d * 0.2)])} fill="none" stroke={color} strokeWidth={px(1.5)} />
         )}
@@ -787,7 +920,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     );
   };
 
-  const draft = drag?.kind === 'draw' ? boundsOf([{ x: snap(set, drag.start.x, undefined, levelId), y: snap(set, drag.start.y, undefined, levelId) }, { x: snap(set, drag.at.x, undefined, levelId), y: snap(set, drag.at.y, undefined, levelId) }]) : null;
+  const draft = drag?.kind === 'draw' && drawBox ? drawBox : drag?.kind === 'draw' ? boundsOf([{ x: snap(set, drag.start.x, undefined, levelId), y: snap(set, drag.start.y, undefined, levelId) }, { x: snap(set, drag.at.x, undefined, levelId), y: snap(set, drag.at.y, undefined, levelId) }]) : null;
   const marquee = drag?.kind === 'marquee' ? boundsOf([drag.start, drag.at]) : null;
   const order = (i: LevelItem) => ({ space: 0, volume: 1, solid: 2, hosted: 3, light: 4, marker: 5, assembly: 6 })[assetOf(set, i, global).kind];
 
@@ -799,7 +932,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
       onPointerMove={(e) => {
         const at = toWorld(e.clientX, e.clientY);
         props.onHover(at);
-        if (props.tool === 'outline' || props.tool === 'route') setPointer(at);
+        if (props.tool === 'outline' || props.tool === 'route' || props.tool === 'hallway') setPointer(at);
       }}
       onPointerLeave={() => {
         props.onHover(null);
@@ -809,6 +942,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
         if (props.tool === 'outline' && draftCorners.length >= 3) finishOutline(draftCorners);
         // The double-click's two clicks each put a point down: the last is a repeat.
         if (props.tool === 'route' && draftRoute) finishRoute(draftRoute);
+        if (props.tool === 'hallway' && draftHall) finishHall(draftHall);
       }}
       aria-label="Level map"
       role="application"
@@ -933,6 +1067,34 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
               </g>
             );
           })}
+          {guides.map((g, i) => (
+            <line key={`guide${i}`} className="lvl-snap-guide" pointerEvents="none" x1={g.vertical ? g.at : g.from} y1={g.vertical ? g.from : g.at} x2={g.vertical ? g.at : g.to} y2={g.vertical ? g.to : g.at} stroke="#5fd3ff" strokeWidth={px(1.5)} strokeDasharray={`${px(6)} ${px(4)}`} />
+          ))}
+          {draftHall && (
+            <g pointerEvents="none" className="lvl-hall-draft">
+              {(() => {
+                const ahead = hallAhead(draftHall, pointer);
+                const w = props.hallWidth ?? 2.4384;
+                const { runs } = hallwayRuns(ahead, w);
+                const len = ahead.slice(1).reduce((n, p, i) => n + Math.abs(p.x - ahead[i]!.x) + Math.abs(p.y - ahead[i]!.y), 0);
+                const tip = ahead[ahead.length - 1]!;
+                return (
+                  <>
+                    {runs.map((r, i) => (
+                      <rect key={i} x={r.x - r.w / 2} y={r.y - r.d / 2} width={r.w} height={r.d} fill="rgba(201,164,92,0.25)" stroke="var(--gold-hi)" strokeWidth={px(1.5)} strokeDasharray={`${px(5)} ${px(3)}`} />
+                    ))}
+                    <polyline points={pointsAttr(ahead)} fill="none" stroke="var(--gold-hi)" strokeWidth={px(1)} />
+                    {draftHall.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r={px(i === 0 ? 6 : 4)} fill={i === 0 ? 'none' : 'var(--gold-hi)'} stroke="var(--gold-hi)" strokeWidth={px(1.5)} />
+                    ))}
+                    <text x={tip.x + px(10)} y={tip.y - px(10)} fontSize={px(11)} fill="var(--gold-hi)">
+                      {formatLength(len, units)} · {formatLength(w, units)} wide
+                    </text>
+                  </>
+                );
+              })()}
+            </g>
+          )}
           {draftRoute && (
             <g pointerEvents="none" className="lvl-route-draft">
               {(() => {

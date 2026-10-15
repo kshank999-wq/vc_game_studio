@@ -417,7 +417,9 @@ export const makeRectangular = (project: Project, id: string, global?: readonly 
  * Move items by a plan offset. A door or window being moved slides along its
  * wall, or into another wall it is dragged to; the rest follow the pointer.
  */
-export const moveItems = (project: Project, ids: readonly string[], dx: number, dy: number, global?: readonly AssetDefinition[]): Project => {
+export const moveItems = (project: Project, ids: readonly string[], dx: number, dy: number, global?: readonly AssetDefinition[], exact: boolean | { x: boolean; y: boolean } = false): Project => {
+  const ex = typeof exact === 'boolean' ? exact : exact.x;
+  const ey = typeof exact === 'boolean' ? exact : exact.y;
   const set = levelsOf(project);
   const moving = new Set(ids);
   let changed = mapItems(set, ids, (i) => {
@@ -431,7 +433,8 @@ export const moveItems = (project: Project, ids: readonly string[], dx: number, 
       if (!host) return i;
       return { ...i, host: { ...host, along: Math.round(host.along * 1000) / 1000 } };
     }
-    return { ...i, x: snap(set, i.x + dx, undefined, i.levelId), y: snap(set, i.y + dy, undefined, i.levelId) };
+    // Exact: by just this much (onto another's edge, which needn't be on the grid).
+    return { ...i, x: snap(set, i.x + dx, ex ? false : undefined, i.levelId), y: snap(set, i.y + dy, ey ? false : undefined, i.levelId) };
   });
   changed = revalidate(changed, ids, global);
   return changed === set ? project : withSet(project, changed);

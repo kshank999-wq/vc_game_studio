@@ -13,6 +13,12 @@ export const UNIT = {
   cylinder: new THREE.CylinderGeometry(0.5, 0.5, 1, 24),
   sphere: new THREE.SphereGeometry(0.5, 20, 14),
   cone: new THREE.ConeGeometry(0.5, 1, 16).rotateX(-Math.PI / 2),
+  // A square pyramid: four flat faces up to a point over the middle of its base.
+  pyramid: (() => {
+    const g = new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1).rotateY(Math.PI / 4).toNonIndexed();
+    g.computeVertexNormals();
+    return g;
+  })(),
   wedge: (() => {
     // Rises to the north (-z): low at the south edge, full height at the north.
     const g = new THREE.BufferGeometry();
@@ -32,7 +38,7 @@ export const UNIT = {
     return g;
   })(),
 };
-const EDGES = { box: new THREE.EdgesGeometry(UNIT.box), wedge: new THREE.EdgesGeometry(UNIT.wedge) };
+const EDGES = { box: new THREE.EdgesGeometry(UNIT.box), wedge: new THREE.EdgesGeometry(UNIT.wedge), pyramid: new THREE.EdgesGeometry(UNIT.pyramid) };
 
 const materials = new Map<string, THREE.Material>();
 export const materialFor = (color: string, opacity: number, emissive = false, twoSided = false): THREE.Material => {
@@ -89,7 +95,7 @@ export const buildPiece = (m: Mesh, selected: boolean): THREE.Object3D => {
   mesh.receiveShadow = m.part === 'floor' || m.part === 'wall';
   mesh.userData = { itemId: m.itemId };
   holder.add(mesh);
-  const edges = m.shape === 'box' ? EDGES.box : m.shape === 'wedge' ? EDGES.wedge : slab ? new THREE.EdgesGeometry(slab) : null;
+  const edges = m.shape === 'box' ? EDGES.box : m.shape === 'wedge' ? EDGES.wedge : m.shape === 'pyramid' ? EDGES.pyramid : slab ? new THREE.EdgesGeometry(slab) : null;
   // A slab's geometry is its own, not shared: freed with the piece.
   if (slab) holder.userData.owned = [slab, edges];
   if (edges && (selected || m.part !== 'floor')) {

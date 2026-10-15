@@ -1730,6 +1730,7 @@ namespace VCGS.EditorTools
                         // Unity's cylinder is two units tall.
                         go.transform.localScale = shape == "cylinder" ? new Vector3(s.x, s.y / 2, s.z) : s;
                         if (shape == "wedge") go.GetComponent<MeshFilter>().sharedMesh = Wedge();
+                        if (shape == "pyramid") go.GetComponent<MeshFilter>().sharedMesh = Pyramid();
                         go.GetComponent<MeshRenderer>().sharedMaterial = MaterialFor(D.Str(piece, "color"), (float)D.Num(piece, "opacity", 1));
                     }
                 }
@@ -1943,6 +1944,25 @@ namespace VCGS.EditorTools
                 new Vector3(-0.5f, 0.5f, 0.5f), new Vector3(0.5f, 0.5f, 0.5f),
             };
             mesh.triangles = new[] { 0, 1, 2, 0, 2, 3, 3, 2, 5, 3, 5, 4, 0, 4, 5, 0, 5, 1, 0, 3, 4, 1, 5, 2 };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            AssetDatabase.CreateAsset(mesh, path);
+            return mesh;
+        }
+
+        /// <summary>A square pyramid a unit across and a unit tall, its point over the middle (flat faces).</summary>
+        static Mesh Pyramid()
+        {
+            var path = Materials + "/Pyramid.asset";
+            var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            if (mesh != null) return mesh;
+            Folder(Materials);
+            mesh = new Mesh { name = "VCGS Pyramid" };
+            var top = new Vector3(0, 0.5f, 0);
+            Vector3 b0 = new Vector3(-0.5f, -0.5f, -0.5f), b1 = new Vector3(0.5f, -0.5f, -0.5f), b2 = new Vector3(0.5f, -0.5f, 0.5f), b3 = new Vector3(-0.5f, -0.5f, 0.5f);
+            // Each face its own corners, so each is lit flat.
+            mesh.vertices = new[] { b0, b1, b2, b0, b2, b3, b0, top, b1, b1, top, b2, b2, top, b3, b3, top, b0 };
+            mesh.triangles = new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 };
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             AssetDatabase.CreateAsset(mesh, path);

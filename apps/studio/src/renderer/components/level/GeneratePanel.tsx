@@ -59,6 +59,7 @@ export const GeneratePanel = ({
   onClose,
   guided,
   onPopOut,
+  start,
 }: {
   level: Level;
   floorId: string;
@@ -75,14 +76,16 @@ export const GeneratePanel = ({
   guided?: Guided;
   /** Pull it out into a window of its own (to put on another screen). */
   onPopOut?: () => void;
+  /** Opened to fill this floor round what was just drawn (the hallways): these rules, this floor. */
+  start?: { rules: LayoutRules };
 }) => {
   const last = level.generation?.[level.generation.length - 1];
-  const [settings, setSettings] = useState<GeneratorSettings>(() => ({ ...defaultGenerator(level.structure?.type), ...(last?.settings ?? {}) }));
-  const [scope, setScope] = useState<GenerateScope>('structure');
+  const [settings, setSettings] = useState<GeneratorSettings>(() => ({ ...defaultGenerator(level.structure?.type), ...(last?.settings ?? {}), ...(start ? { rules: start.rules, mode: 'plan' as const } : {}) }));
+  const [scope, setScope] = useState<GenerateScope>(start ? 'floor' : 'structure');
   const [seed, setSeed] = useState(level.structure?.seed ?? 1);
   const [keepSeed, setKeepSeed] = useState(false);
   const [dressOnly, setDressOnly] = useState(false);
-  const [stepwise, setStepwise] = useState(!!guided);
+  const [stepwise, setStepwise] = useState(!!guided && !start);
   const [lastFloor, setLastFloor] = useState<string | null>(null);
   const byFloor = stepwise && !!guided && settings.mode === 'plan' && !dressOnly;
   const theme = themeOf(settings.theme);

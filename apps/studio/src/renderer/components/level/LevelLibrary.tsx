@@ -55,6 +55,7 @@ export const AssetIcon = ({ asset, size = 18 }: { asset: AssetDefinition; size?:
       default:
         if (asset.proxy === 'cylinder' || asset.proxy === 'sphere') return <circle cx="8" cy="8" r="5.5" fill={c} fillOpacity="0.3" stroke={c} strokeWidth="1.6" />;
         if (asset.proxy === 'stairs') return <path d="M2 14h3v-3h3V8h3V5h3V2" fill="none" stroke={c} strokeWidth="1.6" />;
+        if (asset.proxy === 'pyramid') return <path d="M2 14h12L8 2z M8 2v12" fill={c} fillOpacity="0.3" stroke={c} strokeWidth="1.4" strokeLinejoin="round" />;
         if (asset.proxy === 'wedge') return <path d="M2 13h12V4z" fill={c} fillOpacity="0.3" stroke={c} strokeWidth="1.6" />;
         return <rect x="2.5" y="2.5" width="11" height="11" rx="1" fill={c} fillOpacity="0.3" stroke={c} strokeWidth="1.6" />;
     }
@@ -97,8 +98,10 @@ interface Props {
   onPick: (assetId: string, e: React.PointerEvent) => void;
   /** A drag began (the browser's own, which crosses windows): the click-to-place pick is dropped. */
   onDragStart?: () => void;
-  tab: 'library' | 'outliner';
-  onTab: (tab: 'library' | 'outliner') => void;
+  /** Which part this is: the library (the flyout, or its own window), or the maps and outliner (the left panel). */
+  part: 'library' | 'outliner';
+  /** Above the library: its title, pin and close. */
+  head?: React.ReactNode;
   selection: readonly string[];
   onSelect: (ids: string[]) => void;
   hidden: ReadonlySet<AssetCategory>;
@@ -111,8 +114,9 @@ interface Props {
 }
 
 /**
- * The left panel (spec §2): the library to drag assets from, and the outliner
- * of what is on this floor, by layer, with visibility and locks.
+ * The library to drag assets from (a flyout from the maps panel, or a window
+ * of its own), and the left panel (spec §2): the maps, and the outliner of
+ * what is on this floor, by layer, with visibility and locks.
  */
 export const LevelLibrary = (props: Props) => {
   const [query, setQuery] = useState('');
@@ -180,18 +184,15 @@ export const LevelLibrary = (props: Props) => {
   );
 
   return (
-    <aside className="lvl-left" aria-label="Library and outliner">
-      {props.navigator}
-      <div className="lvl-tabs" role="tablist">
-        <button role="tab" aria-selected={props.tab === 'library'} className={props.tab === 'library' ? 'on' : ''} onClick={() => props.onTab('library')}>
-          Library
-        </button>
-        <button role="tab" aria-selected={props.tab === 'outliner'} className={props.tab === 'outliner' ? 'on' : ''} onClick={() => props.onTab('outliner')}>
+    <Wrap part={props.part}>
+      {props.part === 'outliner' ? props.navigator : props.head}
+      {props.part === 'outliner' && (
+        <div className="lvl-left-head">
           Outliner <span className="lvl-count">{items.length}</span>
-        </button>
-      </div>
-      <input className="inp small lvl-search" placeholder={props.tab === 'library' ? 'Search the library' : 'Find on this floor'} aria-label={props.tab === 'library' ? 'Search the library' : 'Find on this floor'} value={query} onChange={(e) => setQuery(e.target.value)} />
-      {props.tab === 'library' ? (
+        </div>
+      )}
+      <input className="inp small lvl-search" placeholder={props.part === 'library' ? 'Search the library' : 'Find on this floor'} aria-label={props.part === 'library' ? 'Search the library' : 'Find on this floor'} value={query} onChange={(e) => setQuery(e.target.value)} />
+      {props.part === 'library' ? (
         <div className="lvl-list">
           <p className="lvl-hint">Drag onto the map or the graybox, or click and then click where it goes.</p>
           <div className="lvl-scale">
@@ -274,7 +275,7 @@ export const LevelLibrary = (props: Props) => {
               </section>
             );
           })}
-          {!items.length && <p className="lvl-hint">Nothing on this floor yet. Drag a Room in from the library.</p>}
+          {!items.length && <p className="lvl-hint">Nothing on this floor yet. Open the library and drag a Room in.</p>}
         </div>
       )}
       {importing && (
@@ -290,6 +291,17 @@ export const LevelLibrary = (props: Props) => {
           }}
         />
       )}
-    </aside>
+    </Wrap>
   );
 };
+
+const Wrap = ({ part, children }: { part: 'library' | 'outliner'; children: React.ReactNode }) =>
+  part === 'outliner' ? (
+    <aside className="lvl-left" aria-label="Maps and outliner">
+      {children}
+    </aside>
+  ) : (
+    <div className="lvl-lib" role="region" aria-label="Library">
+      {children}
+    </div>
+  );

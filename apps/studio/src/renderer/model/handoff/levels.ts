@@ -22,7 +22,7 @@ import { exportedIds, structureManifest, type IrStructure } from './structures';
 /** One piece of an item's graybox, in the item's own frame. */
 export interface IrPiece {
   part: string;
-  shape: 'box' | 'cylinder' | 'sphere' | 'wedge' | 'cone' | 'slab';
+  shape: 'box' | 'cylinder' | 'sphere' | 'wedge' | 'pyramid' | 'cone' | 'slab';
   /** Centre, relative to the item. */
   at: [number, number, number];
   size: [number, number, number];

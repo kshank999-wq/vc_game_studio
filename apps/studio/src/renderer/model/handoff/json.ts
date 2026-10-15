@@ -232,7 +232,7 @@ export const storySchema = () => ({
     piece: obj(
       {
         part: str,
-        shape: { enum: ['box', 'cylinder', 'sphere', 'wedge', 'cone', 'slab'] },
+        shape: { enum: ['box', 'cylinder', 'sphere', 'wedge', 'pyramid', 'cone', 'slab'] },
         at: { ...ref('vec3'), description: 'Centre, relative to the item (turned with it).' },
         size: ref('vec3'),
         turn: num,

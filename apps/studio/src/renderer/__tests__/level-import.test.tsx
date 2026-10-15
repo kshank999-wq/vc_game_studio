@@ -4,6 +4,13 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 import { resetPreferences } from '../preferences';
 
+/** The library slides out from the maps panel's edge: open it, if it isn't. */
+const openLibrary = () => {
+  const tab = screen.queryByRole('button', { name: 'Open the library' });
+  if (tab) fireEvent.click(tab);
+};
+
+
 // jsdom can't decode pictures: reading one gives back a tiny PNG, 2000 × 1000 pixels as the original was.
 vi.mock('../components/level/import-files', async (original) => ({
   ...(await original<typeof import('../components/level/import-files')>()),
@@ -66,6 +73,7 @@ describe('importing into the Level Designer (spec V2 §10)', () => {
     await opened();
     fireEvent.click(screen.getByRole('button', { name: '+ Start with a world' }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'New world' })).getByRole('button', { name: 'Create world' }));
+    openLibrary();
     const personal = screen.getByRole('region', { name: 'Personal assets' });
     expect(within(personal).getByText(/Import an OBJ, glTF or GLB/)).toBeTruthy();
 

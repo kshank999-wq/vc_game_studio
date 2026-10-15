@@ -34,7 +34,7 @@ export type AssetCategory =
 export type AssetKind = 'space' | 'hosted' | 'solid' | 'light' | 'volume' | 'marker' | 'assembly';
 
 /** The shape the proxy takes in 3D (and its outline in 2D). */
-export type ProxyShape = 'room' | 'box' | 'cylinder' | 'sphere' | 'wedge' | 'plane' | 'stairs' | 'marker' | 'model' | 'none';
+export type ProxyShape = 'room' | 'box' | 'cylinder' | 'sphere' | 'wedge' | 'pyramid' | 'plane' | 'stairs' | 'marker' | 'model' | 'none';
 
 /** What the item is for, as gameplay and the exporters see it. */
 export type AssetRole =
@@ -471,7 +471,7 @@ export interface Level {
 }
 
 /** How the generator lays a floor out (structure spec §6 rule presets). */
-export type LayoutRules = 'linear' | 'branching' | 'hub' | 'maze' | 'chokepoints' | 'puzzleChain' | 'openPlan';
+export type LayoutRules = 'linear' | 'branching' | 'hub' | 'maze' | 'chokepoints' | 'puzzleChain' | 'openPlan' | 'hallways';
 
 /** The generator's settings (structure spec §5 generator configuration). Lengths in metres. */
 export interface GeneratorSettings {

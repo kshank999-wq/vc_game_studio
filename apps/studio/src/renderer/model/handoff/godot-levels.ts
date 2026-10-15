@@ -1655,6 +1655,9 @@ const pieceMesh = (t: Tscn, p: IrPiece): { mesh: string; basis: M3 } => {
     case 'cone':
       // Tip toward north (−z): a cylinder with no top, laid along z.
       return { mesh: t.sub('CylinderMesh', { top_radius: '0.0', bottom_radius: f(sx / 2), height: f(sz), material }), basis: mul(turn, rotX(-90)) };
+    case 'pyramid':
+      // A square pyramid: a four-sided cylinder with no top, turned so its sides face the compass, stretched to size.
+      return { mesh: t.sub('CylinderMesh', { top_radius: '0.0', bottom_radius: f(Math.SQRT1_2), height: '1.0', radial_segments: '4', rings: '0', material }), basis: mul(turn, mul([sx, 0, 0, 0, Math.max(0.01, sy), 0, 0, 0, sz], rotY(45))) };
     case 'wedge':
       // A right-angled prism, high side to the north: its triangle turned into the y–z plane.
       return { mesh: t.sub('PrismMesh', { left_to_right: '1.0', size: `Vector3(${f(sz)}, ${f(sy)}, ${f(sx)})`, material }), basis: mul(turn, rotY(90)) };

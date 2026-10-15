@@ -5,6 +5,13 @@ import { App } from '../App';
 import { sunkenVault } from '../model/sample';
 import { resetPreferences } from '../preferences';
 
+/** The library slides out from the maps panel's edge: open it, if it isn't. */
+const openLibrary = () => {
+  const tab = screen.queryByRole('button', { name: 'Open the library' });
+  if (tab) fireEvent.click(tab);
+};
+
+
 const opened = () => waitFor(() => expect(document.querySelector('.view-loading')).toBeNull(), { timeout: 5000 });
 
 beforeAll(() => {
@@ -52,7 +59,6 @@ describe('Levels panels in windows of their own', () => {
     expect(document.querySelector('.lvl')!.className).toContain('right-out');
     expect(other.head.querySelectorAll('style, link').length).toBe(document.head.querySelectorAll('style, link[rel="stylesheet"]').length);
     // Live: selecting here shows over there.
-    fireEvent.click(within(screen.getByRole('tab', { name: /Outliner/ }).closest('aside')!).getByRole('tab', { name: /Outliner/ }));
     const row = document.querySelector('.lvl-left [data-id], .lvl-left .lvl-out-row');
     if (row) fireEvent.click(row);
     expect(other.querySelector('.popout-bar')!.textContent).toContain('Properties');
@@ -77,6 +83,7 @@ describe('Levels panels in windows of their own', () => {
     await waitFor(() => expect(document.body.textContent).toMatch(/Guard post placed: \d+ pieces/));
     vi.restoreAllMocks();
     vi.spyOn(window, 'open').mockImplementation(() => null);
+    openLibrary();
     fireEvent.click(screen.getByRole('button', { name: 'Open the library in its own window' }));
     await waitFor(() => expect(document.body.textContent).toMatch(/The new window was blocked/));
     expect(document.querySelector('.lvl > .lvl-left')).not.toBeNull();

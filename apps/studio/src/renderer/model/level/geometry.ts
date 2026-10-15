@@ -383,7 +383,7 @@ export const spaceAt = (set: LevelSet, levelId: string, floorId: string, p: Poin
 // ---------------------------------------------------------------- 3D meshes
 
 /** A slab is an outline (a freeform floor or ceiling) raised to its height. */
-export type MeshShape = 'box' | 'cylinder' | 'sphere' | 'wedge' | 'cone' | 'slab' | 'model';
+export type MeshShape = 'box' | 'cylinder' | 'sphere' | 'wedge' | 'pyramid' | 'cone' | 'slab' | 'model';
 export type MeshPart = 'floor' | 'wall' | 'ceiling' | 'solid' | 'volume' | 'marker' | 'light' | 'door';
 
 /** One piece of the graybox. Coordinates are 3D: x east, y up, z south; a centre, a size, and a turn about y (radians). */
@@ -665,7 +665,7 @@ export const meshesFor = (set: LevelSet, levelId: string, options: MeshOptions =
       continue;
     }
     const model = def.proxy === 'model' && options.models && def.model?.mesh ? { key: `${def.id}@${def.version}`, mesh: def.model.mesh } : undefined;
-    const shape: MeshShape = model ? 'model' : def.proxy === 'cylinder' ? 'cylinder' : def.proxy === 'sphere' ? 'sphere' : def.proxy === 'wedge' ? 'wedge' : 'box';
+    const shape: MeshShape = model ? 'model' : def.proxy === 'cylinder' ? 'cylinder' : def.proxy === 'sphere' ? 'sphere' : def.proxy === 'wedge' ? 'wedge' : def.proxy === 'pyramid' ? 'pyramid' : 'box';
     push({ key: `${item.id}:solid`, collide: solid && def.proxy !== 'plane', part: 'solid', shape, x: f.x, y: y0 + f.h / 2, z: f.y, sx: f.w, sy: Math.max(0.01, f.h), sz: f.d, color, opacity, ...(model ? { model } : {}) });
   }
   return out;
