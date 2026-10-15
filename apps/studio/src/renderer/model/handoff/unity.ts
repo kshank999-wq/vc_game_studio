@@ -174,6 +174,11 @@ To try the story before your game has its own screens, add **VcgsCodex** next
 to VcgsGame: a Codex button (and C) opens the quest log and the lore found. The
 same text is \`new Codex(state).Text()\` for your own UI.
 
+To play the story through before then, add **VcgsDebugPlayer** next to
+VcgsGame and set its scene: each line shows on screen and its recorded take
+plays (Resources/VCGS/vo), both at once for dual dialogue. Enter or Space
+carries on; 1–9 pick an option.
+
 The Characters, Items, Locations and Cinematics folders hold a ScriptableObject
 per element, for designers to find in the Project window. So do Lore, Quests,
 Mechanics and Encounters (\`VcgsLore\`, \`VcgsQuest\`, \`VcgsMechanic\`,

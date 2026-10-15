@@ -1266,6 +1266,174 @@ void AVcgsCodexHUD::DrawHUD()
 }
 `,
 
+  'Source/VCGS/Public/VcgsDebugHUD.h': `${RUNTIME_HEAD}
+#pragma once
+
+#include "CoreMinimal.h"
+#include "VcgsCodexHUD.h"
+#include "VcgsCore.h"
+#include <memory>
+#include <string>
+#include <vector>
+#include "VcgsDebugHUD.generated.h"
+
+class UAudioComponent;
+class UVcgsSubsystem;
+
+/**
+ * Try the story in Unreal before your game has its own screens: set this as
+ * the game mode's HUD class, set SceneKey (VcgsKeys::Scenes) and press Play.
+ * Each line, action and cinematic shows in a box at the bottom with what can
+ * be done; Space or Enter does the first, 1–9 pick an option (a choice's, or
+ * Win and Lose). Each line's recorded take (imported by import_vo.py) plays as
+ * it comes up, both at once for dual dialogue. The codex (C) works as in
+ * AVcgsCodexHUD.
+ */
+UCLASS()
+class VCGS_API AVcgsDebugHUD : public AVcgsCodexHUD
+{
+    GENERATED_BODY()
+
+public:
+    /** The scene to play first, as in VcgsKeys::Scenes. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") FString SceneKey;
+    /** Play each line's recorded take as it comes up. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VCGS") bool bPlayVoices = true;
+
+    /** What the box shows now. */
+    UFUNCTION(BlueprintPure, Category = "VCGS") FString GetDebugText() const;
+    /** What can be done now, in order (the first is what Space or Enter does). */
+    UFUNCTION(BlueprintPure, Category = "VCGS") TArray<FString> GetDebugOptions() const;
+    /** Do what the option at this place does. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") void DebugDo(int32 Option);
+    /** Play this scene from its start. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") void PlayScene(const FString& Scene);
+
+    virtual void DrawHUD() override;
+
+private:
+    UVcgsSubsystem* StorySubsystem() const;
+    /** The story playing, made once the story has loaded. */
+    std::unique_ptr<vcgs::DebugStory> Debug;
+    bool EnsureStory();
+    /** Hear these lines: the last ones stop, and each line's take plays at once. */
+    void Say(const std::vector<std::string>& LineIds);
+    UPROPERTY() TArray<UAudioComponent*> Voices;
+};
+`,
+
+  'Source/VCGS/Private/VcgsDebugHUD.cpp': `${RUNTIME_HEAD}
+#include "VcgsDebugHUD.h"
+#include "VcgsConvert.h"
+#include "VcgsSubsystem.h"
+#include "Components/AudioComponent.h"
+#include "Engine/Canvas.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+
+using VcgsConvert::ToF;
+using VcgsConvert::ToStd;
+
+UVcgsSubsystem* AVcgsDebugHUD::StorySubsystem() const
+{
+    UWorld* World = GetWorld();
+    UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+    return GameInstance ? GameInstance->GetSubsystem<UVcgsSubsystem>() : nullptr;
+}
+
+bool AVcgsDebugHUD::EnsureStory()
+{
+    if (Debug) return true;
+    UVcgsSubsystem* Story = StorySubsystem();
+    vcgs::GameState* Game = Story ? Story->State() : nullptr;
+    if (!Game) return false;
+    Debug = std::make_unique<vcgs::DebugStory>(*Game);
+    Debug->Speak = [this](const std::vector<std::string>& LineIds) { Say(LineIds); };
+    Debug->Play(ToStd(SceneKey));
+    return true;
+}
+
+void AVcgsDebugHUD::Say(const std::vector<std::string>& LineIds)
+{
+    for (UAudioComponent* Voice : Voices) if (Voice) Voice->Stop();
+    Voices.Reset();
+    UVcgsSubsystem* Story = StorySubsystem();
+    if (!bPlayVoices || !Story || !Story->State()) return;
+    for (const std::string& LineId : LineIds)
+    {
+        const std::string Audio = vcgs::StoryWalker::GetLine(*Story->State(), LineId).Audio;
+        if (Audio.empty()) continue;
+        if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, *ToF(Audio))) Voices.Add(UGameplayStatics::SpawnSound2D(this, Sound));
+    }
+}
+
+FString AVcgsDebugHUD::GetDebugText() const { return Debug ? ToF(Debug->Text) : FString(); }
+
+TArray<FString> AVcgsDebugHUD::GetDebugOptions() const
+{
+    TArray<FString> Options;
+    if (Debug) for (const std::string& Label : Debug->Labels) Options.Add(ToF(Label));
+    return Options;
+}
+
+void AVcgsDebugHUD::DebugDo(int32 Option)
+{
+    if (EnsureStory()) Debug->Do(Option);
+}
+
+void AVcgsDebugHUD::PlayScene(const FString& Scene)
+{
+    SceneKey = Scene;
+    if (Debug) Debug->Play(ToStd(Scene));
+    else EnsureStory();
+}
+
+void AVcgsDebugHUD::DrawHUD()
+{
+    Super::DrawHUD();
+    UVcgsSubsystem* Story = StorySubsystem();
+    if (!Canvas || IsCodexOpen() || (Story && Story->IsTransitionStandIn())) return;
+    if (!EnsureStory())
+    {
+        DrawText(TEXT("VCGS: no story loaded; export it from VC Game Studio."), FLinearColor::White, 24.f, Canvas->ClipY - 48.f);
+        return;
+    }
+    if (PlayerOwner)
+    {
+        static const FKey Digits[] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine};
+        if (PlayerOwner->WasInputKeyJustPressed(EKeys::SpaceBar) || PlayerOwner->WasInputKeyJustPressed(EKeys::Enter)) Debug->Do(0);
+        else for (int i = 0; i < 9; i++) if (PlayerOwner->WasInputKeyJustPressed(Digits[i])) { Debug->Do(i); break; }
+    }
+    // The text, a line at a time, then the options numbered.
+    std::vector<std::string> Rows;
+    std::string Row;
+    for (char C : Debug->Text)
+    {
+        if (C == '\\n') { Rows.push_back(Row); Row.clear(); }
+        else Row += C;
+    }
+    Rows.push_back(Row);
+    const float Height = 36.f + 20.f * static_cast<float>(Rows.size() + Debug->Labels.size());
+    const float Top = Canvas->ClipY - Height - 24.f;
+    DrawRect(FLinearColor(0.05f, 0.04f, 0.03f, 0.92f), 24.f, Top, Canvas->ClipX - 48.f, Height);
+    float Y = Top + 12.f;
+    for (const std::string& Text : Rows)
+    {
+        DrawText(ToF(Text), FLinearColor::White, 40.f, Y);
+        Y += 20.f;
+    }
+    Y += 4.f;
+    for (size_t i = 0; i < Debug->Labels.size(); i++)
+    {
+        DrawText(ToF(std::to_string(i + 1) + "  " + Debug->Labels[i] + (i == 0 ? "   (Space)" : "")), FLinearColor(0.85f, 0.7f, 0.4f, 1.f), 40.f, Y);
+        Y += 20.f;
+    }
+}
+`,
+
   'Source/VCGS/Public/VcgsSceneFlowComponent.h': `${RUNTIME_HEAD}
 #pragma once
 
@@ -1747,6 +1915,11 @@ To try the story before your game has its own screens, set **AVcgsCodexHUD** as
 the game mode's HUD class: C opens a codex with the quest log and the lore
 found. \`GetCodexText\` and \`GetCodexNewCount\` on the subsystem give the same
 for your own UMG widget.
+
+To play the story through, set **AVcgsDebugHUD** as the HUD class instead (it
+has the codex too) and set its SceneKey: each line shows in a box and its
+recorded take plays (run \`import_vo.py\` first), both at once for dual
+dialogue. Space or Enter carries on; 1–9 pick an option.
 
 The game state lives in the \`UVcgsSubsystem\` (flags, items, arcs and the rest,
 all Blueprint-callable). Quests start and complete by their rules (\`OnQuestStarted\`,

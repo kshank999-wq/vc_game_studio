@@ -19,6 +19,7 @@ export const VCGS_CORE_H = String.raw`// VCGS Runtime for Unreal: the story's lo
 #include <cstdlib>
 #include <functional>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <utility>
@@ -2561,5 +2562,148 @@ ${UNREAL_PUZZLES}
             return {who, l["text"].Str(), l["direction"].Str(), l["audio"].Str()};
         }
     }
+
+    /**
+     * The story as a plain on-screen player shows it (as Godot's and Unity's
+     * debug players do): each line, action and cinematic with Continue, a
+     * choice's options, an encounter's Win and Lose, and on into the next scene.
+     * Speak says which lines to hear now (one, or two at once for dual dialogue).
+     */
+    class DebugStory
+    {
+    public:
+        std::string Text;
+        /** What can be done now, in order (the first is what Continue or Enter does). */
+        std::vector<std::string> Labels;
+        std::function<void(const std::vector<std::string>&)> Speak;
+
+        explicit DebugStory(GameState& state) : game(state) {}
+        DebugStory(const DebugStory&) = delete;
+        DebugStory& operator=(const DebugStory&) = delete;
+
+        ScenePlayer* Player() const { return player.get(); }
+
+        /** Play a scene from its start. */
+        void Play(const std::string& sceneKey)
+        {
+            Queue(sceneKey);
+            Run();
+        }
+
+        /** Do what the option at this place in Labels does. */
+        void Do(int option)
+        {
+            if (option < 0 || option >= static_cast<int>(actions.size())) return;
+            std::function<void()> act = actions[static_cast<size_t>(option)];
+            act();
+            Run();
+        }
+
+        /** A line as the player reads it: who, how, and what they say. */
+        std::string Line(const std::string& lineId) const
+        {
+            const StoryWalker::Line l = StoryWalker::GetLine(game, lineId);
+            std::string who = l.Speaker.empty() ? "NO SPEAKER" : l.Speaker;
+            for (char& c : who) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            return who + (l.Direction.empty() ? "" : "  (" + l.Direction + ")") + "\n" + l.Text;
+        }
+
+    private:
+        GameState& game;
+        std::unique_ptr<ScenePlayer> player;
+        std::vector<std::function<void()>> actions;
+        /** The scene to play next: started once the one playing has returned, never from inside its own callbacks. */
+        std::string pending;
+        bool hasPending = false;
+
+        void Show(const std::string& text, std::vector<std::pair<std::string, std::function<void()>>> options = {})
+        {
+            Text = text;
+            Labels.clear();
+            actions.clear();
+            for (auto& o : options)
+            {
+                Labels.push_back(o.first);
+                actions.push_back(std::move(o.second));
+            }
+        }
+
+        std::pair<std::string, std::function<void()>> Continue() { return {"Continue", [this] { player->Advance(); }}; }
+
+        std::string NameIn(const std::map<std::string, const Value*>& table, const std::string& key) const
+        {
+            const std::string name = Story::Find(table, key)["name"].Str();
+            return name.empty() ? key : name;
+        }
+
+        void Queue(const std::string& sceneKey)
+        {
+            pending = sceneKey;
+            hasPending = true;
+        }
+
+        void Run()
+        {
+            while (hasPending)
+            {
+                const std::string key = pending;
+                pending.clear();
+                hasPending = false;
+                Start(key);
+            }
+        }
+
+        void Start(const std::string& sceneKey)
+        {
+            if (!Story::Find(game.StoryData.Scenes, sceneKey).IsObject())
+            {
+                player.reset();
+                Show(sceneKey.empty() ? "Set the scene to play (its key, as in VcgsKeys::Scenes)." : "The story has no scene " + sceneKey + ".");
+                return;
+            }
+            player = std::make_unique<ScenePlayer>(game, sceneKey);
+            player->OnEvent = [this](const Value& ev)
+            {
+                const std::string kind = ev["kind"].Str();
+                if (kind == "dialogue" || kind == "cinematic" || kind == "freePlay" || kind == "choice" || kind == "trigger" || kind == "encounter") return;
+                Show(ev["label"].Str(), {Continue()});
+            };
+            player->OnDialogue = [this](const std::string& id)
+            {
+                Show(Line(id), {Continue()});
+                if (Speak) Speak({id});
+            };
+            player->OnDual = [this](const std::string& first, const std::string& second)
+            {
+                Show(Line(first) + "\n\n    || at the same time ||\n\n" + Line(second), {Continue()});
+                if (Speak) Speak({first, second});
+            };
+            player->OnCinematic = [this](const std::string& key) { Show("[Cinematic] " + NameIn(game.StoryData.Cinematics, key), {Continue()}); };
+            player->OnFreePlay = [this](const std::string& ends) { Show("[Free play] " + (ends.empty() ? std::string("Play on, then carry on.") : ends), {{"Done", [this] { player->Advance(); }}}); };
+            player->OnChoice = [this](const std::string& key, const std::vector<std::string>& options)
+            {
+                const std::string prompt = Story::Find(game.StoryData.Choices, key)["prompt"].Str();
+                std::vector<std::pair<std::string, std::function<void()>>> list;
+                for (size_t i = 0; i < options.size(); i++)
+                {
+                    const int n = static_cast<int>(i);
+                    list.push_back({options[i], [this, n] { player->Choose(n); }});
+                }
+                Show(prompt.empty() ? NameIn(game.StoryData.Choices, key) : prompt, std::move(list));
+            };
+            player->OnEncounter = [this](const std::string& key, bool canWin)
+            {
+                Show("[Encounter] " + NameIn(game.StoryData.Encounters, key) + (canWin ? "" : " (a win doesn't count yet)"),
+                     {{"Win", [this] { player->Win(); }}, {"Lose", [this] { player->Lose(); }}});
+            };
+            player->OnGameOver = [this, sceneKey](const std::string& key) { Show("Game over: " + NameIn(game.StoryData.Encounters, key) + ".", {{"Play the scene again", [this, sceneKey] { Queue(sceneKey); }}}); };
+            player->OnFinished = [this](const std::string& next)
+            {
+                if (Story::Find(game.StoryData.Scenes, next).IsObject()) Queue(next);
+                else Show(next.empty() ? "The end." : "The story goes on to " + next + ".");
+            };
+            player->Start();
+        }
+    };
 }
 `;

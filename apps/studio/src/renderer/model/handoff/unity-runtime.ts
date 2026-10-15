@@ -2989,6 +2989,179 @@ namespace VCGS
 }
 `,
 
+  'VcgsDebugPlayer.cs': String.raw`${HEAD}
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace VCGS
+{
+    /// <summary>
+    /// The story as a plain on-screen player shows it (as Godot's debug player
+    /// does): each line, action and cinematic with Continue, a choice's options,
+    /// an encounter's Win and Lose, and on into the next scene. Speak says which
+    /// lines to hear now (one, or two at once for dual dialogue).
+    /// </summary>
+    public sealed class DebugStory
+    {
+        readonly GameState game;
+        readonly List<Action> actions = new List<Action>();
+        public ScenePlayer Player { get; private set; }
+        public string Text { get; private set; } = "";
+        /// <summary>What can be done now, in order (the first is what Continue or Enter does).</summary>
+        public readonly List<string> Labels = new List<string>();
+        public event Action<List<string>> Speak;
+
+        public DebugStory(GameState game) { this.game = game; }
+
+        void Show(string text, params (string label, Action act)[] options)
+        {
+            Text = text;
+            Labels.Clear();
+            actions.Clear();
+            foreach (var (label, act) in options)
+            {
+                Labels.Add(label);
+                actions.Add(act);
+            }
+        }
+
+        (string, Action) Continue() => ("Continue", () => Player.Advance());
+
+        /// <summary>Do what the option at this place in Labels does.</summary>
+        public void Do(int option)
+        {
+            if (option >= 0 && option < actions.Count) actions[option]();
+        }
+
+        /// <summary>A line as the player reads it: who, how, and what they say.</summary>
+        public string Line(string lineId)
+        {
+            var (who, text, direction) = StoryWalker.Line(game, lineId);
+            return (who == "" ? "NO SPEAKER" : who.ToUpperInvariant()) + (direction != "" ? "  (" + direction + ")" : "") + "\n" + text;
+        }
+
+        static string NameIn(Dictionary<string, Dictionary<string, object>> table, string key) =>
+            table.TryGetValue(key ?? "", out var o) && D.Str(o, "name") != "" ? D.Str(o, "name") : key;
+
+        public void Play(string sceneKey)
+        {
+            if (!game.Story.Scenes.ContainsKey(sceneKey ?? ""))
+            {
+                Show(sceneKey == "" ? "Set the scene to play (its key, as in StoryKeys.Scenes)." : "The story has no scene " + sceneKey + ".");
+                return;
+            }
+            Player = new ScenePlayer(game, sceneKey);
+            var player = Player;
+            player.EventStarted += ev =>
+            {
+                var kind = D.Str(ev, "kind");
+                if (kind == "dialogue" || kind == "cinematic" || kind == "freePlay" || kind == "choice" || kind == "trigger" || kind == "encounter") return;
+                Show(D.Str(ev, "label"), Continue());
+            };
+            player.DialogueRequested += id =>
+            {
+                Show(Line(id), Continue());
+                Speak?.Invoke(new List<string> { id });
+            };
+            player.DualRequested += (first, second) =>
+            {
+                Show(Line(first) + "\n\n    ‖ at the same time ‖\n\n" + Line(second), Continue());
+                Speak?.Invoke(new List<string> { first, second });
+            };
+            player.CinematicRequested += key => Show("[Cinematic] " + NameIn(game.Story.Cinematics, key), Continue());
+            player.FreePlayStarted += ends => Show("[Free play] " + (ends == "" ? "Play on, then carry on." : ends), ("Done", () => player.Advance()));
+            player.ChoiceRequested += (key, options) =>
+            {
+                var c = game.Story.Choices.TryGetValue(key ?? "", out var choice) ? choice : null;
+                var prompt = c != null && D.Str(c, "prompt") != "" ? D.Str(c, "prompt") : NameIn(game.Story.Choices, key);
+                var list = new List<(string, Action)>();
+                for (var i = 0; i < options.Count; i++)
+                {
+                    var n = i;
+                    list.Add((options[i], () => player.Choose(n)));
+                }
+                Show(prompt, list.ToArray());
+            };
+            player.EncounterRequested += (key, canWin) =>
+                Show("[Encounter] " + NameIn(game.Story.Encounters, key) + (canWin ? "" : " (a win doesn't count yet)"), ("Win", () => player.Win()), ("Lose", () => player.Lose()));
+            player.GameOver += key => Show("Game over: " + NameIn(game.Story.Encounters, key) + ".", ("Play the scene again", () => Play(sceneKey)));
+            player.SceneFinished += next =>
+            {
+                if (game.Story.Scenes.ContainsKey(next ?? "")) Play(next);
+                else Show(next == "" ? "The end." : "The story goes on to " + next + ".");
+            };
+            player.Start();
+        }
+    }
+
+    /// <summary>
+    /// Try the story in Unity: put it beside a VcgsGame, set the scene, press
+    /// Play. Lines show on screen and their recorded takes play (Resources/VCGS/vo);
+    /// Enter or Space carries on, 1–9 pick an option.
+    /// </summary>
+    public sealed class VcgsDebugPlayer : MonoBehaviour
+    {
+        [Tooltip("The scene to play first, as in StoryKeys.Scenes.")]
+        [SerializeField] string sceneKey = "";
+        [Tooltip("Play each line's recorded take as it comes up.")]
+        [SerializeField] bool playVoices = true;
+
+        public DebugStory Story { get; private set; }
+        readonly List<AudioSource> voices = new List<AudioSource>();
+        /// <summary>The audio sources the takes play on (one per voice at once).</summary>
+        public IReadOnlyList<AudioSource> Voices => voices;
+
+        void Start()
+        {
+            if (VcgsGame.Instance == null)
+            {
+                Debug.LogError("VCGS: add a VcgsGame (with the generated story.json) to the scene.");
+                return;
+            }
+            Story = new DebugStory(VcgsGame.Instance.State);
+            Story.Speak += Say;
+            Story.Play(sceneKey);
+        }
+
+        /// <summary>Hear these lines: the last ones stop, and each line's take plays on a source of its own.</summary>
+        public void Say(List<string> lineIds)
+        {
+            foreach (var v in voices) v.Stop();
+            if (!playVoices || VcgsGame.Instance == null) return;
+            var n = 0;
+            foreach (var id in lineIds)
+            {
+                var clip = StoryWalker.Voice(VcgsGame.Instance.State, id);
+                if (clip == null) continue;
+                while (voices.Count <= n) voices.Add(gameObject.AddComponent<AudioSource>());
+                voices[n].clip = clip;
+                voices[n].Play();
+                n++;
+            }
+        }
+
+        void OnGUI()
+        {
+            if (Story == null) return;
+            var e = Event.current;
+            if (e.type == EventType.KeyDown)
+            {
+                if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.Space) { Story.Do(0); e.Use(); }
+                else if (e.keyCode >= KeyCode.Alpha1 && e.keyCode <= KeyCode.Alpha9) { Story.Do(e.keyCode - KeyCode.Alpha1); e.Use(); }
+            }
+            var w = Math.Min(640f, Screen.width - 40f);
+            GUILayout.BeginArea(new Rect((Screen.width - w) / 2f, Screen.height * 0.55f, w, Screen.height * 0.42f));
+            var style = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 16 };
+            GUILayout.Label(Story.Text, style);
+            for (var i = 0; i < Story.Labels.Count; i++)
+                if (GUILayout.Button((Story.Labels.Count > 1 ? (i + 1) + ". " : "") + Story.Labels[i])) Story.Do(i);
+            GUILayout.EndArea();
+        }
+    }
+}
+`,
+
   'VcgsInteractable.cs': String.raw`${HEAD}
 using System.Collections.Generic;
 using UnityEngine;

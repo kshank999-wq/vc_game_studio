@@ -181,9 +181,25 @@ to the project folder, a folder the browser may write to, or in the download.
 | Engine | Where the takes go | How a line's is played |
 |---|---|---|
 | Godot | `vcgs/generated/vo/<line>.mp3` (Godot imports them) | `play_story.tscn` plays them; `VCGSDialogue.audio(line_id)` gives an `AudioStream` |
-| Unity | `Assets/VCGS/Generated/Resources/VCGS/vo/` | `StoryWalker.Voice(game, lineId)` gives the `AudioClip` |
-| Unreal | `VCGS/SourceAudio/vo/<line>.wav` (converted to WAV) | run `import_vo.py` once per export: sound waves in `/Game/VCGS/VO`; the scene flow component plays them (`bPlayVoices`), `GetLineAudio` names one |
+| Unity | `Assets/VCGS/Generated/Resources/VCGS/vo/` | the debug player (`VcgsDebugPlayer`) plays them; `StoryWalker.Voice(game, lineId)` gives the `AudioClip` |
+| Unreal | `VCGS/SourceAudio/vo/<line>.wav` (converted to WAV) | run `import_vo.py` once per export: sound waves in `/Game/VCGS/VO`; the debug HUD (`AVcgsDebugHUD`) and the scene flow component play them (`bPlayVoices`), `GetLineAudio` names one |
 | JSON | `vcgs/vo/<line>.<ext>` | each line's `audio`, relative to `story.json` |
 
 A take whose audio isn't on this computer is left out, and the studio says
 so; the line still names where it would go.
+
+**Try it in the engine** before your game has its own screens, as Godot's
+`play_story.tscn` does. Each player shows the scene one beat at a time in a
+box (a line, an action, a cinematic, with Continue; a choice's options; an
+encounter's Win and Lose) and carries on into the next scene. Each line's take
+plays as it comes up, and a dual-dialogue pair's two takes play together.
+
+- **Unity:** add **VcgsDebugPlayer** next to VcgsGame, set its scene (as in
+  `StoryKeys.Scenes`) and press Play. Enter or Space carries on; 1–9 pick an
+  option. The takes play on AudioSources it adds; untick **Play Voices** for
+  quiet. The same story without the screen is `DebugStory` (plain C#).
+- **Unreal:** run `import_vo.py`, set **AVcgsDebugHUD** as the game mode's HUD
+  class, set its `SceneKey` (`VcgsKeys::Scenes`) and press Play. Space or
+  Enter does the first option; 1–9 pick one. C still opens the codex, as in
+  `AVcgsCodexHUD`. Turn `bPlayVoices` off for quiet. The same story without
+  the screen is `vcgs::DebugStory` in `VcgsCore.h`.

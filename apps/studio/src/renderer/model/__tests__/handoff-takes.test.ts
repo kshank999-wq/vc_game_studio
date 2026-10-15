@@ -34,6 +34,18 @@ describe('recorded takes in the engine handoff', () => {
     expect(fileOf(unreal, 'Content/VCGS/Generated/import_vo.py')).toContain('DESTINATION = "/Game/VCGS/VO"');
   });
 
+  it('Unity and Unreal each get a debug player that plays the takes', () => {
+    const unity = planHandoff(forEngine('unity')).output!.files;
+    const player = unity.find((f) => f.path.endsWith('/VcgsDebugPlayer.cs'))!.content as string;
+    expect(player).toContain('StoryWalker.Voice(VcgsGame.Instance.State, id)');
+    expect(unity.find((f) => f.path.endsWith('README.md'))!.content).toContain('VcgsDebugPlayer');
+    const unreal = planHandoff(forEngine('unreal')).output!.files;
+    const hud = unreal.find((f) => f.path.endsWith('/Private/VcgsDebugHUD.cpp'))!.content as string;
+    expect(hud).toContain('UGameplayStatics::SpawnSound2D(this, Sound)');
+    expect(unreal.find((f) => f.path.endsWith('/Public/VcgsCore.h'))!.content).toContain('class DebugStory');
+    expect(unreal.find((f) => f.path.endsWith('README.md'))!.content).toContain('AVcgsDebugHUD');
+  });
+
   it('the handoff screen lists them as a row of their own, which changes when a take does', () => {
     const p = forEngine('godot');
     const row = planHandoff(p).rows.find((r) => r.id === 'takes')!;

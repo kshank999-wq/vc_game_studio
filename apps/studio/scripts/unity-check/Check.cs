@@ -89,6 +89,18 @@ static class Check
         if (game.HasItem(Items.VaultKey) || game.Arc(Characters.Mara) != 1) Fail("turning the key should use it up and move Mara +1");
         if (game.QuestState(Quests.OpenTheVault) != "done" || string.Join(",", questsDone) != Quests.OpenTheVault) Fail("solving the door should complete Open the vault once, got " + game.QuestState(Quests.OpenTheVault) + " " + string.Join(",", questsDone));
 
+        // The debug player: the scene on screen, with Continue, and both dual lines' takes at once.
+        var debugGame = new GameState(story);
+        debugGame.GiveItem(Items.VaultKey);
+        var debug = new DebugStory(debugGame);
+        var spoken = new List<string>();
+        debug.Speak += ids => spoken.Add(string.Join("+", ids));
+        debug.Play(Scenes.Sc03TheVaultDoor);
+        for (var i = 0; i < 3 && spoken.Count == 0; i++) debug.Do(0);
+        Console.WriteLine("debug player: " + string.Join(" | ", spoken) + " · " + string.Join(", ", debug.Labels));
+        if (string.Join(",", spoken) != "sc_03_line_02+sc_03_line_03") Fail("the debug player should speak Mara's and the Explorer's takes together, got " + string.Join(",", spoken));
+        if (!debug.Text.Contains("at the same time") || debug.Labels.Count == 0 || debug.Labels[0] != "Continue") Fail("the debug player should show both lines with Continue, got " + debug.Text);
+
         // Rules can ask about quests and lore.
         var asks = new Dictionary<string, object> { ["match"] = "all", ["items"] = new List<object> {
             new Dictionary<string, object> { ["kind"] = "quest", ["ref"] = Quests.OpenTheVault, ["op"] = "done" },

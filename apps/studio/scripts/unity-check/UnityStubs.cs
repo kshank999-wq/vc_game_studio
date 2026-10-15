@@ -209,6 +209,14 @@ namespace UnityEngine
 
     public sealed class AudioClip : Object { }
 
+    public sealed class AudioSource : Behaviour
+    {
+        public AudioClip clip;
+        public bool isPlaying;
+        public void Play() => isPlaying = true;
+        public void Stop() => isPlaying = false;
+    }
+
     public static class Resources
     {
         public static T Load<T>(string path) where T : Object => null;
@@ -305,7 +313,7 @@ namespace UnityEngine
         public Rect(float x, float y, float width, float height) { this.x = x; this.y = y; this.width = width; this.height = height; }
     }
 
-    public enum KeyCode { None, C, Escape, Return, Slash, Tab, S, B, N, E, I, Y, V, P, M, T, F5, F9, UpArrow, DownArrow }
+    public enum KeyCode { None, C, Escape, Return, Slash, Tab, S, B, N, E, I, Y, V, P, M, T, F5, F9, UpArrow, DownArrow, Space, Alpha1, Alpha2, Alpha3, Alpha4, Alpha5, Alpha6, Alpha7, Alpha8, Alpha9 }
     public enum EventType { KeyDown, KeyUp, Repaint, Layout }
 
     public sealed class Event

@@ -420,6 +420,25 @@ int main()
     if (vcgs::StoryWalker::KindOf(game, end) != "end") Fail("carrying on should reach the end");
     if (vcgs::StoryWalker::GetLine(game, "sc_03_line_02").Speaker != "Mara") Fail("line 2 should be Mara's");
 
+    // The debug HUD's story: the scene on screen, with Continue, and both dual lines' takes at once.
+    {
+        vcgs::GameState debugGame(story);
+        debugGame.GiveItem(Items::VaultKey);
+        vcgs::DebugStory debug(debugGame);
+        std::vector<std::string> spoken;
+        debug.Speak = [&](const std::vector<std::string>& ids) { spoken.push_back(Join(ids, "+")); };
+        debug.Play(Scenes::Sc03TheVaultDoor);
+        for (int i = 0; i < 3 && spoken.empty(); i++) debug.Do(0);
+        std::printf("debug HUD: %s · %s\n", Join(spoken, " | ").c_str(), Join(debug.Labels, ", ").c_str());
+        if (Join(spoken, ",") != "sc_03_line_02+sc_03_line_03") Fail("the debug HUD should speak Mara's and the Explorer's takes together, got " + Join(spoken, ","));
+        if (debug.Text.find("at the same time") == std::string::npos || debug.Labels.empty() || debug.Labels[0] != "Continue") Fail("the debug HUD should show both lines with Continue, got " + debug.Text);
+        if (vcgs::StoryWalker::GetLine(debugGame, "sc_03_line_02").Audio != "/Game/VCGS/VO/sc_03_line_02.sc_03_line_02") Fail("Mara's line should name its imported sound");
+        // On through the scene, always taking the first option: it ends into a cinematic (not a scene), so it says where the story goes.
+        for (int i = 0; i < 20 && !debug.Labels.empty(); i++) debug.Do(0);
+        std::printf("debug HUD then: %s\n", debug.Text.c_str());
+        if (debug.Text != "The story goes on to the_vault_opens.") Fail("the debug HUD should end where the scene goes, got " + debug.Text);
+    }
+
     // Save and load: a save holds the game as the scene being played began, and loading puts it back.
     {
         vcgs::GameState saving(story);
