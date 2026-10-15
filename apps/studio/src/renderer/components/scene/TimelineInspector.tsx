@@ -1,4 +1,5 @@
 import { cinematicTiming } from '../../model/shots';
+import { TakeControl } from './TakeControl';
 import { useNav } from '../../nav';
 import { renameObject } from '../../model/project';
 import { TYPE_LABEL } from '../../model/semantics';
@@ -240,6 +241,7 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
                 </button>
               ))}
             </div>
+            <TakeControl project={project} lineId={line.id} onCommit={onCommit} />
           </div>
           <Field label="Notes" value={line.notes} multiline placeholder="Delivery, context for the actor…" onSave={(v) => onCommit(updateLine(project, line.id, { notes: v }))} />
         </>

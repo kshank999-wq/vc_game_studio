@@ -157,6 +157,18 @@ export const saveProjectFile = async (project: Project, file: ProjectFile | null
   return { name };
 };
 
+/** Hand the person a file to keep (a download): audio, a zip. */
+export const downloadBlob = (name: string, blob: Blob): void => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
 /** Hand the person a text file to keep (a download). */
 export const downloadText = (name: string, text: string, type = 'text/plain'): void => {
   const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));

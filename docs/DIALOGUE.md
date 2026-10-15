@@ -108,6 +108,30 @@ Download it as a page to print or send (.html), as a spreadsheet for the
 studio (.csv: file, take, scene, cue, voice, direction, line, cue in,
 status), or print it.
 
+### Recorded takes
+
+When the audio comes back, upload it and the line is marked **recorded**.
+
+- **One line:** in a beat card (**🎙 Add take**), in the timeline's inspector,
+  or in the line's detail in the Game Bible, choose **Upload take…** or drop
+  an audio file on it (WAV, MP3, OGG, FLAC, M4A, AIFF…). ▶ plays it back;
+  **Replace** swaps in another take; **×** takes it off and the line goes
+  back to *to record*.
+- **A whole session:** **Takes…** in the Dialogue tab (or **File → Export →
+  Recorded takes**) lists every line to record. **Upload takes…** (or drop the
+  files on the list) sends each file to the line it's named for — the file
+  names the recording script gives, `sc_03_line_02.wav`; anything after the
+  name is ignored (`sc_03_line_02_take3.wav`). Files that match no line are
+  listed so you can rename them.
+- **Download takes (.zip)** gives every take named for its line as the
+  engines play it, under `audio/vo/` — drop the folder into your game.
+
+The audio is kept on this computer, in the app's own storage; the project
+file keeps which take each line has (its name, size and length). Open the
+project on another computer and the lines still read *recorded*, with
+"audio not on this computer": upload it there again, or keep the takes zip
+with the project.
+
 ## In the engines
 
 Each exported line carries `speaker` (the character, if any) and, for

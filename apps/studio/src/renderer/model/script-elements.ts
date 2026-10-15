@@ -89,6 +89,7 @@ export const fromElements = (project: Project, sceneId: string, elements: readon
       order: built.length + 1,
       vo: kind !== 'dialogue' ? 'none' : prior?.kind === 'dialogue' ? prior.vo : defaultVo(),
       notes: prior?.notes ?? '',
+      ...(kind === 'dialogue' && prior?.kind === 'dialogue' && prior.take ? { take: prior.take } : {}),
       ...(prior?.conditions ? { conditions: prior.conditions } : {}),
       ...(prior?.choiceId ? { choiceId: prior.choiceId } : {}),
     };

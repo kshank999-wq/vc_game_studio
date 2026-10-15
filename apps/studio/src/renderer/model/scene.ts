@@ -268,7 +268,7 @@ export const addLine = (
   return { project: next, id: line.id };
 };
 
-export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'voiceFrom' | 'kind' | 'vo' | 'notes' | 'conditions' | 'extension' | 'cue' | 'dual'>>;
+export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'voiceFrom' | 'kind' | 'vo' | 'notes' | 'conditions' | 'extension' | 'cue' | 'dual' | 'take'>>;
 
 export const updateLine = (project: Project, id: string, patch: LinePatch): Project => {
   const line = project.lines.find((l) => l.id === id);
@@ -276,10 +276,12 @@ export const updateLine = (project: Project, id: string, patch: LinePatch): Proj
   const next: DialogueLine = { ...line, ...patch };
   // Only dialogue has a speaker, a parenthetical and a voice to record.
   if (next.voiceFrom === undefined) delete next.voiceFrom;
+  if (next.take === undefined) delete next.take;
   if (next.kind !== 'dialogue') {
     next.speakerId = null;
     next.vo = 'none';
     delete next.voiceFrom;
+    delete next.take;
     delete next.extension;
     delete next.cue;
     delete next.joined;

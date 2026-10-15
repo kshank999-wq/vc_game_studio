@@ -1,4 +1,5 @@
 import { applyFilters, regroup, type Filter, type GroupBy } from '../../model/bible-filters';
+import { TakeControl } from '../scene/TakeControl';
 import { BibleChips } from './BibleChips';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { setupSummary } from '../../model/setup';
@@ -457,6 +458,7 @@ const LineDetail = ({
               </button>
             ))}
           </div>
+          <TakeControl project={project} lineId={line.id} onCommit={onCommit} />
         </div>
         <label className="dfld">
           <span>Notes</span>

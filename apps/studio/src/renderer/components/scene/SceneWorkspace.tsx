@@ -348,6 +348,9 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                 <button type="button" className="tb-btn small" onClick={() => setExporting('recording')} title="Every line in order, numbered, for the voice actors">
                   Recording script…
                 </button>
+                <button type="button" className="tb-btn small" onClick={() => setExporting('takes')} title="Upload the recorded audio: each line with a take is marked recorded">
+                  Takes…
+                </button>
               </div>
             )}
             {tab === 'Dialogue' && scriptView === 'script' && <ScriptEditor project={project} sceneId={sceneId} onCommit={props.onCommit} focusLine={focusLine} />}
@@ -374,7 +377,7 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
             )}
           </div>
           {tab === 'Dialogue' && scriptView === 'script' && <ScriptFooter project={project} sceneId={sceneId} onCommit={props.onCommit} />}
-          {exporting && <ScriptExportDialog project={project} sceneId={sceneId} kind={exporting} onClose={() => setExporting(null)} />}
+          {exporting && <ScriptExportDialog project={project} sceneId={sceneId} kind={exporting} onCommit={props.onCommit} onClose={() => setExporting(null)} />}
         </section>
       </div>
 

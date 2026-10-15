@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { sceneHeading } from '../../model/scene';
 import { beatsOf, beatSummary, moveBeat, type Beat } from '../../model/script-export';
 import type { Project } from '../../model/types';
+import { TakeControl } from './TakeControl';
 
 const KIND_LABEL: Record<Beat['kind'], string> = { action: 'Action', dialogue: 'Dialogue', transition: 'Transition' };
 
@@ -78,6 +79,8 @@ export const BeatBoard = ({ project, sceneId, onCommit, onOpen }: { project: Pro
               }}
               onDoubleClick={() => onOpen(beat.id)}
               onKeyDown={(e) => {
+                // Keys on the card itself, not its buttons.
+                if (e.target !== e.currentTarget) return;
                 if (e.altKey && e.key === 'ArrowUp' && i > 0) (e.preventDefault(), move(beat.id, i - 1));
                 else if (e.altKey && e.key === 'ArrowDown' && i < beats.length - 1) (e.preventDefault(), move(beat.id, i + 1));
                 else if (e.key === 'Enter') onOpen(beat.id);
@@ -100,6 +103,15 @@ export const BeatBoard = ({ project, sceneId, onCommit, onOpen }: { project: Pro
                   )}
                 </div>
                 <div className="beat-text">{text || <span className="muted">(empty)</span>}</div>
+                {beat.kind === 'dialogue' && (
+                  <div className="beat-takes">
+                    {beat.lines
+                      .filter((l) => l.text.trim() && l.vo !== 'none')
+                      .map((l) => (
+                        <TakeControl key={l.id} project={project} lineId={l.id} onCommit={onCommit} compact />
+                      ))}
+                  </div>
+                )}
               </div>
               <span className="beat-moves">
                 <button type="button" className="icon-btn small" aria-label={`Move beat ${i + 1} up`} disabled={i === 0} onClick={() => move(beat.id, i - 1)}>

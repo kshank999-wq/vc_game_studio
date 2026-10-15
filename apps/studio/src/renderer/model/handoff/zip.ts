@@ -19,7 +19,7 @@ export const crc32 = (bytes: Uint8Array): number => {
   return (c ^ 0xffffffff) >>> 0;
 };
 
-export const zip = (files: { path: string; content: string }[], date = new Date()): Uint8Array<ArrayBuffer> => {
+export const zip = (files: { path: string; content: string | Uint8Array }[], date = new Date()): Uint8Array<ArrayBuffer> => {
   const encoder = new TextEncoder();
   const time = ((date.getHours() & 31) << 11) | ((date.getMinutes() & 63) << 5) | ((date.getSeconds() / 2) & 31);
   const day = (((date.getFullYear() - 1980) & 127) << 9) | (((date.getMonth() + 1) & 15) << 5) | (date.getDate() & 31);
@@ -28,7 +28,7 @@ export const zip = (files: { path: string; content: string }[], date = new Date(
   let offset = 0;
   for (const file of files) {
     const name = encoder.encode(file.path);
-    const data = encoder.encode(file.content);
+    const data = typeof file.content === 'string' ? encoder.encode(file.content) : file.content;
     const crc = crc32(data);
     const local = new Uint8Array(30 + name.length + data.length);
     const lv = new DataView(local.buffer);

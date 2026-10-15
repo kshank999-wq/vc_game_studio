@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { spineLane } from '../model/layout';
@@ -80,5 +80,34 @@ describe('the scene’s beats and its script', () => {
     fireEvent.change(within(dialog).getByRole('combobox', { name: 'Lines for' }), { target: { value: Object.values(project.objects).find((o) => o.name === 'Mara')!.id } });
     expect(within(dialog).getByText('1 line')).toBeTruthy();
     expect(preview.getAttribute('srcdoc')).toContain('after JONAH: “You came.”');
+  });
+
+  it('Takes: upload a session of audio and each file marks its line recorded', async () => {
+    const { project } = setup();
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
+    openDialogue();
+    fireEvent.click(screen.getByRole('button', { name: 'Takes…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Export the script' });
+    expect(within(dialog).getByText('0 of 2 recorded')).toBeTruthy();
+    const keys = [...dialog.querySelectorAll('.takes-row .key')].map((k) => k.textContent!);
+    const files = [new File([new Uint8Array([1, 2])], `${keys[1]}.wav`, { type: 'audio/wav' }), new File(['x'], 'room tone.wav', { type: 'audio/wav' })];
+    fireEvent.change(within(dialog).getByLabelText('Audio files for these lines'), { target: { files } });
+    await waitFor(() => expect(within(dialog).getByText('1 of 2 recorded')).toBeTruthy());
+    expect(within(dialog).getByText(/1 take matched to its line; 1 not matched \(room tone.wav\)/)).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Play the take for “I said I would.”' })).toBeTruthy();
+    // Taken off again: back to be recorded.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove the take for “I said I would.”' }));
+    expect(within(dialog).getByText('0 of 2 recorded')).toBeTruthy();
+  });
+
+  it('a beat card takes its line’s audio', async () => {
+    const { project } = setup();
+    localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
+    openDialogue();
+    fireEvent.click(screen.getByRole('tab', { name: 'Beats' }));
+    const file = new File([new Uint8Array([9])], 'whatever.mp3', { type: 'audio/mpeg' });
+    fireEvent.change(screen.getByLabelText('Audio file for “You came.”'), { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Play the take for “You came.”' })).toBeTruthy());
+    expect(screen.getByLabelText('Audio file for “I said I would.”')).toBeTruthy();
   });
 });

@@ -107,7 +107,7 @@ export const App = () => {
   const routeRef = useRef<Route>({ view: 'graph' });
   const [toast, setToast] = useState<string | null>(null);
   const [ask, setAsk] = useState<ConfirmRequest | null>(null);
-  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | 'newGame' | 'setup' | 'guide' | 'kinds' | 'script' | 'recording' | null>(null);
+  const [dialog, setDialog] = useState<'preferences' | 'shortcuts' | 'about' | 'previewSave' | 'comments' | 'license' | 'newGame' | 'setup' | 'guide' | 'kinds' | 'script' | 'recording' | 'takes' | null>(null);
   // Re-render when the license changes: an activation turns saving on, a lapse turns it off.
   useAccess();
   const [recent, setRecent] = useState<Recent[]>(() => recentFiles());
@@ -732,6 +732,7 @@ export const App = () => {
             { kind: 'heading', label: 'SCRIPT' },
             { label: 'Script (Fountain, print)…', onClick: () => setDialog('script') },
             { label: 'Recording script for voice actors…', onClick: () => setDialog('recording') },
+            { label: 'Recorded takes (upload audio)…', onClick: () => setDialog('takes') },
             { kind: 'heading', label: 'PRODUCTION REPORTS' },
             ...REPORTS.map((r): MenuItem => ({ label: r.label, onClick: () => openBible(undefined, r.key) })),
           ],
@@ -1234,8 +1235,8 @@ export const App = () => {
         {dialog === 'preferences' && <PreferencesDialog onClose={() => setDialog(null)} />}
         {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
         {dialog === 'kinds' && <KindsDialog project={project} onCommit={commit} onClose={() => setDialog(null)} />}
-        {(dialog === 'script' || dialog === 'recording') && (
-          <ScriptExportDialog project={project} sceneId={route.view === 'scene' ? route.sceneId : null} kind={dialog} onClose={() => setDialog(null)} />
+        {(dialog === 'script' || dialog === 'recording' || dialog === 'takes') && (
+          <ScriptExportDialog project={project} sceneId={route.view === 'scene' ? route.sceneId : null} kind={dialog} onCommit={commit} onClose={() => setDialog(null)} />
         )}
         {dialog === 'guide' && (
           <Guide

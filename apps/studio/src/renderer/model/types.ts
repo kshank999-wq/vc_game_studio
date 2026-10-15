@@ -181,7 +181,24 @@ export interface DialogueLine {
   conditions?: Rule;
   choiceId?: string;
   vo: 'none' | 'todo' | 'recorded';
+  /** The recorded take: its audio is kept on this computer (see audio-takes.ts), the project holds what it is. */
+  take?: AudioTake;
   notes: string;
+}
+
+/** An audio file recorded for a line. */
+export interface AudioTake {
+  /** The key its audio is stored under. */
+  id: string;
+  /** The file's name as uploaded. */
+  name: string;
+  /** Its media type: audio/wav, audio/mpeg… */
+  type: string;
+  bytes: number;
+  /** How long it plays, where the browser could tell. */
+  seconds?: number;
+  /** When it was added (ISO). */
+  at: string;
 }
 
 export type EventKind = 'cinematic' | 'dialogue' | 'action' | 'interaction' | 'trigger' | 'choice' | 'freePlay' | 'encounter';
