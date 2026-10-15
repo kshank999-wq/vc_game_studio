@@ -28,7 +28,10 @@ const isTyping = (target: EventTarget | null) => target instanceof HTMLElement &
 
 const VoiceView = ({ voice }: { voice: Voice }) => (
   <div className="play-line">
-    <div className="play-speaker">{voice.speaker?.toUpperCase() ?? 'NO SPEAKER'}</div>
+    <div className="play-speaker">
+      {voice.speaker?.toUpperCase() ?? 'NO SPEAKER'}
+      {voice.from && <span className="play-vo">{voice.from === voice.speaker ? ' (V.O.)' : ` (V.O., ${voice.from.toUpperCase()})`}</span>}
+    </div>
     {voice.direction && <div className="play-direction">({voice.direction})</div>}
     <div className="play-said">{voice.text ? <Inline text={voice.text} /> : '…'}</div>
   </div>

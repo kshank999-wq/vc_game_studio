@@ -2,7 +2,7 @@ import { cinematicTiming } from '../../model/shots';
 import { useNav } from '../../nav';
 import { renameObject } from '../../model/project';
 import { TYPE_LABEL } from '../../model/semantics';
-import { speakers, updateLine } from '../../model/scene';
+import { speakers, updateLine, voiceSources } from '../../model/scene';
 import {
   addBranch,
   addEvent,
@@ -154,17 +154,45 @@ export const TimelineInspector = ({ project, sceneId, event, element, numbers, o
       <div className="insp-grid">
         {event.kind === 'dialogue' && line && (
           <label className="fld">
-            <span>Speaker</span>
+            <span>Said by</span>
             <select
               className="inp"
-              value={line.speakerId ?? ''}
-              onChange={(e) => onCommit(updateLine(project, line.id, { speakerId: e.currentTarget.value || null }))}
+              aria-label="Said by"
+              value={line.voiceFrom ? `vo:${line.voiceFrom}` : (line.speakerId ?? '')}
+              onChange={(e) => {
+                const v = e.currentTarget.value;
+                // A character's line, or voiceover from a cinematic or an object (marked V.O.).
+                if (v.startsWith('vo:')) onCommit(updateLine(project, line.id, { voiceFrom: v.slice(3), speakerId: null, extension: '(V.O.)' }));
+                else onCommit(updateLine(project, line.id, { speakerId: v || null, voiceFrom: undefined, ...(line.voiceFrom && line.extension === '(V.O.)' ? { extension: undefined } : {}) }));
+              }}
             >
-              <option value="">No speaker</option>
-              {speakers(project, sceneId).map(({ character, present }) => (
+              <option value="">Nobody yet: choose who</option>
+              <optgroup label="Characters">
+                {speakers(project, sceneId).map(({ character, present }) => (
+                  <option key={character.id} value={character.id}>
+                    {character.name}
+                    {present ? '' : ' (not in scene)'}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Voiceover from">
+                {voiceSources(project, sceneId).map(({ source, present }) => (
+                  <option key={source.id} value={`vo:${source.id}`}>
+                    {source.name} ({TYPE_LABEL[source.type].toLowerCase()}){present ? '' : ' (not in scene)'}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </label>
+        )}
+        {event.kind === 'dialogue' && line?.voiceFrom && (
+          <label className="fld">
+            <span>Whose voice</span>
+            <select className="inp" aria-label="Whose voice" value={line.speakerId ?? ''} onChange={(e) => onCommit(updateLine(project, line.id, { speakerId: e.currentTarget.value || null }))}>
+              <option value="">Not named</option>
+              {speakers(project, sceneId).map(({ character }) => (
                 <option key={character.id} value={character.id}>
                   {character.name}
-                  {present ? '' : ' (not in scene)'}
                 </option>
               ))}
             </select>

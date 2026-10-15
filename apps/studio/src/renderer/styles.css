@@ -13393,3 +13393,23 @@ button.bible-dual-col:hover {
   color: var(--text-soft);
   border-top: 1px solid var(--border);
 }
+
+/* A line for whoever is selected: + Dialogue on a character, + Voiceover on a cinematic or an object. */
+.side-say {
+  border: 1px solid var(--c-dialogue, var(--gold-lo));
+  border-radius: 999px;
+  background: none;
+  color: var(--c-dialogue, var(--gold-hi));
+  font-size: 11px;
+  padding: 1px 8px;
+  margin-left: auto;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.side-say:hover {
+  background: color-mix(in srgb, var(--c-dialogue, #c9a45c) 18%, transparent);
+}
+.play-vo {
+  color: var(--muted);
+  font-weight: 400;
+}

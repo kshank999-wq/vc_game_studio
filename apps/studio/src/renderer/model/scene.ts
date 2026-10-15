@@ -138,8 +138,9 @@ export const addElement = (
 ): { project: Project; id: string } | null => {
   if (!isScene(project, sceneId) || !categoryFor(type)) return null;
   if (type === 'dialogue') {
-    const speaker = elementsIn(project, sceneId, 'characters')[0]?.id ?? null;
-    return addLine(project, sceneId, 'dialogue', undefined, speaker);
+    // Dialogue is always somebody's: with nobody in the scene to say it, there is nothing to add yet.
+    const speaker = elementsIn(project, sceneId, 'characters')[0]?.id;
+    return speaker ? addLine(project, sceneId, 'dialogue', undefined, speaker) : null;
   }
   const format = ELEMENT_CODE[type];
   const data: StoryObject['data'] = format ? { code: nextCode(project, format) } : {};
@@ -167,6 +168,8 @@ export const removeFromScene = (project: Project, sceneId: string, objectId: str
   if (object.type === 'character') {
     next = { ...next, lines: next.lines.map((l) => (l.sceneId === sceneId && l.speakerId === objectId ? { ...l, speakerId: null } : l)) };
   }
+  // Voiceover from something taken out of the scene keeps its text and loses where it came from.
+  next = { ...next, lines: next.lines.map((l) => (l.sceneId === sceneId && l.voiceFrom === objectId ? (({ voiceFrom: _, ...rest }) => rest)(l) : l)) };
   return next;
 };
 
@@ -265,16 +268,18 @@ export const addLine = (
   return { project: next, id: line.id };
 };
 
-export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'kind' | 'vo' | 'notes' | 'conditions' | 'extension' | 'cue' | 'dual'>>;
+export type LinePatch = Partial<Pick<DialogueLine, 'text' | 'direction' | 'speakerId' | 'voiceFrom' | 'kind' | 'vo' | 'notes' | 'conditions' | 'extension' | 'cue' | 'dual'>>;
 
 export const updateLine = (project: Project, id: string, patch: LinePatch): Project => {
   const line = project.lines.find((l) => l.id === id);
   if (!line) return project;
   const next: DialogueLine = { ...line, ...patch };
   // Only dialogue has a speaker, a parenthetical and a voice to record.
+  if (next.voiceFrom === undefined) delete next.voiceFrom;
   if (next.kind !== 'dialogue') {
     next.speakerId = null;
     next.vo = 'none';
+    delete next.voiceFrom;
     delete next.extension;
     delete next.cue;
     delete next.joined;
@@ -287,8 +292,62 @@ export const updateLine = (project: Project, id: string, patch: LinePatch): Proj
   let result: Project = { ...project, lines: project.lines.map((l) => (l.id === id ? next : l)) };
   if (next.speakerId && next.cue !== undefined) delete next.cue;
   if (next.speakerId && next.speakerId !== line.speakerId) result = useInScene(result, line.sceneId, next.speakerId);
+  if (next.voiceFrom && next.voiceFrom !== line.voiceFrom) result = useInScene(result, line.sceneId, next.voiceFrom);
   return result;
 };
+
+// ---------------------------------------------------------------- voiceover
+
+/** What voiceover can come from: a cinematic, or an object (a radio, a TV, a speaker) or an item. */
+export const VOICE_TYPES: readonly ObjectType[] = ['cinematic', 'object', 'inventory'];
+
+export const isVoiceSource = (project: Project, id: string | undefined): boolean => !!id && VOICE_TYPES.includes(project.objects[id]?.type as ObjectType);
+
+/** What voiceover can play from: every cinematic and object in the project, the scene's own first. */
+export const voiceSources = (project: Project, sceneId: string): { source: StoryObject; present: boolean }[] =>
+  Object.values(project.objects)
+    .filter((o) => VOICE_TYPES.includes(o.type))
+    .map((source) => ({ source, present: inScene(project, sceneId, source.id) }))
+    .sort((a, b) => Number(b.present) - Number(a.present) || a.source.name.localeCompare(b.source.name));
+
+/** Voiceover lines from a cinematic or an object, in this scene. */
+export const voiceOf = (project: Project, sceneId: string, fromId: string): DialogueLine[] =>
+  sceneLines(project, sceneId).filter((l) => l.kind === 'dialogue' && l.voiceFrom === fromId);
+
+/**
+ * A voiceover line from a cinematic or an object (overheard: a radio, a TV,
+ * a speaker), after `afterId` or at the end, marked (V.O.). It joins the
+ * scene if it isn't in it. Optionally whose voice it is.
+ */
+export const addVoiceover = (project: Project, sceneId: string, fromId: string, afterId?: string, voiceId: string | null = null): { project: Project; id: string } | null => {
+  if (!isScene(project, sceneId) || !isVoiceSource(project, fromId)) return null;
+  const added = addLine(project, sceneId, 'dialogue', afterId, voiceId);
+  return { project: updateLine(added.project, added.id, { voiceFrom: fromId, extension: '(V.O.)' }), id: added.id };
+};
+
+/** A cinematic or object to play voiceover from, by name: the scene's own first. */
+export const voiceSourceNamed = (project: Project, sceneId: string, name: string): StoryObject | undefined => {
+  const want = name.trim().toLowerCase();
+  if (!want) return undefined;
+  const found = Object.values(project.objects).filter((o) => VOICE_TYPES.includes(o.type) && o.name.trim().toLowerCase() === want);
+  return found.find((o) => inScene(project, sceneId, o.id)) ?? found[0];
+};
+
+/** Who a line is said by, as a cue reads: the character, or the cinematic or object a voiceover plays from. */
+export const saidBy = (project: Project, line: DialogueLine): string =>
+  (line.speakerId && project.objects[line.speakerId]?.name) || (line.voiceFrom && project.objects[line.voiceFrom]?.name) || line.cue || '';
+
+/** A line's cue as the script and the timeline print it: MARA, RADIO (V.O.), or MARA (V.O., RADIO) for a voice over something. */
+export const cueLabel = (project: Project, line: DialogueLine): string => {
+  const speaker = line.speakerId ? project.objects[line.speakerId]?.name : undefined;
+  const from = line.voiceFrom ? project.objects[line.voiceFrom]?.name : undefined;
+  if (from) return speaker ? `${speaker.toUpperCase()} (V.O., ${from.toUpperCase()})` : `${from.toUpperCase()} (V.O.)`;
+  return speaker ? speaker.toUpperCase() : 'NO SPEAKER';
+};
+
+/** Whether a dialogue line belongs to someone: a character, or a cinematic or object it plays from. */
+export const isTied = (project: Project, line: DialogueLine): boolean =>
+  line.kind !== 'dialogue' || (!!line.speakerId && project.objects[line.speakerId]?.type === 'character') || isVoiceSource(project, line.voiceFrom);
 
 export const removeLine = (project: Project, id: string): Project => {
   const line = project.lines.find((l) => l.id === id);

@@ -6,6 +6,7 @@ import type { Project } from '../../model/types';
 import { ElementDetail } from '../detail/ElementDetail';
 import { Symbol } from '../Symbol';
 import { plainInline } from '../../model/inline';
+import { cueLabel } from '../../model/scene';
 
 interface Props {
   project: Project;
@@ -202,7 +203,7 @@ const ShotInspector = ({ project, id, shot, index, onCommit }: { project: Projec
             {shot.lineId && !lines.some((l) => l.id === shot.lineId) && <option value={shot.lineId}>(a line no longer in its scenes)</option>}
             {lines.map((l) => (
               <option key={l.id} value={l.id}>
-                {(l.speakerId ? project.objects[l.speakerId]?.name.toUpperCase() : 'NO SPEAKER') ?? '?'}: {plainInline(l.text).slice(0, 60)}
+                {cueLabel(project, l)}: {plainInline(l.text).slice(0, 60)}
               </option>
             ))}
           </select>

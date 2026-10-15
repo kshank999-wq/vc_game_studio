@@ -8,9 +8,14 @@ import { renameObject } from '../../model/project';
 import {
   PERIMETER,
   addElement,
+  addLine,
+  addVoiceover,
   categoryCounts,
   elementsIn,
   linesOf,
+  sceneLines,
+  VOICE_TYPES,
+  voiceOf,
   setSceneData,
   setSceneNotes,
   type Category,
@@ -19,7 +24,7 @@ import {
 import type { Project } from '../../model/types';
 import type { PaletteDrag } from '../canvas/StoryCanvas';
 import { Symbol } from '../Symbol';
-import { AddMenu, NameEdit, dropCategory, sceneRefusal, symbolColor } from './parts';
+import { AddMenu, NameEdit, dropCategory, sceneRefusal, symbolColor, DIALOGUE_NEEDS } from './parts';
 import { ScriptEditor, ScriptFooter } from './ScriptEditor';
 import { timelineSummary } from '../../model/timeline';
 import { ElementDetail } from '../detail/ElementDetail';
@@ -202,6 +207,10 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
       }
       const result = addElement(project, sceneId, drag.type);
       const category = dropCategory(drag.type);
+      if (!result && drag.type === 'dialogue') {
+        props.onSay(DIALOGUE_NEEDS);
+        return false;
+      }
       if (!result || !category) return false;
       if (drag.type === 'dialogue') {
         props.onCommit(result.project);
@@ -219,6 +228,16 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
       setEditing(id);
     },
   }));
+
+  /** A new line, tied: a character's dialogue, or voiceover from a cinematic or an object. Then on to it in the script. */
+  const say = (id: string, character: boolean) => {
+    const last = sceneLines(project, sceneId).at(-1)?.id;
+    const made = character ? addLine(project, sceneId, 'dialogue', last, id) : addVoiceover(project, sceneId, id, last);
+    if (!made) return;
+    props.onCommit(made.project);
+    setTab('Dialogue');
+    setFocusLine(made.id);
+  };
 
   const refusal = props.paletteDrag ? sceneRefusal(props.paletteDrag.type) : null;
   const rect = rootRef.current?.getBoundingClientRect();
@@ -414,7 +433,10 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                   {open && (
                     <div className="side-items" role="list" aria-label={c.label}>
                       {items.map((item) => {
-                        const said = c.key === 'characters' ? linesOf(project, sceneId, item.id) : [];
+                        const kind = project.objects[item.id]?.type;
+                        const voice = !!kind && VOICE_TYPES.includes(kind);
+                        // A character's dialogue box, or the voiceover a cinematic or an object plays.
+                        const said = c.key === 'characters' ? linesOf(project, sceneId, item.id) : voice ? voiceOf(project, sceneId, item.id) : [];
                         return (
                           <div key={item.id} role="listitem">
                             <div
@@ -442,6 +464,19 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                                 <span className="chip-name">{item.label}</span>
                               )}
                               {item.code && editing !== item.id && <span className="chip-code mono">{item.code}</span>}
+                              {editing !== item.id && props.selection === item.id && (c.key === 'characters' || voice) && (
+                                <button
+                                  className="side-say"
+                                  aria-label={c.key === 'characters' ? `New dialogue for ${item.label}` : `New voiceover from ${item.label}`}
+                                  title={c.key === 'characters' ? 'Write a line for them: it goes in their dialogue box' : 'Voiceover played from it (V.O.): a radio, a TV, a speaker, a cinematic'}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    say(item.id, c.key === 'characters');
+                                  }}
+                                >
+                                  {c.key === 'characters' ? '+ Dialogue' : '+ Voiceover'}
+                                </button>
+                              )}
                               {editing !== item.id && (
                                 <button className="side-open" aria-label={`Open ${item.label}`} title="Open it" onClick={(e) => { e.stopPropagation(); setDetail(item.id); }}>
                                   ›
@@ -449,10 +484,10 @@ export const SceneWorkspace = forwardRef<SceneSurface, Props>(function SceneWork
                               )}
                             </div>
                             {said.length > 0 && (
-                              <div className="dlg-box side-dlg" role="group" aria-label={`${item.label}’s dialogue`} style={{ '--cat': 'var(--c-dialogue)' } as React.CSSProperties}>
+                              <div className="dlg-box side-dlg" role="group" aria-label={voice ? `Voiceover from ${item.label}` : `${item.label}’s dialogue`} style={{ '--cat': 'var(--c-dialogue)' } as React.CSSProperties}>
                                 <span className="dlg-head">
                                   <Symbol type="dialogue" size={11} />
-                                  Dialogue · {said.length}
+                                  {voice ? 'Voiceover' : 'Dialogue'} · {said.length}
                                 </span>
                                 {said.slice(0, DLG_ROWS).map((l) => (
                                   <DialogueRow

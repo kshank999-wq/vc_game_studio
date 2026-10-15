@@ -171,6 +171,9 @@ struct VCGS_API FVcgsLineRow : public FTableRowBase
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Scene;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Speaker;
+    /** Voiceover: the cinematic or object it plays from (a radio, a TV, a speaker), and its name. Empty for a character's line. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString From;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString FromName;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS", meta = (MultiLine = true)) FString Text;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Direction;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString Vo;
@@ -1614,7 +1617,7 @@ export const dataTables = (ir: HandoffIR): Record<string, { struct: string; csv:
         ),
       ),
     },
-    Lines: { struct: 'VcgsLineRow', csv: csv(['---', 'Scene', 'Speaker', 'Text', 'Direction', 'Vo', 'Rich', 'DualWith'], ir.lines.map((l) => [l.id, l.scene, l.speaker ?? '', l.text, l.direction, l.vo, l.styled ? richText(l.styled) : '', l.dual ?? ''])) },
+    Lines: { struct: 'VcgsLineRow', csv: csv(['---', 'Scene', 'Speaker', 'From', 'FromName', 'Text', 'Direction', 'Vo', 'Rich', 'DualWith'], ir.lines.map((l) => [l.id, l.scene, l.speaker ?? '', l.from ?? '', l.from_name ?? '', l.text, l.direction, l.vo, l.styled ? richText(l.styled) : '', l.dual ?? ''])) },
   };
 };
 

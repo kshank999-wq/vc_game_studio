@@ -153,7 +153,16 @@ export interface DialogueLine {
   sceneId: string;
   /** A transition (CUT TO:) is a line of its own, set to the right. */
   kind: 'dialogue' | 'action' | 'transition';
+  /**
+   * Who says it: a character. Dialogue always belongs to someone: a
+   * character, or (voiceover) the cinematic or object it plays from.
+   */
   speakerId: string | null;
+  /**
+   * Voiceover: the cinematic or object it comes from (a radio, a TV, a
+   * speaker: something overheard). Its speaker, if it has one, is whose voice it is.
+   */
+  voiceFrom?: string;
   text: string;
   /** A parenthetical: (listening), (wading forward). */
   direction: string;

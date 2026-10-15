@@ -19,7 +19,7 @@ import {
 import type { EventKind, ObjectType, Project, TimelineEvent } from '../../model/types';
 import type { PaletteDrag } from '../canvas/StoryCanvas';
 import { Symbol } from '../Symbol';
-import { KIND_SYMBOL } from './parts';
+import { KIND_SYMBOL, DIALOGUE_NEEDS } from './parts';
 import { placeOf } from '../../model/level/places';
 import { ExplodedScene } from './ExplodedScene';
 import { TimelineInspector } from './TimelineInspector';
@@ -205,7 +205,10 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
       refId = made.id;
     }
     const added = addEvent(next, sceneId, kind, { track: slot.track, index: slot.index, ...(refId ? { refId } : {}) });
-    if (!added) return false;
+    if (!added) {
+      if (kind === 'dialogue') props.onSay(DIALOGUE_NEEDS);
+      return false;
+    }
     props.onCommit(added.project);
     setSelected(added.id);
     return true;
@@ -336,7 +339,7 @@ export const SceneTimeline = forwardRef<SceneSurface, Props>(function SceneTimel
                       if (added) {
                         props.onCommit(added.project);
                         setSelected(added.id);
-                      }
+                      } else if (kind === 'dialogue') props.onSay(DIALOGUE_NEEDS);
                     }}
                   >
                     <Symbol type={KIND_SYMBOL[kind]} size={11} />

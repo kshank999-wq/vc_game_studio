@@ -1,7 +1,7 @@
 import { cinematicTiming } from './shots';
 import { spineSequence } from './layout';
 import { codeFormatFor, makeObject, newId, nextCode } from './project';
-import { addElement, addLine, dualWith, inScene, removeLine, sceneElements, sceneLines, spokenTogether } from './scene';
+import { addElement, addLine, cueLabel, dualWith, inScene, removeLine, sceneElements, sceneLines, spokenTogether } from './scene';
 import type { DialogueLine, EventKind, ObjectType, Project, TimelineBranch, TimelineEvent } from './types';
 import { describeEffects, describeRule, isEmpty, type Rule } from './rules';
 import { plainInline } from './inline';
@@ -164,7 +164,9 @@ export const addEvent = (
   let refId = options.refId;
   if (kind === 'dialogue') {
     const lines = sceneLines(project, sceneId);
-    const speaker = sceneElements(project, sceneId).find((e) => e.type === 'character')?.id ?? null;
+    // Dialogue is always somebody's: the scene's first character, or none to add until someone is in it.
+    const speaker = sceneElements(project, sceneId).find((e) => e.type === 'character')?.id;
+    if (!speaker) return null;
     const added = addLine(project, sceneId, 'dialogue', lines[lines.length - 1]?.id, speaker);
     next = added.project;
     refId = added.id;
@@ -286,7 +288,7 @@ export const rejoinTargets = (project: Project, sceneId: string, choiceEventId: 
 export const eventTitle = (project: Project, event: TimelineEvent): string => {
   if (event.kind === 'dialogue') {
     const line = lineOf(project, event);
-    return line?.speakerId ? (project.objects[line.speakerId]?.name.toUpperCase() ?? '?') : 'NO SPEAKER';
+    return line ? cueLabel(project, line) : 'NO SPEAKER';
   }
   if (event.refId) return project.objects[event.refId]?.name ?? event.label;
   return event.label;

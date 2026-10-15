@@ -1,4 +1,4 @@
-import { characterNamed, defaultVo, elementsIn, inScene, sceneLines, setSpeakerByName, useInScene } from './scene';
+import { characterNamed, defaultVo, elementsIn, inScene, saidBy, sceneElements, sceneLines, setSpeakerByName, useInScene, VOICE_TYPES, voiceSourceNamed } from './scene';
 import { cueExtension, cueName, cueSuggestions, insideParentheses, type ElementType } from './screenplay';
 import type { DialogueLine, Project } from './types';
 
@@ -42,7 +42,7 @@ export const lineIdOf = (elementId: string): string => elementId.split(':')[0]!;
 
 /** A cue as written: the speaker's name (or the name typed), and its extension. */
 export const cueText = (project: Project, line: DialogueLine): string => {
-  const name = (line.speakerId && project.objects[line.speakerId]?.name) || line.cue || '';
+  const name = saidBy(project, line);
   return line.extension ? `${name} ${line.extension}` : name;
 };
 
@@ -72,7 +72,7 @@ export const fromElements = (project: Project, sceneId: string, elements: readon
   const old = new Map(before.map((l) => [l.id, l]));
   const claimed = new Set<string>();
   const built: DialogueLine[] = [];
-  let speech: { speakerId: string | null; cue?: string; extension?: string } | null = null;
+  let speech: { speakerId: string | null; voiceFrom?: string; cue?: string; extension?: string } | null = null;
 
   const start = (element: ScriptElement, kind: DialogueLine['kind']): DialogueLine => {
     let id = lineIdOf(element.id);
@@ -100,6 +100,7 @@ export const fromElements = (project: Project, sceneId: string, elements: readon
     const line = start(element, 'dialogue');
     if (speech) {
       line.speakerId = speech.speakerId;
+      if (speech.voiceFrom) line.voiceFrom = speech.voiceFrom;
       if (speech.cue !== undefined) line.cue = speech.cue;
       if (speech.extension) line.extension = speech.extension;
     }
@@ -114,7 +115,13 @@ export const fromElements = (project: Project, sceneId: string, elements: readon
         const name = cueName(element.text);
         const extension = cueExtension(element.text);
         const who = name ? characterNamed(project, name) : undefined;
-        speech = { speakerId: who?.id ?? null, ...(who ? {} : { cue: name }), ...(extension ? { extension } : {}) };
+        // Not a character: voiceover from the cinematic or object of that name (RADIO (V.O.)), if there is one.
+        const from = !who && name ? voiceSourceNamed(project, sceneId, name) : undefined;
+        // A character speaking over something (MARA (V.O.) on the radio) keeps what it plays from while the cue still names them.
+        const prior = old.get(lineIdOf(element.id));
+        const kept = who && prior?.voiceFrom && prior.speakerId === who.id ? prior.voiceFrom : undefined;
+        const voiceFrom = from?.id ?? kept;
+        speech = { speakerId: who?.id ?? null, ...(voiceFrom ? { voiceFrom } : {}), ...(who || from ? {} : { cue: name }), ...(extension ? { extension } : {}) };
         const line = speaking(element, false);
         if (element.dual) line.dual = true;
         break;
@@ -156,6 +163,7 @@ export const fromElements = (project: Project, sceneId: string, elements: readon
   if (same) return project;
   let next: Project = { ...project, lines: [...project.lines.filter((l) => l.sceneId !== sceneId), ...built] };
   for (const line of built) if (line.speakerId && !inScene(next, sceneId, line.speakerId)) next = useInScene(next, sceneId, line.speakerId);
+  for (const line of built) if (line.voiceFrom && !inScene(next, sceneId, line.voiceFrom)) next = useInScene(next, sceneId, line.voiceFrom);
   return next;
 };
 
@@ -194,5 +202,7 @@ export const cueNames = (project: Project, sceneId: string, beforeLineId?: strin
     .filter((o) => o.type === 'character')
     .map((o) => o.name)
     .sort((a, b) => a.localeCompare(b));
-  return cueSuggestions([...cast, ...everyone], spoken);
+  // Then what voiceover can play from here: the scene's cinematics and objects.
+  const sources = sceneElements(project, sceneId).filter((o) => VOICE_TYPES.includes(o.type)).map((o) => o.name);
+  return cueSuggestions([...cast, ...everyone, ...sources], spoken);
 };

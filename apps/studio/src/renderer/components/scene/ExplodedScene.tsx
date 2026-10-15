@@ -8,7 +8,7 @@ import { clampZoom, zoomAt, type View } from '../../view';
 import type { PaletteDrag } from '../canvas/StoryCanvas';
 import { Symbol } from '../Symbol';
 import { facetsOf, type Facet } from '../../model/facets';
-import { NameEdit, dropCategory, sceneRefusal, symbolColor } from './parts';
+import { NameEdit, dropCategory, sceneRefusal, symbolColor, DIALOGUE_NEEDS } from './parts';
 import type { SceneSurface } from './SceneWorkspace';
 import { ElementDetail } from '../detail/ElementDetail';
 import type { Destination } from '../../model/details';
@@ -364,7 +364,10 @@ export const ExplodedScene = forwardRef<SceneSurface, Props>(function ExplodedSc
         return false;
       }
       const result = addElement(project, sceneId, drag.type);
-      if (!result) return false;
+      if (!result) {
+        if (drag.type === 'dialogue') props.onSay(DIALOGUE_NEEDS);
+        return false;
+      }
       props.onCommit(result.project);
       if (drag.type !== 'dialogue') {
         props.onSelect(result.id);

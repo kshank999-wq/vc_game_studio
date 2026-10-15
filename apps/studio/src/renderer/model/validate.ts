@@ -3,6 +3,7 @@ import { laneSequence, spineSequence } from './layout';
 import { setterNames } from './details';
 import { brokenReferences } from './rules';
 import { deepIssues } from './validate-deep';
+import { isTied } from './scene';
 import type { ObjectType, Project, StoryObject } from './types';
 
 /**
@@ -131,10 +132,11 @@ export const findIssues = (project: Project): Issue[] => {
       issues.push({ id: event.sceneId, message: `The choice ${event.refId ? `“${project.objects[event.refId]?.name ?? ''}” ` : ''}on its timeline has only one option.` });
     }
   }
-  // A line nobody speaks (spec §25: dialogue speaker missing).
+  // A line that isn't anyone's (spec §25: dialogue speaker missing): dialogue is a character's, or voiceover from a cinematic or an object.
   for (const line of project.lines) {
-    if (line.kind !== 'dialogue' || !project.objects[line.sceneId] || (line.speakerId && project.objects[line.speakerId])) continue;
-    if (!issues.some((i) => i.id === line.sceneId)) issues.push({ id: line.sceneId, message: `Line ${line.order} has no speaker.` });
+    if (line.kind !== 'dialogue' || !project.objects[line.sceneId] || isTied(project, line)) continue;
+    if (!issues.some((i) => i.id === line.sceneId))
+      issues.push({ id: line.sceneId, message: line.voiceFrom ? `Line ${line.order} is voiceover from something that’s gone: play it from a cinematic or an object.` : `Line ${line.order} has no speaker: give it a character, or make it voiceover from a cinematic or an object.` });
   }
   // Across the whole story: unreachable branches, states and items the story waits for in vain, self-undoing effects, unpaid setups.
   for (const issue of deepIssues(project)) if (!issues.some((i) => i.id === issue.id)) issues.push(issue);

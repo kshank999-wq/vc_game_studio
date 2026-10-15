@@ -489,7 +489,13 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
     return (
       <div key={element.id} className={`element element-${element.type}`} data-line={lineIdOf(element.id)} data-type={element.type}>
         <div className={element.type === 'character' ? 'field' : 'field inked'}>
-          {element.type === 'character' && <Symbol type="character" size={10} color={characterColor(latest.current, line?.speakerId)} />}
+          {element.type === 'character' &&
+            (line?.voiceFrom && latest.current.objects[line.voiceFrom] && !line.speakerId ? (
+              // Voiceover: the symbol of what it plays from (a radio, a TV, a cinematic).
+              <Symbol type={latest.current.objects[line.voiceFrom]!.type} size={10} />
+            ) : (
+              <Symbol type="character" size={10} color={characterColor(latest.current, line?.speakerId)} />
+            ))}
           {element.type === 'character' ? null : (
             <div className="ink" aria-hidden="true">
               <Marked text={element.text} />
@@ -497,7 +503,7 @@ export const ScriptEditor = ({ project, sceneId, onCommit, focusLine }: Props) =
           )}
           <textarea
             data-el={element.id}
-            className={element.type === 'character' ? `line-cue${line?.speakerId || !element.text ? '' : ' unnamed'}` : element.type === 'parenthetical' ? 'line-direction' : 'line-text'}
+            className={element.type === 'character' ? `line-cue${line?.speakerId || line?.voiceFrom || !element.text ? '' : ' unnamed'}` : element.type === 'parenthetical' ? 'line-direction' : 'line-text'}
             rows={1}
             aria-label={label}
             aria-autocomplete={element.type === 'character' || element.type === 'transition' ? 'list' : undefined}

@@ -1775,7 +1775,11 @@ namespace VCGS
         public static (string speaker, string text, string direction) Line(GameState game, string lineId)
         {
             if (!game.Story.Lines.TryGetValue(lineId ?? "", out var l)) return ("", "", "");
-            return (game.Story.CharacterName(D.Str(l, "speaker")), D.Str(l, "text"), D.Str(l, "direction"));
+            // Voiceover: from a cinematic or an object (a radio, a TV, a speaker), overheard.
+            var who = game.Story.CharacterName(D.Str(l, "speaker"));
+            var from = D.Str(l, "from_name");
+            if (from != "") who = who == "" ? from + " (V.O.)" : who + " (V.O., " + from + ")";
+            return (who, D.Str(l, "text"), D.Str(l, "direction"));
         }
     }
 }

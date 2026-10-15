@@ -352,6 +352,9 @@ export interface IrLine {
   id: string;
   scene: string;
   speaker: string | null;
+  /** Voiceover: the key of the cinematic or object it plays from (a radio, a TV, a speaker), and its name. Absent for a character's line. */
+  from?: string;
+  from_name?: string;
   text: string;
   direction: string;
   vo: string;
@@ -910,6 +913,7 @@ export const buildIR = (given: Project): HandoffIR => {
         id: lineId(project.objects[l.sceneId]!.data.code ?? '', l.order),
         scene: key(l.sceneId)!,
         speaker: key(l.speakerId),
+        ...(l.voiceFrom && project.objects[l.voiceFrom] ? { from: key(l.voiceFrom)!, from_name: project.objects[l.voiceFrom]!.name } : {}),
         text: plainInline(l.text),
         direction: l.direction,
         vo: l.vo,

@@ -12,6 +12,9 @@ export const sceneRefusal = (type: ObjectType): string | null => {
   return `${TYPE_LABEL[type]} can’t go inside a scene`;
 };
 
+/** Why dialogue can't be dropped into a scene yet: it is always somebody's. */
+export const DIALOGUE_NEEDS = 'Dialogue is always somebody’s: put a character in the scene, click them and choose + Dialogue — or click a cinematic or an object (a radio, a TV) for + Voiceover.';
+
 export const symbolColor = (object: StoryObject): string | undefined =>
   object.type === 'character' ? (object.data.color as string | undefined) : undefined;
 

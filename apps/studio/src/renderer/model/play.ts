@@ -61,7 +61,10 @@ export type { QuestState };
 
 /** A second voice on a line: dual dialogue, spoken at the same time. */
 export interface Voice {
+  /** Who: the character, or what a voiceover plays from when nobody is named. */
   speaker: string | null;
+  /** Voiceover: the cinematic or object it plays from (a radio, a TV, a speaker). */
+  from?: string;
   text: string;
   direction?: string;
   lineId: string;
@@ -69,7 +72,7 @@ export interface Voice {
 
 export type Entry =
   | { kind: 'heading'; text: string; sub?: string; id: string }
-  | { kind: 'line'; speaker: string | null; text: string; direction?: string; sceneId: string; lineId: string; with?: Voice }
+  | { kind: 'line'; speaker: string | null; from?: string; text: string; direction?: string; sceneId: string; lineId: string; with?: Voice }
   | { kind: 'action'; text: string; detail?: string }
   | { kind: 'cinematic'; text: string; detail?: string; shots?: string[]; skippable?: boolean; credits?: string[] }
   | { kind: 'picked'; text: string }
@@ -561,7 +564,10 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
         const after = events[cursor.index + 1];
         const other = after?.kind === 'dialogue' ? eventLine(project, after) : undefined;
         const together = !!other && spokenTogether(project, line.id, other.id) && evaluate(eventRule(project, after!), d.world);
-        const voice = (l: DialogueLine): Voice => ({ speaker: l.speakerId ? name(project, l.speakerId) : null, text: l.text, direction: l.direction || undefined, lineId: l.id });
+        const voice = (l: DialogueLine): Voice => {
+          const from = l.voiceFrom && project.objects[l.voiceFrom] ? name(project, l.voiceFrom) : undefined;
+          return { speaker: l.speakerId ? name(project, l.speakerId) : (from ?? null), ...(from ? { from } : {}), text: l.text, direction: l.direction || undefined, lineId: l.id };
+        };
         // The speech on the left of the pair (the one the other is beside) reads first.
         const [first, second] = together && dualWith(project, line.id)?.id === other!.id ? [other!, line] : [line, other];
         d.log.push({ kind: 'line', ...voice(first), sceneId: first.sceneId, ...(together ? { with: voice(second!) } : {}) });

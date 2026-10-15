@@ -2552,7 +2552,11 @@ ${UNREAL_PUZZLES}
         inline Line GetLine(const GameState& game, const std::string& lineId)
         {
             const Value& l = Story::Find(game.StoryData.Lines, lineId);
-            return {Story::Find(game.StoryData.Characters, l["speaker"].Str())["name"].Str(), l["text"].Str(), l["direction"].Str()};
+            std::string who = Story::Find(game.StoryData.Characters, l["speaker"].Str())["name"].Str();
+            // Voiceover: from a cinematic or an object (a radio, a TV, a speaker), overheard.
+            const std::string from = l["from_name"].Str();
+            if (!from.empty()) who = who.empty() ? from + " (V.O.)" : who + " (V.O., " + from + ")";
+            return {who, l["text"].Str(), l["direction"].Str()};
         }
     }
 }

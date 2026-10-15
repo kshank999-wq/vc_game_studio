@@ -1419,7 +1419,7 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
   // A line with emphasis carries it as BBCode for a RichTextLabel; a dual line names the one it is spoken with.
   const bbcode = (text: string) => markupInline(text, (run, st) => `${st.bold ? '[b]' : ''}${st.italic ? '[i]' : ''}${st.underline ? '[u]' : ''}${run}${st.underline ? '[/u]' : ''}${st.italic ? '[/i]' : ''}${st.bold ? '[/b]' : ''}`);
   const table = Object.fromEntries(
-    ir.lines.map((l) => [l.id, { scene: l.scene, speaker: l.speaker ?? '', text: l.text, direction: l.direction, vo: l.vo, ...(l.styled ? { bbcode: bbcode(l.styled) } : {}), ...(l.dual ? { dual_with: l.dual } : {}) }]),
+    ir.lines.map((l) => [l.id, { scene: l.scene, speaker: l.speaker ?? '', ...(l.from ? { from: l.from, from_name: l.from_name ?? '' } : {}), text: l.text, direction: l.direction, vo: l.vo, ...(l.styled ? { bbcode: bbcode(l.styled) } : {}), ...(l.dual ? { dual_with: l.dual } : {}) }]),
   );
   const dialoguePath = add(
     'dialogue/dialogue_table.gd',
@@ -1442,7 +1442,7 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
   const csv = (cells: string[]) => cells.map((c) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(',');
   const voPath = add(
     'production/vo_cues.csv',
-    [csv(['line', 'scene', 'speaker', 'text', 'direction', 'status']), ...ir.lines.filter((l) => l.vo !== 'none').map((l) => csv([l.id, l.scene, l.speaker ?? '', l.text, l.direction, l.vo]))].join('\n'),
+    [csv(['line', 'scene', 'speaker', 'text', 'direction', 'status']), ...ir.lines.filter((l) => l.vo !== 'none').map((l) => csv([l.id, l.scene, l.speaker ?? (l.from ? `${l.from} (V.O.)` : ''), l.text, l.direction, l.vo]))].join('\n'),
   );
   row({ id: 'dialogue', label: `Dialogue (${ir.lines.length} line${ir.lines.length === 1 ? '' : 's'})`, symbol: 'dialogue', group: 'People + words', generates: 'Dialogue table · VO cue list', files: [dialoguePath, voPath] }, ir.lines);
 
