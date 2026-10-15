@@ -1,5 +1,6 @@
 import { applyFilters, regroup, type Filter, type GroupBy } from '../../model/bible-filters';
 import { TakeControl } from '../scene/TakeControl';
+import { lineSubtitle, secondsLabel } from '../../model/subtitles';
 import { BibleChips } from './BibleChips';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { setupSummary } from '../../model/setup';
@@ -162,7 +163,7 @@ export const GameBible = ({ project, onCommit, focus, onNavigate, onOpenCode, on
   const subtitle = (entry: Entry): string => {
     if (entry.kind === 'line') {
       const scene = project.objects[entry.line.sceneId];
-      return `${scene?.data.code ?? ''} · #${entry.line.order} · VO ${entry.line.vo === 'recorded' ? 'recorded' : entry.line.vo === 'todo' ? 'to record' : '—'}`;
+      return `${scene?.data.code ?? ''} · #${entry.line.order} · VO ${entry.line.vo === 'recorded' ? 'recorded' : entry.line.vo === 'todo' ? 'to record' : '—'}${entry.line.text.trim() ? ` · subtitle ${secondsLabel(lineSubtitle(project, entry.line).seconds)}` : ''}`;
     }
     const o = entry.object;
     if (o.type === 'character') {
@@ -443,6 +444,19 @@ const LineDetail = ({
           <span>Direction</span>
           <input key={line.direction} className="inp script-font" defaultValue={line.direction} placeholder="(wading forward)" onBlur={(e) => onCommit(updateLine(project, line.id, { direction: e.currentTarget.value.replace(/^\(|\)$/g, '').trim() }))} />
         </label>
+        {line.text.trim() && (
+          <div className="dfld" role="group" aria-label="Subtitle">
+            <span>Subtitle</span>
+            {(({ subtitle, seconds }) => (
+              <div className="bible-subtitle">
+                <div className="bible-subtitle-text">{subtitle}</div>
+                <div className="muted small">
+                  Shows for {secondsLabel(seconds)}: {line.take?.seconds ? 'its take’s length' : 'the time to read it (until a take with a known length is added)'}. The engines, the play-through and the scripts all show it so; it follows the line’s words and speaker.
+                </div>
+              </div>
+            ))(lineSubtitle(project, line))}
+          </div>
+        )}
         <div className="dfld">
           <span>VO / audio</span>
           <div className="chips">

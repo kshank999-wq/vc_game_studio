@@ -13734,6 +13734,17 @@ button.bible-dual-col:hover {
 .takes-files li {
   padding: 2px 0;
 }
+.bible-subtitle-text {
+  padding: 6px 10px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 13px;
+}
+.bible-subtitle .small {
+  font-size: 11.5px;
+  margin-top: 4px;
+}
 .takes-subtitle {
   font-size: 11.5px;
   margin-top: 2px;

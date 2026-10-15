@@ -122,6 +122,9 @@ describe('the Game Bible', () => {
       expect(report.blocks.length).toBeGreaterThan(0);
     }
     const vo = buildReport(p, 'voByScene');
-    expect(vo.blocks).toContainEqual({ kind: 'table', columns: ['#', 'Speaker', 'Line', 'Direction', 'VO'], rows: [['1', 'Mara', 'There’s a lever somewhere.', '', 'to record']] });
+    // Each line's subtitle, as the engines get it, and how long it shows (no take: the time to read it).
+    expect(vo.blocks).toContainEqual({ kind: 'table', columns: ['#', 'Speaker', 'Line', 'Direction', 'VO', 'Subtitle'], rows: [['1', 'Mara', 'There’s a lever somewhere.', '', 'to record', 'Mara: There’s a lever somewhere. (2.6s)']] });
+    const byCharacter = buildReport(p, 'voByCharacter').blocks.find((b) => b.kind === 'table');
+    expect(byCharacter && byCharacter.kind === 'table' && byCharacter.columns.at(-1)).toBe('Subtitle');
   });
 });

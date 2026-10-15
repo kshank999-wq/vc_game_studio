@@ -1,10 +1,11 @@
+import { lineSubtitle, secondsLabel } from './subtitles';
 import { cinematicTiming, shotsOf } from './shots';
 import { FIELDS, describeInteraction, interactionsOf, sceneUse, statesOf, whereUsed } from './details';
 import { laneSequence } from './layout';
 import { CATEGORIES, elementsIn, sceneLines } from './scene';
 import { TYPE_LABEL } from './semantics';
 import { eventDetail, eventTitle, sceneTimeline } from './timeline';
-import type { ObjectType, Project, StoryObject } from './types';
+import type { DialogueLine, ObjectType, Project, StoryObject } from './types';
 import { plainInline } from './inline';
 
 /**
@@ -64,6 +65,13 @@ const slug = (project: Project, scene: StoryObject): string => {
 
 const speakerName = (project: Project, id: string | null) => (id ? project.objects[id]?.name ?? '?' : 'No speaker');
 
+/** A line's subtitle as the engines get it, and how long it shows: "Mara: Lit. You go first. (1.5s)". */
+const subtitleCell = (project: Project, line: DialogueLine): string => {
+  if (!line.text.trim()) return '';
+  const { subtitle, seconds } = lineSubtitle(project, line);
+  return `${subtitle} (${secondsLabel(seconds)})`;
+};
+
 export const buildReport = (project: Project, key: ReportKey): Report => {
   const label = REPORTS.find((r) => r.key === key)!.label;
   const blocks: Block[] = [];
@@ -87,8 +95,8 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
         blocks.push({ kind: 'h2', text: c?.name ?? 'No speaker', note: `${own.length} lines` });
         blocks.push({
           kind: 'table',
-          columns: ['Scene', '#', 'Line', 'Direction', 'VO'],
-          rows: own.map((l) => [project.objects[l.sceneId]?.data.code ?? '', String(l.order), plainInline(l.text), l.direction, VO_LABEL[l.vo]]),
+          columns: ['Scene', '#', 'Line', 'Direction', 'VO', 'Subtitle'],
+          rows: own.map((l) => [project.objects[l.sceneId]?.data.code ?? '', String(l.order), plainInline(l.text), l.direction, VO_LABEL[l.vo], subtitleCell(project, l)]),
         });
       }
       break;
@@ -99,8 +107,8 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
         blocks.push({ kind: 'h2', text: title(s), note: slug(project, s) });
         blocks.push({
           kind: 'table',
-          columns: ['#', 'Speaker', 'Line', 'Direction', 'VO'],
-          rows: own.sort((a, b) => a.order - b.order).map((l) => [String(l.order), speakerName(project, l.speakerId), plainInline(l.text), l.direction, VO_LABEL[l.vo]]),
+          columns: ['#', 'Speaker', 'Line', 'Direction', 'VO', 'Subtitle'],
+          rows: own.sort((a, b) => a.order - b.order).map((l) => [String(l.order), speakerName(project, l.speakerId), plainInline(l.text), l.direction, VO_LABEL[l.vo], subtitleCell(project, l)]),
         });
       }
       break;

@@ -227,6 +227,13 @@ the take's length) for tools that read subtitle files. The handoff screen's
 
 The debug players show these subtitles as handed off.
 
+**In the Game Bible** a line's detail shows its **Subtitle** as the engines
+get it, and how long it shows and why (its take's length, or the time to read
+it until a take with a known length is added); it follows the line's words and
+speaker. Each line's row in **Dialogue / Voice** ends with its time
+("subtitle 2.5s"), and the **Dialogue / VO** production reports (by character,
+by scene) have a **Subtitle** column.
+
 **Try it in the engine** before your game has its own screens, as Godot's
 `play_story.tscn` does. Each player shows the scene one beat at a time in a
 box (a line, an action, a cinematic, with Continue; a choice's options; an
