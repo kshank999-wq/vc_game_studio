@@ -232,7 +232,10 @@ get it, and how long it shows and why (its take's length, or the time to read
 it until a take with a known length is added); it follows the line's words and
 speaker. Each line's row in **Dialogue / Voice** ends with its time
 ("subtitle 2.5s"), and the **Dialogue / VO** production reports (by character,
-by scene) have a **Subtitle** column.
+by scene) have a **Subtitle** column. Each **character sheet** (Print / Export →
+Character sheets) lists that character's subtitles in story order, each with
+how long it shows ("1.5s (take)" when it is the take's length), and their total
+time on screen ("4 lines · 6.2s on screen").
 
 **Try it in the engine** before your game has its own screens, as Godot's
 `play_story.tscn` does. Each player shows the scene one beat at a time in a

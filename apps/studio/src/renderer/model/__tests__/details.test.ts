@@ -1,3 +1,4 @@
+import { sunkenVault } from '../sample';
 import { describe, expect, it } from 'vitest';
 import { spineLane } from '../layout';
 import { addLane, createProject, placeNew } from '../project';
@@ -124,6 +125,14 @@ describe('the Game Bible', () => {
     const vo = buildReport(p, 'voByScene');
     // Each line's subtitle, as the engines get it, and how long it shows (no take: the time to read it).
     expect(vo.blocks).toContainEqual({ kind: 'table', columns: ['#', 'Speaker', 'Line', 'Direction', 'VO', 'Subtitle'], rows: [['1', 'Mara', 'There’s a lever somewhere.', '', 'to record', 'Mara: There’s a lever somewhere. (2.6s)']] });
+    // The character sheets: each one's subtitles, and their time on screen.
+    const sheets = buildReport(p, 'characters').blocks;
+    expect(sheets).toContainEqual({ kind: 'table', columns: ['Scene', '#', 'Subtitle', 'Shows for'], rows: [['SC-01', '1', 'Mara: There’s a lever somewhere.', '2.6s']] });
+    const maraKv = sheets.find((b) => b.kind === 'kv' && b.rows.some(([k]) => k === 'Subtitles'));
+    expect(maraKv && maraKv.kind === 'kv' && maraKv.rows.find(([k]) => k === 'Subtitles')![1]).toBe('1 line · 2.6s on screen');
+    // Recorded lines show for their take's length, and say so.
+    const sample = buildReport(sunkenVault(), 'characters').blocks.find((b) => b.kind === 'table' && b.columns[2] === 'Subtitle');
+    expect(sample && sample.kind === 'table' && sample.rows[0]).toEqual(['SC-01', '2', 'Mara: Lit. You go first.', '1.5s (take)']);
     const byCharacter = buildReport(p, 'voByCharacter').blocks.find((b) => b.kind === 'table');
     expect(byCharacter && byCharacter.kind === 'table' && byCharacter.columns.at(-1)).toBe('Subtitle');
   });

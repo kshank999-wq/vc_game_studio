@@ -81,9 +81,28 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
     case 'characters':
       for (const c of of(project, 'character')) {
         const own = lines.filter((l) => l.speakerId === c.id);
+        // Their subtitles, as the engines get them, in story order.
+        const said = own
+          .filter((l) => l.text.trim())
+          .sort((a, b) => String(project.objects[a.sceneId]?.data.code ?? '').localeCompare(String(project.objects[b.sceneId]?.data.code ?? ''), undefined, { numeric: true }) || a.order - b.order)
+          .map((l) => ({ line: l, ...lineSubtitle(project, l) }));
+        const onScreen = said.reduce((t, s) => t + s.seconds, 0);
         blocks.push({ kind: 'h2', text: c.name, note: c.data.code });
-        blocks.push({ kind: 'kv', rows: [...fieldRows(c), ['Lines', `${own.length} (${own.filter((l) => l.vo === 'recorded').length} recorded)`]] });
+        blocks.push({
+          kind: 'kv',
+          rows: [
+            ...fieldRows(c),
+            ['Lines', `${own.length} (${own.filter((l) => l.vo === 'recorded').length} recorded)`],
+            ...(said.length ? [['Subtitles', `${said.length} line${said.length === 1 ? '' : 's'} · ${secondsLabel(onScreen)} on screen`] as [string, string]] : []),
+          ],
+        });
         if (c.notes) blocks.push({ kind: 'p', text: c.notes });
+        if (said.length)
+          blocks.push({
+            kind: 'table',
+            columns: ['Scene', '#', 'Subtitle', 'Shows for'],
+            rows: said.map((s) => [String(project.objects[s.line.sceneId]?.data.code ?? ''), String(s.line.order), s.subtitle, `${secondsLabel(s.seconds)}${s.line.take?.seconds ? ' (take)' : ''}`]),
+          });
         const uses = whereUsed(project, c.id);
         if (uses.length) blocks.push({ kind: 'table', columns: ['Where', 'What'], rows: uses.map((u) => [u.label, u.detail]) });
       }
