@@ -133,6 +133,15 @@ speaking is marked 🔊; ▶ beside a line plays it again. **🔊 Voices** in th
 play-through's bar turns them off (remembered). Lines without a take are
 read, not heard.
 
+**In a level's 3D Play Mode**, talking to someone linked to a scene plays
+the scene's lines on its card, one beat at a time, as the world stands: lines
+whose conditions don't hold are left out, a dual speech is heard with the one
+beside it. Each beat's take plays; **E** (Interact) goes to the next line and,
+after the last, carries on. **▶ Again** replays the line, **Skip the scene**
+leaves it, and **🔊 Voices** turns the takes off (the same setting as the
+play-through's). Lines on a choice's branch play in the story's play-through,
+where the choice is made.
+
 The audio is kept on this computer, in the app's own storage; the project
 file keeps which take each line has (its name, size and length). Open the
 project on another computer and the lines still read *recorded*, with

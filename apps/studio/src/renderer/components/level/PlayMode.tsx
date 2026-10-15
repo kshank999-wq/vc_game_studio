@@ -10,7 +10,7 @@ import { levelsOf } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
 import { levelCast } from '../../model/level/play';
 import { doorRules } from '../../model/level/doors';
-import { answerScreen, darknessAt, dismiss, inHand, interactWith, isOpen, leaveLevel, lightOf, offerFor, present, spendStamina, startLevelPlay, tick, toggleLight, tracksStamina, traversalAt, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
+import { answerScreen, darknessAt, dismiss, skipScene, inHand, interactWith, isOpen, leaveLevel, lightOf, offerFor, present, spendStamina, startLevelPlay, tick, toggleLight, tracksStamina, traversalAt, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
 import { equipmentList, equipmentOf, usesLeft } from '../../model/equipment';
 import { recipesOf } from '../../model/crafting';
 import { skillsOf } from '../../model/skills';
@@ -24,6 +24,8 @@ import { PlayInspect } from './PlayInspect';
 import { ScreenPlayer } from '../puzzle/ScreenPlayer';
 import { screenOf } from '../../model/puzzle/screens';
 import { buildPiece, disposePiece } from './three-pieces';
+import { useVoicePlayer } from '../play/takes-player';
+import { Inline } from '../Inline';
 
 /**
  * Play Mode (spec §9): walk the graybox as the player, first person, third
@@ -83,6 +85,16 @@ export const PlayMode = (props: Props) => {
   const labels = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const [hud, setHud] = useState<LevelPlayState>(() => startLevelPlay(project, levelId, { preset: props.preset, world: props.world, global }));
+  // A scene's lines, heard as the card steps through them.
+  const voices = useVoicePlayer(project);
+  const beat = hud.scene?.speech?.[hud.scene.beat ?? 0];
+  const anyTakes = project.lines.some((l) => l.take);
+  useEffect(() => {
+    if (!beat || !voices.on) return voices.stop();
+    const ids = voices.heard(beat.map((v) => v.lineId));
+    if (ids.length) voices.playGroups([ids]);
+    else voices.stop();
+  }, [hud.scene?.id, hud.scene?.beat, voices.on]);
   const [offer, setOffer] = useState<Offer | null>(null);
   const [paused, setPaused] = useState(false);
   // Which tab the paused panel opens on: the state, or the gear screen (I).
@@ -669,14 +681,59 @@ export const PlayMode = (props: Props) => {
         </div>
       )}
       {hud.scene && (
-        <div className="play-card" role="dialog" aria-label="Scene">
-          <span className="play-kicker">SCENE</span>
+        <div className="play-card play-scene" role="dialog" aria-label="Scene">
+          <span className="play-kicker">
+            SCENE
+            {hud.scene.speech && (
+              <span className="play-scene-count">
+                {' '}
+                · {(hud.scene.beat ?? 0) + 1} / {hud.scene.speech.length}
+              </span>
+            )}
+          </span>
           <h2>{hud.scene.title}</h2>
-          {hud.scene.text && <p>{hud.scene.text}</p>}
-          <p className="muted">The scene plays here in the game. In the studio, its script and timeline play in the story’s play-through.</p>
-          <button className="tb-btn primary" onClick={() => commitState(dismiss(state.current))}>
-            Carry on ({keyLabel(controls.keys.interact[0] ?? 'KeyE')})
-          </button>
+          {beat ? (
+            <div className={beat.length > 1 ? 'play-dual' : undefined} role={beat.length > 1 ? 'group' : undefined} aria-label={beat.length > 1 ? 'Spoken at the same time' : undefined}>
+              {beat.map((v) => (
+                <div key={v.lineId} className={`play-line${voices.speaking.has(v.lineId) ? ' speaking' : ''}`}>
+                  <div className="play-speaker">
+                    {v.speaker?.toUpperCase() ?? 'NO SPEAKER'}
+                    {v.from && <span className="play-vo">{v.from === v.speaker ? ' (V.O.)' : ` (V.O., ${v.from.toUpperCase()})`}</span>}
+                    {voices.speaking.has(v.lineId) && <span aria-label="Speaking"> 🔊</span>}
+                  </div>
+                  {v.direction && <div className="play-direction">({v.direction})</div>}
+                  <div className="play-said">
+                    <Inline text={v.text} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {hud.scene.text && <p>{hud.scene.text}</p>}
+              <p className="muted">Nothing is said in this scene yet: write its dialogue in the studio.</p>
+            </>
+          )}
+          <div className="lvl-btnrow">
+            <button className="tb-btn primary" onClick={() => commitState(dismiss(state.current))}>
+              {hud.scene.speech && (hud.scene.beat ?? 0) < hud.scene.speech.length - 1 ? 'Next' : 'Carry on'} ({keyLabel(controls.keys.interact[0] ?? 'KeyE')})
+            </button>
+            {beat && voices.on && voices.heard(beat.map((v) => v.lineId)).length > 0 && (
+              <button className="tb-btn small" aria-label="Hear it again" onClick={() => voices.playGroups([voices.heard(beat.map((v) => v.lineId))])}>
+                ▶ Again
+              </button>
+            )}
+            {hud.scene.speech && (hud.scene.beat ?? 0) < hud.scene.speech.length - 1 && (
+              <button className="tb-btn small" onClick={() => commitState(skipScene(state.current))}>
+                Skip the scene
+              </button>
+            )}
+            {anyTakes && (
+              <button className={`tb-btn small${voices.on ? ' on' : ''}`} aria-pressed={voices.on} title="Play the recorded takes" onClick={() => voices.setOn(!voices.on)}>
+                {voices.on ? '🔊 Voices' : '🔇 Voices'}
+              </button>
+            )}
+          </div>
         </div>
       )}
       {hud.over && (

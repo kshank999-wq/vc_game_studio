@@ -35,7 +35,12 @@ interface Playing {
   urls: string[];
 }
 
-export const useTakesPlayer = (project: Project, log: readonly Entry[]) => {
+/**
+ * Takes played aloud: groups of lines one after another, each group's lines
+ * at once; a new start cuts off what was playing. On or off is the
+ * player's choice, remembered, and the same in every play mode.
+ */
+export const useVoicePlayer = (project: Project) => {
   const [on, setOnState] = useState(readOn);
   const [speaking, setSpeaking] = useState<ReadonlySet<string>>(new Set());
   const latest = useRef(project);
@@ -44,8 +49,6 @@ export const useTakesPlayer = (project: Project, log: readonly Entry[]) => {
   const current = useRef<Playing | null>(null);
   // Each start bumps this, so a take still loading from an earlier step doesn't start late.
   const run = useRef(0);
-  // Nothing heard yet: the opening lines play too.
-  const seen = useRef<readonly Entry[]>([]);
 
   const stop = () => {
     run.current++;
@@ -101,19 +104,6 @@ export const useTakesPlayer = (project: Project, log: readonly Entry[]) => {
     void next(run.current);
   };
 
-  // New lines in the log: theirs play. A step back, a fresh start or a loaded save only stops the voices.
-  useEffect(() => {
-    const before = seen.current;
-    seen.current = log;
-    if (log === before) return;
-    const carriedOn = log.length > before.length && (before.length === 0 || log[before.length - 1] === before[before.length - 1]);
-    if (!carriedOn) return stop();
-    if (!on) return;
-    const groups = takeGroups(latest.current, log.slice(before.length));
-    if (groups.length) playGroups(groups);
-    else stop();
-  }, [log]);
-
   useEffect(() => stop, []);
 
   const setOn = (value: boolean) => {
@@ -126,8 +116,35 @@ export const useTakesPlayer = (project: Project, log: readonly Entry[]) => {
     }
   };
 
-  /** Hear one entry again (its line, or both voices of a dual line). */
-  const replay = (entry: Entry) => playGroups(takeGroups(latest.current, [entry]));
+  /** Lines with a take, of these: the ones that can be heard. */
+  const heard = (lineIds: readonly string[]) => lineIds.filter((id) => latest.current.lines.some((l) => l.id === id && l.take));
 
-  return { on, setOn, speaking, replay, stop };
+  return { on, setOn, speaking, playGroups, stop, heard };
+};
+
+/** The play-through's voices: the lines that come up in its log. */
+export const useTakesPlayer = (project: Project, log: readonly Entry[]) => {
+  const voices = useVoicePlayer(project);
+  const latest = useRef(project);
+  latest.current = project;
+  // Nothing heard yet: the opening lines play too.
+  const seen = useRef<readonly Entry[]>([]);
+
+  // New lines in the log: theirs play. A step back, a fresh start or a loaded save only stops the voices.
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = log;
+    if (log === before) return;
+    const carriedOn = log.length > before.length && (before.length === 0 || log[before.length - 1] === before[before.length - 1]);
+    if (!carriedOn) return voices.stop();
+    if (!voices.on) return;
+    const groups = takeGroups(latest.current, log.slice(before.length));
+    if (groups.length) voices.playGroups(groups);
+    else voices.stop();
+  }, [log]);
+
+  /** Hear one entry again (its line, or both voices of a dual line). */
+  const replay = (entry: Entry) => voices.playGroups(takeGroups(latest.current, [entry]));
+
+  return { on: voices.on, setOn: voices.setOn, speaking: voices.speaking, replay, stop: voices.stop };
 };

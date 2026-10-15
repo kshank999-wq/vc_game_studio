@@ -420,6 +420,41 @@ const eventRule = (project: Project, event: TimelineEvent): Rule | undefined =>
 
 const trackOf = (project: Project, sceneId: string, track: string) => sceneTimeline(project, sceneId).find((t) => t.id === track);
 
+/** A line as the player hears it: who, from what, what is said. */
+const voiceOf = (project: Project, l: DialogueLine): Voice => {
+  const from = l.voiceFrom && project.objects[l.voiceFrom] ? name(project, l.voiceFrom) : undefined;
+  return { speaker: l.speakerId ? name(project, l.speakerId) : (from ?? null), ...(from ? { from } : {}), text: l.text, direction: l.direction || undefined, lineId: l.id };
+};
+
+/**
+ * What a scene says, beat by beat, as the world stands: its main track's
+ * dialogue in playing order, lines whose conditions don't hold left out, a
+ * dual speech heard with the one it's beside. Where a scene plays without
+ * its timeline (talking to someone in a level's Play Mode), this is it.
+ */
+export const sceneSpeech = (project: Project, world: PlayWorld, sceneId: string): Voice[][] => {
+  const events = trackOf(project, sceneId, MAIN)?.events ?? [];
+  const out: Voice[][] = [];
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i]!;
+    if (event.kind !== 'dialogue') continue;
+    const line = eventLine(project, event);
+    if (!line || !line.text.trim() || !evaluate(eventRule(project, event), world)) continue;
+    // Paired only with the event right after it, as the play-through pairs them.
+    const after = events[i + 1];
+    const other = after?.kind === 'dialogue' ? eventLine(project, after) : undefined;
+    const together = !!other && spokenTogether(project, line.id, other.id) && evaluate(eventRule(project, after!), world);
+    if (!together) {
+      out.push([voiceOf(project, line)]);
+      continue;
+    }
+    const [first, second] = dualWith(project, line.id)?.id === other!.id ? [other!, line] : [line, other!];
+    out.push([voiceOf(project, first), voiceOf(project, second)]);
+    i++;
+  }
+  return out;
+};
+
 /**
  * Crossing into another level of the Level lane: where one level ends on the
  * spine, the transition to the next. Only what is on the story graph is in a
@@ -564,10 +599,7 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
         const after = events[cursor.index + 1];
         const other = after?.kind === 'dialogue' ? eventLine(project, after) : undefined;
         const together = !!other && spokenTogether(project, line.id, other.id) && evaluate(eventRule(project, after!), d.world);
-        const voice = (l: DialogueLine): Voice => {
-          const from = l.voiceFrom && project.objects[l.voiceFrom] ? name(project, l.voiceFrom) : undefined;
-          return { speaker: l.speakerId ? name(project, l.speakerId) : (from ?? null), ...(from ? { from } : {}), text: l.text, direction: l.direction || undefined, lineId: l.id };
-        };
+        const voice = (l: DialogueLine): Voice => voiceOf(project, l);
         // The speech on the left of the pair (the one the other is beside) reads first.
         const [first, second] = together && dualWith(project, line.id)?.id === other!.id ? [other!, line] : [line, other];
         d.log.push({ kind: 'line', ...voice(first), sceneId: first.sceneId, ...(together ? { with: voice(second!) } : {}) });

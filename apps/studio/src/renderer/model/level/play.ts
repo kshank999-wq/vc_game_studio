@@ -5,7 +5,7 @@ import { craftCheck, recipeOf, recipesOf } from '../crafting';
 import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
 import { cuesOf } from '../puzzle/staged';
 import { nodesOf, treeDrives } from '../puzzle/tree';
-import { applyStoryEffects, craftIn, firstInteraction, gearIn, learnSkillIn, screenWrongIn, settleWorld, startWorld, useInteractionIn, useStoryObject, type Entry, type PlayWorld } from '../play';
+import { applyStoryEffects, craftIn, firstInteraction, gearIn, learnSkillIn, sceneSpeech, screenWrongIn, settleWorld, startWorld, useInteractionIn, useStoryObject, type Entry, type PlayWorld, type Voice } from '../play';
 import { learnCheck, skillsOf } from '../skills';
 import { describeEffect, describeRule, evaluate, isEmpty } from '../rules';
 import { cinematicTiming } from '../shots';
@@ -97,7 +97,8 @@ export interface LevelPlayState {
   cinematic?: { id: string; name: string; seconds: number; until: number; returnTo?: Where };
   /** Where a cinematic that has ended puts the player back (its "Back to gameplay"); the view moves the player there. */
   placePlayer?: Where;
-  scene?: { id: string; title: string; text: string };
+  /** A scene playing over the level (talking to someone): its card, and what is said in it, beat by beat. */
+  scene?: { id: string; title: string; text: string; speech?: Voice[][]; beat?: number };
   /** A screen puzzle up (puzzle spec §8): the object, the interaction it opens on, the item used. */
   screen?: { objectId: string; interactionId: string; itemId: string };
   message?: { text: string; until: number };
@@ -395,7 +396,8 @@ const startScene = (project: Project, state: LevelPlayState, sceneId: string, de
   const world = { ...state.world, visited: { ...state.world.visited, [sceneId]: true } };
   const settled = settleWorld(project, world);
   const s = changeWorld(project, state, settled.world, settled.log, undefined, depth);
-  return { ...s, scene: { id: sceneId, title: `${scene.data.code ? `${String(scene.data.code)} ` : ''}${scene.name}`, text: String(scene.data.summary ?? '') } };
+  const speech = sceneSpeech(project, s.world, sceneId);
+  return { ...s, scene: { id: sceneId, title: `${scene.data.code ? `${String(scene.data.code)} ` : ''}${scene.name}`, text: String(scene.data.summary ?? ''), ...(speech.length ? { speech, beat: 0 } : {}) } };
 };
 
 /** How near a door's middle the player must come for it to open by itself. */
@@ -508,11 +510,17 @@ export const answerScreen = (project: Project, state: LevelPlayState, outcome: '
   return changeWorld(project, s, r.world, r.log, up.itemId, 0);
 };
 
-/** Skip or finish what is playing over the level: a cinematic, or a scene's card. */
-export const dismiss = (state: LevelPlayState): LevelPlayState =>
-  state.cinematic
-    ? log({ ...state, cinematic: undefined, ...(state.cinematic.returnTo ? { placePlayer: state.cinematic.returnTo } : {}) }, { kind: 'info', text: `${state.cinematic.name} ends${state.cinematic.returnTo ? ', and the player is put back' : ''}` })
-    : state.scene ? { ...state, scene: undefined } : state;
+/** Skip or finish what is playing over the level: a cinematic, or a scene's card (its next line first, while it has lines left). */
+export const dismiss = (state: LevelPlayState): LevelPlayState => {
+  if (state.cinematic)
+    return log({ ...state, cinematic: undefined, ...(state.cinematic.returnTo ? { placePlayer: state.cinematic.returnTo } : {}) }, { kind: 'info', text: `${state.cinematic.name} ends${state.cinematic.returnTo ? ', and the player is put back' : ''}` });
+  const sc = state.scene;
+  if (sc?.speech && (sc.beat ?? 0) < sc.speech.length - 1) return { ...state, scene: { ...sc, beat: (sc.beat ?? 0) + 1 } };
+  return sc ? { ...state, scene: undefined } : state;
+};
+
+/** Leave a scene's card at once, whatever is left to say. */
+export const skipScene = (state: LevelPlayState): LevelPlayState => (state.scene ? { ...state, scene: undefined } : state);
 
 const spawnFrom = (project: Project, state: LevelPlayState, spawner: LevelItem, global?: readonly AssetDefinition[]): LevelPlayState => {
   const set = levelsOf(project);
