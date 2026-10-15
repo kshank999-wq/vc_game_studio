@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PlayView } from '../components/play/PlayView';
-import { takeGroups } from '../components/play/takes-player';
+import { subtitleWho, takeGroups } from '../components/play/takes-player';
 import { attachTake, putAudio } from '../model/audio-takes';
 import { sunkenVault } from '../model/sample';
 import { sceneLines } from '../model/scene';
@@ -84,6 +84,36 @@ describe('recorded takes in the play-through', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(played).toEqual([]);
     expect(localStorage.getItem('vcgs.play.voices')).toBe('off');
+  });
+
+  it('subtitles show what each voice says while its take plays, and can be turned off', async () => {
+    const { p, vault } = await withTakes();
+    render(<PlayView project={p} from={vault} onNavigate={() => {}} />);
+    toLine('Stand back. I’ll find it.');
+    // Both voices of the dual line: a row each, Mara (left) first.
+    const band = await screen.findByRole('status', { name: 'Subtitles' });
+    const rows = [...band.querySelectorAll('.play-subtitle')].map((r) => r.textContent);
+    expect(rows).toEqual(['Mara: Water’s holding it shut. There’s a lever somewhere.', 'The Explorer: Stand back. I’ll find it.']);
+    // The takes end: the subtitles go.
+    act(() => live.forEach((a) => a.onended?.(new Event('ended'))));
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Subtitles' })).toBeNull());
+    // Off: the takes play, the subtitles don't; remembered.
+    fireEvent.click(screen.getByRole('button', { name: 'CC Subtitles' }));
+    expect(localStorage.getItem('vcgs.play.subtitles')).toBe('off');
+    played = [];
+    fireEvent.click(screen.getByRole('button', { name: /^Hear “Water’s holding/ }));
+    await waitFor(() => expect(played).toHaveLength(2));
+    expect(screen.queryByRole('status', { name: 'Subtitles' })).toBeNull();
+    // Voices off: no takes, so no subtitles and no switch for them.
+    fireEvent.click(screen.getByRole('button', { name: '🔊 Voices' }));
+    expect(screen.queryByRole('button', { name: 'CC Subtitles' })).toBeNull();
+  });
+
+  it('a voiceover’s subtitle says where it plays from', () => {
+    expect(subtitleWho({ speaker: 'Mara', text: '', lineId: 'a' })).toBe('Mara');
+    expect(subtitleWho({ speaker: 'Radio', from: 'Radio', text: '', lineId: 'a' })).toBe('Radio (V.O.)');
+    expect(subtitleWho({ speaker: 'Mara', from: 'Radio', text: '', lineId: 'a' })).toBe('Mara (V.O., Radio)');
+    expect(subtitleWho({ speaker: null, text: '', lineId: 'a' })).toBe('');
   });
 
   it('no takes in the project: no Voices button', () => {

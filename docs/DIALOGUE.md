@@ -133,6 +133,13 @@ speaking is marked 🔊; ▶ beside a line plays it again. **🔊 Voices** in th
 play-through's bar turns them off (remembered). Lines without a take are
 read, not heard.
 
+While a take plays, its **subtitle** shows over the foot of the transcript,
+centred, white on a dark band: who says it, then the line ("Mara: Lit. You go
+first."; a voiceover reads "Radio (V.O.): …"), a row a voice, so a
+dual-dialogue pair gets two. It goes when the take ends, or when you go on.
+**CC Subtitles** beside **🔊 Voices** turns them off (remembered); with the
+voices off there are no takes playing, so no subtitles either.
+
 **In a level's 3D Play Mode**, talking to someone linked to a scene plays
 the scene's lines on its card, one beat at a time, as the world stands: lines
 whose conditions don't hold are left out, a dual speech is heard with the one

@@ -13683,6 +13683,33 @@ button.bible-dual-col:hover {
 .play-speaking {
   font-size: 0.85em;
 }
+/* The subtitles: over the foot of the transcript, centred, while the takes play. */
+.play-subtitles-anchor {
+  position: relative;
+  height: 0;
+}
+.play-subtitles {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 32px));
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.4;
+  pointer-events: none;
+  z-index: 2;
+}
+.play-subtitle + .play-subtitle {
+  margin-top: 4px;
+}
+.play-subtitle-who {
+  color: #f2d48a;
+}
 .about-credit {
   font-size: 11.5px;
   color: var(--muted);

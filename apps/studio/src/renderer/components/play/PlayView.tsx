@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTakesPlayer } from './takes-player';
+import { subtitleRows, useSubtitlesSetting, useTakesPlayer, type Subtitle } from './takes-player';
 import type { Destination } from '../../model/details';
 import { interactionsOf, statesOf, varTypeOf } from '../../model/details';
 import { fromNumber, toNumber } from '../../model/rules';
@@ -43,6 +43,21 @@ const VoiceView = ({ voice, speaking }: { voice: Voice; speaking?: boolean }) =>
     <div className="play-said">{voice.text ? <Inline text={voice.text} /> : '…'}</div>
   </div>
 );
+
+/** The subtitles for the takes playing now: a row a voice, centred over the foot of the transcript. */
+const Subtitles = ({ rows }: { rows: Subtitle[] }) =>
+  rows.length ? (
+    <div className="play-subtitles-anchor">
+      <div className="play-subtitles" role="status" aria-label="Subtitles">
+        {rows.map((r) => (
+          <div key={r.lineId} className="play-subtitle">
+            {r.who && <span className="play-subtitle-who">{r.who}: </span>}
+            <Inline text={r.text} />
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : null;
 
 /** How a line plays aloud: what is speaking now, and hearing a line again. */
 interface Voices {
@@ -984,6 +999,7 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
   const [onScreen, setOnScreen] = useState<{ objectId: string; interactionId: string } | null>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const voices = useTakesPlayer(project, play.log);
+  const subtitles = useSubtitlesSetting();
   const anyTakes = project.lines.some((l) => l.take);
   const voiceView: Voices | undefined = anyTakes && voices.on ? { speaking: voices.speaking, hasTake: (id) => project.lines.some((l) => l.id === id && !!l.take), replay: voices.replay } : undefined;
   const [codexOpen, setCodexOpen] = useState(false);
@@ -1135,6 +1151,11 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
               {voices.on ? '🔊 Voices' : '🔇 Voices'}
             </button>
           )}
+          {anyTakes && voices.on && (
+            <button className={`tb-btn small${subtitles.on ? ' on' : ''}`} aria-pressed={subtitles.on} title="Show what each voice says while its take plays" onClick={() => subtitles.setOn(!subtitles.on)}>
+              CC Subtitles
+            </button>
+          )}
           {hasCodex && (
             <button className={`tb-btn small${codexOpen ? ' on' : ''}`} aria-pressed={codexOpen} title="The codex: quests and lore found (C)" onClick={() => (setCodexOpen(!codexOpen), setSavesOpen(false), setPathsOpen(false))}>
               Codex{fresh > 0 && <span className="play-codex-new"> · {fresh} new</span>}
@@ -1181,6 +1202,7 @@ export const PlayView = ({ project, from, onNavigate, onCommit }: Props) => {
             <EntryView key={i} entry={entry} voices={voiceView} />
           ))}
         </div>
+        {subtitles.on && voices.on && <Subtitles rows={subtitleRows(play.log, voices.speaking)} />}
         <div className="play-prompt">
           {prompt.kind === 'continue' && prompt.transition && (
             // A level transition plays for its length and goes on by itself; Skip goes on at once.

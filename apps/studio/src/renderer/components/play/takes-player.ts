@@ -21,13 +21,64 @@ export const takeGroups = (project: Project, entries: readonly Entry[]): string[
     .filter((g) => g.length > 0);
 
 const VOICES_KEY = 'vcgs.play.voices';
+const SUBTITLES_KEY = 'vcgs.play.subtitles';
 
-const readOn = (): boolean => {
+const readSetting = (key: string): boolean => {
   try {
-    return globalThis.localStorage?.getItem(VOICES_KEY) !== 'off';
+    return globalThis.localStorage?.getItem(key) !== 'off';
   } catch {
     return true;
   }
+};
+const readOn = () => readSetting(VOICES_KEY);
+
+const keepSetting = (key: string, value: boolean) => {
+  try {
+    globalThis.localStorage?.setItem(key, value ? 'on' : 'off');
+  } catch {
+    // Remembered for this window only.
+  }
+};
+
+/** A subtitle: who says it (and from where, for a voiceover), then what they say. */
+export interface Subtitle {
+  lineId: string;
+  who: string;
+  text: string;
+}
+
+/** Who a voice is, as a subtitle names them: "Mara", "Radio (V.O.)", "Mara (V.O., Radio)"; "" for nobody. */
+export const subtitleWho = (voice: Voice): string => {
+  if (!voice.from) return voice.speaker ?? '';
+  if (!voice.speaker || voice.from === voice.speaker) return `${voice.from} (V.O.)`;
+  return `${voice.speaker} (V.O., ${voice.from})`;
+};
+
+/**
+ * The subtitles for what is speaking now: a row a voice, in the order the
+ * log has them (a dual line's left-hand voice first), each from the latest
+ * time its line came up.
+ */
+export const subtitleRows = (log: readonly Entry[], speaking: ReadonlySet<string>): Subtitle[] => {
+  if (!speaking.size) return [];
+  const rows: Subtitle[] = [];
+  const seen = new Set<string>();
+  for (let i = log.length - 1; i >= 0 && seen.size < speaking.size; i--) {
+    const found = voicesOf(log[i]!).filter((v) => speaking.has(v.lineId) && !seen.has(v.lineId));
+    found.forEach((v) => seen.add(v.lineId));
+    rows.unshift(...found.map((v) => ({ lineId: v.lineId, who: subtitleWho(v), text: v.text })));
+  }
+  return rows;
+};
+
+/** Subtitles on or off: the player's choice, remembered, like the voices. */
+export const useSubtitlesSetting = () => {
+  const [on, setOnState] = useState(() => readSetting(SUBTITLES_KEY));
+  const setOn = (value: boolean) => {
+    setOnState(value);
+    keepSetting(SUBTITLES_KEY, value);
+  };
+  return { on, setOn };
 };
 
 interface Playing {
@@ -109,11 +160,7 @@ export const useVoicePlayer = (project: Project) => {
   const setOn = (value: boolean) => {
     setOnState(value);
     if (!value) stop();
-    try {
-      globalThis.localStorage?.setItem(VOICES_KEY, value ? 'on' : 'off');
-    } catch {
-      // Remembered for this window only.
-    }
+    keepSetting(VOICES_KEY, value);
   };
 
   /** Lines with a take, of these: the ones that can be heard. */
