@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PlayView } from '../components/play/PlayView';
-import { subtitleWho, takeGroups } from '../components/play/takes-player';
+import { subtitlesFor, subtitleWho, takeGroups } from '../components/play/takes-player';
 import { attachTake, putAudio } from '../model/audio-takes';
 import { sunkenVault } from '../model/sample';
 import { sceneLines } from '../model/scene';
@@ -107,6 +107,17 @@ describe('recorded takes in the play-through', () => {
     // Voices off: no takes, so no subtitles and no switch for them.
     fireEvent.click(screen.getByRole('button', { name: '🔊 Voices' }));
     expect(screen.queryByRole('button', { name: 'CC Subtitles' })).toBeNull();
+  });
+
+  it('Play Mode’s beat: a subtitle for each voice speaking now, in the beat’s order', () => {
+    const beat = [
+      { speaker: 'Mara', text: 'Left.', lineId: 'a' },
+      { speaker: 'The Explorer', text: 'Right.', lineId: 'b' },
+    ];
+    expect(subtitlesFor(beat, new Set(['b', 'a'])).map((r) => `${r.who}: ${r.text}`)).toEqual(['Mara: Left.', 'The Explorer: Right.']);
+    // A voice without a take isn't speaking, so it has no subtitle.
+    expect(subtitlesFor(beat, new Set(['b'])).map((r) => r.lineId)).toEqual(['b']);
+    expect(subtitlesFor(beat, new Set())).toEqual([]);
   });
 
   it('a voiceover’s subtitle says where it plays from', () => {

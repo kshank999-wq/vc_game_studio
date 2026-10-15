@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { subtitleRows, useSubtitlesSetting, useTakesPlayer, type Subtitle } from './takes-player';
+import { subtitleRows, useSubtitlesSetting, useTakesPlayer } from './takes-player';
+import { Subtitles } from './Subtitles';
 import type { Destination } from '../../model/details';
 import { interactionsOf, statesOf, varTypeOf } from '../../model/details';
 import { fromNumber, toNumber } from '../../model/rules';
@@ -43,21 +44,6 @@ const VoiceView = ({ voice, speaking }: { voice: Voice; speaking?: boolean }) =>
     <div className="play-said">{voice.text ? <Inline text={voice.text} /> : '…'}</div>
   </div>
 );
-
-/** The subtitles for the takes playing now: a row a voice, centred over the foot of the transcript. */
-const Subtitles = ({ rows }: { rows: Subtitle[] }) =>
-  rows.length ? (
-    <div className="play-subtitles-anchor">
-      <div className="play-subtitles" role="status" aria-label="Subtitles">
-        {rows.map((r) => (
-          <div key={r.lineId} className="play-subtitle">
-            {r.who && <span className="play-subtitle-who">{r.who}: </span>}
-            <Inline text={r.text} />
-          </div>
-        ))}
-      </div>
-    </div>
-  ) : null;
 
 /** How a line plays aloud: what is speaking now, and hearing a line again. */
 interface Voices {

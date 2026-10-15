@@ -54,6 +54,10 @@ export const subtitleWho = (voice: Voice): string => {
   return `${voice.speaker} (V.O., ${voice.from})`;
 };
 
+/** The subtitles for these voices (one beat), keeping those speaking now, in their order. */
+export const subtitlesFor = (voices: readonly Voice[], speaking: ReadonlySet<string>): Subtitle[] =>
+  voices.filter((v) => speaking.has(v.lineId)).map((v) => ({ lineId: v.lineId, who: subtitleWho(v), text: v.text }));
+
 /**
  * The subtitles for what is speaking now: a row a voice, in the order the
  * log has them (a dual line's left-hand voice first), each from the latest
@@ -71,7 +75,7 @@ export const subtitleRows = (log: readonly Entry[], speaking: ReadonlySet<string
   return rows;
 };
 
-/** Subtitles on or off: the player's choice, remembered, like the voices. */
+/** Subtitles on or off: the player's choice, remembered, like the voices, and the same in every play mode. */
 export const useSubtitlesSetting = () => {
   const [on, setOnState] = useState(() => readSetting(SUBTITLES_KEY));
   const setOn = (value: boolean) => {

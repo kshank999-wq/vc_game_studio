@@ -148,6 +148,10 @@ after the last, carries on. **▶ Again** replays the line, **Skip the scene**
 leaves it, and **🔊 Voices** turns the takes off (the same setting as the
 play-through's). Lines on a choice's branch play in the story's play-through,
 where the choice is made.
+While a beat's take plays, its subtitle shows at the foot of the 3D view,
+as a game shows them: a row a voice, two for a dual speech, gone when the take
+ends or you go on. **CC Subtitles** on the card turns them off (the same
+setting as the play-through's).
 **The sample's lines come recorded**: each has a placeholder take
 (synthesized with Piper's LibriTTS voice, CC BY 4.0; see
 `apps/studio/src/renderer/assets/sample-takes/NOTICE.md`), so the

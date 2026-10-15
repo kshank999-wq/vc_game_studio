@@ -13688,6 +13688,18 @@ button.bible-dual-col:hover {
   position: relative;
   height: 0;
 }
+/* In Play Mode: at the foot of the 3D view, over everything but the cards' buttons. */
+.play-subtitles-screen {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 28px;
+  pointer-events: none;
+}
+.play-subtitles-screen .play-subtitles {
+  bottom: 0;
+  font-size: 17px;
+}
 .play-subtitles {
   position: absolute;
   left: 50%;

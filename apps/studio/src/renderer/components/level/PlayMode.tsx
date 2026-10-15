@@ -24,7 +24,8 @@ import { PlayInspect } from './PlayInspect';
 import { ScreenPlayer } from '../puzzle/ScreenPlayer';
 import { screenOf } from '../../model/puzzle/screens';
 import { buildPiece, disposePiece } from './three-pieces';
-import { useVoicePlayer } from '../play/takes-player';
+import { subtitlesFor, useSubtitlesSetting, useVoicePlayer } from '../play/takes-player';
+import { Subtitles } from '../play/Subtitles';
 import { Inline } from '../Inline';
 
 /**
@@ -87,6 +88,7 @@ export const PlayMode = (props: Props) => {
   const [hud, setHud] = useState<LevelPlayState>(() => startLevelPlay(project, levelId, { preset: props.preset, world: props.world, global }));
   // A scene's lines, heard as the card steps through them.
   const voices = useVoicePlayer(project);
+  const subtitles = useSubtitlesSetting();
   const beat = hud.scene?.speech?.[hud.scene.beat ?? 0];
   const anyTakes = project.lines.some((l) => l.take);
   useEffect(() => {
@@ -733,9 +735,15 @@ export const PlayMode = (props: Props) => {
                 {voices.on ? '🔊 Voices' : '🔇 Voices'}
               </button>
             )}
+            {anyTakes && voices.on && (
+              <button className={`tb-btn small${subtitles.on ? ' on' : ''}`} aria-pressed={subtitles.on} title="Show what each voice says while its take plays" onClick={() => subtitles.setOn(!subtitles.on)}>
+                CC Subtitles
+              </button>
+            )}
           </div>
         </div>
       )}
+      {beat && voices.on && subtitles.on && <Subtitles onScreen rows={subtitlesFor(beat, voices.speaking)} />}
       {hud.over && (
         <div className="play-card" role="dialog" aria-label="Game over">
           <span className="play-kicker">GAME OVER</span>
