@@ -189,6 +189,8 @@ interface Element {
   /** Path-first: where it is in the route (chambers and passages), for linking along the route only. */
   route?: number;
   secret?: boolean;
+  /** Leftover cells beside it that no room fitted, taken in: it is made as an outline (an L, a T…) round them all. */
+  pockets?: { c: number; r: number }[];
 }
 
 interface Edge {
@@ -202,24 +204,44 @@ interface Edge {
 }
 
 /** Where two elements share a wall at least `min` cells long. */
-const shared = (A: Rect, B: Rect, min: number): Omit<Edge, 'a' | 'b'> | null => {
+/** The least wall a door goes in: the door itself (1.2 m) and 0.1 m each side. */
+const DOOR_ROOM = 1.4;
+
+/**
+ * The wall two rects share, at least `min` cells long; with the grid, at least
+ * that long in metres too (a line moved onto a hallway's wall can shorten it).
+ */
+const shared = (A: Rect, B: Rect, min: number, g?: Grid): Omit<Edge, 'a' | 'b'> | null => {
   const span = (a0: number, a1: number, b0: number, b1: number) => [Math.max(a0, b0), Math.min(a1, b1)] as const;
+  // In metres: room for a door (1.2 m) and a little wall each side.
+  const long = (vertical: boolean, f: number, t: number) => t - f >= min && (!g || lineAt(g, t, !vertical) - lineAt(g, f, !vertical) >= DOOR_ROOM - 1e-6);
   if (A.c + A.w === B.c || B.c + B.w === A.c) {
     const [f, t] = span(A.r, A.r + A.h, B.r, B.r + B.h);
-    if (t - f >= min) return { vertical: true, line: A.c + A.w === B.c ? B.c : A.c, from: f, to: t };
+    if (long(true, f, t)) return { vertical: true, line: A.c + A.w === B.c ? B.c : A.c, from: f, to: t };
   }
   if (A.r + A.h === B.r || B.r + B.h === A.r) {
     const [f, t] = span(A.c, A.c + A.w, B.c, B.c + B.w);
-    if (t - f >= min) return { vertical: false, line: A.r + A.h === B.r ? B.r : A.r, from: f, to: t };
+    if (long(false, f, t)) return { vertical: false, line: A.r + A.h === B.r ? B.r : A.r, from: f, to: t };
   }
   return null;
 };
 
-const edgesOf = (els: Element[], min: number): Edge[] => {
+/** The point along a run of grid lines (in cells) that is halfway between its ends in plan. */
+const realMid = (g: Grid, from: number, to: number, vertical: boolean): number => {
+  const want = (lineAt(g, from, vertical) + lineAt(g, to, vertical)) / 2;
+  for (let k = Math.floor(from); k < Math.ceil(to); k++) {
+    const a = lineAt(g, k, vertical);
+    const b = lineAt(g, k + 1, vertical);
+    if (want >= a - 1e-9 && want <= b + 1e-9) return k + (b > a ? (want - a) / (b - a) : 0);
+  }
+  return (from + to) / 2;
+};
+
+const edgesOf = (els: Element[], min: number, g?: Grid): Edge[] => {
   const out: Edge[] = [];
   for (let a = 0; a < els.length; a++)
     for (let b = a + 1; b < els.length; b++) {
-      const s = shared(els[a]!.rect, els[b]!.rect, min);
+      const s = shared(els[a]!.rect, els[b]!.rect, min, g);
       if (s) out.push({ a, b, ...s });
     }
   return out;
@@ -315,6 +337,117 @@ const growRooms = (g: Grid, els: Element[], limit: number) => {
     }
     if (!changed) break;
   }
+};
+
+const cellsOf = (R: Rect) => {
+  const out: { c: number; r: number }[] = [];
+  for (let r = R.r; r < R.r + R.h; r++) for (let c = R.c; c < R.c + R.w; c++) out.push({ c, r });
+  return out;
+};
+
+/**
+ * Leftover free cells (pockets no room fitted or could grow into) given to the
+ * room beside them that shares the most wall with them, so the floor has no
+ * dead gaps between walls. Only rooms take them in (not corridors, the stairs
+ * or what is kept), and only pockets up to `most` cells: a bigger empty stretch
+ * is left as it is.
+ */
+const absorbPockets = (g: Grid, els: Element[], most: number) => {
+  const seen = new Uint8Array(g.cols * g.rows);
+  const owner = new Map<string, number>();
+  els.forEach((e, i) => {
+    for (const k of cellsOf(e.rect)) owner.set(`${k.c},${k.r}`, i);
+  });
+  const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+  for (let r0 = 0; r0 < g.rows; r0++)
+    for (let c0 = 0; c0 < g.cols; c0++) {
+      if (seen[at(g, c0, r0)] || !isFree(g, c0, r0)) continue;
+      // The pocket: free cells joined side to side.
+      const cells: { c: number; r: number }[] = [];
+      const stack = [{ c: c0, r: r0 }];
+      seen[at(g, c0, r0)] = 1;
+      while (stack.length) {
+        const k = stack.pop()!;
+        cells.push(k);
+        for (const [dc, dr] of nb) {
+          const c = k.c + dc;
+          const r = k.r + dr;
+          if (isFree(g, c, r) && !seen[at(g, c, r)]) {
+            seen[at(g, c, r)] = 1;
+            stack.push({ c, r });
+          }
+        }
+      }
+      if (cells.length > most) continue;
+      // The room beside it with the longest wall against it.
+      const touch = new Map<number, number>();
+      for (const k of cells)
+        for (const [dc, dr] of nb) {
+          const i = owner.get(`${k.c + dc},${k.r + dr}`);
+          if (i !== undefined && els[i]!.kind === 'room') touch.set(i, (touch.get(i) ?? 0) + 1);
+        }
+      const best = [...touch.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (!best) continue;
+      const room = els[best[0]]!;
+      const all = [...cellsOf(room.rect), ...(room.pockets ?? []), ...cells];
+      if (!cellsOutline(g, all)) continue;
+      room.pockets = [...(room.pockets ?? []), ...cells];
+      for (const k of cells) {
+        g.taken[at(g, k.c, k.r)] = 1;
+        owner.set(`${k.c},${k.r}`, best[0]);
+      }
+    }
+};
+
+/** The outline round these cells, in plan (clockwise on the map), or null when they don't make one simple shape. */
+const cellsOutline = (g: Grid, cells: readonly { c: number; r: number }[]): Point[] | null => {
+  const has = new Set(cells.map((k) => `${k.c},${k.r}`));
+  const H = (c: number, r: number) => has.has(`${c},${r}`);
+  // Each outside side of a cell, running clockwise round the shape (y grows down the map).
+  const next = new Map<string, string>();
+  const add = (a: [number, number], b: [number, number]) => {
+    const k = `${a[0]},${a[1]}`;
+    if (next.has(k)) next.set(k, '!');
+    else next.set(k, `${b[0]},${b[1]}`);
+  };
+  for (const { c, r } of cells) {
+    if (!H(c, r - 1)) add([c, r], [c + 1, r]);
+    if (!H(c + 1, r)) add([c + 1, r], [c + 1, r + 1]);
+    if (!H(c, r + 1)) add([c + 1, r + 1], [c, r + 1]);
+    if (!H(c - 1, r)) add([c, r + 1], [c, r]);
+  }
+  // Corners where the shape pinches (two ways on) make no simple outline.
+  if ([...next.values()].includes('!')) return null;
+  const start = next.keys().next().value as string | undefined;
+  if (!start) return null;
+  const loop: [number, number][] = [];
+  let k: string | undefined = start;
+  while (k && loop.length <= next.size) {
+    loop.push(k.split(',').map(Number) as [number, number]);
+    k = next.get(k);
+    if (k === start) break;
+  }
+  // A hole inside, or the walk didn't close: not one simple shape.
+  if (k !== start || loop.length !== next.size) return null;
+  // In plan, then only the corners: a line moved onto a hallway's wall can bring two points together, or into line.
+  let pts = loop.map(([c, r]) => ({ x: gx(g, c), y: gy(g, r) }));
+  const same = (a: Point, b: Point) => Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9;
+  // One at a time, each against its neighbours as they now are (two taken out together could leave a slant).
+  const extra = (i: number) => {
+    const a = pts[(i - 1 + pts.length) % pts.length]!;
+    const p = pts[i]!;
+    const b = pts[(i + 1) % pts.length]!;
+    return same(a, p) || (Math.abs(a.x - p.x) < 1e-9 && Math.abs(p.x - b.x) < 1e-9) || (Math.abs(a.y - p.y) < 1e-9 && Math.abs(p.y - b.y) < 1e-9);
+  };
+  for (let i = 0; i < pts.length && pts.length >= 3; ) {
+    if (extra(i)) {
+      pts = [...pts.slice(0, i), ...pts.slice(i + 1)];
+      i = Math.max(0, i - 1);
+    } else i++;
+  }
+  // Square to the map still (no slant), or none.
+  if (pts.some((p, i) => { const b = pts[(i + 1) % pts.length]!; return Math.abs(p.x - b.x) > 1e-9 && Math.abs(p.y - b.y) > 1e-9; })) return null;
+  return pts.length >= 4 ? pts : null;
 };
 
 // ---------------------------------------------------------------- what is kept, what is replaced
@@ -570,6 +703,8 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     // Rooms grow into the gaps beside them (a full floor), so they share walls to put doors in.
     const pathFloor = s.mode === 'path' && routes(floor).length > 0;
     if ((s.density >= 1 && (!pathFloor || s.fill)) || isRoof) growRooms(g, els, Math.round(maxC * (isRoof ? 3 : 1.5)));
+    // What growing couldn't reach (too small for a room, no room can widen into it as a rectangle) goes to the room beside it.
+    if (s.density >= 1 && !isRoof && (!pathFloor || s.fill)) absorbPockets(g, els, maxC * maxC);
     plan.entrances = [];
     connect(plan, s.rules, rand, doorMin, problems, keptCount, s.mode === 'path' && routes(floor).length > 0, isRoof);
     if (isGround && !isRoof && !areaPoly) {
@@ -607,6 +742,28 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
       const asset = e.kind === 'corridor' ? 'space.corridor' : e.kind === 'core' ? 'space.stairwell' : e.kind === 'zone' ? 'space.exterior' : 'space.room';
       const id = put(plan.floor.id, asset, p.x, p.y, e.name, { w: p.w, d: p.d, h: e.kind === 'zone' ? 3 : h });
       ids.set(`${plan.floor.id}:${n}`, id);
+      // A room that took in a pocket: its outline round both.
+      if (id && e.pockets?.length) {
+        const outline = cellsOutline(g, [...cellsOf(e.rect), ...e.pockets]);
+        if (outline) {
+          // Exactly (not to the millimetre): its sides are on the hallways' walls.
+          const xs = outline.map((q) => q.x);
+          const ys = outline.map((q) => q.y);
+          const x0 = Math.min(...xs);
+          const x1 = Math.max(...xs);
+          const y0 = Math.min(...ys);
+          const y1 = Math.max(...ys);
+          const w = x1 - x0;
+          const d = y1 - y0;
+          const cx = (x0 + x1) / 2;
+          const cy = (y0 + y1) / 2;
+          const s4 = levelsOf(next);
+          next = withSet(next, {
+            ...s4,
+            items: s4.items.map((i) => (i.id === id ? { ...i, x: cx, y: cy, size: { ...i.size, w, d }, outline: outline.map((q) => ({ x: (q.x - cx) / w, y: (q.y - cy) / d })) } : i)),
+          });
+        }
+      }
       if (e.kind === 'corridor') counts.corridors++;
       else counts.rooms++;
     });
@@ -617,7 +774,7 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     const x = gx(g, vertical ? line : along);
     const y = gy(g, vertical ? along : line);
     // An opening as wide as its wall allows (to 3 m), leaving 0.4 m each side.
-    const wide = open ? Math.max(1.2, Math.min(3, wall * g.cell - 0.8)) : 0;
+    const wide = open ? Math.max(1.2, Math.min(3, wall - 0.8)) : 0;
     const id = put(plan.floor.id, 'arch.door', x, y, name, open ? { w: wide } : undefined, open ? { swing: 'open archway' } : secret ? { secret: true } : undefined, secret ? { tags: ['secret'] } : undefined);
     if (id) counts.doors++;
   };
@@ -625,10 +782,12 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     for (const l of plan.links) {
       const A = plan.elements[l.a]!;
       const B = plan.elements[l.b]!;
-      const sh = shared(A.rect, B.rect, doorMin);
+      const sh = shared(A.rect, B.rect, doorMin, plan.grid);
       if (!sh) continue;
-      const mid = (sh.from + sh.to) / 2;
-      door(plan, sh.vertical, sh.line, mid, l.secret ? 'Secret door' : l.open ? 'Opening' : 'Door', l.open, l.secret, sh.to - sh.from);
+      // Halfway along the wall as it is in plan (its ends may have moved onto a hallway's wall).
+      const mid = realMid(plan.grid, sh.from, sh.to, !sh.vertical);
+      const len = lineAt(plan.grid, sh.to, !sh.vertical) - lineAt(plan.grid, sh.from, !sh.vertical);
+      door(plan, sh.vertical, sh.line, mid, l.secret ? 'Secret door' : l.open ? 'Opening' : 'Door', l.open, l.secret, len);
     }
     for (const e of plan.entrances) door(plan, e.vertical, e.line, e.along, 'Way in', false);
   }
@@ -957,7 +1116,7 @@ const layPath = (set: LevelSet, g: Grid, routes: NonNullable<LevelSet['travel']>
 const connect = (plan: FloorPlan, rules: LayoutRules, rand: () => number, doorMin: number, problems: string[], keptCount: number, path: boolean, roof: boolean) => {
   const els = plan.elements;
   if (els.length <= keptCount) return;
-  const edges = edgesOf(els, doorMin);
+  const edges = edgesOf(els, doorMin, plan.grid);
   const parent = els.map((_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
   const join = (a: number, b: number) => (parent[find(a)] = find(b));

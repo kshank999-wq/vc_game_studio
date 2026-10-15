@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { acceptLayout, defaultGenerator, groundFloorOf, proposeLayout } from '../level/generate';
-import { assetOf, frameOf } from '../level/geometry';
+import { areaOf, assetOf, frameOf } from '../level/geometry';
 import { addHallway, hallwayRuns, squaredLine } from '../level/hallway';
 import { addLevel, levelsOf } from '../level/level';
 import { createStructure } from '../level/structure';
@@ -80,6 +80,11 @@ describe('hallways drawn as a line', () => {
       }
     }
     expect(beside).toBeGreaterThanOrEqual(5);
+    // No pockets left between the walls: a room that a leftover sat beside took it in (an L or the like), so the
+    // rooms and hallways cover the floor.
+    expect(made2.some((i) => i.assetId === 'space.room' && i.outline)).toBe(true);
+    const covered = [...halls, ...made2.filter((i) => i.assetId === 'space.room')].reduce((n, i) => n + areaOf(frameOf(after, i)), 0);
+    expect(covered).toBeCloseTo(f.w * f.d, 3);
     // And every door made is in a wall.
     expect(made2.filter((i) => i.assetId === 'arch.door' && i.invalid).map((i) => i.invalid)).toEqual([]);
     // Nothing made left unjoined.
