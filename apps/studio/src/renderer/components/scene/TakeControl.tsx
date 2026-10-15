@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { attachTake, AUDIO_ACCEPT, detachTake, getAudio, isAudioFile, storeTake, takeSummary } from '../../model/audio-takes';
+import { attachTake, AUDIO_ACCEPT, detachTake, hasAudio, isAudioFile, storeTake, takeSource, takeSummary } from '../../model/audio-takes';
 import type { Project } from '../../model/types';
 
 /** One take plays at a time, wherever it was started. */
-let playing: { audio: HTMLAudioElement; url: string; stop: () => void } | null = null;
+let playing: { audio: HTMLAudioElement; release: () => void; stop: () => void } | null = null;
 const stopPlaying = () => {
   if (!playing) return;
   playing.audio.pause();
-  URL.revokeObjectURL(playing.url);
+  playing.release();
   playing.stop();
   playing = null;
 };
@@ -33,7 +33,7 @@ export const TakeControl = ({ project, lineId, onCommit, compact = false }: { pr
   useEffect(() => {
     let live = true;
     setHere(null);
-    if (take) void getAudio(take.id).then((b) => live && setHere(!!b));
+    if (take) void hasAudio(take.id).then((b) => live && setHere(b));
     return () => {
       live = false;
     };
@@ -64,12 +64,11 @@ export const TakeControl = ({ project, lineId, onCommit, compact = false }: { pr
   const play = async () => {
     if (isPlaying) return stopPlaying();
     if (!take) return;
-    const blob = await getAudio(take.id);
-    if (!blob) return setHere(false);
+    const source = await takeSource(take.id);
+    if (!source) return setHere(false);
     stopPlaying();
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    playing = { audio, url, stop: () => setIsPlaying(false) };
+    const audio = new Audio(source.url);
+    playing = { audio, release: source.release, stop: () => setIsPlaying(false) };
     audio.onended = () => stopPlaying();
     setIsPlaying(true);
     const refused = () => {

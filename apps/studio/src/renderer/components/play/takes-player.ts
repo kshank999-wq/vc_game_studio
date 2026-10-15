@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getAudio } from '../../model/audio-takes';
+import { takeSource } from '../../model/audio-takes';
 import type { Entry, Voice } from '../../model/play';
 import type { Project } from '../../model/types';
 
@@ -32,7 +32,7 @@ const readOn = (): boolean => {
 
 interface Playing {
   audios: HTMLAudioElement[];
-  urls: string[];
+  release: () => void;
 }
 
 /**
@@ -57,7 +57,7 @@ export const useVoicePlayer = (project: Project) => {
     current.current = null;
     if (c) {
       for (const a of c.audios) a.pause();
-      for (const u of c.urls) URL.revokeObjectURL(u);
+      c.release();
     }
     setSpeaking(new Set());
   };
@@ -69,18 +69,18 @@ export const useVoicePlayer = (project: Project) => {
       return;
     }
     const lines = group.map((id) => latest.current.lines.find((l) => l.id === id)).filter((l) => l?.take);
-    const blobs = (await Promise.all(lines.map((l) => getAudio(l!.take!.id)))).map((b, i) => ({ b, id: lines[i]!.id }));
-    if (ticket !== run.current) return;
-    const here = blobs.filter((x): x is { b: Blob; id: string } => !!x.b);
+    const sources = (await Promise.all(lines.map((l) => takeSource(l!.take!.id)))).map((src, i) => ({ src, id: lines[i]!.id }));
+    const here = sources.filter((x): x is { src: NonNullable<typeof x.src>; id: string } => !!x.src);
+    const release = () => here.forEach((x) => x.src.release());
+    if (ticket !== run.current) return release();
     if (!here.length) return next(ticket);
-    const urls = here.map((x) => URL.createObjectURL(x.b));
-    const audios = urls.map((u) => new Audio(u));
-    current.current = { audios, urls };
+    const audios = here.map((x) => new Audio(x.src.url));
+    current.current = { audios, release };
     setSpeaking(new Set(here.map((x) => x.id)));
     let left = audios.length;
     const ended = () => {
       if (--left > 0 || ticket !== run.current) return;
-      for (const u of urls) URL.revokeObjectURL(u);
+      release();
       current.current = null;
       void next(ticket);
     };

@@ -87,7 +87,7 @@ describe('recorded takes in the play-through', () => {
   });
 
   it('no takes in the project: no Voices button', () => {
-    const p = sunkenVault();
+    const p = { ...sunkenVault(), lines: sunkenVault().lines.map(({ take: _t, ...l }) => l) };
     render(<PlayView project={p} onNavigate={() => {}} />);
     expect(screen.queryByRole('button', { name: /Voices/ })).toBeNull();
   });

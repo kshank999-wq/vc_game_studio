@@ -13683,3 +13683,7 @@ button.bible-dual-col:hover {
 .play-speaking {
   font-size: 0.85em;
 }
+.about-credit {
+  font-size: 11.5px;
+  color: var(--muted);
+}

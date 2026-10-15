@@ -21,8 +21,9 @@ describe('Bible filters', () => {
     const characters = applyFilters(p, viewGroups(p, 'characters'), [{ kind: 'vo', value: 'has' }], issues);
     expect(names(characters).sort()).toEqual(['Mara', 'The Explorer']);
     const todo = applyFilters(p, viewGroups(p, 'dialogue'), [{ kind: 'vo', value: 'todo' }], issues);
-    expect(names(todo).length).toBe(6);
-    expect(applyFilters(p, viewGroups(p, 'dialogue'), [{ kind: 'vo', value: 'recorded' }], issues)).toEqual([]);
+    // The sample's lines come with their (placeholder) takes: all recorded.
+    expect(names(todo)).toEqual([]);
+    expect(names(applyFilters(p, viewGroups(p, 'dialogue'), [{ kind: 'vo', value: 'recorded' }], issues)).length).toBe(6);
   });
 
   it('every filter must hold, and the menus only offer filters that keep something', () => {

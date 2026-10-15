@@ -60,8 +60,43 @@ export const putAudio = async (id: string, blob: Blob): Promise<void> => {
   await run('readwrite', (s) => s.put(blob, id));
 };
 
-/** A take's audio, or undefined when it isn't on this computer. */
-export const getAudio = async (id: string): Promise<Blob | undefined> => {
+/** The sample's takes (sample-takes.ts) ship with the app rather than living in this computer's store. */
+export const SAMPLE_TAKE_PREFIX = 'take_sample_';
+
+const sampleUrl = async (id: string): Promise<string | undefined> => {
+  if (!id.startsWith(SAMPLE_TAKE_PREFIX)) return undefined;
+  try {
+    const { SAMPLE_TAKE_URLS } = await import('./sample-take-urls');
+    return SAMPLE_TAKE_URLS[id.slice(SAMPLE_TAKE_PREFIX.length)];
+  } catch {
+    return undefined;
+  }
+};
+
+/** A file the app ships, as bytes: fetch, or the older request where fetch can't read it (the desktop app's own files). */
+const fetchBlob = async (url: string): Promise<Blob | undefined> => {
+  try {
+    const r = await fetch(url);
+    if (r.ok) return await r.blob();
+  } catch {
+    // Try the older way.
+  }
+  return new Promise((resolve) => {
+    try {
+      const x = new XMLHttpRequest();
+      x.open('GET', url);
+      x.responseType = 'blob';
+      x.onload = () => resolve(x.status === 0 || (x.status >= 200 && x.status < 300) ? (x.response as Blob) : undefined);
+      x.onerror = () => resolve(undefined);
+      x.send();
+    } catch {
+      resolve(undefined);
+    }
+  });
+};
+
+/** A take's audio kept on this computer, or undefined when it isn't here. */
+const storedAudio = async (id: string): Promise<Blob | undefined> => {
   if (memory.has(id)) return memory.get(id);
   try {
     const found = await run<unknown>('readonly', (s) => s.get(id));
@@ -71,10 +106,34 @@ export const getAudio = async (id: string): Promise<Blob | undefined> => {
   }
 };
 
+/** A take's audio, or undefined when it isn't on this computer (nor one the app ships). */
+export const getAudio = async (id: string): Promise<Blob | undefined> => {
+  const stored = await storedAudio(id);
+  if (stored) return stored;
+  const url = await sampleUrl(id);
+  const blob = url ? await fetchBlob(url) : undefined;
+  if (blob) memory.set(id, blob);
+  return blob;
+};
+
+/** Whether a take can be heard here. */
+export const hasAudio = async (id: string): Promise<boolean> => !!(await storedAudio(id)) || !!(await sampleUrl(id));
+
+/** Where to play a take from, and what to let go of once it has played. */
+export const takeSource = async (id: string): Promise<{ url: string; release: () => void } | undefined> => {
+  const stored = await storedAudio(id);
+  if (stored && typeof URL.createObjectURL === 'function') {
+    const url = URL.createObjectURL(stored);
+    return { url, release: () => URL.revokeObjectURL(url) };
+  }
+  const url = await sampleUrl(id);
+  return url ? { url, release: () => {} } : undefined;
+};
+
 /** Which of these takes have their audio here. */
 export const audioHere = async (ids: readonly string[]): Promise<Set<string>> => {
   const out = new Set<string>();
-  for (const id of ids) if (await getAudio(id)) out.add(id);
+  for (const id of ids) if (await hasAudio(id)) out.add(id);
   return out;
 };
 

@@ -5,6 +5,7 @@ import { sampleLevel } from './level/sample-level';
 import { addPath, pathOf, playBy } from './paths';
 import type { Who } from './collab';
 import { addElement, addLine, setSceneData, updateLine, useInScene } from './scene';
+import { withSampleTakes } from './sample-takes';
 import { addBranch, addEvent, moveEvent, sceneTimeline, updateBranch, updateEvent } from './timeline';
 import type { Condition } from './rules';
 import { addShot, updateShot } from './shots';
@@ -353,5 +354,6 @@ export const sunkenVault = (): Project => {
       { id: 'cmt_sample_mara', target: { kind: 'levelItem', id: maraItem.id }, kind: 'task', for: 'gameplay', text: 'Mara should turn to face the player when spoken to.', by: designer, at: at(5) },
     ],
   };
-  return p;
+  // Every line voiced (placeholder takes), so the sample can be heard from the first run.
+  return withSampleTakes(p);
 };

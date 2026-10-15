@@ -261,6 +261,7 @@ export const AboutDialog = ({ onClose }: { onClose: () => void }) => (
         Version {__APP_VERSION__} · {__LICENSING__ ? EDITION_LABEL[currentAccess().plan] : isPreview() ? 'Preview edition (no saving)' : 'Full edition'} · {desktop() ? 'Desktop' : 'Browser'}
       </p>
       <p>Plan a game’s story on one spine, write its scenes, and hand it to the engine.</p>
+      <p className="about-credit">The sample’s voices are placeholder takes synthesized with Piper, using its LibriTTS voice (from the LibriTTS corpus, Zen et al., CC BY 4.0).</p>
       <p>
         <a href={PURCHASE_URL} target="_blank" rel="noreferrer">
           {isPreview() ? 'Buy or subscribe to keep your work' : 'vc-gamestudio.com'}
