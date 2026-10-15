@@ -237,12 +237,45 @@ const realMid = (g: Grid, from: number, to: number, vertical: boolean): number =
   return (from + to) / 2;
 };
 
-const edgesOf = (els: Element[], min: number, g?: Grid): Edge[] => {
+/** A wall's length in plan. */
+const wallLength = (g: Grid | undefined, w: Omit<Edge, 'a' | 'b'>) => (g ? lineAt(g, w.to, !w.vertical) - lineAt(g, w.from, !w.vertical) : (w.to - w.from));
+
+/** An element's pieces: its rectangle, and the pocket it took in as rectangles (each row of cells as wide as it runs, stacked while they match). */
+const piecesOf = (e: Element): Rect[] => {
+  if (!e.pockets?.length) return [e.rect];
+  const left = new Set(e.pockets.map((k) => `${k.c},${k.r}`));
+  const out: Rect[] = [e.rect];
+  const cells = [...e.pockets].sort((a, b) => a.r - b.r || a.c - b.c);
+  for (const k of cells) {
+    if (!left.has(`${k.c},${k.r}`)) continue;
+    let w = 1;
+    while (left.has(`${k.c + w},${k.r}`)) w++;
+    let h = 1;
+    while (Array.from({ length: w }, (_, i) => left.has(`${k.c + i},${k.r + h}`)).every(Boolean)) h++;
+    for (let r = k.r; r < k.r + h; r++) for (let c = k.c; c < k.c + w; c++) left.delete(`${c},${r}`);
+    out.push({ c: k.c, r: k.r, w, h });
+  }
+  return out;
+};
+
+/**
+ * Every pair that shares a wall a door fits in, by its longest such wall
+ * (pockets taken in count). A door onto a corridor needs only room for
+ * itself; elsewhere a wall of `min` cells.
+ */
+const edgesOf = (els: Element[], min: number, g?: Grid, onto?: (a: number, b: number) => boolean): Edge[] => {
   const out: Edge[] = [];
+  const pieces = els.map(piecesOf);
   for (let a = 0; a < els.length; a++)
     for (let b = a + 1; b < els.length; b++) {
-      const s = shared(els[a]!.rect, els[b]!.rect, min, g);
-      if (s) out.push({ a, b, ...s });
+      const m = onto?.(a, b) ? 1 : min;
+      let best: Omit<Edge, 'a' | 'b'> | null = null;
+      for (const A of pieces[a]!)
+        for (const B of pieces[b]!) {
+          const sh = shared(A, B, m, g);
+          if (sh && (!best || wallLength(g, sh) > wallLength(g, best))) best = sh;
+        }
+      if (best) out.push({ a, b, ...best });
     }
   return out;
 };
@@ -496,7 +529,7 @@ interface FloorPlan {
   floor: Floor;
   grid: Grid;
   elements: Element[];
-  links: { a: number; b: number; open: boolean; secret?: boolean }[];
+  links: { a: number; b: number; open: boolean; secret?: boolean; wall?: Omit<Edge, 'a' | 'b'> }[];
   entrances: { el: number; vertical: boolean; line: number; along: number }[];
   core?: Rect;
 }
@@ -656,7 +689,9 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
       const c = Math.round((f.x - w / 2 - g.x0) / cell);
       const r = Math.round((f.y - d / 2 - g.y0) / cell);
       const hall = assetOf(set, i, global).role === 'corridor';
-      const rect = { c, r, w: Math.round(w / cell), h: Math.round(d / cell) };
+      // Its cells from its edges, each to the nearest grid line (not from its width: a 2.44 m hallway
+      // whose edges round outward spans three cells, and the room beside it must meet it there).
+      const rect = { c, r, w: Math.max(1, Math.round((f.x + w / 2 - g.x0) / cell) - c), h: Math.max(1, Math.round((f.y + d / 2 - g.y0) / cell) - r) };
       els.push({ rect, kind: 'kept', name: i.name, keptId: i.id, hall });
       // A hallway drawn at its own width: the grid lines along its sides move onto them (half a cell at most).
       if (hall) {
@@ -782,7 +817,7 @@ export const proposeLayout = (project: Project, req: GenerateRequest, global?: r
     for (const l of plan.links) {
       const A = plan.elements[l.a]!;
       const B = plan.elements[l.b]!;
-      const sh = shared(A.rect, B.rect, doorMin, plan.grid);
+      const sh = l.wall ?? shared(A.rect, B.rect, doorMin, plan.grid);
       if (!sh) continue;
       // Halfway along the wall as it is in plan (its ends may have moved onto a hallway's wall).
       const mid = realMid(plan.grid, sh.from, sh.to, !sh.vertical);
@@ -1116,7 +1151,10 @@ const layPath = (set: LevelSet, g: Grid, routes: NonNullable<LevelSet['travel']>
 const connect = (plan: FloorPlan, rules: LayoutRules, rand: () => number, doorMin: number, problems: string[], keptCount: number, path: boolean, roof: boolean) => {
   const els = plan.elements;
   if (els.length <= keptCount) return;
-  const edges = edgesOf(els, doorMin, plan.grid);
+  // Around the hallways: the hallways drawn are the corridors.
+  const corridorish = (i: number) => els[i]!.kind === 'corridor' || els[i]!.kind === 'hub' || (rules === 'hallways' && !!els[i]!.hall);
+  const edges = edgesOf(els, doorMin, plan.grid, (a, b) => corridorish(a) || corridorish(b));
+  const wallOf = new Map(edges.map((e) => [`${Math.min(e.a, e.b)}:${Math.max(e.a, e.b)}`, e]));
   const parent = els.map((_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
   const join = (a: number, b: number) => (parent[find(a)] = find(b));
@@ -1125,7 +1163,8 @@ const connect = (plan: FloorPlan, rules: LayoutRules, rand: () => number, doorMi
     const k = `${Math.min(a, b)}:${Math.max(a, b)}`;
     if (linked.has(k)) return;
     linked.add(k);
-    plan.links.push({ a, b, open });
+    const w = wallOf.get(k);
+    plan.links.push({ a, b, open, ...(w ? { wall: { vertical: w.vertical, line: w.line, from: w.from, to: w.to } } : {}) });
     join(a, b);
   };
   for (const l of plan.links) join(l.a, l.b);
@@ -1138,8 +1177,6 @@ const connect = (plan: FloorPlan, rules: LayoutRules, rand: () => number, doorMi
   if (roof) {
     for (const e of edges) if (els[e.a]!.kind === 'zone' || els[e.b]!.kind === 'zone') join(e.a, e.b);
   }
-  // Around the hallways: the hallways drawn are the corridors.
-  const corridorish = (i: number) => els[i]!.kind === 'corridor' || els[i]!.kind === 'hub' || (rules === 'hallways' && !!els[i]!.hall);
   const shuffled = [...edges];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
@@ -1148,12 +1185,35 @@ const connect = (plan: FloorPlan, rules: LayoutRules, rand: () => number, doorMi
   if (!path && !roof) {
     if (rules === 'linear' || rules === 'branching' || rules === 'hub' || rules === 'hallways') {
       for (const e of edges) if (corridorish(e.a) && corridorish(e.b) && (e.a >= keptCount || e.b >= keptCount)) link(e.a, e.b, true);
-      // Each room opens onto the corridor it shares the longest wall with.
+      // Doors open onto the hallway first: each room beside a corridor opens onto the one it shares the longest wall with.
+      const reached = new Map<number, number>();
+      els.forEach((el, i) => {
+        if (corridorish(i)) reached.set(i, 0);
+      });
       els.forEach((el, i) => {
         if (corridorish(i) || el.kind === 'kept') return;
-        const best = edges.filter((e) => (e.a === i && corridorish(e.b)) || (e.b === i && corridorish(e.a))).sort((x, y) => y.to - y.from - (x.to - x.from))[0];
-        if (best) link(best.a, best.b);
+        const best = edges.filter((e) => (e.a === i && corridorish(e.b)) || (e.b === i && corridorish(e.a))).sort((x, y) => wallLength(plan.grid, y) - wallLength(plan.grid, x))[0];
+        if (best) {
+          link(best.a, best.b);
+          reached.set(i, 1);
+        }
       });
+      // Then the rooms further in, a step at a time: each opens into the neighbour fewest doors from a corridor.
+      for (let step = 2; ; step++) {
+        const next: [number, Edge][] = [];
+        els.forEach((el, i) => {
+          if (reached.has(i) || el.kind === 'kept') return;
+          const via = edges
+            .filter((e) => (e.a === i || e.b === i) && reached.has(e.a === i ? e.b : e.a) && els[e.a === i ? e.b : e.a]!.kind !== 'kept')
+            .sort((x, y) => reached.get(x.a === i ? x.b : x.a)! - reached.get(y.a === i ? y.b : y.a)! || wallLength(plan.grid, y) - wallLength(plan.grid, x))[0];
+          if (via) next.push([i, via]);
+        });
+        if (!next.length) break;
+        for (const [i, e] of next) {
+          link(e.a, e.b);
+          reached.set(i, step);
+        }
+      }
     } else if (rules === 'openPlan') {
       for (const e of edges) link(e.a, e.b, true);
     } else if (rules === 'maze') {
