@@ -243,6 +243,11 @@ Each **location report** (Print / Export → Locations / environments) lists
 what is said there: the subtitles of every scene set at that location or that
 holds it, with the same times, and their total on screen ("3 lines · 5.4s on
 screen").
+The **cinematics report** (Print / Export → Cinematics + camera notes) lists
+what is said over each cinematic: its voiceovers and the lines its shots carry,
+with the same times and their total, which it flags when the subtitles need
+longer than the cinematic runs ("6 lines · 9.6s on screen — longer than its
+7.5s").
 
 **Try it in the engine** before your game has its own screens, as Godot's
 `play_story.tscn` does. Each player shows the scene one beat at a time in a

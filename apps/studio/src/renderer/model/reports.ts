@@ -219,9 +219,16 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
         const event = project.events.find((e) => e.refId === c.id);
         const timing = event || shotsOf(c).length ? cinematicTiming(project, c.id, event) : undefined;
         blocks.push({ kind: 'h2', text: title(c), note: timing ? `${timing.seconds}s · ${timing.shots} shot${timing.shots === 1 ? '' : 's'}` : undefined });
-        blocks.push({ kind: 'kv', rows: [...fieldRows(c), ['Scenes', scenesOf(project, c.id)]].filter(([, v]) => v) as [string, string][] });
-        if (c.notes) blocks.push({ kind: 'p', text: c.notes });
         const shots = shotsOf(c);
+        // What is said over it: its voiceovers, and the lines its shots carry, as the engines subtitle them.
+        const spokenIds = new Set([...project.lines.filter((l) => l.voiceFrom === c.id).map((l) => l.id), ...shots.flatMap((s) => (s.lineId ? [s.lineId] : []))]);
+        const { said, onScreen } = subtitlesOf(project, project.lines.filter((l) => l.kind === 'dialogue' && spokenIds.has(l.id)));
+        const tooLong = timing && timing.seconds > 0 && onScreen > timing.seconds ? ` — longer than its ${timing.seconds}s` : '';
+        blocks.push({
+          kind: 'kv',
+          rows: [...fieldRows(c), ['Scenes', scenesOf(project, c.id)], ['Subtitles', said.length ? `${onScreenLabel(said.length, onScreen)}${tooLong}` : '']].filter(([, v]) => v) as [string, string][],
+        });
+        if (c.notes) blocks.push({ kind: 'p', text: c.notes });
         if (shots.length) {
           blocks.push({
             kind: 'table',
@@ -238,6 +245,12 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
             ]),
           });
         }
+        if (said.length)
+          blocks.push({
+            kind: 'table',
+            columns: ['Scene', '#', 'Subtitle', 'Shows for'],
+            rows: said.map((s) => [String(project.objects[s.line.sceneId]?.data.code ?? ''), String(s.line.order), s.subtitle, showsFor(s)]),
+          });
       }
       break;
     case 'assets': {

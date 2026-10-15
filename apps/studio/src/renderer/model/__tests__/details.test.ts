@@ -147,6 +147,27 @@ describe('the Game Bible', () => {
     ]);
     const chamberKv = places.find((b) => b.kind === 'kv' && b.rows.some(([k]) => k === 'Subtitles'));
     expect(chamberKv && chamberKv.kind === 'kv' && chamberKv.rows.find(([k]) => k === 'Subtitles')![1]).toBe('3 lines · 5.4s on screen');
+    // The cinematics report: what is said over each, its voiceovers as the engines subtitle them, flagged when longer than it runs.
+    const withVo = (() => {
+      const q = sunkenVault();
+      const cine = Object.values(q.objects).find((o) => o.type === 'cinematic' && o.name === 'The Vault Opens')!;
+      const line = q.lines.find((l) => l.text.startsWith('Water’s holding'))!;
+      return { q: { ...q, lines: q.lines.map((l) => (l.id === line.id ? { ...l, voiceFrom: cine.id } : l)) }, cine };
+    })();
+    const cineBlocks = buildReport(withVo.q, 'cinematics').blocks;
+    const cineTable = cineBlocks.find((b) => b.kind === 'table' && b.columns[2] === 'Subtitle');
+    expect(cineTable && cineTable.kind === 'table' && cineTable.rows).toEqual([['SC-03', '2', 'Mara (V.O., The Vault Opens): Water’s holding it shut. There’s a lever somewhere.', '2.5s (take)']]);
+    // The sample: Door in the dark's shot carries Mara's line.
+    const sampleCine = buildReport(sunkenVault(), 'cinematics').blocks;
+    expect(sampleCine).toContainEqual({ kind: 'table', columns: ['Scene', '#', 'Subtitle', 'Shows for'], rows: [['SC-03', '2', 'Mara: Water’s holding it shut. There’s a lever somewhere.', '2.5s (take)']] });
+    // Every line over Door in the dark (7.5s): 9.6s of subtitles, flagged.
+    const crowded = (() => {
+      const q = sunkenVault();
+      const door = Object.values(q.objects).find((o) => o.type === 'cinematic' && o.name === 'Door in the dark')!;
+      return { ...q, lines: q.lines.map((l) => (l.kind === 'dialogue' ? { ...l, voiceFrom: door.id } : l)) };
+    })();
+    const doorKv = buildReport(crowded, 'cinematics').blocks.find((b) => b.kind === 'kv' && b.rows.some(([k, v]) => k === 'Subtitles' && v.includes('longer')));
+    expect(doorKv && doorKv.kind === 'kv' && doorKv.rows.find(([k]) => k === 'Subtitles')![1]).toBe('6 lines · 9.6s on screen — longer than its 7.5s');
     // Recorded lines show for their take's length, and say so.
     const sample = buildReport(sunkenVault(), 'characters').blocks.find((b) => b.kind === 'table' && b.columns[2] === 'Subtitle');
     expect(sample && sample.kind === 'table' && sample.rows[0]).toEqual(['SC-01', '2', 'Mara: Lit. You go first.', '1.5s (take)']);
