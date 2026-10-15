@@ -145,9 +145,18 @@ export const buildReport = (project: Project, key: ReportKey): Report => {
         const contents = CATEGORIES.filter((c) => c.key !== 'dialogue')
           .map((c) => [c.label, elementsIn(project, s.id, c.key).map((o) => o.name).join(', ')])
           .filter(([, v]) => v);
-        const spoken = sceneLines(project, s.id).filter((l) => l.kind === 'dialogue').length;
-        if (spoken) contents.push(['Dialogue', `${spoken} lines`]);
+        const dialogue = sceneLines(project, s.id).filter((l) => l.kind === 'dialogue');
+        // Its subtitles, as the engines get them, in the order the scene says them.
+        const said = dialogue.filter((l) => l.text.trim()).map((l) => ({ line: l, ...lineSubtitle(project, l) }));
+        const onScreen = said.reduce((t, x) => t + x.seconds, 0);
+        if (dialogue.length) contents.push(['Dialogue', `${dialogue.length} line${dialogue.length === 1 ? '' : 's'}${said.length ? ` · subtitles ${secondsLabel(onScreen)} on screen` : ''}`]);
         if (contents.length) blocks.push({ kind: 'table', columns: ['Category', 'Contents'], rows: contents as string[][] });
+        if (said.length)
+          blocks.push({
+            kind: 'table',
+            columns: ['#', 'Subtitle', 'Shows for'],
+            rows: said.map((x) => [String(x.line.order), x.subtitle, `${secondsLabel(x.seconds)}${x.line.take?.seconds ? ' (take)' : ''}`]),
+          });
         const tracks = sceneTimeline(project, s.id);
         if (tracks[0]!.events.length) {
           blocks.push({
