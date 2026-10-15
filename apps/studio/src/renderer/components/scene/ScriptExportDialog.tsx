@@ -10,6 +10,9 @@ import type { Project } from '../../model/types';
 
 export type ScriptExportKind = 'script' | 'recording' | 'takes';
 
+/** Whether the screenplay shows each speech's subtitle: the person's choice, remembered. */
+const SUBTITLES_KEY = 'vcgs.script.subtitles';
+
 /**
  * Export the script: as a screenplay (Fountain, which Final Draft, Highland,
  * WriterSolo and VC Writer open, or printed), or as a recording script for
@@ -34,6 +37,21 @@ export const ScriptExportDialog = ({
   const many = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const { contd } = usePreferences();
+  const [subtitles, setSubtitlesState] = useState(() => {
+    try {
+      return localStorage.getItem(SUBTITLES_KEY) !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const setSubtitles = (on: boolean) => {
+    setSubtitlesState(on);
+    try {
+      localStorage.setItem(SUBTITLES_KEY, on ? 'on' : 'off');
+    } catch {
+      // Remembered for this window only.
+    }
+  };
   const [kind, setKind] = useState<ScriptExportKind>(start);
   const scene = sceneId ? project.objects[sceneId] : undefined;
   const [scope, setScope] = useState<'all' | 'scene'>(scene ? 'scene' : 'all');
@@ -45,7 +63,7 @@ export const ScriptExportDialog = ({
     return [...ids].map((id) => project.objects[id]).filter((o) => o?.type === 'character').sort((a, b) => a!.name.localeCompare(b!.name));
   }, [project, sceneIds?.[0]]);
   const recording = useMemo(() => recordingScript(project, { sceneIds, characterId: who || null }), [project, scope, who]);
-  const page = useMemo(() => (kind === 'script' ? scriptHtml(project, { contd, sceneIds }) : recordingHtml(recording)), [kind, project, contd, scope, recording]);
+  const page = useMemo(() => (kind === 'script' ? scriptHtml(project, { contd, subtitles, sceneIds }) : recordingHtml(recording)), [kind, project, contd, subtitles, scope, recording]);
   const takeLines = recording.scenes.flatMap((sc) => sc.items.flatMap((i) => (i.kind === 'line' ? [{ ...i, scene: sc }] : [])));
   const recorded = takeLines.filter((i) => project.lines.find((l) => l.id === i.lineId)?.take).length;
   /** Takes dropped in together: each goes to the line its file is named for. */
@@ -125,6 +143,11 @@ export const ScriptExportDialog = ({
                 <option value="scene">This scene ({scene.name})</option>
                 <option value="all">Every scene, in story order</option>
               </select>
+            </label>
+          )}
+          {kind === 'script' && (
+            <label title="Each speech’s subtitle, as the engines get it: a note in the .fountain, a small grey line on the page">
+              <input type="checkbox" checked={subtitles} onChange={(e) => setSubtitles(e.currentTarget.checked)} /> Subtitles
             </label>
           )}
           {kind !== 'script' && (
@@ -218,7 +241,7 @@ export const ScriptExportDialog = ({
               </button>
             </>
           ) : kind === 'script' ? (
-            <button type="button" className="tb-btn primary" onClick={() => downloadText(scriptFileName(project, what, 'fountain'), projectFountain(project, { contd, sceneIds }))}>
+            <button type="button" className="tb-btn primary" onClick={() => downloadText(scriptFileName(project, what, 'fountain'), projectFountain(project, { contd, subtitles, sceneIds }))}>
               Download .fountain
             </button>
           ) : (

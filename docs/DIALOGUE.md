@@ -90,6 +90,12 @@ the story graph; scenes with nothing written are left out):
 - **Download page (.html)** or **Print…** — set in Courier 12 with the usual
   screenplay margins, a title page first.
 
+**Subtitles** (on by default, remembered) puts each speech's subtitle, as the
+engines get it, under its words: in the .fountain as a note
+(`[[Subtitle · 1.5s: Mara: Lit. You go first.]]`), which screenwriting apps
+keep but leave off the printed script; on the page as a small grey line. Turn
+it off for a clean read.
+
 ### The recording script
 
 **Recording script…** (in the Dialogue tab, or **File → Export → Recording

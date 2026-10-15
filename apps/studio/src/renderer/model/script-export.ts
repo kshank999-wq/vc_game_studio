@@ -18,7 +18,22 @@ import type { DialogueLine, Project, StoryObject } from './types';
 export interface ScriptOptions {
   /** Mark a speaker carrying on after action with (CONT’D). */
   contd?: boolean;
+  /**
+   * Each speech's subtitle as the engines get it, under its words: in
+   * Fountain a note ([[Subtitle · 2.5s: Mara: …]]), which screenwriting apps
+   * keep but leave off the printed page; on the page a small grey line.
+   */
+  subtitles?: boolean;
 }
+
+/** A line's subtitle as a script shows it: "Subtitle · 2.5s: Mara: Lit. You go first." */
+const subtitleNote = (project: Project, line: DialogueLine): string => {
+  const { subtitle, seconds } = lineSubtitle(project, line);
+  return `Subtitle · ${secondsLabel(seconds)}: ${subtitle}`;
+};
+
+/** Fountain notes end at ]]: a subtitle can't close its own. */
+const fountainNote = (text: string): string => `[[${text.replace(/\]\]/g, '] ]').replace(/\[\[/g, '[ [')}]]`;
 
 /** The scenes in the order the story plays them: along the graph left to right, then any not on it. */
 export const scriptScenes = (project: Project): StoryObject[] => {
@@ -87,7 +102,7 @@ export const sceneFountain = (project: Project, sceneId: string, options: Script
       out.push(line.kind === 'transition' ? fountainTransition(line.text) : line.shot ? fountainAction(line.text.toUpperCase()) : fountainAction(line.text));
       continue;
     }
-    const body = [...(line.direction ? [`(${line.direction})`] : []), line.text.trim() || '…'];
+    const body = [...(line.direction ? [`(${line.direction})`] : []), line.text.trim() || '…', ...(options.subtitles && line.text.trim() ? [fountainNote(subtitleNote(project, line))] : [])];
     if (line.joined && speech) {
       (speech as string[]).push(...body);
       continue;
@@ -143,12 +158,14 @@ body { font-family: 'Courier Prime', 'Courier New', Courier, monospace; font-siz
 .dual .paren { margin-left: 0.4in; }
 .dual .dialogue { margin-left: 0; }
 .transition { text-align: right; text-transform: uppercase; margin: 0 0 1em; }
+.subtitle { margin: 0.3em 0 0 1in; max-width: 3.5in; font-family: 'IBM Plex Sans', Arial, sans-serif; font-size: 8.5pt; line-height: 1.25; color: #777; }
+.dual .subtitle { margin-left: 0; }
 .scene { page-break-inside: auto; }
 `;
 
 const speechHtml = (project: Project, lines: DialogueLine[], options: ScriptOptions): string =>
   `<div class="speech"><div class="cue">${esc(cueFor(project, lines[0]!, options))}</div>${lines
-    .map((l) => `${l.direction ? `<div class="paren">(${esc(l.direction)})</div>` : ''}<div class="dialogue">${rich(l.text.trim() || '…')}</div>`)
+    .map((l) => `${l.direction ? `<div class="paren">(${esc(l.direction)})</div>` : ''}<div class="dialogue">${rich(l.text.trim() || '…')}</div>${options.subtitles && l.text.trim() ? `<div class="subtitle">${esc(subtitleNote(project, l))}</div>` : ''}`)
     .join('')}</div>`;
 
 /** A scene as a printed screenplay shows it. */

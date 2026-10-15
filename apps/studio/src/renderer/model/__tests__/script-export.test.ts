@@ -122,6 +122,27 @@ describe('beats', () => {
   });
 });
 
+describe('subtitles in the screenplay', () => {
+  it('a note under each speech in Fountain, a small line on the page; off unless asked for', () => {
+    const { p, scene } = setup();
+    const mara = recordingScript(p).scenes[0]!.items.flatMap((i) => (i.kind === 'line' ? [i] : []))[1]!;
+    const note = `[[Subtitle · ${mara.subtitleSeconds}s: ${mara.subtitle}]]`;
+    expect(sceneFountain(p, scene)).not.toContain('[[Subtitle');
+    const fountain = sceneFountain(p, scene, { subtitles: true });
+    // Right under the words it subtitles, inside the speech.
+    expect(fountain).toContain(`${mara.text}\n${note}`);
+    expect(fountain.match(/\[\[Subtitle/g)).toHaveLength(3);
+    expect(scriptHtml(p).includes('class="subtitle"')).toBe(false);
+    expect(scriptHtml(p, { subtitles: true })).toContain(`<div class="subtitle">Subtitle · ${mara.subtitleSeconds}s: ${mara.subtitle}</div>`);
+  });
+
+  it('a subtitle can’t close its Fountain note early', () => {
+    const { p, scene } = setup();
+    const odd = { ...p, lines: p.lines.map((l) => (l.kind === 'dialogue' && l.text === 'You came.' ? { ...l, text: 'You came]] back.' } : l)) };
+    expect(sceneFountain(odd, scene, { subtitles: true })).toMatch(/\[\[Subtitle · [\d.]+s: Jonah: You came\] \] back\.\]\]/);
+  });
+});
+
 describe('the recording script', () => {
   it('numbers every line in order, with its file name, cue and direction', () => {
     const { p } = setup();
