@@ -543,7 +543,10 @@ its cost in `nav.costs` (one number per node, sent only when any isn't 1).
 A step counts its length times the mean cost of its two nodes, and a way is
 pulled straight only over ground no dearer than its two ends, so people go
 round slow ground when that is shorter and never cut a corner across it.
-Every runtime (`cost_of`, `CostOf`) does the same, and the engine checks
+Nav links are already links in the graph (from the
+ground at a link's back end to its front, and back for one set both ways),
+so every runtime follows them as it follows the rest. Every runtime
+(`cost_of`, `CostOf`) does the same with costs, and the engine checks
 walk the yard with a strip of mud instead of the wall: round it at 10 a
 metre, straight over it at 2, the same ways as the studio. The engine checks walk
 a small yard with a wall in it: round through the gap, never through, and

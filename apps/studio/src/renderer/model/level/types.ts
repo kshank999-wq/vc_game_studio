@@ -51,6 +51,8 @@ export type AssetRole =
   | 'trigger' | 'gate' | 'prerequisite' | 'interaction' | 'puzzle' | 'hazard' | 'damage' | 'darkness' | 'water'
   /** Navmesh authoring (spec §19): ground people won't walk on, or walk on at a cost. */
   | 'navArea'
+  /** Navmesh authoring (spec §19): a way across a gap or down a drop the graph can't see, both ways or forward only. */
+  | 'navLink'
   | 'camera' | 'cinematic' | 'audio' | 'ambient' | 'dialogue'
   | 'spawn'
   | 'waypoint' | 'patrolPath' | 'traversal' | 'portal' | 'destination'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aiStep, defaultAI, startMemory, type AIMemory, type AIWorld } from '../character/ai';
-import { findPath, navGraph, nextOnWay, type NavGraph, type Way } from '../level/nav';
+import { findPath, navGraph, nextOnWay, pathBetween, type NavGraph, type Way } from '../level/nav';
 import { startLevelPlay, tick, waysOf } from '../level/play';
 import { levelIssues } from '../level/validate';
 import { addLevel, levelsOf, placeAsset, placeAt, resizeItem, setParam } from '../level/level';
@@ -252,5 +252,54 @@ describe('the engines’ yard, in the studio', () => {
     expect(plain(findPath(yardGraph(), ...ends))).toEqual([[1.5, 4.5], [3.5, 4.5], [4.5, 0.5]]);
     expect(plain(findPath(yardGraph(10), ...ends))).toEqual([[1.5, 4.5], [3.5, 4.5], [4.5, 0.5]]);
     expect(plain(findPath(yardGraph(2), ...ends))).toEqual([[2.5, 0.5], [4.5, 0.5]]);
+  });
+});
+
+describe('nav links and the Path tool', () => {
+  /** Two 6 × 6 m floors 4 m apart, with nothing between: the graph sees no way across. */
+  const islands = () => {
+    const { project, levelId, floorId } = start();
+    const west = place(project, levelId, floorId, 'arch.floor', { x: -5, y: 0 });
+    let p = resizeItem(west.project, west.id, { w: 6, d: 6, h: 0.2 });
+    const east = place(p, levelId, floorId, 'arch.floor', { x: 5, y: 0 });
+    p = resizeItem(east.project, east.id, { w: 6, d: 6, h: 0.2 });
+    return { p, levelId, floorId };
+  };
+  /** A nav link across the gap, from west (its back) to east (its front): turned to face east. */
+  const bridge = (p: Project, levelId: string, floorId: string, way: 'forward only' | 'both ways') => {
+    const l = place(p, levelId, floorId, 'logic.navLink', { x: 0, y: 0 });
+    const q = placeAt(resizeItem(l.project, l.id, { w: 1, d: 5, h: 1 }), l.id, { rotation: 90 });
+    return setParam(q, l.id, 'way', way);
+  };
+  const west = { x: -5, y: 0, z: 0.2 };
+  const east = { x: 5, y: 0, z: 0.2 };
+
+  it('a forward-only link takes people across one way, not back', () => {
+    const { p, levelId, floorId } = islands();
+    expect(findPath(navGraph(levelsOf(p), levelId)!, west, east)).toBeNull();
+    const q = bridge(p, levelId, floorId, 'forward only');
+    const g = navGraph(levelsOf(q), levelId)!;
+    const across = findPath(g, west, east)!;
+    expect(across).not.toBeNull();
+    expect(across[across.length - 1]).toMatchObject({ x: 5, y: 0 });
+    expect(findPath(g, east, west)).toBeNull();
+  });
+
+  it('a both-ways link takes them back too', () => {
+    const { p, levelId, floorId } = islands();
+    const g = navGraph(levelsOf(bridge(p, levelId, floorId, 'both ways')), levelId)!;
+    expect(findPath(g, east, west)).not.toBeNull();
+  });
+
+  it('the Path tool: the way from a point, how far it is, or no way', () => {
+    const { project, levelId, floorId } = yard();
+    const p = wall(project, levelId, floorId, -8, 4);
+    const way = pathBetween(levelsOf(p), levelId, 0.2, { x: -5, y: 0 }, { x: 5, y: 0 })!;
+    expect(way.none).toBe(false);
+    expect(way.points[0]).toMatchObject({ x: -5, y: 0 });
+    expect(way.length).toBeGreaterThan(10.5);
+    const shut = wall(project, levelId, floorId, -8, 8);
+    expect(pathBetween(levelsOf(shut), levelId, 0.2, { x: -5, y: 0 }, { x: 5, y: 0 })).toMatchObject({ none: true });
+    expect(pathBetween(levelsOf(start().project), start().levelId, 0, { x: 0, y: 0 }, { x: 1, y: 1 })).toBeNull();
   });
 });

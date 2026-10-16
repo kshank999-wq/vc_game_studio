@@ -15,6 +15,7 @@ import type { Project } from '../../model/types';
 import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
 import type { View } from '../../view';
 import { formatLength } from './units';
+import { pathBetween } from '../../model/level/nav';
 
 /** Pixels per metre at zoom 1. */
 export const PX = 24;
@@ -29,7 +30,7 @@ export interface MapApi {
 }
 
 /** Select and move; drag out a rectangle; click the corners of a freeform outline; or draw a route between places. */
-export type MapTool = 'select' | 'draw' | 'outline' | 'route' | 'hallway';
+export type MapTool = 'select' | 'draw' | 'outline' | 'route' | 'hallway' | 'path';
 
 interface Props {
   project: Project;
@@ -190,6 +191,11 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   const [draftCorners, setDraftCorners] = useState<Point[]>([]);
   // The route being drawn (spec V2 §5): its points, and the items its ends are on.
   const [draftRoute, setDraftRoute] = useState<{ points: Point[]; from?: string } | null>(null);
+  // The Path tool (navmesh, spec §19): two points, and the way people would walk between them.
+  const [pathEnds, setPathEnds] = useState<Point[]>([]);
+  useEffect(() => {
+    if (props.tool !== 'path') setPathEnds([]);
+  }, [props.tool]);
   // The hallway being drawn: its points, squared up along the axes.
   const [draftHall, setDraftHall] = useState<Point[] | null>(null);
   // Edges snapped to while dragging (rooms, hallways and buildings pull flush), drawn as guides.
@@ -434,6 +440,12 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
     }
     if (e.button === 0 && props.tool === 'hallway') {
       addHallPoint(snapPoint(at));
+      return;
+    }
+    if (e.button === 0 && props.tool === 'path') {
+      // Once a click, whether it lands on an item or the ground.
+      e.stopPropagation();
+      setPathEnds((ends) => (ends.length === 1 ? [ends[0]!, at] : [at]));
       return;
     }
     if (e.button === 0 && e.shiftKey) {
@@ -1089,6 +1101,28 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
                     ))}
                     <text x={tip.x + px(10)} y={tip.y - px(10)} fontSize={px(11)} fill="var(--gold-hi)">
                       {formatLength(len, units)} · {formatLength(w, units)} wide
+                    </text>
+                  </>
+                );
+              })()}
+            </g>
+          )}
+          {pathEnds.length > 0 && (
+            <g pointerEvents="none" className="lvl-path-test">
+              {(() => {
+                const floor = level?.floors.find((f) => f.id === floorId);
+                const way = pathEnds.length === 2 ? pathBetween(set, levelId, floor?.elevation ?? 0, pathEnds[0]!, pathEnds[1]!, global) : null;
+                const end = pathEnds[pathEnds.length - 1]!;
+                const words = pathEnds.length < 2 ? 'Click where they go' : !way ? 'Nothing to walk on here' : way.none ? 'No way there' : formatLength(way.length, units);
+                return (
+                  <>
+                    {way && !way.none && <polyline points={pointsAttr(way.points)} fill="none" stroke="#35d0ff" strokeWidth={px(3)} strokeLinejoin="round" strokeLinecap="round" />}
+                    {pathEnds.length === 2 && (!way || way.none) && <line x1={pathEnds[0]!.x} y1={pathEnds[0]!.y} x2={end.x} y2={end.y} stroke="#c8524a" strokeWidth={px(2)} strokeDasharray={`${px(6)} ${px(5)}`} />}
+                    {pathEnds.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r={px(6)} fill={i === 0 ? 'none' : '#35d0ff'} stroke="#35d0ff" strokeWidth={px(2)} />
+                    ))}
+                    <text x={end.x + px(10)} y={end.y - px(10)} fontSize={px(12)} fill={way?.none || (pathEnds.length === 2 && !way) ? '#e07a70' : '#35d0ff'}>
+                      {words}
                     </text>
                   </>
                 );

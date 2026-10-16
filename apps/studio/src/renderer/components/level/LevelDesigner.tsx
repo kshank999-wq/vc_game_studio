@@ -725,6 +725,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
       else if (!mod && key === 'd') setTool((t) => (t === 'draw' ? 'select' : 'draw'));
       else if (!mod && key === 'o') outlineTool();
       else if (!mod && key === 't') setTool((t) => (t === 'route' ? 'select' : 'route'));
+      else if (!mod && key === 'w') setTool((t) => (t === 'path' ? 'select' : 'path'));
       else if (!mod && key === 'l') {
         if (libPinned || libOpen) {
           pinLib(false);
@@ -1167,6 +1168,9 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
               </button>
               <button className={tool === 'outline' ? 'on' : ''} aria-pressed={tool === 'outline'} onClick={outlineTool} title="Click the corners of a space or volume of any shape; click the first corner, double-click or press Enter to close it (O)">
                 Outline
+              </button>
+              <button className={tool === 'path' ? 'on' : ''} aria-pressed={tool === 'path'} onClick={() => setTool((t) => (t === 'path' ? 'select' : 'path'))} title="Test the way people walk: click where they start, then where they go, and see the way they'd take round walls and nav areas, and how far it is (W)">
+                Path
               </button>
               <button className={tool === 'hallway' ? 'on' : ''} aria-pressed={tool === 'hallway'} onClick={() => (tool === 'hallway' ? setTool('select') : setAskHall(true))} title="Draw a hallway: give its width, then click along where it runs; Enter or a double-click finishes it. Then fill the floor with rooms round it (H)">
                 Hallway

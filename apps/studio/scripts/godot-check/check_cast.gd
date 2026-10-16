@@ -99,9 +99,10 @@ func _process(_delta: float) -> bool:
 	else:
 		var first: VCGSActor = people[0]
 		var at: Array = market["members"][0]["position"]
-		# Where the studio put it (it may have taken a step since).
-		if first.position.distance_to(Vector3(at[0], at[1], at[2])) > 0.25:
-			fail("the first villager should stand where the studio put it, got %s for %s" % [str(first.position), str(at)])
+		# Where the studio put it: its home, where it stood when it was spawned (a wanderer may have walked off since, as far as the frames allow).
+		var home: Array = first.behavior.patrol[0] if first.behavior and not first.behavior.patrol.is_empty() else [first.position.x, first.position.z]
+		if Vector2(float(home[0]), float(home[1])).distance_to(Vector2(at[0], at[2])) > 0.01:
+			fail("the first villager should stand where the studio put it, got %s for %s" % [str(home), str(at)])
 		if first.inventory == null or first.behavior == null or first.abilities == null or first.dialogue == null or first.equipment == null or first.perception == null:
 			fail("a spawned character should have all its components")
 		if first.get_node_or_null("Placeholder") == null:

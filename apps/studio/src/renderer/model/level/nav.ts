@@ -1,5 +1,5 @@
 import { BODY, collidersFrom, CROUCH, type Collider } from './controller';
-import { assetOf, boundsOf, contains, corners, frameOf, meshesFor, num, paramOf } from './geometry';
+import { assetOf, boundsOf, contains, corners, frameOf, meshesFor, num, paramOf, toLocal } from './geometry';
 import type { AssetDefinition, LevelItem, LevelSet } from './types';
 
 /**
@@ -209,6 +209,27 @@ const build = (set: LevelSet, levelId: string, global?: readonly AssetDefinition
     const base = (elevation.get(i.floorId) ?? 0) + f.z;
     const group = nodes.map((n, idx) => ({ n, idx })).filter(({ n }) => near(f, n) && n.z >= base - 0.5 && n.z <= base + f.h + 0.5).map(({ idx }) => idx);
     for (const a of group) for (const c of group) if (a !== c) linked[a]!.add(c);
+  }
+  // Nav links (navmesh authoring) join the ground at their back end to the ground at their front: forward only, or both ways.
+  for (const i of items.filter((x) => role(x) === 'navLink')) {
+    const f = frameOf(set, i, global);
+    const base = (elevation.get(i.floorId) ?? 0) + f.z;
+    const end = (side: 1 | -1) =>
+      nodes.flatMap((n, idx) => {
+        if (n.z < base - 0.5 || n.z > base + f.h + 0.5) return [];
+        // Its front is the way it faces (north, -y, unturned).
+        const l = toLocal(f, n);
+        return Math.abs(l.x) <= f.w / 2 + cell && Math.abs(l.y - (side * f.d) / 2) <= cell * 1.25 ? [idx] : [];
+      });
+    const back = end(1);
+    const front = end(-1);
+    const both = String(paramOf(set, i, 'way', global) ?? 'forward only') === 'both ways';
+    for (const a of back)
+      for (const c of front) {
+        if (a === c) continue;
+        linked[a]!.add(c);
+        if (both) linked[c]!.add(a);
+      }
   }
   const links = linked.map((l) => [...l]);
   const out: Built = { graph: { cell, minX: b.minX, minY: b.minY, cols, rows, nodes, links, at }, items, role, elevation };
@@ -478,6 +499,23 @@ export const nextOnWay = (g: NavGraph, way: Way | undefined, from: { x: number; 
   if (route !== w.route) w = { ...w, route };
   // The last point of the way is where it was planned to; the target itself is near it.
   return { way: w, next: route.length > 1 ? route[0]! : to };
+};
+
+/**
+ * The way people would walk from one point to another on a floor at a
+ * height (the map's Path tool): its points from a, and its length; none when
+ * there is no way; null when the level has nothing to walk on.
+ */
+export const pathBetween = (set: LevelSet, levelId: string, z: number, a: { x: number; y: number }, b: { x: number; y: number }, global?: readonly AssetDefinition[]): { points: { x: number; y: number; z: number }[]; length: number; none: boolean } | null => {
+  const g = navGraph(set, levelId, global);
+  if (!g) return null;
+  const from = { ...a, z };
+  const path = findPath(g, from, { ...b, z });
+  if (!path) return { points: [from], length: 0, none: true };
+  const points = [from, ...path];
+  let length = 0;
+  for (let i = 1; i < points.length; i++) length += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y, points[i]!.z - points[i - 1]!.z);
+  return { points, length, none: false };
 };
 
 const cache = new WeakMap<LevelSet, Map<string, NavResult>>();
