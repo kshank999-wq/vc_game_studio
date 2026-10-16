@@ -7,6 +7,7 @@ import { walkStructure } from './walkthrough';
 import { migrationFor } from './migrate';
 import { navGraph, navigate, nearestNode, reachableFrom } from './nav';
 import { countLabel, METRICS, overBudget, PLATFORMS } from './budget';
+import { networkIssues } from './network';
 import { streamingIssues } from './streaming';
 import { BODY, CROUCH } from './controller';
 import { engineSafe, exportNameOf, levelExportName } from './naming';
@@ -222,6 +223,7 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
 
   // The streaming plan (spec §19): what may not be loaded when the story needs it, and loaded cells over budget.
   for (const level of set.levels) for (const i of streamingIssues(project, level.id, global)) add({ ...i, levelId: level.id, severity: 'warning' });
+  for (const level of set.levels) for (const i of networkIssues(project, level.id, global)) add({ ...i, levelId: level.id, severity: 'warning' });
 
   // Placed from an earlier version of a library asset: shown, never silently changed (spec §4.3).
   for (const item of set.items) {

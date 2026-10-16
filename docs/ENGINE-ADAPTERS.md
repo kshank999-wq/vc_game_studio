@@ -668,6 +668,16 @@ additive scenes or Addressables groups a cell, Godot's scenes a cell loaded
 with `ResourceLoader.load_threaded_request`. The studio plans the partition;
 the engine team builds it.
 
+A level planned for multiplayer (spec §19) carries `network`: `players` at
+most at once, `teams` (empty for none), `spawns` (the player starts by guid,
+each with its team or null), and the item guids that are `shared` (server
+state every player sees), `per_player` (each player's own) and `server`
+(server only); every other item is local. Every adapter writes
+`NETWORKING.md` (`network-doc.ts`) with the starts by team and how to build
+each kind there: Unreal's `bReplicates` and Player Start tags, Unity's
+`NetworkObject`s and `NetworkVariable`s, Godot's `MultiplayerSpawner` and
+`MultiplayerSynchronizer` with the server as authority.
+
 ## Saved games
 
 Every runtime saves and loads the game in one format, so a save from one

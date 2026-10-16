@@ -52,6 +52,7 @@ import { formatLength } from './units';
 import { ReferencesSection } from './ReferencesSection';
 import { BudgetSection } from './BudgetSection';
 import { AlwaysLoadedField, StreamingSection } from './StreamingSection';
+import { MultiplayerSection, NetworkFields } from './MultiplayerSection';
 import { PlaceInRoom } from './PlaceInRoom';
 import { StructureSceneSection, StructureSection } from './StructureSection';
 import { floorCodes } from '../../model/level/structure';
@@ -211,6 +212,7 @@ export const LevelInspector = (props: Props) => {
         <MapSection project={project} levelId={level.id} global={global} open={!closed.has('map')} onToggle={() => toggle('map')} onCommit={onCommit} onOpenMap={props.onOpenMap} />
         <BudgetSection project={project} levelId={level.id} floorId={floorId} global={global} open={!closed.has('budget')} onToggle={() => toggle('budget')} onCommit={onCommit} />
         <StreamingSection project={project} levelId={level.id} global={global} open={!closed.has('streaming')} onToggle={() => toggle('streaming')} onCommit={onCommit} />
+        <MultiplayerSection project={project} levelId={level.id} global={global} open={!closed.has('multiplayer')} onToggle={() => toggle('multiplayer')} onCommit={onCommit} />
         <StructureSection project={project} levelId={level.id} open={!closed.has('structure')} onToggle={() => toggle('structure')} onCommit={onCommit} onFloor={props.onFloor} />
         <StructureSceneSection project={project} levelId={level.id} global={global} open={!closed.has('structureScene')} onToggle={() => toggle('structureScene')} onCommit={onCommit} />
         <ReferencesSection project={project} levelId={level.id} floorId={floorId} global={global} open={!closed.has('references')} onToggle={() => toggle('references')} onCommit={onCommit} onSay={props.onSay} />
@@ -403,6 +405,7 @@ export const LevelInspector = (props: Props) => {
             )}
             <div className="lvl-kv"><span>GUID</span><span className="mono lvl-guid" title="Never changes: references and the engine manifest use it">{item.id}</span></div>
             <AlwaysLoadedField project={project} levelId={item.levelId} itemId={item.id} onCommit={onCommit} />
+            <NetworkFields project={project} itemId={item.id} global={global} onCommit={onCommit} />
             {def.kind === 'space' && (
               <div className="lvl-btnrow wrap">
                 {props.focusRoom === item.id ? (

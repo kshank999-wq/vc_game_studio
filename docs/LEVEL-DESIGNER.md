@@ -250,6 +250,28 @@ The preflight warns where the plan and the level disagree:
 
 The engine handoff carries the plan (`levels[].streaming`: the cells, what is in each and its costs, what stays loaded, the worst) and a `STREAMING.md` saying how to build it: Unreal's World Partition grid, Unity's additive scenes or Addressables, Godot's scenes a cell. The studio plans the partition; the engine team builds it.
 
+## Multiplayer (spec §19)
+
+Tick **Plan for multiplayer** in a map's **Multiplayer** properties (with nothing selected) to plan it for several players at once: how many (**Players**, 4 to start) and, if they play in teams, the **Teams** (comma separated: *Red, Blue*). Give each player start its **Team** in its properties. The studio still plays one player; this is the plan the engine team builds the networking from.
+
+Every item says what the network does with it (**Network** in its properties):
+
+| Network | What it means | Default for |
+|---|---|---|
+| Shared | The server holds its state; every player sees the same. | Doors, elevators, pickups, containers, gates, puzzles, interactions, hazards, people and crowds, and anything a rule opens, enables or spawns, or that is only active when something is so |
+| Each player's own | Every player has their own copy and state (a collectible each finds for themselves). | Nothing: pick it |
+| Server only | Game logic on the server; players never see it. | Player starts, triggers, prerequisites, spawners, objectives, checkpoints, damage |
+| Local | Built on every machine and never changes, so nothing to send. | Everything else: rooms, structure, props, lights, sound, cameras |
+
+The preflight warns where the plan and the level disagree:
+
+- too few player starts for the players (*Team Red has 1 player start for up to 2 players.*), a start in no team or in a team the map doesn't have;
+- two starts closer than 1.5 m on one floor, where two players coming in at once land inside each other;
+- a rule changing something set to Local (*Lantern is Local, but Rusted Lever enables it: only the player who set it off would see that.*);
+- something players have to see (a wall, a door, a room, a light) set to Server only.
+
+The engine handoff carries the plan (`levels[].network`: players, teams, starts and their teams, and the items that are shared, each player's own and server only) and a `NETWORKING.md` saying how to build it: Unreal's replicated actors and Player Start tags, Unity's Netcode for GameObjects, Godot's multiplayer spawner and synchronizer.
+
 ## Bringing changes back from the engine (spec §19)
 
 Once a level is in the engine, the engine team moves things, renames them, deletes some and adds their own. To keep the studio's outline true, they run the exporter the handoff gave them:
@@ -485,7 +507,7 @@ clockwise seen from above.
 | §11 Engine handoff | Done: Godot, Unity, Unreal and JSON (see *Sending a level to an engine*). Checked in Godot 4.3, and against Unity and Unreal stand-ins (C#, C++ with g++ and clang, and the Python builder). |
 | §12 Preflight | Done, including what can't be reached from the player start, doorways lower than the player, items from older library versions, engine-specific checks (roles an engine gets as data only, wedges in Unreal, locked art with no final asset) and files changed in the engine since the last export. |
 | §14 Undo, persistence | Done: every edit is one undo step, GUIDs survive save, load, duplicate (which gives new ones), rename and re-export, and the data is plain JSON in the project file. |
-| §19 Future | Navmesh pathing and authoring (see *Finding the way* and *Nav areas*) and performance budgets (see *Performance budgets*) done, in Play Mode and every engine. Bringing safe engine-side changes back done (see *Bringing changes back from the engine*). Streaming and world-partition planning done (see *Streaming and world partition*). Terrain sculpting and foliage are out of scope: the engine team builds the biomes and terrain in the engine, from the maps' terrain and biome planning shapes. The rest not started, as the spec says. |
+| §19 Future | Navmesh pathing and authoring (see *Finding the way* and *Nav areas*) and performance budgets (see *Performance budgets*) done, in Play Mode and every engine. Bringing safe engine-side changes back done (see *Bringing changes back from the engine*). Streaming and world-partition planning done (see *Streaming and world partition*). Multiplayer spawn and replication planning done (see *Multiplayer*). Terrain sculpting and foliage are out of scope: the engine team builds the biomes and terrain in the engine, from the maps' terrain and biome planning shapes. Rule-based generation and shared libraries came with the structure generator, themes and prefabs (spec V2). |
 
 Against spec V2:
 

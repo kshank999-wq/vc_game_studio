@@ -1,5 +1,6 @@
 import { budgetsMarkdown } from './budgets';
 import { streamingMarkdown } from './streaming-doc';
+import { networkMarkdown } from './network-doc';
 import { tasksMarkdown } from './notes';
 import { castFiles } from './cast-files';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
@@ -152,6 +153,10 @@ export const storySchema = () => ({
               },
               ['cell', 'load_range', 'origin', 'cols', 'rows', 'cells', 'always', 'worst'],
             ),
+          },
+          network: {
+            description: 'Its multiplayer plan (spec §19), when it has one: at most `players` at once, in `teams` (empty: no teams); `spawns` are the player starts by guid with their team (null when there are no teams or none was picked); item guids by what the network does with them: `shared` (the server holds the state, every player sees the same), `per_player` (each player has their own copy and state), `server` (on the server only, never seen). Every item not listed is local: built on every machine and never changed, so nothing is sent.',
+            ...obj({ players: num, teams: strings, spawns: { type: 'array', items: obj({ guid: str, team: { anyOf: [{ type: 'null' }, str] } }, ['guid', 'team']) }, shared: strings, per_player: strings, server: strings }, ['players', 'teams', 'spawns', 'shared', 'per_player', 'server']),
           },
           revision: str,
         },
@@ -634,6 +639,8 @@ const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
   if (budgets) files.push({ path: `${root}/BUDGETS.md`, content: budgets, kind: 'generated' });
   const streaming = streamingMarkdown(ir, 'json', (l) => `\`${l.key}\``);
   if (streaming) files.push({ path: `${root}/STREAMING.md`, content: streaming, kind: 'generated' });
+  const networking = networkMarkdown(ir, 'json', (l) => `\`${l.key}\``);
+  if (networking) files.push({ path: `${root}/NETWORKING.md`, content: networking, kind: 'generated' });
   const storyPath = `${root}/story.json`;
   const elements: ElementOutput[] = [];
   const row = (e: Omit<ElementOutput, 'fingerprint' | 'files'>, data: unknown) =>

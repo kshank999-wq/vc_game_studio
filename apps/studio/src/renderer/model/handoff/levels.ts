@@ -3,6 +3,7 @@ import { BODY } from '../level/controller';
 import { navGraph } from '../level/nav';
 import { limitsOf, METRICS, tallyOf, type Limits, type Metric } from '../level/budget';
 import { streamLayout } from '../level/streaming';
+import { networkLayout } from '../level/network';
 import type { Effect, Rule } from '../rules';
 import type { Project } from '../types';
 import { assetOf, contains, frameOf, meshesFor, paramOf } from '../level/geometry';
@@ -206,6 +207,17 @@ export interface IrStreaming {
   worst: { metric: Metric; count: number; around: string }[];
 }
 
+export interface IrNetwork {
+  players: number;
+  teams: string[];
+  /** Player starts by guid, with their team (null with no teams, or none picked). */
+  spawns: { guid: string; team: string | null }[];
+  /** Item guids by what the network does with them; the rest are local. */
+  shared: string[];
+  per_player: string[];
+  server: string[];
+}
+
 export interface IrLevel {
   guid: string;
   key: string;
@@ -228,6 +240,8 @@ export interface IrLevel {
   budget?: { platform: string; limits: Limits; counts: Limits; over: Metric[] };
   /** Its streaming plan (spec §19 world partition), when it has one: cells of `cell` metres from `origin` [x, z] (the north-west corner), what is in each, what stays loaded, and the worst loaded at once. */
   streaming?: IrStreaming;
+  /** Its multiplayer plan (spec §19), when it has one: players, teams, where each team comes in, and what the network does with the items (anything not listed is local). */
+  network?: IrNetwork;
   revision: string;
 }
 
@@ -314,6 +328,12 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
     const limits = limitsOf(level.budget);
     const counts = tallyOf(project, level.id).counts;
     return { budget: { platform: level.budget.platform, limits, counts, over: METRICS.filter((m) => counts[m.id] > limits[m.id]).map((m) => m.id) } };
+  };
+  const networkOf = (levelId: string): Pick<IrLevel, 'network'> => {
+    const n = networkLayout(project, levelId);
+    if (!n) return {};
+    const by = (r: string) => n.items.filter((i) => i.replicate === r).map((i) => i.id);
+    return { network: { players: n.plan.players, teams: n.plan.teams ?? [], spawns: n.spawns.map((s) => ({ guid: s.id, team: s.team })), shared: by('shared'), per_player: by('perPlayer'), server: by('server') } };
   };
   const streamingOf = (levelId: string): Pick<IrLevel, 'streaming'> => {
     const l = streamLayout(project, levelId);
@@ -488,6 +508,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
       ...navOf(level.id),
       ...budgetOf(level),
       ...streamingOf(level.id),
+      ...networkOf(level.id),
     };
     return { ...out, revision: fingerprint(JSON.stringify(out)) };
   });

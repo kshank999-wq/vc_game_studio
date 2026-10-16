@@ -317,6 +317,8 @@ export interface LevelItem {
    */
   generated?: string;
   notes?: string;
+  /** On a map planned for multiplayer (spec §19): what the network does with it, and a player start's team. */
+  net?: import('./network').ItemNet;
 }
 
 /** What an item is to a puzzle (spec V2 §14). */
@@ -476,6 +478,8 @@ export interface Level {
   budget?: import('./budget').LevelBudget;
   /** How it streams in (spec §19 world-partition planning): its cell grid, load range and what stays loaded. */
   streaming?: import('./streaming').StreamingPlan;
+  /** Who plays it at once (spec §19 multiplayer planning): players, teams. None set, single player. */
+  network?: import('./network').NetworkPlan;
 }
 
 /** How the generator lays a floor out (structure spec §6 rule presets). */
