@@ -8,6 +8,7 @@ import type { EngineAdapter, ElementOutput, EngineOutput, GenerateOptions, Gener
 import { fingerprint } from './engines';
 import { DESIGN_LISTS, type HandoffIR, type IrEvent, type IrThing } from './ir';
 import { levelRuntime, levelScript, levelTscn, playTscn } from './godot-levels';
+import { exportChangesScript } from './godot-changes';
 import { sceneRuntime, sceneTscn, storyNodes, storyTscn } from './godot-scenes';
 import { markupInline } from '../inline';
 
@@ -1921,6 +1922,8 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
     const play = add(`levels/play_${level.key}.tscn`, playTscn(level, root));
     row({ id: level.guid, label: level.name, symbol: 'environment', group: 'World', generates: `Level scene · ${level.items.length} items (${level.export_name})`, files: [scene, script, play] }, level);
   }
+  // Bring back changes (spec §19): the engine team runs it, the studio reads what it writes.
+  if (ir.levels.length) add('export_changes.gd', exportChangesScript(root));
 
   const readme = add(
     'README.md',

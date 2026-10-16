@@ -27,6 +27,8 @@ mkdir -p "$gen/vo"
 cp "$here/../src/renderer/assets/sample-takes/"*.mp3 "$gen/vo/"
 "${GODOT:?Set GODOT to a Godot 4 binary}" --headless --path "$work" --import > /dev/null 2>&1 || true
 "$GODOT" --headless --path "$work" -s check.gd
+# Bring back changes (spec §19): the studio reads what Godot's VCGSChanges wrote, and finds the four changes made there.
+(cd "$here/.." && npx vite-node scripts/read-changes.ts "$work/vcgs-changes.json" "$work/project.json")
 # The puzzle runtime (puzzle spec §6–§10): the sample with the built-in puzzle templates.
 puzzles="$(mktemp -d)"
 trap 'rm -rf "$work" "$puzzles"' EXIT

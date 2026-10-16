@@ -1,5 +1,6 @@
 import type { IrNote } from './ir';
 import { navRuntime } from './godot-nav';
+import { changesRuntime } from './godot-changes';
 import { todoLines } from './notes';
 import type { GeneratedFile } from './engines';
 import { slabFaces, slabPrisms, type IrLevel, type IrLevelItem, type IrPiece } from './levels';
@@ -52,6 +53,7 @@ const nodeName = (name: string) => name.replace(/[.:@/"%]/g, '_') || 'Item';
 
 export const levelRuntime = (): GeneratedFile[] => [
   navRuntime(RUNTIME),
+  changesRuntime(RUNTIME),
   {
     path: `${RUNTIME}/level.gd`,
     kind: 'runtime',

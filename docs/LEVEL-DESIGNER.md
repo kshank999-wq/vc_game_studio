@@ -236,6 +236,25 @@ It counts, from what is placed, and shows as a bar against each limit (amber pas
 
 These are the studio's estimates, made to say early, while it is still cheap to move things, that a level is heading over: a graybox's triangles are a floor, not the final art. Over budget is a preflight warning naming what costs most (*Sunken Vault is over its Mobile budget for lights: 3 of 1. Most of it: Lantern (1), Camp embers (1), Seam glow (1).*). The engine handoff carries the budget and the counts (`levels[].budget`) and a `BUDGETS.md` for the engine and art teams to profile the real level against.
 
+## Bringing changes back from the engine (spec §19)
+
+Once a level is in the engine, the engine team moves things, renames them, deletes some and adds their own. To keep the studio's outline true, they run the exporter the handoff gave them:
+
+| Engine | Exporter | Writes |
+|---|---|---|
+| Godot | Open `vcgs/generated/export_changes.gd` in the Script editor, **File ▸ Run** | `vcgs-changes.json` beside it |
+| Unity | **VCGS ▸ Export changes for the studio** | `vcgs-changes.json` (see the generated README) |
+| Unreal | Run `export_changes.py` in the editor's Python | `vcgs-changes.json` (see the generated README) |
+
+In the studio, **Engine Handoff ▸ Bring back changes from …** and pick the file. Each studio item is found by its GUID, so names and places can change freely; the list shows what differs:
+
+- **moved**: somewhere else, or turned. Taken, it is placed where the engine has it.
+- **renamed**: called something else there. Taken, its export name becomes the engine's.
+- **deleted**: not in the engine any more. Taken, it goes from the level.
+- **added**: something under the level with no GUID. Taken, it comes in as a waypoint named as in the engine, to give a role to.
+
+Untick what to leave as it is; the rest comes in as one step you can undo. Only what the studio owns comes back: where things are, what they're called and whether they're there. Code, art and engine settings stay the engine team's. A door or window stays in its wall (moving it there is the wall's business), and things keep the names the engine knows them by even when a move puts them in another room. The next handoff sends the levels as they now are.
+
 ## Play Mode (spec §9)
 
 Press **▶ Play** in the toolbar, or **F5** (Shift+F5 plays from the
@@ -452,7 +471,7 @@ clockwise seen from above.
 | §11 Engine handoff | Done: Godot, Unity, Unreal and JSON (see *Sending a level to an engine*). Checked in Godot 4.3, and against Unity and Unreal stand-ins (C#, C++ with g++ and clang, and the Python builder). |
 | §12 Preflight | Done, including what can't be reached from the player start, doorways lower than the player, items from older library versions, engine-specific checks (roles an engine gets as data only, wedges in Unreal, locked art with no final asset) and files changed in the engine since the last export. |
 | §14 Undo, persistence | Done: every edit is one undo step, GUIDs survive save, load, duplicate (which gives new ones), rename and re-export, and the data is plain JSON in the project file. |
-| §19 Future | Navmesh pathing and authoring (see *Finding the way* and *Nav areas*) and performance budgets (see *Performance budgets*) done, in Play Mode and every engine. Terrain sculpting and foliage are out of scope: the engine team builds the biomes and terrain in the engine, from the maps' terrain and biome planning shapes. The rest not started, as the spec says. |
+| §19 Future | Navmesh pathing and authoring (see *Finding the way* and *Nav areas*) and performance budgets (see *Performance budgets*) done, in Play Mode and every engine. Bringing safe engine-side changes back done (see *Bringing changes back from the engine*). Terrain sculpting and foliage are out of scope: the engine team builds the biomes and terrain in the engine, from the maps' terrain and biome planning shapes. The rest not started, as the spec says. |
 
 Against spec V2:
 

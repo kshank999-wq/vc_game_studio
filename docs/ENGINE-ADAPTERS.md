@@ -628,6 +628,18 @@ level's script, and for a comment on a file at the top of that file
 row fingerprints are made without the notes (`withoutNotes`), so a comment
 never marks the story as changed. See [COLLABORATION.md](COLLABORATION.md).
 
+Bringing changes back (spec §19 round-trip import): every engine's handoff
+has an exporter that writes `vcgs-changes.json` (`format: "vcgs-changes"`,
+`version: 1`): per level by its GUID, each studio item it finds by its GUID
+with the engine object's name, its position (metres, the IR's level space)
+and turn (degrees counter-clockwise from above), and `added`, the objects
+directly under the level with no GUID. Godot's is `VCGSChanges`
+(`addons/vcgs_runtime/changes.gd`) run by `vcgs/generated/export_changes.gd`.
+The studio reads it with `changes.ts` (`parseChanges`, `changesFrom`,
+`applyChanges`); the engine checks change the sample level there (Mara moved
+2 m and turned, the Vault Key renamed, the Camp embers deleted, a CameraHint
+added) and check that the studio finds exactly that (`scripts/read-changes.ts`).
+
 A level with a performance budget (spec §19) carries it as `budget`: the
 platform it is made for, its limits, the studio's counts from the graybox
 (triangles, draw calls, people, lights, shadow lights, nav cells) and which

@@ -13758,3 +13758,13 @@ button.bible-dual-col:hover {
 .lvl-budget.near .lvl-budget-bar > span { background: #e0a040; }
 .lvl-budget.over .lvl-budget-bar > span { background: #c8524a; }
 .lvl-budget.over .lvl-budget-head .mono { color: #e07a70; }
+
+/* Bring back changes from the engine (spec §19 round-trip import). */
+.bring-back { list-style: none; margin: 8px 0; padding: 0; max-height: 46vh; overflow: auto; }
+.bring-back li { padding: 4px 0; border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.08)); font-size: 13px; }
+.bring-back label { display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+.bring-kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); }
+.bring-kind.deleted { color: #e07a70; }
+.bring-kind.added { color: #6fae5e; }
+.bring-kind.moved { color: #35d0ff; }
+.bring-kind.renamed { color: #e0a040; }

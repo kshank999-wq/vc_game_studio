@@ -721,6 +721,7 @@ func check_level(game: Node) -> void:
 		level.step_patrol(shut, beat, 0.1, 0.0, _yard(false))
 	if shut["at"] != Vector3(0.5, 0, 0.5) or shut["moving"]:
 		fail("with no way to its stop a patrol should stand, got " + str(shut["at"]))
+	_round_trip()
 	var chamber: Node = level.get_node_or_null("RM_SunkenVault_VaultChamber_004")
 	if chamber == null or chamber.get_node("Collision").get_child_count() < 4 or chamber.get_node("Proxy").get_child_count() < 5:
 		fail("the vault chamber should have its floor and walls, as meshes and collision")
@@ -976,3 +977,41 @@ func _yard(gap: bool, mud: float = 0.0) -> VCGSNav:
 	if mud > 0.0:
 		data["costs"] = costs
 	return VCGSNav.from_data(data)
+
+## Bring back changes (spec §19): the engine team moves Mara, renames the Vault Key, deletes
+## the Camp embers and adds a node; VCGSChanges writes what the studio reads back.
+func _round_trip() -> void:
+	var packed: PackedScene = load("res://vcgs/generated/levels/sunken_vault.tscn")
+	var level: Node = packed.instantiate()
+	var by_name := {}
+	for child in level.get_children():
+		if child.has_meta("vcgs_guid"):
+			by_name[str(child.name).get_slice("_", 2)] = child
+	var mara := by_name.get("Mara") as Node3D
+	var key := by_name.get("VaultKey") as Node3D
+	var embers := by_name.get("CampEmbers") as Node3D
+	if mara == null or key == null or embers == null:
+		fail("the level should have Mara, the Vault Key and the Camp embers as nodes, got " + str(by_name.keys()))
+		return
+	mara.position += Vector3(2, 0, 0)
+	mara.rotation.y += PI / 2
+	key.name = "KeyOfTheVault"
+	level.remove_child(embers)
+	embers.free()
+	var hint := Node3D.new()
+	hint.name = "CameraHint"
+	hint.position = Vector3(1, 0, 2)
+	level.add_child(hint)
+	var one: Dictionary = VCGSChanges.collect_level(level)
+	if one["added"].size() != 1 or str(one["added"][0]["name"]) != "CameraHint":
+		fail("the added node should be listed as added, got " + str(one["added"]))
+	var out := { "format": "vcgs-changes", "version": 1, "engine": "godot", "levels": [one] }
+	var file := FileAccess.open("res://vcgs-changes.json", FileAccess.WRITE)
+	file.store_string(JSON.stringify(out, "  "))
+	file.close()
+	# And straight from the generated scenes on disk: every level, untouched.
+	var all: Dictionary = VCGSChanges.collect("res://vcgs/generated/levels")
+	print("round trip: ", one["items"].size(), " items, ", one["added"].size(), " added; ", all["levels"].size(), " levels on disk")
+	if all["levels"].size() < 1:
+		fail("VCGSChanges should read the generated level scenes")
+	level.free()

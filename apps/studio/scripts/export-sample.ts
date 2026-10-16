@@ -104,6 +104,9 @@ if (!dir) throw new Error('Usage: export-sample.ts <godot project folder>');
 const engine = (process.argv[3] ?? 'godot') as EngineId;
 const tomb = process.argv[4] === 'structure' ? withTomb(sunkenVault()) : null;
 const base = process.argv[4] === 'puzzles' ? withPuzzles(sunkenVault()) : process.argv[4] === 'rooms' ? withRooms(sunkenVault()) : process.argv[4] === 'cast' ? withCast(sunkenVault()) : tomb ? tomb.project : sunkenVault();
+// The project exactly as exported (its GUIDs are new each time the sample is made), for the round-trip check to read changes against.
+mkdirSync(dir!, { recursive: true });
+writeFileSync(join(dir!, 'project.json'), JSON.stringify(base));
 if (process.argv[4] === 'cast') {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'cast_expect.json'), JSON.stringify({ scenarios: scenarios(base) }, null, 2));

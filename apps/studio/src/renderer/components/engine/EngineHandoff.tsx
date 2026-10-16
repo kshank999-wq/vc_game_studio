@@ -14,6 +14,7 @@ import { canPickFolder, pickBrowserFolder, type FolderAccess } from '../../folde
 import { canExport, isPreview, licenseBridge, PURCHASE_URL } from '../../edition';
 import { useNav } from '../../nav';
 import { Symbol } from '../Symbol';
+import { BringBack } from './BringBack';
 
 interface Props {
   project: Project;
@@ -465,6 +466,15 @@ export const EngineHandoff = ({ project, onReplace, onNavigate, onSay, focus, on
           <button className="tb-btn handoff-file" disabled={!output || plan.blocking.length > 0 || sending} onClick={() => void saveFile()} title={`One file to bring in with ${engineName}’s own import`}>
             {adapter.id === 'unity' ? 'Save as a .unitypackage…' : 'Save as a .zip to import…'}
           </button>
+        )}
+        {adapter.id !== 'custom' && levelsOf(project).levels.length > 0 && (
+          <BringBack
+            project={project}
+            engineName={engineName}
+            exporter={adapter.id === 'godot' ? 'vcgs/export_changes.gd' : adapter.id === 'unity' ? 'VCGS ▸ Export changes for the studio' : 'export_changes.py'}
+            onCommit={onCommit ?? onReplace}
+            onSay={onSay}
+          />
         )}
         {saved && (
           <div className="handoff-saved" role="status">
