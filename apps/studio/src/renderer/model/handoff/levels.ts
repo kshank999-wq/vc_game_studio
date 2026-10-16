@@ -176,7 +176,9 @@ export interface IrTravel {
  * reach which. Node i is nodes[3i], nodes[3i + 1], nodes[3i + 2]: x, height, y
  * in the level's space, the middle of its cell. The runtimes walk it as the
  * studio's Play Mode does: A* over the links, pulled straight where the line is
- * clear (no node in a cell along it within step_up of the height: not clear).
+ * clear (no node in a cell along it within step_up of the height: not clear;
+ * nor one dearer than both ends). A step counts its length at the mean of the
+ * two nodes' `costs`.
  */
 export interface IrNav {
   cell: number;
@@ -186,6 +188,8 @@ export interface IrNav {
   step_up: number;
   nodes: number[];
   links: number[][];
+  /** What a metre on each node counts for (Cost nav areas; 1 is ordinary ground), when any isn't 1. No walk areas' ground isn't in the graph at all. */
+  costs?: number[];
 }
 
 export interface IrLevel {
@@ -300,6 +304,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
         step_up: BODY.stepUp,
         nodes: g.nodes.flatMap((n) => [round(n.x), round(n.z), round(n.y)]),
         links: g.links.map((l) => [...l].sort((a, b) => a - b)),
+        ...(g.costs ? { costs: g.costs.map(round) } : {}),
       },
     };
   };

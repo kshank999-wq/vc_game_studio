@@ -468,6 +468,11 @@ static class Check
             if (way.Count == 0 || highest < 4 || VcgsNav.Flat(way[way.Count - 1], new double[] { 4.5, 0, 0.5 }) > 0.001) Fail("the way should go round the wall through the gap at its far end");
             if (Yard(false).FindPath(new double[] { 0.5, 0, 0.5 }, new double[] { 4.5, 0, 0.5 }).Count != 0) Fail("there should be no way through a wall with no gap");
             if (yard.FindPath(new double[] { 0.5, 0, 4.5 }, new double[] { 4.5, 0, 4.5 }).Count != 1) Fail("along open ground the way should go straight there");
+            // Cost nav areas: round mud at 10 a metre (13 across against 12 round), straight over it at 2, never cutting a corner across it.
+            var roundMud = Yard(false, 10).FindPath(new double[] { 0.5, 0, 0.5 }, new double[] { 4.5, 0, 0.5 });
+            var overMud = Yard(false, 2).FindPath(new double[] { 0.5, 0, 0.5 }, new double[] { 4.5, 0, 0.5 });
+            Console.WriteLine("nav: round the mud " + string.Join(" ", roundMud.ConvertAll(p => "(" + p[0] + ", " + p[1] + ", " + p[2] + ")")) + " · over it " + string.Join(" ", overMud.ConvertAll(p => "(" + p[0] + ", " + p[1] + ", " + p[2] + ")")));
+            if (roundMud.TrueForAll(p => p[2] < 4) || overMud.Count == 0 || overMud.Exists(p => p[2] > 1)) Fail("a way should go round dear mud and over cheap mud");
             var beat = new Dictionary<string, object> { ["kind"] = "patrol", ["speed"] = 4.0, ["stops"] = new List<object> { new Dictionary<string, object> { ["at"] = new List<object> { 4.5, 0.0, 0.5 }, ["wait"] = 30.0 } } };
             var guard = new ActorPose { X = 0.5, Z = 0.5 };
             var through = false;
@@ -632,17 +637,19 @@ static class Check
         return "null";
     }
 
-    /// <summary>A 5 × 5 m yard of 1 m cells with a wall down x = 2.5: a gap at its far end (z 4–5, the south) or none.</summary>
-    static VcgsNav Yard(bool gap)
+    /// <summary>A 5 × 5 m yard of 1 m cells with a wall down x = 2.5: a gap at its far end (z 4–5, the south) or none. With mud, no wall: that strip (z 0–4) costs mud a metre instead.</summary>
+    static VcgsNav Yard(bool gap, double mud = 0)
     {
         var nodes = new List<object>();
+        var costs = new List<object>();
         var index = new Dictionary<int, int>();
         for (var r = 0; r < 5; r++)
             for (var c = 0; c < 5; c++)
             {
-                if (c == 2 && (r < 4 || !gap)) continue;
+                if (mud <= 0 && c == 2 && (r < 4 || !gap)) continue;
                 index[r * 5 + c] = nodes.Count / 3;
                 nodes.AddRange(new object[] { c + 0.5, 0.0, r + 0.5 });
+                costs.Add(mud > 0 && c == 2 && r < 4 ? mud : 1.0);
             }
         var links = new List<object>();
         for (var r = 0; r < 5; r++)
@@ -654,6 +661,8 @@ static class Check
                     if (r + dr >= 0 && r + dr < 5 && c + dc >= 0 && c + dc < 5 && index.TryGetValue((r + dr) * 5 + c + dc, out var k)) reach.Add((double)k);
                 links.Add(reach);
             }
-        return VcgsNav.FromData(new Dictionary<string, object> { ["cell"] = 1.0, ["origin"] = new List<object> { 0.0, 0.0 }, ["cols"] = 5.0, ["rows"] = 5.0, ["step_up"] = 0.42, ["nodes"] = nodes, ["links"] = links });
+        var data = new Dictionary<string, object> { ["cell"] = 1.0, ["origin"] = new List<object> { 0.0, 0.0 }, ["cols"] = 5.0, ["rows"] = 5.0, ["step_up"] = 0.42, ["nodes"] = nodes, ["links"] = links };
+        if (mud > 0) data["costs"] = costs;
+        return VcgsNav.FromData(data);
     }
 }

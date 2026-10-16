@@ -96,7 +96,7 @@ const isTyping = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
 const DRAW_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.exterior', 'space.arena', 'logic.trigger', 'pres.ambient', 'spawn.wave', 'space.platform', 'arch.floor'];
-const OUTLINE_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.exterior', 'space.arena', 'logic.trigger', 'pres.cinematic', 'pres.ambient', 'logic.hazard', 'logic.damage', 'spawn.wave', 'play.checkpoint'];
+const OUTLINE_ASSETS = ['space.room', 'space.hall', 'space.stairwell', 'space.exterior', 'space.arena', 'logic.trigger', 'pres.cinematic', 'pres.ambient', 'logic.hazard', 'logic.damage', 'logic.navArea', 'spawn.wave', 'play.checkpoint'];
 
 
 /** The Levels panels that can go into windows of their own. */
@@ -1248,7 +1248,7 @@ export const LevelDesigner = ({ project, onCommit, onNavigate, onOpenBible, onSa
             )}
             <label className="lvl-toggle"><input type="checkbox" checked={view3d.logic} onChange={(e) => setView3d((o) => ({ ...o, logic: e.target.checked }))} /> Logic volumes</label>
             <label className="lvl-toggle" title="What the player bumps into and stands on"><input type="checkbox" checked={view3d.collision} onChange={(e) => setView3d((o) => ({ ...o, collision: e.target.checked }))} /> Collision</label>
-            <label className="lvl-toggle" title="Where the player can walk to from the player start (green), and where they can’t (amber). Doors and gates count as open."><input type="checkbox" checked={view3d.walkable} onChange={(e) => setView3d((o) => ({ ...o, walkable: e.target.checked }))} /> Walkable</label>
+            <label className="lvl-toggle" title="Where the player can walk to from the player start (green), and where they can’t (amber). Doors and gates count as open. Nav areas: red where people are kept off (No walk), blue where the going costs more."><input type="checkbox" checked={view3d.walkable} onChange={(e) => setView3d((o) => ({ ...o, walkable: e.target.checked }))} /> Walkable</label>
           </>
         )}
         <label className="lvl-toggle" title="Snap to the grid"><input type="checkbox" checked={set.settings.snap} onChange={(e) => onCommit({ ...project, levels: { ...set, settings: { ...set.settings, snap: e.target.checked } } })} /> Snap {formatLength(mapGrid(set, level.id), set.settings.units)}</label>

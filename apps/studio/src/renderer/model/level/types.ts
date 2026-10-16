@@ -49,6 +49,8 @@ export type AssetRole =
   /** A Character Creator group put in an area (character spec §7): its people come from `populate`. */
   | 'crowd'
   | 'trigger' | 'gate' | 'prerequisite' | 'interaction' | 'puzzle' | 'hazard' | 'damage' | 'darkness' | 'water'
+  /** Navmesh authoring (spec §19): ground people won't walk on, or walk on at a cost. */
+  | 'navArea'
   | 'camera' | 'cinematic' | 'audio' | 'ambient' | 'dialogue'
   | 'spawn'
   | 'waypoint' | 'patrolPath' | 'traversal' | 'portal' | 'destination'

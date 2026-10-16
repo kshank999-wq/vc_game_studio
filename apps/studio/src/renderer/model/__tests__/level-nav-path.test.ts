@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aiStep, defaultAI, startMemory, type AIMemory, type AIWorld } from '../character/ai';
-import { findPath, navGraph, nextOnWay, type Way } from '../level/nav';
+import { findPath, navGraph, nextOnWay, type NavGraph, type Way } from '../level/nav';
 import { startLevelPlay, tick, waysOf } from '../level/play';
 import { levelIssues } from '../level/validate';
 import { addLevel, levelsOf, placeAsset, placeAt, resizeItem, setParam } from '../level/level';
@@ -162,5 +162,95 @@ describe('the navigation graph in the engine handoff', () => {
     expect(level).toContain('func nav_data() -> Dictionary:');
     const story = JSON.parse(planHandoff(setTarget(sunkenVault(), { engine: 'custom' })).output!.files.find((f) => f.path.endsWith('story.json'))!.content as string);
     expect(story.levels[0].nav.nodes.length % 3).toBe(0);
+  });
+});
+
+describe('nav areas (navmesh authoring)', () => {
+  const area = (p: Project, levelId: string, floorId: string, at: { x: number; y: number }, size: { w: number; d: number }, kind: 'no walk' | 'cost', cost = 3) => {
+    const a = place(p, levelId, floorId, 'logic.navArea', at);
+    let q = resizeItem(a.project, a.id, { ...size, h: 2 });
+    q = setParam(q, a.id, 'area', kind);
+    return kind === 'cost' ? setParam(q, a.id, 'cost', cost) : q;
+  };
+  const from = { x: -5, y: 0, z: 0.2 };
+  const to = { x: 5, y: 0, z: 0.2 };
+
+  it('No walk takes the ground away from people, not from the player', () => {
+    const { project, levelId, floorId } = yard();
+    // The wall's only gap, at its north end, kept off.
+    let p = wall(project, levelId, floorId, -8, 4);
+    p = area(p, levelId, floorId, { x: 0, y: 6 }, { w: 3, d: 4 }, 'no walk');
+    expect(findPath(navGraph(levelsOf(p), levelId)!, from, to)).toBeNull();
+    // The player still gets through: the preflight's reach is the level's own.
+    const start = place(p, levelId, floorId, 'actor.player', { x: -5, y: 0 });
+    const goal = place(start.project, levelId, floorId, 'play.pickup', { x: 5, y: 0 });
+    expect(levelIssues(goal.project).some((i) => i.id === goal.id && i.message.includes('can’t be reached'))).toBe(false);
+  });
+
+  it('Cost: round slow ground when that is shorter even so, straight across when it isn’t', () => {
+    const mud = (cost: number) => {
+      const { project, levelId, floorId } = yard();
+      // A 6 m strip of mud across the way, open at its north end.
+      const p = area(project, levelId, floorId, { x: 0, y: -1 }, { w: 6, d: 14 }, 'cost', cost);
+      const g = navGraph(levelsOf(p), levelId)!;
+      expect(g.costs).toBeDefined();
+      return findPath(g, from, to)!;
+    };
+    // Across: 4 m of ground and 6 m of mud at 3 (22) against about 17 m round.
+    expect(Math.max(...mud(3).map((q) => q.y))).toBeGreaterThan(6);
+    // At 1.5 the mud counts 9: straight across (13) is shorter.
+    const across = mud(1.5);
+    expect(Math.max(...across.map((q) => Math.abs(q.y)))).toBeLessThan(1);
+  });
+
+  it('the preflight warns of a patrol stop on No walk ground', () => {
+    const { project, levelId, floorId } = yard();
+    const guard = place(project, levelId, floorId, 'actor.enemy', { x: -5, y: 0 });
+    const stop = place(guard.project, levelId, floorId, 'actor.patrol', { x: 5, y: 0 });
+    let p = setParam(setParam(stop.project, stop.id, 'path', 'Gate'), guard.id, 'patrol', 'Gate');
+    expect(levelIssues(p).some((i) => i.message.includes('can’t walk to'))).toBe(false);
+    p = area(p, levelId, floorId, { x: 5, y: 0 }, { w: 5, d: 5 }, 'no walk');
+    expect(levelIssues(p).find((i) => i.id === guard.id && i.message.includes('can’t walk to'))).toBeDefined();
+  });
+
+  it('the handoff carries each node’s cost when any differs', () => {
+    const { project, levelId, floorId } = yard();
+    let p = place(project, levelId, floorId, 'actor.enemy', { x: -5, y: 0 }).project;
+    expect(buildIR(p).levels[0]!.nav!.costs).toBeUndefined();
+    p = area(p, levelId, floorId, { x: 0, y: 0 }, { w: 4, d: 4 }, 'cost', 4);
+    const nav = buildIR(p).levels[0]!.nav!;
+    expect(nav.costs).toHaveLength(nav.nodes.length / 3);
+    expect(Math.max(...nav.costs!)).toBe(4);
+  });
+});
+
+describe('the engines’ yard, in the studio', () => {
+  /** The engine checks' 5 × 5 yard of 1 m cells: a wall down x = 2.5 with a gap at z 4–5, or with mud there instead. */
+  const yardGraph = (mud = 0): NavGraph => {
+    const nodes: NavGraph['nodes'] = [];
+    const costs: number[] = [];
+    const index = new Map<number, number>();
+    for (let r = 0; r < 5; r++)
+      for (let c = 0; c < 5; c++) {
+        if (mud <= 0 && c === 2 && r < 4) continue;
+        index.set(r * 5 + c, nodes.length);
+        nodes.push({ x: c + 0.5, y: r + 0.5, z: 0 });
+        costs.push(mud > 0 && c === 2 && r < 4 ? mud : 1);
+      }
+    const links = [...index.keys()].map((k) => {
+      const r = Math.floor(k / 5);
+      const c = k % 5;
+      return [[0, 1], [1, 0], [0, -1], [-1, 0]].flatMap(([dr, dc]) => (r + dr! >= 0 && r + dr! < 5 && c + dc! >= 0 && c + dc! < 5 && index.has((r + dr!) * 5 + c + dc!) ? [index.get((r + dr!) * 5 + c + dc!)!] : []));
+    });
+    const at = new Map([...index].map(([k, i]) => [k, [i]]));
+    return { cell: 1, minX: 0, minY: 0, cols: 5, rows: 5, nodes, links, at, ...(mud > 0 ? { costs } : {}) };
+  };
+  const ends = [{ x: 0.5, y: 0.5, z: 0 }, { x: 4.5, y: 0.5, z: 0 }] as const;
+  const plain = (path: { x: number; y: number }[] | null) => path!.map((q) => [q.x, q.y]);
+
+  it('takes the ways Godot, Unity and Unreal take', () => {
+    expect(plain(findPath(yardGraph(), ...ends))).toEqual([[1.5, 4.5], [3.5, 4.5], [4.5, 0.5]]);
+    expect(plain(findPath(yardGraph(10), ...ends))).toEqual([[1.5, 4.5], [3.5, 4.5], [4.5, 0.5]]);
+    expect(plain(findPath(yardGraph(2), ...ends))).toEqual([[2.5, 0.5], [4.5, 0.5]]);
   });
 });

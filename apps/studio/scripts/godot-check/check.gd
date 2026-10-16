@@ -695,6 +695,18 @@ func check_level(game: Node) -> void:
 		fail("there should be no way through a wall with no gap")
 	if yard.find_path(Vector3(0.5, 0, 4.5), Vector3(4.5, 0, 4.5)).size() != 1:
 		fail("along open ground the way should go straight there")
+	# Cost nav areas: round mud at 10 a metre (13 across against 12 round), straight over it at 2, never cutting a corner across it.
+	var round_mud: Array = _yard(false, 10.0).find_path(Vector3(0.5, 0, 0.5), Vector3(4.5, 0, 0.5))
+	var over_mud: Array = _yard(false, 2.0).find_path(Vector3(0.5, 0, 0.5), Vector3(4.5, 0, 0.5))
+	var round_top := 0.0
+	for p in round_mud:
+		round_top = maxf(round_top, p.z)
+	var over_top := 0.0
+	for p in over_mud:
+		over_top = maxf(over_top, p.z)
+	print("nav: round the mud ", round_mud, " · over it ", over_mud)
+	if round_top < 4.0 or over_mud.is_empty() or over_top > 1.0:
+		fail("a way should go round dear mud and over cheap mud, got " + str(round_mud) + " and " + str(over_mud))
 	var guard := { "at": Vector3(0.5, 0, 0.5), "stop": 0, "until": 0.0 }
 	var beat := { "kind": "patrol", "speed": 4.0, "stops": [{ "at": [4.5, 0, 0.5], "wait": 30.0 }] }
 	var through := false
@@ -937,15 +949,18 @@ func check_world(game: Node) -> void:
 	world.queue_free()
 
 ## A 5 × 5 m yard of 1 m cells with a wall down x = 2.5: a gap at its north end (z 4–5) or none.
-func _yard(gap: bool) -> VCGSNav:
+## With mud, no wall: that strip (z 0–4) costs mud a metre instead.
+func _yard(gap: bool, mud: float = 0.0) -> VCGSNav:
 	var nodes: Array = []
+	var costs: Array = []
 	var index := {}
 	for r in 5:
 		for c in 5:
-			if c == 2 and (r < 4 or not gap):
+			if mud <= 0.0 and c == 2 and (r < 4 or not gap):
 				continue
 			index[r * 5 + c] = nodes.size() / 3
 			nodes.append_array([c + 0.5, 0.0, r + 0.5])
+			costs.append(mud if mud > 0.0 and c == 2 and r < 4 else 1.0)
 	var links: Array = []
 	for r in 5:
 		for c in 5:
@@ -957,4 +972,7 @@ func _yard(gap: bool) -> VCGSNav:
 				if r + d[0] >= 0 and r + d[0] < 5 and c + d[1] >= 0 and c + d[1] < 5 and index.has(k):
 					out.append(index[k])
 			links.append(out)
-	return VCGSNav.from_data({ "cell": 1.0, "origin": [0, 0], "cols": 5, "rows": 5, "step_up": 0.42, "nodes": nodes, "links": links })
+	var data := { "cell": 1.0, "origin": [0, 0], "cols": 5, "rows": 5, "step_up": 0.42, "nodes": nodes, "links": links }
+	if mud > 0.0:
+		data["costs"] = costs
+	return VCGSNav.from_data(data)

@@ -535,7 +535,17 @@ steer that gives the next point of the way (`VCGSCast._walk`,
 Unity the level above it in the scene, in Unreal the playing level whose
 ground is nearest its feet. Activities walk round walls too, and a wanderer
 with no way to its spot picks another. A level with nothing to
-stand on has no `nav`, and people there walk straight. The engine checks walk
+stand on has no `nav`, and people there walk straight.
+
+Nav areas (navmesh authoring) are already in the graph the handoff carries:
+the ground inside a No walk area is left out, and a Cost area's ground has
+its cost in `nav.costs` (one number per node, sent only when any isn't 1).
+A step counts its length times the mean cost of its two nodes, and a way is
+pulled straight only over ground no dearer than its two ends, so people go
+round slow ground when that is shorter and never cut a corner across it.
+Every runtime (`cost_of`, `CostOf`) does the same, and the engine checks
+walk the yard with a strip of mud instead of the wall: round it at 10 a
+metre, straight over it at 2, the same ways as the studio. The engine checks walk
 a small yard with a wall in it: round through the gap, never through, and
 standing still when the wall has no gap.
 

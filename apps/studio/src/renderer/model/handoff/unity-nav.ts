@@ -53,6 +53,9 @@ namespace VCGS
         public readonly List<List<int>> Links = new List<List<int>>();
         /// <summary>Grid cell (row * Cols + col) to the nodes standing in it.</summary>
         readonly Dictionary<int, List<int>> at = new Dictionary<int, List<int>>();
+        /// <summary>What a metre on each node counts for (Cost nav areas); empty when it is all ordinary ground (1).</summary>
+        public readonly List<double> Costs = new List<double>();
+        public double CostOf(int i) => i < Costs.Count ? Costs[i] : 1;
         static readonly List<int> NoNodes = new List<int>();
 
         /// <summary>The graph from a level's nav data (the level data's "nav"); null for none.</summary>
@@ -79,6 +82,7 @@ namespace VCGS
                 g.Nodes.Add(n);
             }
             foreach (var l in D.List(data, "links")) g.Links.Add(D.List(l).ConvertAll(m => (int)D.Num(m, 0)));
+            foreach (var c in D.List(data, "costs")) g.Costs.Add(D.Num(c, 1));
             return g;
         }
 
@@ -129,6 +133,8 @@ namespace VCGS
             var q = Nodes[b];
             var steps = Math.Max(1, (int)Math.Ceiling(Flat(p, q) / (Cell * 0.5)));
             var prev = a;
+            // Not straight across ground dearer than either end (a Cost nav area): round it, or through it as A* chose.
+            var cap = Math.Max(CostOf(a), CostOf(b)) + 1e-9;
             for (var s = 1; s <= steps; s++)
             {
                 var t = (double)s / steps;
@@ -140,7 +146,7 @@ namespace VCGS
                 else
                     foreach (var i in In(CellOf(x, z)))
                         if (Math.Abs(Nodes[i][1] - height) <= StepUp + 1e-6) { next = i; break; }
-                if (next < 0) return false;
+                if (next < 0 || CostOf(next) > cap) return false;
                 if (next == prev) continue;
                 // Straight on, or round a corner through a cell both sides of it reach.
                 var from = Links[prev];
@@ -209,7 +215,8 @@ namespace VCGS
                 foreach (var m in Links[n])
                 {
                     var there = Nodes[m];
-                    var c = cost[n] + Flat(here, there) + Math.Abs(there[1] - here[1]);
+                    // A step counts its length at the mean cost of the ground either side.
+                    var c = cost[n] + (Flat(here, there) + Math.Abs(there[1] - here[1])) * (CostOf(n) + CostOf(m)) / 2;
                     if (c < (cost.TryGetValue(m, out var was) ? was : double.PositiveInfinity))
                     {
                         cost[m] = c;

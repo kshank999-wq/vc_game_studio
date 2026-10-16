@@ -128,8 +128,8 @@ export const storySchema = () => ({
           map: ref('map'),
           travel: { type: 'array', items: ref('travel') },
           nav: {
-            description: 'Where its people can walk (a level with patrols, companions, enemies or crowds): standable cells on a plan grid of `cell` metres from `origin` [x, z], `cols` by `rows`. Node i is `nodes[3i..3i+2]` (x, y up, z), its cell’s middle; `links[i]` are the nodes one step from it (across a ladder, too; down a drop, not back up). Find a way with A* over the links, then pull it straight wherever every half cell along the line has a node within `step_up` of the height, each linked to the last (or through one neighbour). Doors count as open.',
-            ...obj({ cell: num, origin: ref('corner'), cols: num, rows: num, step_up: num, nodes: { type: 'array', items: num }, links: { type: 'array', items: { type: 'array', items: num } } }),
+            description: 'Where its people can walk (a level with patrols, companions, enemies or crowds): standable cells on a plan grid of `cell` metres from `origin` [x, z], `cols` by `rows`. Node i is `nodes[3i..3i+2]` (x, y up, z), its cell’s middle; `links[i]` are the nodes one step from it (across a ladder, too; down a drop, not back up). Find a way with A* over the links (a step counts its length times the mean of its two nodes’ `costs`, 1 when there are none), then pull it straight wherever every half cell along the line has a node within `step_up` of the height, each linked to the last (or through one neighbour) and none dearer than both ends. Doors count as open; No walk nav areas’ ground is left out.',
+            ...obj({ cell: num, origin: ref('corner'), cols: num, rows: num, step_up: num, nodes: { type: 'array', items: num }, links: { type: 'array', items: { type: 'array', items: num } }, costs: { type: 'array', items: num, description: 'What a metre on each node counts for (Cost nav areas), when any isn’t 1.' } }, ['cell', 'origin', 'cols', 'rows', 'step_up', 'nodes', 'links']),
           },
           revision: str,
         },

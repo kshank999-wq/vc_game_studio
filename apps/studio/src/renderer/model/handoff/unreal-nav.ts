@@ -56,6 +56,9 @@ namespace vcgs
         std::vector<std::vector<int>> Links;
         /** Grid cell (row * Cols + col) to the nodes standing in it. */
         std::vector<std::vector<int>> At;
+        /** What a metre on each node counts for (Cost nav areas); empty when it is all ordinary ground (1). */
+        std::vector<double> Costs;
+        double CostOf(int i) const { return static_cast<size_t>(i) < Costs.size() ? Costs[static_cast<size_t>(i)] : 1.0; }
 
         /** The graph from a level's nav data (the level JSON's "nav"); null for none. */
         static std::shared_ptr<const NavGraph> FromData(const Value& data)
@@ -86,6 +89,8 @@ namespace vcgs
             }
             // Every node has its links, if only none.
             g->Links.resize(g->Nodes.size());
+            const Value& costs = data["costs"];
+            for (size_t i = 0; i < costs.Size(); i++) g->Costs.push_back(costs[i].Num(1));
             return g;
         }
 
@@ -134,6 +139,8 @@ namespace vcgs
             const NavPoint& q = Nodes[static_cast<size_t>(b)];
             const int steps = std::max(1, static_cast<int>(std::ceil(Flat(p, q) / (Cell * 0.5))));
             int prev = a;
+            // Not straight across ground dearer than either end (a Cost nav area): round it, or through it as A* chose.
+            const double cap = std::max(CostOf(a), CostOf(b)) + 1e-9;
             for (int s = 1; s <= steps; s++)
             {
                 const double t = static_cast<double>(s) / steps;
@@ -148,7 +155,7 @@ namespace vcgs
                         for (int i : At[static_cast<size_t>(k)])
                             if (std::fabs(Nodes[static_cast<size_t>(i)].Y - height) <= StepUp + 1e-6) { next = i; break; }
                 }
-                if (next < 0) return false;
+                if (next < 0 || CostOf(next) > cap) return false;
                 if (next == prev) continue;
                 // Straight on, or round a corner through a cell both sides of it reach.
                 const std::vector<int>& from = Links[static_cast<size_t>(prev)];
@@ -189,7 +196,8 @@ namespace vcgs
                 for (int m : Links[static_cast<size_t>(n)])
                 {
                     const NavPoint& there = Nodes[static_cast<size_t>(m)];
-                    const double c = cost[static_cast<size_t>(n)] + Flat(here, there) + std::fabs(there.Y - here.Y);
+                    // A step counts its length at the mean cost of the ground either side.
+                    const double c = cost[static_cast<size_t>(n)] + (Flat(here, there) + std::fabs(there.Y - here.Y)) * (CostOf(n) + CostOf(m)) / 2;
                     if (c < cost[static_cast<size_t>(m)])
                     {
                         cost[static_cast<size_t>(m)] = c;

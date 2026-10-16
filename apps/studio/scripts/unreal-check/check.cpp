@@ -24,17 +24,19 @@ static std::string Join(const std::vector<std::string>& list, const char* sep)
 }
 
 // A 5 × 5 m yard of 1 m cells with a wall down x = 2.5: a gap at its north end (z 4–5) or none.
-static std::shared_ptr<const vcgs::NavGraph> Yard(bool gap)
+// With mud, no wall: that strip (z 0–4) costs mud a metre instead.
+static std::shared_ptr<const vcgs::NavGraph> Yard(bool gap, double mud = 0)
 {
-    std::string nodes, links;
+    std::string nodes, links, costs;
     std::map<int, int> index;
     for (int r = 0; r < 5; r++)
         for (int c = 0; c < 5; c++)
         {
-            if (c == 2 && (r < 4 || !gap)) continue;
+            if (mud <= 0 && c == 2 && (r < 4 || !gap)) continue;
             const int n = static_cast<int>(index.size());
             index[r * 5 + c] = n;
             nodes += (nodes.empty() ? "" : ", ") + std::to_string(c) + ".5, 0, " + std::to_string(r) + ".5";
+            costs += (costs.empty() ? "" : ", ") + std::to_string(mud > 0 && c == 2 && r < 4 ? mud : 1.0);
         }
     const int steps[4][2] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
     for (int r = 0; r < 5; r++)
@@ -49,7 +51,7 @@ static std::shared_ptr<const vcgs::NavGraph> Yard(bool gap)
             }
             links += (links.empty() ? "[" : ", [") + out + "]";
         }
-    return vcgs::NavGraph::FromData(vcgs::JsonReader::Parse("{\"cell\": 1, \"origin\": [0, 0], \"cols\": 5, \"rows\": 5, \"step_up\": 0.42, \"nodes\": [" + nodes + "], \"links\": [" + links + "]}"));
+    return vcgs::NavGraph::FromData(vcgs::JsonReader::Parse("{\"cell\": 1, \"origin\": [0, 0], \"cols\": 5, \"rows\": 5, \"step_up\": 0.42, \"nodes\": [" + nodes + "], \"links\": [" + links + "]" + (mud > 0 ? ", \"costs\": [" + costs + "]" : std::string()) + "}"));
 }
 
 // The level: its rules on the story's state, the same walk as Godot and Unity.
@@ -148,6 +150,16 @@ static void CheckLevel(const vcgs::Story& story)
         if (way.empty() || highest < 4 || std::fabs(way.back().X - 4.5) > 0.001 || std::fabs(way.back().Z - 0.5) > 0.001) Fail("the way should go round the wall through the gap at its north end, got " + points);
         if (!Yard(false)->FindPath({0.5, 0, 0.5}, {4.5, 0, 0.5}).empty()) Fail("there should be no way through a wall with no gap");
         if (yard->FindPath({0.5, 0, 4.5}, {4.5, 0, 4.5}).size() != 1) Fail("along open ground the way should go straight there");
+        // Cost nav areas: round mud at 10 a metre (13 across against 12 round), straight over it at 2, never cutting a corner across it.
+        {
+            const auto roundMud = Yard(false, 10)->FindPath({0.5, 0, 0.5}, {4.5, 0, 0.5});
+            const auto overMud = Yard(false, 2)->FindPath({0.5, 0, 0.5}, {4.5, 0, 0.5});
+            double roundTop = 0, overTop = 0;
+            for (const auto& p : roundMud) roundTop = std::max(roundTop, p.Z);
+            for (const auto& p : overMud) overTop = std::max(overTop, p.Z);
+            std::printf("nav: round the mud to z %.1f (%zu points) · over it to z %.1f (%zu points)\n", roundTop, roundMud.size(), overTop, overMud.size());
+            if (roundTop < 4 || overMud.empty() || overTop > 1) Fail("a way should go round dear mud and over cheap mud");
+        }
         const vcgs::Value beat = vcgs::JsonReader::Parse("{\"kind\": \"patrol\", \"speed\": 4, \"stops\": [{\"at\": [4.5, 0, 0.5], \"wait\": 30}]}", &error);
         vcgs::ActorPose guard;
         guard.X = 0.5;

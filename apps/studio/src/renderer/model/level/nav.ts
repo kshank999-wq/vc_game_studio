@@ -24,6 +24,8 @@ export interface NavCell {
   /** The standing surface's height. */
   z: number;
   reached: boolean;
+  /** For people (nav areas): Infinity where No walk keeps them off, a Cost area's cost; absent on ordinary ground. */
+  cost?: number;
 }
 
 export interface NavResult {
@@ -102,6 +104,8 @@ export interface NavGraph {
   links: number[][];
   /** Grid cell (row * cols + col) to the nodes standing in it. */
   at: Map<number, number[]>;
+  /** What a metre on each node counts for (1 is ordinary ground; a Cost nav area's cost); absent when it is all ordinary. */
+  costs?: number[];
 }
 
 interface Built {
@@ -212,8 +216,70 @@ const build = (set: LevelSet, levelId: string, global?: readonly AssetDefinition
   return out;
 };
 
-/** A level's navigation graph (cached per level set), or null when it has nothing to stand on. */
-export const navGraph = (set: LevelSet, levelId: string, global?: readonly AssetDefinition[]): NavGraph | null => build(set, levelId, global)?.graph ?? null;
+const forPeople = new WeakMap<Built, NavGraph>();
+const areaCosts = new WeakMap<Built, number[] | null>();
+
+/** What each of the level's nodes costs people (Infinity: a No walk area's), or null with no nav areas. */
+const costsOf = (b: Built, set: LevelSet, global?: readonly AssetDefinition[]): number[] | null => {
+  if (areaCosts.has(b)) return areaCosts.get(b)!;
+  const areas = b.items
+    .filter((i) => b.role(i) === 'navArea')
+    .map((i) => {
+      const f = frameOf(set, i, global);
+      const base = (b.elevation.get(i.floorId) ?? 0) + f.z;
+      const block = String(paramOf(set, i, 'area', global) ?? 'no walk') !== 'cost';
+      return { f, base, top: base + f.h, cost: block ? Infinity : Math.max(1, num(paramOf(set, i, 'cost', global), 3)) };
+    });
+  // The highest where they overlap: No walk wins.
+  const out = areas.length ? b.graph.nodes.map((n) => Math.max(1, ...areas.filter((a) => n.z >= a.base - 0.5 && n.z <= a.top && contains(a.f, n)).map((a) => a.cost))) : null;
+  areaCosts.set(b, out);
+  return out;
+};
+
+/**
+ * The graph people walk (spec §19 navmesh authoring): the level's, less the
+ * ground inside No walk nav areas, with a Cost area's cost on the ground in
+ * it (the highest where they overlap). The player's own reach (`navigate`)
+ * is the level's: nav areas are for the people the game moves.
+ */
+const peopleGraph = (b: Built, set: LevelSet, global?: readonly AssetDefinition[]): NavGraph => {
+  const known = forPeople.get(b);
+  if (known) return known;
+  const all = costsOf(b, set, global);
+  let out = b.graph;
+  if (all) {
+    const g = b.graph;
+    const index: number[] = [];
+    const nodes: NavGraph['nodes'] = [];
+    const costs: number[] = [];
+    g.nodes.forEach((n, i) => {
+      if (all[i] === Infinity) {
+        index.push(-1);
+        return;
+      }
+      index.push(nodes.length);
+      nodes.push(n);
+      costs.push(all[i]!);
+    });
+    const links = g.links.flatMap((l, i) => (index[i]! < 0 ? [] : [l.map((m) => index[m]!).filter((m) => m >= 0)]));
+    const at = new Map<number, number[]>();
+    for (const [k, list] of g.at) {
+      const kept = list.map((i) => index[i]!).filter((i) => i >= 0);
+      if (kept.length) at.set(k, kept);
+    }
+    out = { ...g, nodes, links, at, ...(costs.some((c) => c !== 1) ? { costs } : {}) };
+  }
+  forPeople.set(b, out);
+  return out;
+};
+
+/** The graph a level's people walk (cached per level set), or null when it has nothing to stand on. */
+export const navGraph = (set: LevelSet, levelId: string, global?: readonly AssetDefinition[]): NavGraph | null => {
+  const b = build(set, levelId, global);
+  return b ? peopleGraph(b, set, global) : null;
+};
+
+const costOf = (g: NavGraph, i: number) => g.costs?.[i] ?? 1;
 
 const cellOf = (g: NavGraph, x: number, y: number) => {
   const c = Math.floor((x - g.minX) / g.cell);
@@ -257,6 +323,8 @@ export const clearLine = (g: NavGraph, a: number, b: number): boolean => {
   const d = Math.hypot(q.x - p.x, q.y - p.y);
   const steps = Math.max(1, Math.ceil(d / (g.cell * 0.5)));
   let prev = a;
+  // Not straight across ground dearer than either end: round a Cost area, or through it by the way A* chose.
+  const cap = Math.max(costOf(g, a), costOf(g, b)) + 1e-9;
   for (let s = 1; s <= steps; s++) {
     const t = s / steps;
     const x = p.x + (q.x - p.x) * t;
@@ -264,7 +332,7 @@ export const clearLine = (g: NavGraph, a: number, b: number): boolean => {
     const z = (g.nodes[prev]!.z);
     const here = g.at.get(cellOf(g, x, y)) ?? [];
     const next = s === steps ? b : here.find((i) => Math.abs(g.nodes[i]!.z - z) <= BODY.stepUp + 1e-6);
-    if (next === undefined) return false;
+    if (next === undefined || costOf(g, next) > cap) return false;
     if (next === prev) continue;
     // Straight on, or round a corner through a cell both sides of it reach.
     if (!g.links[prev]!.includes(next) && !g.links[prev]!.some((m) => g.links[m]!.includes(next))) return false;
@@ -331,7 +399,8 @@ export const findPath = (g: NavGraph, from: { x: number; y: number; z: number },
     const here = g.nodes[n]!;
     for (const m of g.links[n]!) {
       const there = g.nodes[m]!;
-      const c = cost.get(n)! + Math.hypot(there.x - here.x, there.y - here.y) + Math.abs(there.z - here.z);
+      // A step counts its length at the cost of the ground either side (never under 1, so the straight-line guess stays a guess from below).
+      const c = cost.get(n)! + (Math.hypot(there.x - here.x, there.y - here.y) + Math.abs(there.z - here.z)) * ((costOf(g, n) + costOf(g, m)) / 2);
       if (c < (cost.get(m) ?? Infinity)) {
         cost.set(m, c);
         came.set(m, n);
@@ -425,7 +494,8 @@ export const navigate = (set: LevelSet, levelId: string, global?: readonly Asset
     return empty;
   }
   const { graph: g, items, role, elevation } = built;
-  const nodes: NavCell[] = g.nodes.map((n) => ({ ...n, reached: false }));
+  const costs = costsOf(built, set, global);
+  const nodes: NavCell[] = g.nodes.map((n, i) => ({ ...n, reached: false, ...(costs && costs[i] !== 1 ? { cost: costs[i] } : {}) }));
   const start = items.find((i) => role(i) === 'playerStart');
   if (start) {
     const sf = frameOf(set, start, global);

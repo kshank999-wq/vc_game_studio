@@ -150,10 +150,13 @@ export const buildWalkable = (group: THREE.Group, cells: readonly NavCell[], siz
   const m = new THREE.Matrix4();
   const reached = new THREE.Color('#6fae5e');
   const cut = new THREE.Color('#e0a040');
+  // Nav areas: ground people are kept off, and slow ground they walk round when they can.
+  const off = new THREE.Color('#c8524a');
+  const slow = new THREE.Color('#5b8fd1');
   cells.forEach((c, i) => {
     m.makeScale(size * 0.86, 1, size * 0.86).setPosition(c.x, c.z + 0.03, c.y);
     mesh.setMatrixAt(i, m);
-    mesh.setColorAt(i, c.reached ? reached : cut);
+    mesh.setColorAt(i, c.cost === Infinity ? off : c.cost ? slow : c.reached ? reached : cut);
   });
   mesh.instanceMatrix.needsUpdate = true;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
