@@ -5,7 +5,8 @@
 #  2. compile every source file of the plugin against stubs of Unreal's
 #     headers (syntax and types; Unreal Header Tool does not run here);
 #  3. byte-compile the DataTable import script, and run the level builder
-#     against a stand-in for Unreal's Python API.
+#     and the changes exporter against a stand-in for Unreal's Python API,
+#     the studio reading back what the exporter wrote.
 # Needs a C++17 compiler (CXX, default g++) and python3; with the .NET SDK
 # it also compiles VCGS.Build.cs.
 set -euo pipefail
@@ -89,6 +90,8 @@ echo "takes: import_vo.py, story.json and DT_Lines name the sound waves"
 echo "import_datatables.py compiles"
 # The level builder runs against a stand-in for Unreal's Python API.
 python3 "$here/unreal-check/check_build_level.py" "$work"
+# Bring back changes (spec §19): the studio reads what export_changes.py wrote, and finds the four changes made there.
+(cd "$here/.." && npx vite-node scripts/read-changes.ts "$work/vcgs-changes.json" "$work/project.json")
 
 if command -v dotnet > /dev/null; then
   mkdir -p "$work/build-rules"

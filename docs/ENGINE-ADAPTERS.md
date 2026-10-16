@@ -634,7 +634,14 @@ has an exporter that writes `vcgs-changes.json` (`format: "vcgs-changes"`,
 with the engine object's name, its position (metres, the IR's level space)
 and turn (degrees counter-clockwise from above), and `added`, the objects
 directly under the level with no GUID. Godot's is `VCGSChanges`
-(`addons/vcgs_runtime/changes.gd`) run by `vcgs/generated/export_changes.gd`.
+(`addons/vcgs_runtime/changes.gd`) run by `vcgs/generated/export_changes.gd`;
+Unity's is `VcgsChanges` (runtime) with the editor menu **VCGS ▸ Export
+changes for the studio** (`VcgsChangesExporter`), writing
+`Assets/VCGS/vcgs-changes.json`; Unreal's is `Levels/export_changes.py`,
+which inverts `build_level.py`'s conversion (centimetres, X = −z, Y = x,
+yaw = −turn, through a child map's placement) and writes beside the
+`.uproject`. Each reads only levels open in the editor, so a closed one isn't
+taken for deleted.
 The studio reads it with `changes.ts` (`parseChanges`, `changesFrom`,
 `applyChanges`); the engine checks change the sample level there (Mara moved
 2 m and turned, the Vault Key renamed, the Camp embers deleted, a CameraHint

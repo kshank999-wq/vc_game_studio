@@ -8,6 +8,7 @@ import { JSON_FORMAT } from './json';
 import { VCGS_CORE_H } from './unreal-core';
 import { CHARACTER_PLUGIN_FILES } from './unreal-characters';
 import { castFiles } from './cast-files';
+import { exportChangesScript } from './unreal-changes';
 import { buildLevelScript, LEVEL_PLUGIN_FILES, levelJsonUnreal } from './unreal-levels';
 import { NAV_PLUGIN_FILES } from './unreal-nav';
 import { markupInline } from '../inline';
@@ -2040,7 +2041,19 @@ stand-in shows its heading and shots on screen for its length. With \`AVcgsCodex
 it is a box with a **Skip** button (click it, or press Space, Enter or Escape); with your own HUD
 it is on-screen text that Space, Enter or Escape skips (or draw it yourself from
 \`GetTransitionTitle\`, with a Skip button of your own that calls \`FinishTransition\`). \`OnTransitionFinished\` says when it is over.
-
+${
+  ir.levels.length
+    ? `
+**Bring back changes** (spec §19): after moving, renaming, deleting or adding
+things in a level built by \`build_level.py\`, open it and run
+\`${root}/Levels/export_changes.py\` (Tools > Execute Python Script). It writes
+\`vcgs-changes.json\` in the project's folder, beside the .uproject; in VC Game
+Studio, *Engine Handoff > Bring back changes from Unreal* reads it. Items are
+found by their GUID; something new comes back if it is attached to the level's
+director (\`<Level>_Director\`) or has the level's tag (\`vcgs_map:<level>\`).
+`
+    : ''
+}
 **Puzzles** built in the Puzzle Creator play their steps as the studio does
 (order, links, time limits on the play clock, which the level director advances
 or \`AdvanceClock\` does, rewards, wrong moves, resets): \`OnPuzzleStep\`,
@@ -2099,6 +2112,8 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
       const path = put(`${root}/Levels/${level.key}.json`, levelJsonUnreal(level, names), 'generated');
       row({ id: level.guid, label: level.name, symbol: 'environment', group: 'World', generates: `Level data · ${level.items.length} items → build_level.py places AVcgsLevelItem actors (${level.export_name})`, files: [path, builder] }, level);
     }
+    // Bring back changes (spec §19): the engine team runs it, the studio reads what it writes.
+    put(`${root}/Levels/export_changes.py`, exportChangesScript(root), 'generated');
   }
   put(
     `${root}/vcgs_manifest.json`,

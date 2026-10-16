@@ -243,15 +243,15 @@ Once a level is in the engine, the engine team moves things, renames them, delet
 | Engine | Exporter | Writes |
 |---|---|---|
 | Godot | Open `vcgs/generated/export_changes.gd` in the Script editor, **File ▸ Run** | `vcgs-changes.json` beside it |
-| Unity | **VCGS ▸ Export changes for the studio** | `vcgs-changes.json` (see the generated README) |
-| Unreal | Run `export_changes.py` in the editor's Python | `vcgs-changes.json` (see the generated README) |
+| Unity | **VCGS ▸ Export changes for the studio**, with the level scenes open | `Assets/VCGS/vcgs-changes.json` (beside the generated folder, so a handoff never overwrites it) |
+| Unreal | Run `Content/VCGS/Generated/Levels/export_changes.py` in the editor's Python, with the levels open | `vcgs-changes.json` beside the `.uproject` |
 
 In the studio, **Engine Handoff ▸ Bring back changes from …** and pick the file. Each studio item is found by its GUID, so names and places can change freely; the list shows what differs:
 
 - **moved**: somewhere else, or turned. Taken, it is placed where the engine has it.
 - **renamed**: called something else there. Taken, its export name becomes the engine's.
 - **deleted**: not in the engine any more. Taken, it goes from the level.
-- **added**: something under the level with no GUID. Taken, it comes in as a waypoint named as in the engine, to give a role to.
+- **added**: something under the level with no GUID (in Unity a direct child of the level, in Unreal an actor attached to the level's director or tagged `vcgs_map:<level>`, so the team's own art and lights don't all come back). Taken, it comes in as a waypoint named as in the engine, to give a role to.
 
 Untick what to leave as it is; the rest comes in as one step you can undo. Only what the studio owns comes back: where things are, what they're called and whether they're there. Code, art and engine settings stay the engine team's. A door or window stays in its wall (moving it there is the wall's business), and things keep the names the engine knows them by even when a move puts them in another room. The next handoff sends the levels as they now are.
 

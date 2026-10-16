@@ -173,5 +173,43 @@ if fake_unreal.LevelEditorSubsystem.opened != ["/Game/VCGS/Levels/sunken_vault"]
     fail("building the maps again should open and save the one already made")
 print("level maps: %s" % ", ".join(fake_unreal.LevelEditorSubsystem.made))
 
+# Bring back changes (spec §19): the team moves Mara 2 m east (Unreal +Y) and turns her 90° counter-clockwise
+# from above (yaw -90), relabels the Vault Key, deletes the Camp embers and attaches a CameraHint to the
+# vault's director; export_changes.py writes what the studio reads back (scripts/read-changes.ts).
+spec = importlib.util.spec_from_file_location("export_changes", os.path.join(work, "Content/VCGS/Generated/Levels/export_changes.py"))
+export_changes = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(export_changes)
+for x, yaw in ((0.0, 0.0), (1.0, 90.0), (-3.0, -45.0)):
+    turn = export_changes.turn_of(build_level.yaw_of(yaw))
+    u = build_level.to_unreal([x, 2.0, -5.0])
+    if abs(((turn - yaw) + 180) % 360 - 180) > 1e-9 or export_changes.to_studio([u.x, u.y, u.z]) != [x, 2.0, -5.0]:
+        fail("export_changes.py should undo build_level.py's to_unreal and yaw_of")
+placement = {"position": [-20.0, 0.0, 15.0], "turn": 30.0}
+back = export_changes.out_of_parent(build_level.in_parent([3.0, 1.0, -2.0], placement), placement)
+if max(abs(a - b) for a, b in zip(back, [3.0, 1.0, -2.0])) > 1e-9:
+    fail("export_changes.py should undo in_parent, got %r" % back)
+vault = items()
+mara = next(a for a in vault.values() if a.get_actor_label().startswith("NPC_") and "_Mara_" in a.get_actor_label())
+key = next(a for a in vault.values() if "_VaultKey_" in a.get_actor_label())
+embers = vault["LGT_SiltCamp_CampEmbers_002"]
+mara.set_actor_location(mara.get_actor_location() + fake_unreal.Vector(0, 200, 0), False, False)
+mara.set_actor_rotation(fake_unreal.Rotator(0.0, 0.0, mara.get_actor_rotation().yaw - 90.0), False)
+key.set_actor_label("KeyOfTheVault")
+for child in embers.get_attached_actors():
+    child.destroy_actor()
+embers.destroy_actor()
+vault_director = next(d for d in fake_unreal._actors if isinstance(d, fake_unreal.VcgsLevelDirector) and d.get_editor_property("map_key") == "sunken_vault")
+hint = fake_unreal.EditorLevelLibrary.spawn_actor_from_class(fake_unreal.Actor, fake_unreal.Vector(-200, 100, 0), fake_unreal.Rotator(0.0, 0.0, 0.0))
+hint.set_actor_label("CameraHint")
+hint.attach_to_actor(vault_director, "", fake_unreal.AttachmentRule.KEEP_WORLD, fake_unreal.AttachmentRule.KEEP_WORLD, fake_unreal.AttachmentRule.KEEP_WORLD, False)
+written = export_changes.write()
+with open(written, encoding="utf-8") as f:
+    out = json.load(f)
+mine = next((l for l in out["levels"] if l["guid"] == data["guid"]), None)
+if mine is None or [a["name"] for a in mine["added"]] != ["CameraHint"] or any(i["name"] == "LGT_SiltCamp_CampEmbers_002" for i in mine["items"]):
+    fail("export_changes.py should list the vault's items without the embers, and the CameraHint as added, got %r" % mine)
+else:
+    print("round trip: %d items, %d added; %d levels · %s" % (len(mine["items"]), len(mine["added"]), len(out["levels"]), os.path.relpath(written, work)))
+
 print("build_level.py OK" if not failures else "%d FAILED" % len(failures))
 sys.exit(1 if failures else 0)

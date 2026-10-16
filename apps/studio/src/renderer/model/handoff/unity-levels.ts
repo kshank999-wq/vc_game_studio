@@ -1,5 +1,6 @@
 import type { IrLevel } from './levels';
 import { NAV_RUNTIME } from './unity-nav';
+import { CHANGES_EDITOR, CHANGES_RUNTIME } from './unity-changes';
 
 /**
  * Levels for Unity (spec §11.2). The level's data goes over as JSON; an
@@ -1253,6 +1254,8 @@ namespace VCGS
         public TextAsset level = null;
         [Tooltip("The map's key in VC Game Studio: its children find their parent by it.")]
         public string key = "";
+        [Tooltip("The level's GUID in VC Game Studio (it never changes): VCGS › Export changes for the studio sends it back with what changed.")]
+        public string guid = "";
         [Tooltip("How the game reaches it (spec V2 §13): continuous, streamed, instanced, transition or mapOnly.")]
         public string boundary = "continuous";
 
@@ -1463,6 +1466,7 @@ namespace VCGS
 `,
 
   'VcgsNav.cs': NAV_RUNTIME,
+  'VcgsChanges.cs': CHANGES_RUNTIME,
   'VcgsTravelLink.cs': String.raw`${HEAD}
 using UnityEngine;
 
@@ -1536,6 +1540,7 @@ namespace VCGS
 };
 
 export const LEVEL_EDITOR_FILES: Record<string, string> = {
+  'VcgsChangesExporter.cs': CHANGES_EDITOR,
   'VcgsLevelBuilder.cs': String.raw`// VCGS Editor tools for Unity. The same for every project; safe to commit.
 using System.Collections.Generic;
 using System.IO;
@@ -1644,6 +1649,7 @@ namespace VCGS.EditorTools
             foreach (var item in root.GetComponentsInChildren<VcgsLevelItem>(true))
                 if (VcgsLevel.OwnedBy(root.transform, item.transform)) existing[item.guid] = item;
             level.key = key;
+            level.guid = D.Str(data, "guid");
             level.boundary = D.Str(map, "boundary") != "" ? D.Str(map, "boundary") : "continuous";
             var seen = new HashSet<string>();
 

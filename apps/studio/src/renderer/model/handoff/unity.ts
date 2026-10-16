@@ -9,6 +9,7 @@ import { ASMDEF, RUNTIME_FILES } from './unity-runtime';
 import { EDITOR_ASMDEF, LEVEL_EDITOR_FILES, LEVEL_RUNTIME_FILES, levelJson } from './unity-levels';
 import { CHARACTER_FILES } from './unity-characters';
 import { NAV_RUNTIME } from './unity-nav';
+import { CHANGES_PATH } from './unity-changes';
 import { castFiles } from './cast-files';
 import { markupInline } from '../inline';
 
@@ -186,7 +187,19 @@ per element, for designers to find in the Project window. So do Lore, Quests,
 Mechanics and Encounters (\`VcgsLore\`, \`VcgsQuest\`, \`VcgsMechanic\`,
 \`VcgsEncounter\`): design definitions for a codex, a quest log or tuning to
 read. They are data; their logic lives in flags and triggers.
-`;
+${
+  ir.levels.length
+    ? `
+**Bring back changes** (spec §19): moved, renamed, deleted or added something in
+a level here? Open the level scenes and run **VCGS › Export changes for the
+studio**. It writes \`${CHANGES_PATH}\` (beside this folder, so exporting
+again never overwrites it); in VC Game Studio, Engine Handoff › Bring back
+changes from Unity, and pick it. Only where things are, what they are called
+and whether they are there goes back. Something added directly under a level
+root comes in as a waypoint; start its name with \`_\` to keep it out.
+`
+    : ''
+}`;
 
 export const generateUnity = (ir: HandoffIR, outputPath: string): EngineOutput => {
   const root = outputPath.replace(/\/+$/, '') || 'Assets/VCGS/Generated';
@@ -360,6 +373,7 @@ export const unity: EngineAdapter = {
     'Add a GameObject with VcgsGame to your first scene and give it Assets/VCGS/Generated/story.json.',
     'Put VcgsSceneFlow (with its scene key) in each scene, and VcgsInteractable on each usable object.',
     'For a level, open its scene and run VCGS › Update level from data…, choosing Assets/VCGS/Generated/Levels/<level>.json; run it again after each export.',
+    'To bring back what the team moved, renamed, deleted or added in a level, run VCGS › Export changes for the studio with its scene open: it writes Assets/VCGS/vcgs-changes.json for Bring back changes.',
     'Recorded takes go in Resources/VCGS/vo: play a line’s with StoryWalker.Voice(game, lineId) on an AudioSource when DialogueRequested fires.',
   ],
   generate: generateUnity,

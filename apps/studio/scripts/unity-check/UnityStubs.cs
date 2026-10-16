@@ -408,6 +408,7 @@ namespace UnityEngine
     public static class Debug
     {
         public static void Log(object message) => Console.WriteLine(message);
+        public static void LogWarning(object message) => Console.WriteLine(message);
         public static void LogError(object message) => Console.Error.WriteLine(message);
     }
 
@@ -455,6 +456,9 @@ namespace UnityEngine.SceneManagement
     public static class SceneManager
     {
         public static Scene GetActiveScene() => default;
+        /// <summary>The stubs keep one scene, open.</summary>
+        public static int sceneCount => 1;
+        public static Scene GetSceneAt(int index) => new Scene { isLoaded = true };
         /// <summary>The scenes loaded, in order, and unloaded, for the checks.</summary>
         public static readonly List<string> loaded = new();
         public static readonly List<string> unloaded = new();
@@ -495,6 +499,7 @@ namespace UnityEditor
         public static T LoadAssetAtPath<T>(string path) where T : Object => assets.TryGetValue(path, out var a) ? a as T : null;
         public static void CreateAsset(Object asset, string path) => assets[path] = asset;
         public static bool IsValidFolder(string path) => folders.Contains(path);
+        public static void Refresh() { }
         public static string CreateFolder(string parent, string name)
         {
             folders.Add(parent + "/" + name);

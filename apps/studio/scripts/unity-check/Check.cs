@@ -352,11 +352,71 @@ static class Check
         if (!string.Equals(Scenes.Custom, "kept")) Fail("custom keys in StoryKeys.cs should survive exporting again");
         else Console.WriteLine("custom code: " + Scenes.Custom);
 
+        CheckRoundTrip();
         CheckLevel(story);
         CheckWorld(story);
 
         Console.WriteLine(failures == 0 ? "OK" : failures + " FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    // Bring back changes (spec §19): the Sunken Vault built, changed as the engine team would
+    // (Mara moved 2 m east and turned 90° counter-clockwise, the Vault Key renamed, the Camp
+    // embers deleted, a CameraHint added), and collected for the studio: check-unity.sh then
+    // reads vcgs-changes.json against the sample, as the studio's Bring back changes does.
+    static void CheckRoundTrip()
+    {
+        var path = "Assets/VCGS/Generated/Levels/sunken_vault.json";
+        var json = File.ReadAllText(path);
+        VCGS.EditorTools.VcgsLevelBuilder.Build(json, path, false);
+        var root = UnityEngine.GameObject.Find("LVL_SunkenVault_01");
+        var level = root?.GetComponent<VcgsLevel>();
+        var data = D.Map(Json.Parse(json));
+        if (level == null || level.guid != D.Str(data, "guid")) { Fail("the builder should keep the level's GUID on its VcgsLevel"); return; }
+        var byName = new Dictionary<string, UnityEngine.Transform>();
+        for (var i = 0; i < root.transform.childCount; i++)
+        {
+            var child = root.transform.GetChild(i);
+            var parts = child.gameObject.name.Split('_');
+            if (child.GetComponent<VcgsLevelItem>() != null && parts.Length > 2) byName[parts[2]] = child;
+        }
+        if (!byName.TryGetValue("Mara", out var mara) || !byName.TryGetValue("VaultKey", out var key) || !byName.TryGetValue("CampEmbers", out var embers))
+        {
+            Fail("the level should have Mara, the Vault Key and the Camp embers as GameObjects, got " + string.Join(", ", byName.Keys));
+            return;
+        }
+        var maraGuid = mara.GetComponent<VcgsLevelItem>().guid;
+        var sent = D.Map(D.List(data, "items").Find(o => D.Str(D.Map(o), "guid") == maraGuid));
+        // East is +X in both; a turn counter-clockwise from above is a negative yaw in Unity.
+        mara.localPosition = mara.localPosition + new UnityEngine.Vector3(2, 0, 0);
+        mara.localRotation = UnityEngine.Quaternion.Euler(0, mara.localEulerAngles.y - 90, 0);
+        key.gameObject.name = "KeyOfTheVault";
+        UnityEngine.Object.DestroyImmediate(embers.gameObject);
+        var hint = new UnityEngine.GameObject("CameraHint");
+        hint.transform.SetParent(root.transform, false);
+        hint.transform.localPosition = new UnityEngine.Vector3(1, 0, -2);
+
+        var one = VcgsChanges.CollectLevel(level);
+        var items = D.List(one, "items");
+        var added = D.List(one, "added");
+        if (added.Count != 1 || D.Str(D.Map(added[0]), "name") != "CameraHint") Fail("the added GameObject should be listed as added (and not Travel), got " + added.Count);
+        else if (D.Num(D.List(D.Map(added[0]), "position")[2], 0) != 2) Fail("the CameraHint 2 m south (Unity's -Z) should come back at z 2");
+        var maraBack = D.Map(items.Find(o => D.Str(D.Map(o), "guid") == maraGuid));
+        var was = D.List(sent, "position");
+        var now = D.List(maraBack, "position");
+        var turned = ((D.Num(maraBack, "turn", 0) - D.Num(sent, "turn", 0)) % 360 + 360) % 360;
+        Console.WriteLine("round trip: Mara from (" + string.Join(", ", was) + ") turn " + D.Num(sent, "turn", 0) + " to (" + string.Join(", ", now) + ") turn " + D.Num(maraBack, "turn", 0));
+        if (now.Count != 3 || Math.Abs(D.Num(now[0], 0) - D.Num(was[0], 0) - 2) > 0.001 || Math.Abs(D.Num(now[2], 0) - D.Num(was[2], 0)) > 0.001 || Math.Abs(turned - 90) > 0.01)
+            Fail("Mara should come back 2 m east and turned 90° counter-clockwise in the level's space");
+        if (items.Exists(o => D.Str(D.Map(o), "name") == "KeyOfTheVault") == false) Fail("the Vault Key should come back by its new name");
+        if (items.Count != D.List(data, "items").Count - 1) Fail("every item but the Camp embers should come back, got " + items.Count);
+        // As the studio reads it (check-unity.sh), and as the menu writes it.
+        VcgsChanges.Write(new[] { level }, "vcgs-changes.json");
+        var menu = VCGS.EditorTools.VcgsChangesExporter.Export();
+        if (menu != "Assets/VCGS/vcgs-changes.json" || File.ReadAllText(menu) != File.ReadAllText("vcgs-changes.json")) Fail("VCGS › Export changes for the studio should write the open scene's level to Assets/VCGS/vcgs-changes.json");
+        Console.WriteLine("round trip: " + items.Count + " items, " + added.Count + " added · " + menu);
+        // Out of the scene: the level check builds it fresh.
+        UnityEngine.Object.DestroyImmediate(root);
     }
 
     // The level: its rules on the story's state, then the editor builder, twice.

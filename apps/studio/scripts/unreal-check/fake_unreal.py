@@ -12,6 +12,14 @@ class Paths:
     def project_content_dir():
         return _content
 
+    @staticmethod
+    def project_dir():
+        return _content[: -len("Content")] if _content.endswith("Content") else _content
+
+    @staticmethod
+    def convert_relative_path_to_full(path):
+        return path
+
 
 class Vector:
     def __init__(self, x=0.0, y=0.0, z=0.0):
