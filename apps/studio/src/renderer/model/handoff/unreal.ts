@@ -1,3 +1,4 @@
+import { budgetsMarkdown } from './budgets';
 import { tasksMarkdown, todoLines, withCodeNotes, withoutNotes } from './notes';
 import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
@@ -2136,6 +2137,9 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
     'generated',
   );
   row({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'TASKS.md · TODO(VCGS) in VcgsStoryKeys.h', files: [tasksPath] }, ir.notes);
+  // Performance budgets (spec §19), when any level has one.
+  const budgets = budgetsMarkdown(ir, 'Unreal', (l) => `${l.export_name} (AVcgsLevelDirector)`);
+  if (budgets) put(`${root}/BUDGETS.md`, budgets, 'generated');
   // The Character Creator's cast (character spec §10): characters.json, its manifests and the starter classes.
   const cast = castFiles(ir.cast, root, 'unreal', 'Unreal', VERSION);
   if (cast.files.length) {

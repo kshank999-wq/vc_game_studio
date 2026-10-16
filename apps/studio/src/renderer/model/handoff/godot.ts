@@ -1,6 +1,7 @@
 import { puzzleRuntimeGd } from './godot-puzzles';
 import { characterRuntimeGd } from './godot-characters';
 import { castFiles } from './cast-files';
+import { budgetsMarkdown } from './budgets';
 import { tasksMarkdown, withCodeNotes } from './notes';
 import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GenerateOptions, GeneratedFile } from './engines';
@@ -2033,6 +2034,9 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
     ),
   );
   row({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'TASKS.md · TODO(VCGS) beside what each is about', files: [tasks] }, ir.notes);
+  // Performance budgets (spec §19), when any level has one.
+  const budgets = budgetsMarkdown(ir, 'Godot', (l) => `res://${root}/levels/${l.key}.tscn`);
+  if (budgets) add('BUDGETS.md', budgets);
   // The Character Creator's cast (character spec §10): characters.json, its schema and manifests, CHARACTERS.md, and the components.
   const cast = castFiles(ir.cast, root, 'godot', 'Godot', VERSION);
   if (cast.files.length) {

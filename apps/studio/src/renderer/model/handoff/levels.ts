@@ -1,6 +1,7 @@
 import { motionOf, PATROLLERS } from '../level/actors';
 import { BODY } from '../level/controller';
 import { navGraph } from '../level/nav';
+import { limitsOf, METRICS, tallyOf, type Limits, type Metric } from '../level/budget';
 import type { Effect, Rule } from '../rules';
 import type { Project } from '../types';
 import { assetOf, contains, frameOf, meshesFor, paramOf } from '../level/geometry';
@@ -210,6 +211,8 @@ export interface IrLevel {
   structure?: IrStructure;
   /** Where its people can walk, when it has any (patrols, companions, enemies, crowds). */
   nav?: IrNav;
+  /** Its performance budget (spec §19), when it has one: the platform, the limits, the studio's counts and which are over. */
+  budget?: { platform: string; limits: Limits; counts: Limits; over: Metric[] };
   revision: string;
 }
 
@@ -290,6 +293,12 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
       children: kids.map((k) => childEntry(k, level)),
       placement: parent ? childEntry(level, parent).placement : null,
     };
+  };
+  const budgetOf = (level: (typeof set.levels)[number]): Pick<IrLevel, 'budget'> => {
+    if (!level.budget) return {};
+    const limits = limitsOf(level.budget);
+    const counts = tallyOf(project, level.id).counts;
+    return { budget: { platform: level.budget.platform, limits, counts, over: METRICS.filter((m) => counts[m.id] > limits[m.id]).map((m) => m.id) } };
   };
   const navOf = (levelId: string): { nav?: IrNav } => {
     if (!set.items.some((i) => i.levelId === levelId && !i.hidden && WALKERS.has(assetOf(set, i).role))) return {};
@@ -446,6 +455,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
       }),
       ...(level.structure ? { structure: structureManifest(project, set, level, floorKey, exportedIds(set, level.id), story) } : {}),
       ...navOf(level.id),
+      ...budgetOf(level),
     };
     return { ...out, revision: fingerprint(JSON.stringify(out)) };
   });

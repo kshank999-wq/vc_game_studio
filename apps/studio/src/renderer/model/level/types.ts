@@ -470,6 +470,8 @@ export interface Level {
   claim?: import('./coop').Claim;
   /** The layouts the structure generator made and the designer accepted (structure spec §13 GenerationRun), newest last. */
   generation?: GenerationRun[];
+  /** What it may cost on the platform it is made for (spec §19 performance budgets): none set, no warnings. */
+  budget?: import('./budget').LevelBudget;
 }
 
 /** How the generator lays a floor out (structure spec §6 rule presets). */

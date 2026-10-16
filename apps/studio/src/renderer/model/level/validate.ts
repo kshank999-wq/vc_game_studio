@@ -6,6 +6,7 @@ import { structureIssues } from './structure';
 import { walkStructure } from './walkthrough';
 import { migrationFor } from './migrate';
 import { navGraph, navigate, nearestNode, reachableFrom } from './nav';
+import { countLabel, METRICS, overBudget, PLATFORMS } from './budget';
 import { BODY, CROUCH } from './controller';
 import { engineSafe, exportNameOf, levelExportName } from './naming';
 import type { AssetDefinition, LevelItem } from './types';
@@ -204,6 +205,17 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
       if (n >= 0 && reach[n]) continue;
       const node = set.items.find((i) => i.id === stop.itemId)!;
       add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} can’t walk to ${node.name} on its patrol “${m.name}”.`, export: 'It stops and stands where the way runs out. Doors count as open: look for a wall in the way, a step too high, or a stop off the ground.' });
+    }
+  }
+
+  // Over its performance budget (spec §19): what it costs, and what costs most.
+  for (const level of set.levels) {
+    if (!level.budget) continue;
+    const platform = PLATFORMS.find((p) => p.id === level.budget!.platform)?.label ?? level.budget.platform;
+    for (const o of overBudget(project, level.id, global)) {
+      const label = METRICS.find((m) => m.id === o.metric)!.label.toLowerCase();
+      const most = o.top.map((t) => `${set.items.find((i) => i.id === t.itemId)?.name ?? level.name} (${countLabel(t.amount)})`).join(', ');
+      add({ id: level.id, levelId: level.id, severity: 'warning', message: `${level.name} is over its ${platform} budget for ${label}: ${countLabel(o.count)} of ${countLabel(o.limit)}.`, export: `${most ? `Most of it: ${most}. ` : ''}The studio’s count is an estimate from the graybox; the engine team profiles the real level against the same budget, which goes over in the handoff.` });
     }
   }
 

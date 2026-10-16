@@ -13749,3 +13749,12 @@ button.bible-dual-col:hover {
   font-size: 11.5px;
   margin-top: 2px;
 }
+
+/* Performance budget (spec §19): a bar per count against its limit. */
+.lvl-budget { margin: 8px 0 10px; }
+.lvl-budget-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.lvl-budget-bar { height: 6px; border-radius: 3px; background: var(--line, rgba(255, 255, 255, 0.12)); overflow: hidden; margin: 4px 0; }
+.lvl-budget-bar > span { display: block; height: 100%; background: #6fae5e; }
+.lvl-budget.near .lvl-budget-bar > span { background: #e0a040; }
+.lvl-budget.over .lvl-budget-bar > span { background: #c8524a; }
+.lvl-budget.over .lvl-budget-head .mono { color: #e07a70; }

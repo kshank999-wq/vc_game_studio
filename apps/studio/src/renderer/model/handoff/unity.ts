@@ -1,3 +1,4 @@
+import { budgetsMarkdown } from './budgets';
 import { tasksMarkdown, todoLines, withCodeNotes, withoutNotes } from './notes';
 import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
@@ -341,6 +342,9 @@ export const generateUnity = (ir: HandoffIR, outputPath: string): EngineOutput =
     'text',
   );
   row({ id: 'tasks', label: `Comments and tasks (${ir.notes.length})`, symbol: 'plotPoint', group: 'Story', generates: 'TASKS.md · TODO(VCGS) in StoryKeys.cs', files: [tasksPath] }, ir.notes);
+  // Performance budgets (spec §19), when any level has one.
+  const budgets = budgetsMarkdown(ir, 'Unity', (l) => `${l.export_name} (VcgsLevel)`);
+  if (budgets) put(`${root}/BUDGETS.md`, budgets, 'generated', 'text');
   return { files: withCodeNotes(files, ir), elements };
 };
 

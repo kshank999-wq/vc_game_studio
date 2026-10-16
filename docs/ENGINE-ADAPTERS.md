@@ -625,6 +625,13 @@ level's script, and for a comment on a file at the top of that file
 row fingerprints are made without the notes (`withoutNotes`), so a comment
 never marks the story as changed. See [COLLABORATION.md](COLLABORATION.md).
 
+A level with a performance budget (spec §19) carries it as `budget`: the
+platform it is made for, its limits, the studio's counts from the graybox
+(triangles, draw calls, people, lights, shadow lights, nav cells) and which
+are `over`. Every adapter also writes `BUDGETS.md`, a table a level, for the
+engine and art teams to profile the real level against (`budgets.ts`). The
+counts are estimates; the limits are the target.
+
 ## Saved games
 
 Every runtime saves and loads the game in one format, so a save from one

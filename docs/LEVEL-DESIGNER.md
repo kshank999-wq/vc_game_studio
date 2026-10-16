@@ -220,6 +220,22 @@ later.
 | Delete | Delete, asking first when a room's doors would go with it |
 | Esc | Put down what you picked up, then clear the selection |
 
+## Performance budgets (spec §19)
+
+A level's **Performance budget** (in its properties, with nothing selected) says what it may cost on the platform it is made for: **PC**, **Console**, **Mobile** or **VR**, each with starting limits you can change one by one (a limit set by hand says so; set it back to the platform's to drop it). With no platform picked there is no budget and no warning.
+
+It counts, from what is placed, and shows as a bar against each limit (amber past 80%, red over), for the level and, on a level with several floors, this floor:
+
+| Count | What it counts |
+|---|---|
+| Triangles | Graybox pieces and imported models as placed (a model counts its full triangle count). Markers and volumes aren't drawn in the game. |
+| Draw calls | About one a graybox piece or model, and one a person. |
+| People | Placed NPCs, companions, enemies and neutrals, and every crowd's people. |
+| Lights, shadow lights | Every light; those set to cast shadows. |
+| Nav cells | Walkable cells in the navigation graph people find their way on. |
+
+These are the studio's estimates, made to say early, while it is still cheap to move things, that a level is heading over: a graybox's triangles are a floor, not the final art. Over budget is a preflight warning naming what costs most (*Sunken Vault is over its Mobile budget for lights: 3 of 1. Most of it: Lantern (1), Camp embers (1), Seam glow (1).*). The engine handoff carries the budget and the counts (`levels[].budget`) and a `BUDGETS.md` for the engine and art teams to profile the real level against.
+
 ## Play Mode (spec §9)
 
 Press **▶ Play** in the toolbar, or **F5** (Shift+F5 plays from the
@@ -434,7 +450,7 @@ clockwise seen from above.
 | §11 Engine handoff | Done: Godot, Unity, Unreal and JSON (see *Sending a level to an engine*). Checked in Godot 4.3, and against Unity and Unreal stand-ins (C#, C++ with g++ and clang, and the Python builder). |
 | §12 Preflight | Done, including what can't be reached from the player start, doorways lower than the player, items from older library versions, engine-specific checks (roles an engine gets as data only, wedges in Unreal, locked art with no final asset) and files changed in the engine since the last export. |
 | §14 Undo, persistence | Done: every edit is one undo step, GUIDs survive save, load, duplicate (which gives new ones), rename and re-export, and the data is plain JSON in the project file. |
-| §19 Future | Navmesh pathing and authoring done (see *Finding the way* and *Nav areas*), in Play Mode and every engine; the rest not started, as the spec says. |
+| §19 Future | Navmesh pathing and authoring (see *Finding the way* and *Nav areas*) and performance budgets (see *Performance budgets*) done, in Play Mode and every engine. Terrain sculpting and foliage are out of scope: the engine team builds the biomes and terrain in the engine, from the maps' terrain and biome planning shapes. The rest not started, as the spec says. |
 
 Against spec V2:
 

@@ -1,3 +1,4 @@
+import { budgetsMarkdown } from './budgets';
 import { tasksMarkdown } from './notes';
 import { castFiles } from './cast-files';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
@@ -130,6 +131,10 @@ export const storySchema = () => ({
           nav: {
             description: 'Where its people can walk (a level with patrols, companions, enemies or crowds): standable cells on a plan grid of `cell` metres from `origin` [x, z], `cols` by `rows`. Node i is `nodes[3i..3i+2]` (x, y up, z), its cell’s middle; `links[i]` are the nodes one step from it (across a ladder, too; down a drop, not back up). Find a way with A* over the links (a step counts its length times the mean of its two nodes’ `costs`, 1 when there are none), then pull it straight wherever every half cell along the line has a node within `step_up` of the height, each linked to the last (or through one neighbour) and none dearer than both ends. Doors count as open; No walk nav areas’ ground is left out.',
             ...obj({ cell: num, origin: ref('corner'), cols: num, rows: num, step_up: num, nodes: { type: 'array', items: num }, links: { type: 'array', items: { type: 'array', items: num } }, costs: { type: 'array', items: num, description: 'What a metre on each node counts for (Cost nav areas), when any isn’t 1.' } }, ['cell', 'origin', 'cols', 'rows', 'step_up', 'nodes', 'links']),
+          },
+          budget: {
+            description: 'Its performance budget (spec §19), when it has one: the platform it is made for (pc, console, mobile, vr), the limits, what the studio counted from the graybox (estimates: profile the real level against the limits), and which counts are over.',
+            ...obj({ platform: str, limits: { type: 'object', additionalProperties: num }, counts: { type: 'object', additionalProperties: num }, over: strings }),
           },
           revision: str,
         },
@@ -607,6 +612,9 @@ const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
     { path: `${root}/README.md`, content: README(ir), kind: 'generated' },
     { path: `${root}/TASKS.md`, content: tasksMarkdown(ir, 'engine', (n) => (n.on.kind === 'levelItem' || n.on.kind === 'level' ? `${n.on.export_name} (${n.on.key})` : n.on.key)), kind: 'generated' },
   ];
+  // Performance budgets (spec §19), when any level has one.
+  const budgets = budgetsMarkdown(ir, 'your engine', (l) => `\`${l.key}\``);
+  if (budgets) files.push({ path: `${root}/BUDGETS.md`, content: budgets, kind: 'generated' });
   const storyPath = `${root}/story.json`;
   const elements: ElementOutput[] = [];
   const row = (e: Omit<ElementOutput, 'fingerprint' | 'files'>, data: unknown) =>

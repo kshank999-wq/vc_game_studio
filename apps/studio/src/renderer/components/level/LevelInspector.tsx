@@ -50,6 +50,7 @@ import { BoolField, NumberField, RefField, Section, SelectField, TextField } fro
 import { itemsInRoom, anchorOf, boundsOf as mapBounds, BOUNDARIES, childOfItem, childrenOf, descendantsOf, kindLabel, kindOf, MAP_KINDS, moveMap, STATUSES, statusOf, updateMap } from '../../model/level/hierarchy';
 import { formatLength } from './units';
 import { ReferencesSection } from './ReferencesSection';
+import { BudgetSection } from './BudgetSection';
 import { PlaceInRoom } from './PlaceInRoom';
 import { StructureSceneSection, StructureSection } from './StructureSection';
 import { floorCodes } from '../../model/level/structure';
@@ -207,6 +208,7 @@ export const LevelInspector = (props: Props) => {
           <TextField label="Notes" value={level.notes ?? ''} onCommit={(v) => onCommit(updateLevel(project, level.id, { notes: v }))} />
         </Section>
         <MapSection project={project} levelId={level.id} global={global} open={!closed.has('map')} onToggle={() => toggle('map')} onCommit={onCommit} onOpenMap={props.onOpenMap} />
+        <BudgetSection project={project} levelId={level.id} floorId={floorId} global={global} open={!closed.has('budget')} onToggle={() => toggle('budget')} onCommit={onCommit} />
         <StructureSection project={project} levelId={level.id} open={!closed.has('structure')} onToggle={() => toggle('structure')} onCommit={onCommit} onFloor={props.onFloor} />
         <StructureSceneSection project={project} levelId={level.id} global={global} open={!closed.has('structureScene')} onToggle={() => toggle('structureScene')} onCommit={onCommit} />
         <ReferencesSection project={project} levelId={level.id} floorId={floorId} global={global} open={!closed.has('references')} onToggle={() => toggle('references')} onCommit={onCommit} onSay={props.onSay} />
