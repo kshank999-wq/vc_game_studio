@@ -246,7 +246,8 @@ the same effects, with triggers and puzzles settling after every change:
 - **Characters:** a linked scene starts, shown as a scene card.
 - **Interaction points:** tied to a story object, they use it the way free play does.
 - **Volumes:** notice entering and leaving. Cinematic triggers play their cinematic (with its shot list, skippable); checkpoints set where you come back; portals lead to another level, carrying the story with them; hazards and damage volumes hurt.
-- **Patrols (spec §11):** an NPC, enemy or neutral actor whose **Patrol** names a patrol walks the **Patrol nodes** of that name (Actors) in their **Order**, at its **Speed**, waiting each node's **Wait** at it, round and round. They walk straight from stop to stop: there is no pathfinding, so lay a patrol out with a clear line between its stops. Talk to someone on a patrol where they are. The map draws each patrol as a dashed loop, its stops numbered, and the preflight warns of a Patrol that names no nodes.
+- **Patrols (spec §11):** an NPC, enemy or neutral actor whose **Patrol** names a patrol walks the **Patrol nodes** of that name (Actors) in their **Order**, at its **Speed**, waiting each node's **Wait** at it, round and round. They find their way from stop to stop round walls, through doorways and up stairs and ladders (see *Finding the way*), so a patrol's stops can be in different rooms. Talk to someone on a patrol where they are. The map draws each patrol as a dashed loop, its stops numbered, and the preflight warns of a Patrol that names no nodes.
+- **Finding the way (spec §19, navmesh):** patrols, companions, actors chasing the player and the Character Creator's people walk round walls on the level's **navigation graph**: the same cells the 3D graybox's **Walkable** view shows, linked where one can step (or drop) to the next, and across ladders, elevators and traversal links. Each finds the way with A* and then walks it in straight lines wherever the ground between two points is clear, so it takes corners, not a staircase of cells. Doors count as open. When the target moves (a companion's player, a chaser's quarry) the way is planned again once it has moved a metre. With no way there at all, an actor stands where it is rather than walk through a wall, and the preflight warns of a patrol stop its actor can't walk to. A level with nothing to stand on (no floor) has no graph, and people there walk straight, as before.
 - **Characters and groups (Character Creator):**
   - A **Character group** (Actors) spreads one of the Character Creator's groups over its area. Its people show as dots on the map and as placeholder figures in 3D, and they wander, chat, patrol and flee in Play Mode.
   - An actor whose character is in the registry stands in as that character's placeholder.
@@ -270,7 +271,7 @@ the same effects, with triggers and puzzles settling after every change:
   - **Save preset** keeps the story state to start from later
 - **Event log:** every check (✓ or ✗) and everything that fired, newest first, filterable.
 - **Notes:** record an issue against the nearest item or the level. Notes appear in the preflight and on the item's inspector until resolved.
-- **Debug overlay** (F3): every item's name, export name and story links over it; volumes and markers drawn; the player's position and the volumes they're in; the last few log entries.
+- **Debug overlay** (F3): every item's name, export name and story links over it; volumes and markers drawn; the way each actor and character is walking, as a blue line; the player's position and the volumes they're in; the last few log entries.
 - **Game over** offers the last checkpoint, or starting again.
 
 ## Sending a level to an engine (spec §11)
@@ -422,13 +423,13 @@ clockwise seen from above.
 | §5 3D graybox | Done: box, plane, cylinder, sphere, wedge, stairs and ramps; walls with openings; move (free, or along world or local axes), resize and extrude faces and outline walls, pivots, hosted assets that follow their wall, collision and walkable previews. |
 | §6 Inspector | Done, including search and "More" for advanced fields. |
 | §7 Narrative | Done: links both ways, conditions from choices and state, and scene timeline events placed in the level. |
-| §8 Logic, spawns | Done: rules, conditions, story effects and level actions run in Play Mode; spawners spawn after their delay, conditionally. Placed actors walk their patrols and companions follow the player (§11 of the Game Studio spec), in Play Mode and every engine; spawned actors stand where they spawn, and nothing paths around walls. |
+| §8 Logic, spawns | Done: rules, conditions, story effects and level actions run in Play Mode; spawners spawn after their delay, conditionally. Placed actors walk their patrols and companions follow the player (§11 of the Game Studio spec), in Play Mode and every engine; spawned actors stand where they spawn. Everyone who walks finds their way round walls (§19 navmesh). |
 | §9 Play Mode | Done: first person, third person and top-down; keyboard, mouse and controller through rebindable actions; collision, gravity, jumping, stairs; pause and inspect with editable state; test presets; start from the level start, the selection or the 3D camera; debug overlay; event log; notes linked to items. Scenes linked to characters show as cards rather than playing their script in the level. |
 | §10 Identity and names | Done. |
 | §11 Engine handoff | Done: Godot, Unity, Unreal and JSON (see *Sending a level to an engine*). Checked in Godot 4.3, and against Unity and Unreal stand-ins (C#, C++ with g++ and clang, and the Python builder). |
 | §12 Preflight | Done, including what can't be reached from the player start, doorways lower than the player, items from older library versions, engine-specific checks (roles an engine gets as data only, wedges in Unreal, locked art with no final asset) and files changed in the engine since the last export. |
 | §14 Undo, persistence | Done: every edit is one undo step, GUIDs survive save, load, duplicate (which gives new ones), rename and re-export, and the data is plain JSON in the project file. |
-| §19 Future | Not started, as the spec says. |
+| §19 Future | Navmesh pathing done (see *Finding the way*), in Play Mode and every engine; the rest not started, as the spec says. |
 
 Against spec V2:
 

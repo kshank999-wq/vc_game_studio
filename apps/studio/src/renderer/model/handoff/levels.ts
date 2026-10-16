@@ -1,4 +1,6 @@
-import { motionOf } from '../level/actors';
+import { motionOf, PATROLLERS } from '../level/actors';
+import { BODY } from '../level/controller';
+import { navGraph } from '../level/nav';
 import type { Effect, Rule } from '../rules';
 import type { Project } from '../types';
 import { assetOf, contains, frameOf, meshesFor, paramOf } from '../level/geometry';
@@ -168,6 +170,24 @@ export interface IrTravel {
   unlock_when?: IrRule;
 }
 
+/**
+ * The navigation graph (spec §19 navmesh), for a level with people who walk:
+ * standable cells on a plan grid (origin is its north-west corner) and which
+ * reach which. Node i is nodes[3i], nodes[3i + 1], nodes[3i + 2]: x, height, y
+ * in the level's space, the middle of its cell. The runtimes walk it as the
+ * studio's Play Mode does: A* over the links, pulled straight where the line is
+ * clear (no node in a cell along it within step_up of the height: not clear).
+ */
+export interface IrNav {
+  cell: number;
+  origin: [number, number];
+  cols: number;
+  rows: number;
+  step_up: number;
+  nodes: number[];
+  links: number[][];
+}
+
 export interface IrLevel {
   guid: string;
   key: string;
@@ -184,8 +204,13 @@ export interface IrLevel {
   travel: IrTravel[];
   /** A structure's manifest (structure spec §13, §14): floors, rooms, connections, door rules, objectives, persistence. */
   structure?: IrStructure;
+  /** Where its people can walk, when it has any (patrols, companions, enemies, crowds). */
+  nav?: IrNav;
   revision: string;
 }
+
+/** Roles of the people who walk a level: they find their way on its navigation graph. */
+const WALKERS: ReadonlySet<string> = new Set([...PATROLLERS, 'companion', 'crowd']);
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -260,6 +285,22 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
       navigation: level.navigation ?? '',
       children: kids.map((k) => childEntry(k, level)),
       placement: parent ? childEntry(level, parent).placement : null,
+    };
+  };
+  const navOf = (levelId: string): { nav?: IrNav } => {
+    if (!set.items.some((i) => i.levelId === levelId && !i.hidden && WALKERS.has(assetOf(set, i).role))) return {};
+    const g = navGraph(set, levelId);
+    if (!g) return {};
+    return {
+      nav: {
+        cell: g.cell,
+        origin: [round(g.minX), round(g.minY)],
+        cols: g.cols,
+        rows: g.rows,
+        step_up: BODY.stepUp,
+        nodes: g.nodes.flatMap((n) => [round(n.x), round(n.z), round(n.y)]),
+        links: g.links.map((l) => [...l].sort((a, b) => a - b)),
+      },
     };
   };
   const motionFor = (item: (typeof set.items)[number]): { motion?: IrMotion } => {
@@ -399,6 +440,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
         };
       }),
       ...(level.structure ? { structure: structureManifest(project, set, level, floorKey, exportedIds(set, level.id), story) } : {}),
+      ...navOf(level.id),
     };
     return { ...out, revision: fingerprint(JSON.stringify(out)) };
   });

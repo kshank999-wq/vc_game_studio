@@ -10,7 +10,7 @@ import { levelsOf } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
 import { levelCast } from '../../model/level/play';
 import { doorRules } from '../../model/level/doors';
-import { answerScreen, darknessAt, dismiss, skipScene, inHand, interactWith, isOpen, leaveLevel, lightOf, offerFor, present, spendStamina, startLevelPlay, tick, toggleLight, tracksStamina, traversalAt, useInHand, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
+import { answerScreen, darknessAt, dismiss, skipScene, inHand, interactWith, isOpen, leaveLevel, lightOf, offerFor, present, spendStamina, startLevelPlay, tick, toggleLight, tracksStamina, traversalAt, useInHand, waysOf, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
 import { equipmentList, equipmentOf, usesLeft } from '../../model/equipment';
 import { recipesOf } from '../../model/crafting';
 import { skillsOf } from '../../model/skills';
@@ -158,7 +158,7 @@ export const PlayMode = (props: Props) => {
 
   // ------------------------------------------------------------ three.js
 
-  const three = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; content: THREE.Group; avatar: THREE.Group; actors: THREE.Group; lamp: THREE.PointLight } | null>(null);
+  const three = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; content: THREE.Group; avatar: THREE.Group; actors: THREE.Group; lamp: THREE.PointLight; ways: THREE.LineSegments } | null>(null);
   const darkRef = useRef<HTMLDivElement>(null);
   // Actors that move (patrols, companions): drawn in a group each, placed at their pose every frame.
   const movers = useRef(new Map<string, THREE.Group>());
@@ -204,7 +204,13 @@ export const PlayMode = (props: Props) => {
     const lamp = new THREE.PointLight('#ffd89a', 26, lightOf(project, levelId, global).range, 1.4);
     lamp.visible = false;
     s.add(lamp);
-    three.current = { renderer, scene: s, camera, content, avatar, actors, lamp };
+    // The ways the actors are walking, in the debug overlay: drawn over everything.
+    const ways = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: '#35d0ff', depthTest: false }));
+    ways.renderOrder = 10;
+    ways.frustumCulled = false;
+    ways.visible = false;
+    s.add(ways);
+    three.current = { renderer, scene: s, camera, content, avatar, actors, lamp, ways };
     const resize = () => {
       const { width, height } = el.getBoundingClientRect();
       renderer.setSize(Math.max(1, width), Math.max(1, height));
@@ -519,6 +525,23 @@ export const PlayMode = (props: Props) => {
       }
       t.lamp.visible = !!s.light?.on && lit;
       t.lamp.position.set(body.current.x, body.current.z + eyeOf(body.current) + 0.2, body.current.y);
+      t.ways.visible = latest.current.debug;
+      if (latest.current.debug) {
+        const xyz: number[] = [];
+        for (const way of waysOf(s)) for (let i = 1; i < way.length; i++) xyz.push(way[i - 1]!.x, way[i - 1]!.z + 0.1, way[i - 1]!.y, way[i]!.x, way[i]!.z + 0.1, way[i]!.y);
+        // One buffer, grown when it must be, so drawing every frame allocates nothing on the GPU.
+        let at = t.ways.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+        if (!at || at.array.length < xyz.length) {
+          t.ways.geometry.dispose();
+          t.ways.geometry = new THREE.BufferGeometry();
+          at = new THREE.BufferAttribute(new Float32Array(Math.max(xyz.length, 6 * 256) * 2), 3);
+          at.setUsage(THREE.DynamicDrawUsage);
+          t.ways.geometry.setAttribute('position', at);
+        }
+        (at.array as Float32Array).set(xyz);
+        at.needsUpdate = true;
+        t.ways.geometry.setDrawRange(0, xyz.length / 3);
+      }
       if (latest.current.debug) drawLabels(labels.current, t.camera, p.project, s, p.global);
       else if (labels.current && labels.current.childElementCount) labels.current.replaceChildren();
       t.renderer.render(t.scene, t.camera);

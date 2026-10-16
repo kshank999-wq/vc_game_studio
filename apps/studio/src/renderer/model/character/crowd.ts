@@ -1,5 +1,6 @@
 import { canSee, patrolStops, type Blocker } from '../level/actors';
 import { assetOf, frameOf, num, paramOf } from '../level/geometry';
+import { nextOnWay, type NavGraph, type Way } from '../level/nav';
 import type { AssetDefinition, LevelItem, LevelSet } from '../level/types';
 import type { Project, StoryObject } from '../types';
 import { abilityTemplate } from './abilities';
@@ -163,6 +164,8 @@ export interface CastPose {
   fleeing?: boolean;
   /** An AI member's machine. */
   mem?: AIMemory;
+  /** The way round walls it is walking, on the level's navigation graph. */
+  way?: Way;
 }
 
 export const startCast = (cast: readonly CastMember[]): Record<string, CastPose> =>
@@ -213,9 +216,18 @@ export interface CastStep {
  * Move everyone by dt. Ambient people follow their activity (and flee when
  * their character does); AI enemies run their machine on the plan around
  * the player, with `blocked` saying when a wall is in the way, attacking
- * (no more at once than their guardrail allows) when in range.
+ * (no more at once than their guardrail allows) when in range. Given the
+ * level's navigation graph, everyone walks round walls on it.
  */
-export const stepCast = (cast: readonly CastMember[], poses: Readonly<Record<string, CastPose>>, dt: number, time: number, player: { x: number; y: number; z: number; alive: boolean; noisy: boolean }, blocked: (a: { x: number; y: number }, b: { x: number; y: number }) => boolean): CastStep => {
+export const stepCast = (
+  cast: readonly CastMember[],
+  poses: Readonly<Record<string, CastPose>>,
+  dt: number,
+  time: number,
+  player: { x: number; y: number; z: number; alive: boolean; noisy: boolean },
+  blocked: (a: { x: number; y: number }, b: { x: number; y: number }) => boolean,
+  nav?: NavGraph | null,
+): CastStep => {
   const next: Record<string, CastPose> = { ...poses };
   let damage = 0;
   const events: string[] = [];
@@ -226,9 +238,30 @@ export const stepCast = (cast: readonly CastMember[], poses: Readonly<Record<str
     const p0 = poses[c.key];
     if (!p0) continue;
     let p = p0;
+    // Toward a place by the way round walls (standing when there is none); straight with no graph.
+    const walkVia = (q: CastPose, to: { x: number; y: number }, by: number): { pose: CastPose; arrived: boolean } => {
+      if (!nav) return walkTo(q, to, by);
+      const goal = { x: to.x, y: to.y, z: c.z };
+      const r = nextOnWay(nav, q.way, { x: q.x, y: q.y, z: c.z }, goal);
+      if (!r.next) return { pose: { ...q, way: r.way, moving: false }, arrived: false };
+      const step = walkTo({ ...q, way: r.way }, r.next, by);
+      if (r.next !== goal) return { pose: { ...step.pose, moving: true }, arrived: false };
+      if (!step.arrived) return step;
+      const { way: _w, ...rest } = step.pose;
+      return { pose: rest, arrived: true };
+    };
     if (c.ai && p.mem) {
       const route = [c.home, ...c.route];
-      const r = aiStep(c.ai, c.speed, { ...p.mem, pos: { x: p.x, y: p.y } }, { target: { x: player.x, y: player.y, noisy: player.noisy, alive: player.alive && Math.abs(player.z - c.z) < 3 }, patrol: route, walls: [], blocked }, dt);
+      let way = p.way;
+      const steer = nav
+        ? (from: { x: number; y: number }, to: { x: number; y: number }) => {
+            const goal = { x: to.x, y: to.y, z: c.z };
+            const r = nextOnWay(nav, way, { x: from.x, y: from.y, z: c.z }, goal);
+            way = r.way;
+            return r.next === goal ? to : r.next;
+          }
+        : undefined;
+      const r = aiStep(c.ai, c.speed, { ...p.mem, pos: { x: p.x, y: p.y } }, { target: { x: player.x, y: player.y, noisy: player.noisy, alive: player.alive && Math.abs(player.z - c.z) < 3 }, patrol: route, walls: [], blocked, ...(steer ? { steer } : {}) }, dt);
       const m = r.memory;
       if (r.reason) events.push(`${c.name}: ${r.reason}`);
       if (r.attacked) {
@@ -239,7 +272,7 @@ export const stepCast = (cast: readonly CastMember[], poses: Readonly<Record<str
         }
       }
       if (m.state === 'attack' && p.mem.state !== 'attack') attackers++;
-      p = { ...p, x: m.pos.x, y: m.pos.y, yaw: m.facing + Math.PI / 2, moving: Math.hypot(m.pos.x - p.x, m.pos.y - p.y) > 1e-4, mem: m };
+      p = { ...p, x: m.pos.x, y: m.pos.y, yaw: m.facing + Math.PI / 2, moving: Math.hypot(m.pos.x - p.x, m.pos.y - p.y) > 1e-4, mem: m, ...(way ? { way } : {}) };
       next[c.key] = p;
       continue;
     }
@@ -249,7 +282,7 @@ export const stepCast = (cast: readonly CastMember[], poses: Readonly<Record<str
     if (threat) {
       const away = Math.atan2(p.y - threat.y, p.x - threat.x);
       const to = { x: c.home.x + Math.cos(away) * (c.wanderRadius + 4), y: c.home.y + Math.sin(away) * (c.wanderRadius + 4) };
-      p = { ...walkTo(p, to, c.speed * 1.2 * dt).pose, fleeing: true, until: time + 3 };
+      p = { ...walkVia(p, to, c.speed * 1.2 * dt).pose, fleeing: true, until: time + 3 };
       next[c.key] = p;
       continue;
     }
@@ -266,14 +299,14 @@ export const stepCast = (cast: readonly CastMember[], poses: Readonly<Record<str
           p = blocked(p, to) || (c.area && !insideArea(c.area, to)) ? { ...p, draws: p.draws + 2, until: time + 0.5 } : { ...p, target: to, draws: p.draws + 2 };
           break;
         }
-        const { pose, arrived } = walkTo(p, p.target, c.speed * 0.35 * dt);
+        const { pose, arrived } = walkVia(p, p.target, c.speed * 0.35 * dt);
         p = arrived ? { ...pose, target: undefined, until: time + 1 + draw(c.key, p.draws) * 3, draws: p.draws + 1 } : pose;
         break;
       }
       case 'patrol': {
         if (!c.route.length || time < p.until) break;
         const to = c.route[p.stop % c.route.length]!;
-        const { pose, arrived } = walkTo(p, to, c.speed * 0.45 * dt);
+        const { pose, arrived } = walkVia(p, to, c.speed * 0.45 * dt);
         p = arrived ? { ...pose, stop: (p.stop + 1) % c.route.length, until: time + 1 } : pose;
         break;
       }
@@ -284,7 +317,7 @@ export const stepCast = (cast: readonly CastMember[], poses: Readonly<Record<str
       case 'talk':
       case 'guard':
         // Back to its spot when something moved it (a flight).
-        if (Math.hypot(p.x - c.home.x, p.y - c.home.y) > 0.3) p = walkTo(p, c.home, c.speed * 0.5 * dt).pose;
+        if (Math.hypot(p.x - c.home.x, p.y - c.home.y) > 0.3) p = walkVia(p, c.home, c.speed * 0.5 * dt).pose;
         else if (p.moving) p = { ...p, moving: false, yaw: c.yaw };
         break;
     }

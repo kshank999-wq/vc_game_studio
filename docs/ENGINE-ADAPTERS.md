@@ -515,6 +515,26 @@ While it sees the player an actor does what its `onSight` says: `carry on`
 patrol, or stands where it is. Every runtime does the same: Godot's
 `step_reaction`, Unity's and Unreal's `StepReaction`.
 
+## Finding the way round walls
+
+A level with people who walk (patrols, companions, enemies, crowds) carries
+its navigation graph as `nav` (spec §19 navmesh): standable cells on a plan
+grid of `cell` metres from `origin`, `cols` by `rows`; node *i* is
+`nodes[3i..3i+2]` (x, y up, z, its cell's middle) and `links[i]` the nodes one
+step from it, across ladders too, and down drops but not back up them. Doors
+count as open. Every runtime walks it as Play Mode does: the nearest node to
+each end, A* over the links, then pulled straight wherever every half cell
+along the line has a node within `step_up` of the height, each leading to the
+last. The way is kept and planned again once the target has moved a metre;
+with no way there, the actor stands. Patrols, companions and chasers use it
+(Godot's `VCGSNav` with `_travel` in `VCGSLevel`), and so does the AI
+character core: its walk takes a `steer` that gives the next point of the way
+(`VCGSCast._walk`, with the actor's `steer` from the level above it), and
+activities walk round walls too (`move_along_plan`). A level with nothing to
+stand on has no `nav`, and people there walk straight. The engine checks walk
+a small yard with a wall in it: round through the gap, never through, and
+standing still when the wall has no gap.
+
 ## Cinematics: branching, and back to gameplay
 
 A cinematic on the spine can skip ahead, as a choice can: its routes out carry

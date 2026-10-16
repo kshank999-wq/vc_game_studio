@@ -680,6 +680,35 @@ func check_level(game: Node) -> void:
 	level.step_follow(pose, follow, 0.1, Vector3(4, 0, 30))
 	if pose["at"].distance_to(Vector3(4, 0, 28)) > 0.001:
 		fail("a companion left 30 m behind should catch up at once, got " + str(pose["at"]))
+	# Navmesh pathing (spec §19): the level carries its graph; a way goes round a wall, through its gap.
+	if level.nav == null or level.nav.nodes.size() < 100:
+		fail("the Sunken Vault should carry its navigation graph (Mara walks it)")
+	var yard := _yard(true)
+	var way: Array = yard.find_path(Vector3(0.5, 0, 0.5), Vector3(4.5, 0, 0.5))
+	var highest := 0.0
+	for p in way:
+		highest = maxf(highest, p.z)
+	print("nav: way round the wall ", way)
+	if way.is_empty() or highest < 4.0 or way.back().distance_to(Vector3(4.5, 0, 0.5)) > 0.001:
+		fail("the way should go round the wall through the gap at its north end, got " + str(way))
+	if not _yard(false).find_path(Vector3(0.5, 0, 0.5), Vector3(4.5, 0, 0.5)).is_empty():
+		fail("there should be no way through a wall with no gap")
+	if yard.find_path(Vector3(0.5, 0, 4.5), Vector3(4.5, 0, 4.5)).size() != 1:
+		fail("along open ground the way should go straight there")
+	var guard := { "at": Vector3(0.5, 0, 0.5), "stop": 0, "until": 0.0 }
+	var beat := { "kind": "patrol", "speed": 4.0, "stops": [{ "at": [4.5, 0, 0.5], "wait": 30.0 }] }
+	var through := false
+	for _i in 60:
+		level.step_patrol(guard, beat, 0.1, 0.0, yard)
+		if absf(guard["at"].x - 2.5) < 0.5 and guard["at"].z < 4.0:
+			through = true
+	if through or guard["at"].distance_to(Vector3(4.5, 0, 0.5)) > 0.001:
+		fail("a patrol should walk round the wall to its stop, got " + str(guard["at"]) + (" through the wall" if through else ""))
+	var shut := { "at": Vector3(0.5, 0, 0.5), "stop": 0, "until": 0.0 }
+	for _i in 10:
+		level.step_patrol(shut, beat, 0.1, 0.0, _yard(false))
+	if shut["at"] != Vector3(0.5, 0, 0.5) or shut["moving"]:
+		fail("with no way to its stop a patrol should stand, got " + str(shut["at"]))
 	var chamber: Node = level.get_node_or_null("RM_SunkenVault_VaultChamber_004")
 	if chamber == null or chamber.get_node("Collision").get_child_count() < 4 or chamber.get_node("Proxy").get_child_count() < 5:
 		fail("the vault chamber should have its floor and walls, as meshes and collision")
@@ -906,3 +935,26 @@ func check_world(game: Node) -> void:
 	print("travel: ", went.map(func(w: Array) -> String: return str(w[0]) + " → " + (str(w[1]) if str(w[1]) != "" else "here") + " (" + str(w[2]) + ")"))
 	walker.free()
 	world.queue_free()
+
+## A 5 × 5 m yard of 1 m cells with a wall down x = 2.5: a gap at its north end (z 4–5) or none.
+func _yard(gap: bool) -> VCGSNav:
+	var nodes: Array = []
+	var index := {}
+	for r in 5:
+		for c in 5:
+			if c == 2 and (r < 4 or not gap):
+				continue
+			index[r * 5 + c] = nodes.size() / 3
+			nodes.append_array([c + 0.5, 0.0, r + 0.5])
+	var links: Array = []
+	for r in 5:
+		for c in 5:
+			if not index.has(r * 5 + c):
+				continue
+			var out: Array = []
+			for d in [[0, 1], [1, 0], [0, -1], [-1, 0]]:
+				var k: int = (r + d[0]) * 5 + c + d[1]
+				if r + d[0] >= 0 and r + d[0] < 5 and c + d[1] >= 0 and c + d[1] < 5 and index.has(k):
+					out.append(index[k])
+			links.append(out)
+	return VCGSNav.from_data({ "cell": 1.0, "origin": [0, 0], "cols": 5, "rows": 5, "step_up": 0.42, "nodes": nodes, "links": links })

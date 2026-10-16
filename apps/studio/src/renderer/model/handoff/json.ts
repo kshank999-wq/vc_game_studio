@@ -127,6 +127,10 @@ export const storySchema = () => ({
           items: { type: 'array', items: ref('levelItem') },
           map: ref('map'),
           travel: { type: 'array', items: ref('travel') },
+          nav: {
+            description: 'Where its people can walk (a level with patrols, companions, enemies or crowds): standable cells on a plan grid of `cell` metres from `origin` [x, z], `cols` by `rows`. Node i is `nodes[3i..3i+2]` (x, y up, z), its cell’s middle; `links[i]` are the nodes one step from it (across a ladder, too; down a drop, not back up). Find a way with A* over the links, then pull it straight wherever every half cell along the line has a node within `step_up` of the height, each linked to the last (or through one neighbour). Doors count as open.',
+            ...obj({ cell: num, origin: ref('corner'), cols: num, rows: num, step_up: num, nodes: { type: 'array', items: num }, links: { type: 'array', items: { type: 'array', items: num } } }),
+          },
           revision: str,
         },
         ['guid', 'key', 'export_name', 'name', 'floors', 'links', 'start', 'light', 'items', 'map', 'travel', 'revision'],
@@ -210,7 +214,7 @@ export const storySchema = () => ({
           replacement_locked: { type: 'boolean' },
           pieces: { type: 'array', items: ref('piece') },
           motion: {
-            description: 'How it moves in play: a patrol walked round its stops in order (straight from stop to stop, waiting `wait` seconds at each), or a companion keeping within `distance` of the player (catching up at once when more than 12 m behind or 3 m above or below). Speeds in metres a second.',
+            description: 'How it moves in play: a patrol walked round its stops in order (by the level’s `nav` round walls, straight with none, waiting `wait` seconds at each; with no way to a stop it stands), or a companion keeping within `distance` of the player (catching up at once when more than 12 m behind or 3 m above or below). Speeds in metres a second.',
             oneOf: [
               obj({ kind: { const: 'patrol' }, name: str, speed: num, stops: { type: 'array', minItems: 1, items: obj({ guid: str, at: ref('vec3'), wait: num }) } }),
               obj({ kind: { const: 'follow' }, speed: num, distance: num }),

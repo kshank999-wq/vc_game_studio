@@ -63,6 +63,14 @@ func _initialize() -> void:
 		fail("a fireball should need mana")
 	if VCGSCast.can_use(fireball, { "fireball": 5.0 }, { "mana": 100.0 }, 1.0) != "Fireball is cooling down.":
 		fail("a fireball should cool down")
+	# The way round walls (spec §19 navmesh): the machine heads for the corner steer gives it, and stands with no way.
+	var corner := func(_ax: float, ay: float, tx: float, ty: float) -> Variant: return [0.0, 3.0, false] if ay < 2.999 else [tx, ty, true]
+	var walker := { "x": 0.0, "y": 0.0, "facing": 0.0 }
+	if VCGSCast._walk(walker, 3.0, 0.0, 1.0, 1.0, corner) or absf(walker["x"]) > 0.001 or absf(walker["y"] - 1.0) > 0.001:
+		fail("an AI should walk to the corner of its way first, got " + str(walker))
+	var stuck := { "x": 0.0, "y": 0.0, "facing": 0.0 }
+	if VCGSCast._walk(stuck, 3.0, 0.0, 1.0, 1.0, func(_a, _b, _c, _d): return null) or stuck["x"] != 0.0:
+		fail("an AI with no way there should stand, got " + str(stuck))
 	# The spawn group and a placed orc: added now, checked once they are ready (a frame on).
 	spawner = VCGSSpawnGroup.new()
 	for p in cast["placements"]:

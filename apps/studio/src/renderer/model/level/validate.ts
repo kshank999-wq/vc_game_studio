@@ -1,11 +1,11 @@
-import { PATROLLERS, patrolStops } from './actors';
+import { motionOf, PATROLLERS, patrolStops } from './actors';
 import type { Project } from '../types';
 import { assetOf, corners, frameOf, openingOf, outlineOf, overlaps, paramOf, selfIntersects, sizeOf, wallsOf } from './geometry';
 import { referencesOf } from './links';
 import { structureIssues } from './structure';
 import { walkStructure } from './walkthrough';
 import { migrationFor } from './migrate';
-import { navigate } from './nav';
+import { navGraph, navigate, nearestNode, reachableFrom } from './nav';
 import { BODY, CROUCH } from './controller';
 import { engineSafe, exportNameOf, levelExportName } from './naming';
 import type { AssetDefinition, LevelItem } from './types';
@@ -186,6 +186,24 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
     for (const id of nav.unreachable) {
       const item = set.items.find((i) => i.id === id)!;
       add({ id, levelId: level.id, severity: 'warning', message: `${item.name} can’t be reached from the player start.`, export: 'Doors and gates count as open. Look for a step too high to climb, a gap, or a wall in the way: the 3D graybox’s Walkable view shows where the player can get to.' });
+    }
+  }
+  // Patrol stops an actor can't walk to (spec §19 navmesh): it would stand still in play, and in the engines.
+  for (const item of set.items) {
+    if (item.hidden) continue;
+    const m = motionOf(set, item, global);
+    if (m?.kind !== 'patrol') continue;
+    const g = navGraph(set, item.levelId, global);
+    if (!g) continue;
+    const f = frameOf(set, item, global);
+    const elevation = set.levels.find((l) => l.id === item.levelId)?.floors.find((fl) => fl.id === item.floorId)?.elevation ?? 0;
+    const reach = reachableFrom(g, { x: f.x, y: f.y, z: elevation + item.z });
+    if (!reach) continue;
+    for (const stop of m.stops) {
+      const n = nearestNode(g, stop, 2);
+      if (n >= 0 && reach[n]) continue;
+      const node = set.items.find((i) => i.id === stop.itemId)!;
+      add({ id: item.id, levelId: item.levelId, severity: 'warning', message: `${item.name} can’t walk to ${node.name} on its patrol “${m.name}”.`, export: 'It stops and stands where the way runs out. Doors count as open: look for a wall in the way, a step too high, or a stop off the ground.' });
     }
   }
 

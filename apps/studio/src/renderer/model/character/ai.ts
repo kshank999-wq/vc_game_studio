@@ -265,6 +265,8 @@ export interface AIWorld {
   walls: [Vec, Vec][];
   /** What else blocks sight between two points (a level's solids). */
   blocked?: (a: Vec, b: Vec) => boolean;
+  /** The way round walls: the next point to head for on the way from one place to another, or null for no way there (a level's navigation graph). */
+  steer?: (from: Vec, to: Vec) => Vec | null;
 }
 
 export interface AIMemory {
@@ -409,15 +411,20 @@ export const aiStep = (ai: AIProfile, speed: number, m0: AIMemory, world: AIWorl
   }
 
   // Move.
+  // Toward a place, by the way round walls when the world knows one (standing when there is none).
   const walk = (to: Vec, pace: number) => {
-    const d = dist(m.pos, to);
-    if (d < 0.01) return true;
-    const turn = angleTo(m.pos, to);
+    if (dist(m.pos, to) < 0.01) return true;
+    const via = world.steer ? world.steer(m.pos, to) : to;
+    if (!via) return false;
+    const d = dist(m.pos, via);
+    if (d < 1e-6) return false;
+    const turn = angleTo(m.pos, via);
     m.facing = turn;
     const step = Math.min(d, pace * dt);
     m.pos.x += Math.cos(turn) * step;
     m.pos.y += Math.sin(turn) * step;
-    return step >= d;
+    // There only on the last leg of the way.
+    return via === to && step >= d;
   };
   const chaseSpeed = speed * (0.7 + 0.6 * (ai.skill.pursuit / 100));
   let attacked = false;

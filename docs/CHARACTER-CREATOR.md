@@ -377,11 +377,12 @@ the Level Designer on it), and its problems:
     - chatters face each other;
     - workers keep their spot;
     - patrols walk the group's route in formation;
+    - everyone walks round walls on the level's navigation graph, and a wanderer picks another spot when there's no way to the one it chose;
     - extras flee from fights or the player, as their character says.
   - People are never put inside walls or solids, and never closer than the spacing.
 - **Placed characters.** An NPC, Companion, Enemy or Neutral actor whose character is in the registry stands in as that character's placeholder: its tint, silhouette and height, with its sword, shield, bow or staff in hand. The inspector has **Open … in the Character Creator**. An Enemy can pick one of its character's **variants**.
 - **AI enemies in Play Mode.** A placed Enemy, or a group member, whose character is an enemy runs its AI profile:
-  - it patrols its patrol, or holds its post;
+  - it patrols its patrol, or holds its post, finding its way round walls on the level's navigation graph (as every move it makes does: investigating, chasing, searching, going back);
   - it sees the player in its cone (walls and closed doors block sight), hears them, or senses them within its proximity radius;
   - it reacts after its reaction time, chases and attacks;
   - its blows hurt the player: the damage of its first combat ability, by rank and variant, scaled by its accuracy;

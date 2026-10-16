@@ -12,6 +12,7 @@ import { cinematicTiming } from '../shots';
 import type { Project } from '../types';
 import { assetOf, bool, contains, frameOf, meshesFor, num, paramOf, spaceAt, type Point } from './geometry';
 import { doorRules, doorSide } from './doors';
+import { navGraph } from './nav';
 import { footprintOf, insidePolygon, OUTSIDE, structureGraph } from './structure';
 import { guid, levelsOf } from './level';
 import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelSet, PlayNote, PlayPreset, StructureObjective } from './types';
@@ -263,6 +264,14 @@ export const tooDark = (project: Project, state: LevelPlayState, item: LevelItem
 // ---------------------------------------------------------------- what is there
 
 /** In the level right now: not taken, not switched off, and its "present only when" holds. */
+/** The ways the actors and characters are walking now, each from where it stands (the debug overlay draws them). */
+export const waysOf = (state: LevelPlayState): { x: number; y: number; z: number }[][] => {
+  const out: { x: number; y: number; z: number }[][] = [];
+  for (const p of Object.values(state.actors ?? {})) if (p.route?.length) out.push([{ x: p.x, y: p.y, z: p.z }, ...p.route]);
+  for (const p of Object.values(state.cast ?? {})) if (p.way && !p.way.none && p.way.route.length) out.push([{ x: p.x, y: p.y, z: p.z }, ...p.way.route]);
+  return out;
+};
+
 export const present = (project: Project, state: LevelPlayState, item: LevelItem): boolean =>
   item.levelId === state.levelId && !item.hidden && !state.gone[item.id] && switchedOn(state, item) && evaluate(item.activeWhen, state.world);
 
@@ -814,17 +823,18 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   // Timed puzzle steps run on the play clock: one that ran out is undone (puzzle spec §6).
   s = runPuzzleClock(project, s);
 
-  // Patrols walk on, companions keep up.
+  // Patrols walk on, companions keep up: round walls, on the level's navigation graph.
   const cast = levelCast(project, s.levelId, global);
   const driven = new Set(cast.filter((c) => c.placed).map((c) => c.itemId));
-  const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => !driven.has(i.id) && present(project, s, i), global, s.seen);
+  const nav = cast.length || Object.keys(s.actors ?? {}).length ? navGraph(set, s.levelId, global) : null;
+  const actors = stepActors(set, s.actors ?? {}, dt, s.time, at, (i) => !driven.has(i.id) && present(project, s, i), global, s.seen, nav);
   if (actors !== s.actors) s = { ...s, actors };
 
   // The Character Creator's people: group members go about their business, AI enemies run their machines (character spec §6.2, §7).
   if (cast.length) {
     const blockers = blockersOf(set, s.levelId, global).filter((b) => !(b.part === 'door' && s.open[b.itemId]));
     const here = cast.filter((c) => !c.placed || present(project, s, set.items.find((i) => i.id === c.itemId)!));
-    const step = stepCast(here, s.cast ?? startCast(cast), dt, s.time, { ...at, alive: s.health > 0, noisy: false }, sightBlocked(blockers, at.z));
+    const step = stepCast(here, s.cast ?? startCast(cast), dt, s.time, { ...at, alive: s.health > 0, noisy: false }, sightBlocked(blockers, at.z), nav);
     s = { ...s, cast: step.poses };
     for (const text of step.events) s = log(s, { kind: 'event', text });
     if (step.damage > 0) s = { ...s, health: Math.max(0, s.health - step.damage) };
