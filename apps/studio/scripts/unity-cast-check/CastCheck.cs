@@ -109,7 +109,15 @@ static class CastCheck
             var first = people[0];
             var at = D.List(D.Map(D.List(market, "members")[0]), "position");
             var pos = first.transform.localPosition;
-            if (Math.Abs(pos.x - D.Num(at[0], 0)) > 0.01 || Math.Abs(pos.z - D.Num(at[2], 0)) > 0.01) Fail("the first villager should stand where the studio put it");
+            // In Unity's space, as the level builder puts the level: the studio's z (south) is Unity's -z.
+            if (Math.Abs(pos.x - D.Num(at[0], 0)) > 0.01 || Math.Abs(pos.z + D.Num(at[2], 0)) > 0.01) Fail("the first villager should stand where the studio put it, in the level's space (z flipped), got " + pos + " for " + D.Num(at[2], 0));
+            var routed = people.Find(a => a.route.Count > 0);
+            if (routed != null)
+            {
+                var plan = D.List(D.Map(D.List(market, "members")[people.IndexOf(routed)]), "route");
+                if (Math.Abs(routed.route[0].z + D.Num(D.List(plan[0])[2], 0)) > 0.01) Fail("a patrolling villager's route should be in the level's space too (z flipped)");
+            }
+            Console.WriteLine("villagers in the level's space; " + (routed != null ? "a route flipped with them" : "none on a route"));
             if (first.Inventory == null || first.Behavior == null || first.Abilities == null || first.Dialogue == null || first.Equipment == null || first.Perception == null) Fail("a spawned character should have all its components");
             if (first.transform.Find("Placeholder") == null) Fail("a character with no final art should show its placeholder");
             foreach (var a in people) a.Behavior.Tick(0.1f);

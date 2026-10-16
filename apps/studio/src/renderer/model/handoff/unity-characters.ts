@@ -893,8 +893,8 @@ namespace VCGS
                     var m = D.Map(o);
                     var go = new GameObject(D.Str(m, "id").Replace("#", "_"));
                     go.transform.SetParent(transform, false);
-                    var pos = D.List(m, "position");
-                    go.transform.localPosition = new Vector3((float)D.Num(pos[0], 0), (float)D.Num(pos[1], 0), (float)D.Num(pos[2], 0));
+                    // Into Unity's space as the level builder puts the level: the studio's z runs south, Unity's north.
+                    go.transform.localPosition = ToUnity(D.List(m, "position"));
                     go.transform.localRotation = Quaternion.Euler(0, -(float)D.Num(m, "turn"), 0);
                     var actor = go.AddComponent<VcgsActor>();
                     actor.characterKey = D.Str(m, "character");
@@ -903,8 +903,7 @@ namespace VCGS
                     actor.wanderRadius = (float)D.Num(m, "wander_radius");
                     foreach (var r in D.List(m, "route"))
                     {
-                        var v = D.List(r);
-                        actor.route.Add(new Vector3((float)D.Num(v[0], 0), (float)D.Num(v[1], 0), (float)D.Num(v[2], 0)));
+                        actor.route.Add(ToUnity(D.List(r)));
                     }
                     actor.Setup(cast);
                     Spawned.Add(actor);
@@ -912,6 +911,8 @@ namespace VCGS
             }
             return Spawned;
         }
+
+        static Vector3 ToUnity(List<object> v) => new Vector3((float)D.Num(v[0], 0), (float)D.Num(v[1], 0), -(float)D.Num(v[2], 0));
 
         public void Show() => gameObject.SetActive(true);
         public void Hide() => gameObject.SetActive(false);
