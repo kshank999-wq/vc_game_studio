@@ -33,6 +33,10 @@ afterEach(() => {
 
 const openMenu = (title: string) => fireEvent.pointerDown(screen.getByRole('menuitem', { name: title }));
 
+
+/** The Game Setup Wizard is a lazy chunk: loading it under a full parallel test run can take longer than the default second. */
+const LAZY = { timeout: 8000 };
+
 describe('project files', () => {
   it('round-trip a whole project, and refuse anything else', () => {
     const project = sunkenVault();
@@ -74,7 +78,7 @@ describe('the menu bar', () => {
     expect(screen.getByRole('alertdialog').textContent).toContain('Save “The Sunken Vault” first?');
     fireEvent.click(screen.getByRole('button', { name: 'Don’t save' }));
     // A new project starts with the Game Setup Wizard, which can start blank instead.
-    fireEvent.click(await screen.findByRole('button', { name: 'Start blank instead' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Start blank instead' }, LAZY));
     expect(container.querySelectorAll('[data-node]')).toHaveLength(4);
   });
 
@@ -83,7 +87,7 @@ describe('the menu bar', () => {
     act(() => {
       fireEvent.keyDown(window, { key: 'n', ctrlKey: true });
     });
-    const wizard = await screen.findByRole('dialog', { name: 'New game' });
+    const wizard = await screen.findByRole('dialog', { name: 'New game' }, LAZY);
     fireEvent.change(within(wizard).getByLabelText('Game name'), { target: { value: 'Ash Line' } });
     fireEvent.click(within(wizard).getByLabelText('First-person shooter'));
     fireEvent.click(within(wizard).getByRole('button', { name: 'Next' }));
@@ -96,7 +100,7 @@ describe('the menu bar', () => {
     expect(names.join(' ')).toContain('Mission 3');
     openMenu('Project');
     fireEvent.click(screen.getByRole('menuitem', { name: 'Game setup…' }));
-    const setup = await screen.findByRole('dialog', { name: 'Game setup' });
+    const setup = await screen.findByRole('dialog', { name: 'Game setup' }, LAZY);
     fireEvent.click(within(setup).getByRole('button', { name: /3\. World and tone/ }));
     fireEvent.change(within(setup).getByLabelText('Tone'), { target: { value: 'Breathless' } });
     fireEvent.click(within(setup).getByRole('button', { name: 'Save' }));
