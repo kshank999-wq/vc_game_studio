@@ -90,6 +90,16 @@ int main()
     const vcgs::Value fireball = vcgs::JsonReader::Parse(R"({"key": "fireball", "name": "Fireball", "enabled": true, "kind": "active", "cost": {"resource": "mana", "amount": 15}, "failure": ""})");
     if (vcgs::Cast::CanUse(fireball, {}, {{"mana", 10.0}}, 0) != "Not enough mana.") Fail("a fireball should need mana");
     if (vcgs::Cast::CanUse(fireball, {{"fireball", 5.0}}, {{"mana", 100.0}}, 1) != "Fireball is cooling down.") Fail("a fireball should cool down");
+    // The way round walls (spec §19 navmesh): the machine heads for the corner its way gives it, and stands with no way.
+    const vcgs::Cast::Steer corner = [](double, double AY, double TX, double TY, double& VX, double& VY, bool& bLast) {
+        if (AY < 2.999) { VX = 0; VY = 3; bLast = false; }
+        else { VX = TX; VY = TY; bLast = true; }
+        return true;
+    };
+    vcgs::Cast::Memory walker;
+    if (vcgs::Cast::Walk(walker, 3, 0, 1, 1, corner) || std::fabs(walker.X) > 0.001 || std::fabs(walker.Y - 1) > 0.001) Fail("an AI should walk to the corner of its way first, got " + std::to_string(walker.X) + ", " + std::to_string(walker.Y));
+    vcgs::Cast::Memory stuck;
+    if (vcgs::Cast::Walk(stuck, 3, 0, 1, 1, [](double, double, double, double, double&, double&, bool&) { return false; }) || stuck.X != 0) Fail("an AI with no way there should stand, got " + std::to_string(stuck.X));
     // The Village Market's people, where the studio put them, each a character of the cast.
     int people = 0;
     for (const vcgs::Value* p : vcgs::Cast::Placements(cast))

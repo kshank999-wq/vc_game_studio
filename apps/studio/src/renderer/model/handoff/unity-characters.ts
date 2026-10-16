@@ -7,8 +7,10 @@
  * (BehaviorController), VcgsActorAbilities, VcgsActorInventory,
  * VcgsActorEquipment, VcgsActorDialogue and VcgsSpawnGroup
  * (SpawnGroupController). Positions in the core are on the plan: a
- * transform's (x, z). Movement is in straight lines; NavMesh, Animator and
- * effects are the engine team's (see CHARACTERS.md), the hooks are here.
+ * transform's (x, z). Movement goes round walls on the level's navigation
+ * graph (VcgsNav, from a VcgsLevel among the actor's parents), else in
+ * straight lines; NavMesh, Animator and effects are the engine team's (see
+ * CHARACTERS.md), the hooks are here.
  */
 
 const HEAD = '// VCGS Runtime for Unity. The same for every project; safe to commit.';
@@ -125,6 +127,9 @@ namespace VCGS
         /// <summary>Whether something blocks sight from (ax, ay) to (bx, by): the level's solids.</summary>
         public delegate bool Blocked(double ax, double ay, double bx, double by);
 
+        /// <summary>The way round walls from (ax, ay) to (tx, ty) on the plan: the next point to head for, and whether it is the last leg; null when there is no way there.</summary>
+        public delegate (double x, double y, bool last)? Steer(double ax, double ay, double tx, double ty);
+
         public static Memory StartMemory(Dictionary<string, object> ai, List<double[]> patrol, double health, double facing = 0)
         {
             var states = D.List(ai, "states");
@@ -172,24 +177,36 @@ namespace VCGS
             return s;
         }
 
-        static bool Walk(Memory m, double tx, double ty, double pace, double dt)
+        /// <summary>Toward a plan point; with steer (the level's way round walls) by that way, standing when there is none. True when there.</summary>
+        public static bool Walk(Memory m, double tx, double ty, double pace, double dt, Steer steer = null)
         {
             var d = Dist(m.X, m.Y, tx, ty);
             if (d < 0.01) return true;
-            var turn = Math.Atan2(ty - m.Y, tx - m.X);
+            double vx = tx, vy = ty;
+            var last = true;
+            if (steer != null)
+            {
+                var via = steer(m.X, m.Y, tx, ty);
+                if (via == null) return false;
+                (vx, vy, last) = via.Value;
+                d = Dist(m.X, m.Y, vx, vy);
+                if (d < 1e-6) return false;
+            }
+            var turn = Math.Atan2(vy - m.Y, vx - m.X);
             m.Facing = turn;
             var step = Math.Min(d, pace * dt);
             m.X += Math.Cos(turn) * step;
             m.Y += Math.Sin(turn) * step;
-            return step >= d;
+            return last && step >= d;
         }
 
         /// <summary>
         /// One step of the machine: sense, take the first enabled transition from
         /// this state (or any) whose trigger holds, then move. Alert holds for its
-        /// reaction time first. The same rules as the studio's aiStep.
+        /// reaction time first. The same rules as the studio's aiStep; with steer, it walks
+        /// the way round walls (the studio's world.steer).
         /// </summary>
-        public static Step AiStep(Dictionary<string, object> ai, double speed, Memory m0, Target target, List<double[]> patrol, List<double[][]> walls, double dt, Blocked blocked = null)
+        public static Step AiStep(Dictionary<string, object> ai, double speed, Memory m0, Target target, List<double[]> patrol, List<double[][]> walls, double dt, Blocked blocked = null, Steer steer = null)
         {
             var m = m0.Copy();
             m.Timer = m0.Timer + dt;
@@ -232,18 +249,18 @@ namespace VCGS
                 {
                     var stops = patrol.Count > 0 ? patrol : new List<double[]> { post };
                     var goal = stops[m.PatrolIndex % stops.Count];
-                    if (Walk(m, goal[0], goal[1], speed * 0.45, dt)) m.PatrolIndex = (m.PatrolIndex + 1) % stops.Count;
+                    if (Walk(m, goal[0], goal[1], speed * 0.45, dt, steer)) m.PatrolIndex = (m.PatrolIndex + 1) % stops.Count;
                     break;
                 }
                 case "alert":
                     if (m.HasLastKnown) m.Facing = Math.Atan2(m.LastY - m.Y, m.LastX - m.X);
                     break;
                 case "investigate":
-                    if (m.HasLastKnown) Walk(m, m.LastX, m.LastY, speed * 0.6, dt);
+                    if (m.HasLastKnown) Walk(m, m.LastX, m.LastY, speed * 0.6, dt, steer);
                     break;
                 case "chase":
-                    if (noticed || !m.HasLastKnown) Walk(m, target.X, target.Y, chaseSpeed, dt);
-                    else Walk(m, m.LastX, m.LastY, chaseSpeed, dt);
+                    if (noticed || !m.HasLastKnown) Walk(m, target.X, target.Y, chaseSpeed, dt, steer);
+                    else Walk(m, m.LastX, m.LastY, chaseSpeed, dt, steer);
                     break;
                 case "attack":
                     m.Facing = Math.Atan2(target.Y - m.Y, target.X - m.X);
@@ -259,17 +276,17 @@ namespace VCGS
                     var cx = m.HasLastKnown ? m.LastX : m.X;
                     var cy = m.HasLastKnown ? m.LastY : m.Y;
                     var a = m.Timer * 1.2;
-                    Walk(m, cx + Math.Cos(a) * 2, cy + Math.Sin(a) * 2, speed * 0.5, dt);
+                    Walk(m, cx + Math.Cos(a) * 2, cy + Math.Sin(a) * 2, speed * 0.5, dt, steer);
                     break;
                 }
                 case "return":
-                    if (D.Bool(ai, "reset_to_post")) Walk(m, post[0], post[1], speed * 0.6, dt);
+                    if (D.Bool(ai, "reset_to_post")) Walk(m, post[0], post[1], speed * 0.6, dt, steer);
                     else m.State = "idle";
                     break;
                 case "flee":
                 {
                     var away = Math.Atan2(m.Y - target.Y, m.X - target.X);
-                    Walk(m, m.X + Math.Cos(away) * 5, m.Y + Math.Sin(away) * 5, speed, dt);
+                    Walk(m, m.X + Math.Cos(away) * 5, m.Y + Math.Sin(away) * 5, speed, dt, steer);
                     break;
                 }
             }
@@ -440,6 +457,46 @@ namespace VCGS
         /// <summary>Where it is on the plan (x east, y south), as the core counts.</summary>
         public double[] PlanPosition() => new double[] { transform.localPosition.x, transform.localPosition.z };
 
+        /// <summary>The level it is in (a parent with a navigation graph, VcgsLevel), found once.</summary>
+        IVcgsNavHost level;
+        bool levelFound;
+        readonly VcgsNav.Way way = new VcgsNav.Way();
+
+        IVcgsNavHost Level()
+        {
+            if (!levelFound)
+            {
+                levelFound = true;
+                level = transform.parent != null ? transform.parent.GetComponentInParent<IVcgsNavHost>() : null;
+            }
+            return level;
+        }
+
+        /// <summary>
+        /// The next plan point on the way round walls from (ax, ay) to (tx, ty), on the level's
+        /// navigation graph (spec §19 navmesh); null when there is no way there. With no graph,
+        /// straight there: (tx, ty, true). The graph has the data's z south, Unity's +Z north.
+        /// </summary>
+        public (double x, double y, bool last)? Steer(double ax, double ay, double tx, double ty)
+        {
+            var host = Level();
+            if (host == null || host.Nav == null) return (tx, ty, true);
+            var frame = ((Component)host).transform;
+            var y = transform.position.y;
+            double[] ToLevel(double x, double z)
+            {
+                var world = transform.parent.TransformPoint(new Vector3((float)x, 0, (float)z));
+                var at = frame.InverseTransformPoint(new Vector3(world.x, y, world.z));
+                return new double[] { at.x, at.y, -at.z };
+            }
+            var goal = ToLevel(tx, ty);
+            var next = host.Nav.NextOnWay(way, ToLevel(ax, ay), goal);
+            if (next == null) return null;
+            if (next == goal) return (tx, ty, true);
+            var there = transform.parent.InverseTransformPoint(frame.TransformPoint(new Vector3((float)next[0], (float)next[1], -(float)next[2])));
+            return (there.x, there.z, false);
+        }
+
         /// <summary>The point it is walking to: give it to a NavMeshAgent for pathfinding.</summary>
         public Vector3 MoveTarget { get; private set; }
 
@@ -549,7 +606,7 @@ namespace VCGS
             Memory.X = here[0];
             Memory.Y = here[1];
             var before = Memory.State;
-            var step = VcgsCast.AiStep(ai, speed, Memory, target, patrol, null, dt, actor.Perception != null ? actor.Perception.Blocked : (VcgsCast.Blocked)null);
+            var step = VcgsCast.AiStep(ai, speed, Memory, target, patrol, null, dt, actor.Perception != null ? actor.Perception.Blocked : (VcgsCast.Blocked)null, actor.Steer);
             Memory = step.Memory;
             if (step.Reason != "")
             {
@@ -579,7 +636,10 @@ namespace VCGS
                     var r = System.Math.Sqrt(random.NextDouble()) * actor.wanderRadius;
                     wanderTo = new[] { home[0] + System.Math.Cos(a) * r, home[1] + System.Math.Sin(a) * r };
                 }
-                if (StepTowards(here, wanderTo, speed * 0.35 * dt))
+                var went = StepAlong(here, wanderTo, speed * 0.35 * dt);
+                // Somewhere it can't get to: it picks another.
+                if (went == null) wanderTo = null;
+                else if (went.Value)
                 {
                     wanderTo = null;
                     wanderUntil = clock + 1 + (float)random.NextDouble() * 3;
@@ -587,8 +647,17 @@ namespace VCGS
             }
             else if (actor.activity == "patrol" && patrol.Count > 1)
             {
-                if (StepTowards(here, patrol[wanderStop], speed * 0.45 * dt)) wanderStop = 1 + wanderStop % (patrol.Count - 1);
+                if (StepAlong(here, patrol[wanderStop], speed * 0.45 * dt) == true) wanderStop = 1 + wanderStop % (patrol.Count - 1);
             }
+        }
+
+        /// <summary>Towards a plan point by the way round walls (the actor's Steer): whether it got there, or null (standing) when there is no way there.</summary>
+        bool? StepAlong(double[] here, double[] to, double by)
+        {
+            var via = actor.Steer(here[0], here[1], to[0], to[1]);
+            if (via == null) return null;
+            var (x, y, last) = via.Value;
+            return StepTowards(here, new[] { x, y }, by) && last;
         }
 
         bool StepTowards(double[] here, double[] to, double by)

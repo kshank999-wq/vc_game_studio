@@ -7,6 +7,7 @@ import { JSON_FORMAT } from './json';
 import { ASMDEF, RUNTIME_FILES } from './unity-runtime';
 import { EDITOR_ASMDEF, LEVEL_EDITOR_FILES, LEVEL_RUNTIME_FILES, levelJson } from './unity-levels';
 import { CHARACTER_FILES } from './unity-characters';
+import { NAV_RUNTIME } from './unity-nav';
 import { castFiles } from './cast-files';
 import { markupInline } from '../inline';
 
@@ -318,6 +319,8 @@ export const generateUnity = (ir: HandoffIR, outputPath: string): EngineOutput =
   const cast = castFiles(ir.cast, root, 'unity', 'Unity', VERSION);
   if (cast.files.length) {
     for (const [name, source] of Object.entries(CHARACTER_FILES)) put(`${RUNTIME}/Characters/${name}`, source, 'runtime', 'script');
+    // Characters steer round walls on a level's VcgsNav: it comes with the levels, or with them when there are none.
+    if (!ir.levels.length) put(`${RUNTIME}/Levels/VcgsNav.cs`, NAV_RUNTIME, 'runtime', 'script');
     for (const f of cast.files) put(f.path, f.content, f.kind, 'text');
     elements.push(...cast.elements);
   }

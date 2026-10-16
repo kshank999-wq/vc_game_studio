@@ -8,9 +8,10 @@
  * UVcgsActorAbilities, UVcgsActorInventory, UVcgsActorEquipment,
  * UVcgsActorDialogue) and AVcgsSpawnGroup (SpawnGroupController). The core
  * works on the plan (metres, x east, y south); the actor turns that into
- * Unreal's centimetres (X north, Y east, Z up). Movement is in straight lines;
- * the AI controller, navigation, animation and effects are the engine team's
- * (see CHARACTERS.md), the hooks are here.
+ * Unreal's centimetres (X north, Y east, Z up). Movement goes round walls on
+ * the level's navigation graph (VcgsNav.h, spec §19 navmesh), straight with
+ * none; the AI controller, animation and effects are the engine team's (see
+ * CHARACTERS.md), the hooks are here.
  */
 
 const HEAD = '// VCGS Runtime for Unreal. The same for every project; safe to commit.';
@@ -170,6 +171,13 @@ namespace Cast
     /** Whether something blocks sight from (AX, AY) to (BX, BY): the level's solids. */
     using Blocked = std::function<bool(double, double, double, double)>;
 
+    /**
+     * The way round walls from (AX, AY) to (TX, TY): the next plan point to head for in
+     * (VX, VY), and whether it is the last leg; false when there is no way there (the
+     * level's navigation graph).
+     */
+    using Steer = std::function<bool(double AX, double AY, double TX, double TY, double& VX, double& VY, bool& bLast)>;
+
     inline Memory StartMemory(const Value& Ai, const std::vector<Point>& Patrol, double Health, double Facing = 0)
     {
         const Value& States = Ai["states"];
@@ -227,16 +235,26 @@ namespace Cast
         return S;
     }
 
-    inline bool Walk(Memory& M, double TX, double TY, double Pace, double Dt)
+    /** Toward a plan point; with a way (the level's round walls) by that way, standing when there is none. True when there. */
+    inline bool Walk(Memory& M, double TX, double TY, double Pace, double Dt, const Steer& Way = nullptr)
     {
-        const double D = Dist(M.X, M.Y, TX, TY);
+        double D = Dist(M.X, M.Y, TX, TY);
         if (D < 0.01) return true;
-        const double Turn = std::atan2(TY - M.Y, TX - M.X);
+        double VX = TX, VY = TY;
+        bool bLast = true;
+        if (Way)
+        {
+            if (!Way(M.X, M.Y, TX, TY, VX, VY, bLast)) return false;
+            D = Dist(M.X, M.Y, VX, VY);
+            if (D < 1e-6) return false;
+        }
+        const double Turn = std::atan2(VY - M.Y, VX - M.X);
         M.Facing = Turn;
         const double Stride = std::fmin(D, Pace * Dt);
         M.X += std::cos(Turn) * Stride;
         M.Y += std::sin(Turn) * Stride;
-        return Stride >= D;
+        // There only on the last leg of the way.
+        return bLast && Stride >= D;
     }
 
     inline std::string TimerKey(const std::string& State)
@@ -281,9 +299,10 @@ namespace Cast
     /**
      * One step of the machine: sense, take the first enabled transition from
      * this state (or any) whose trigger holds, then move. Alert holds for its
-     * reaction time first. The same rules as the studio's aiStep.
+     * reaction time first. The same rules as the studio's aiStep. With a way
+     * (the level's round walls), it walks by that.
      */
-    inline Step AiStep(const Value& Ai, double Speed, const Memory& M0, const Target& T, const std::vector<Point>& Patrol, const std::vector<Wall>& Walls, double Dt, const Blocked& IsBlocked = nullptr)
+    inline Step AiStep(const Value& Ai, double Speed, const Memory& M0, const Target& T, const std::vector<Point>& Patrol, const std::vector<Wall>& Walls, double Dt, const Blocked& IsBlocked = nullptr, const Steer& Way = nullptr)
     {
         Memory M = M0;
         M.Timer = M0.Timer + Dt;
@@ -322,7 +341,7 @@ namespace Cast
         {
             const std::vector<Point> Stops = Patrol.empty() ? std::vector<Point>{Post} : Patrol;
             const Point Goal = Stops[static_cast<size_t>(M.PatrolIndex) % Stops.size()];
-            if (Walk(M, Goal.X, Goal.Y, Speed * 0.45, Dt)) M.PatrolIndex = (M.PatrolIndex + 1) % static_cast<int>(Stops.size());
+            if (Walk(M, Goal.X, Goal.Y, Speed * 0.45, Dt, Way)) M.PatrolIndex = (M.PatrolIndex + 1) % static_cast<int>(Stops.size());
         }
         else if (M.State == "alert")
         {
@@ -330,12 +349,12 @@ namespace Cast
         }
         else if (M.State == "investigate")
         {
-            if (M.bHasLastKnown) Walk(M, M.LastX, M.LastY, Speed * 0.6, Dt);
+            if (M.bHasLastKnown) Walk(M, M.LastX, M.LastY, Speed * 0.6, Dt, Way);
         }
         else if (M.State == "chase")
         {
-            if (bNoticed || !M.bHasLastKnown) Walk(M, T.X, T.Y, ChaseSpeed, Dt);
-            else Walk(M, M.LastX, M.LastY, ChaseSpeed, Dt);
+            if (bNoticed || !M.bHasLastKnown) Walk(M, T.X, T.Y, ChaseSpeed, Dt, Way);
+            else Walk(M, M.LastX, M.LastY, ChaseSpeed, Dt, Way);
         }
         else if (M.State == "attack")
         {
@@ -351,17 +370,17 @@ namespace Cast
         {
             const double CX = M.bHasLastKnown ? M.LastX : M.X, CY = M.bHasLastKnown ? M.LastY : M.Y;
             const double A = M.Timer * 1.2;
-            Walk(M, CX + std::cos(A) * 2, CY + std::sin(A) * 2, Speed * 0.5, Dt);
+            Walk(M, CX + std::cos(A) * 2, CY + std::sin(A) * 2, Speed * 0.5, Dt, Way);
         }
         else if (M.State == "return")
         {
-            if (Ai["reset_to_post"].Bool()) Walk(M, Post.X, Post.Y, Speed * 0.6, Dt);
+            if (Ai["reset_to_post"].Bool()) Walk(M, Post.X, Post.Y, Speed * 0.6, Dt, Way);
             else M.State = "idle";
         }
         else if (M.State == "flee")
         {
             const double Away = std::atan2(M.Y - T.Y, M.X - T.X);
-            Walk(M, M.X + std::cos(Away) * 5, M.Y + std::sin(Away) * 5, Speed, Dt);
+            Walk(M, M.X + std::cos(Away) * 5, M.Y + std::sin(Away) * 5, Speed, Dt, Way);
         }
         Step Out;
         Out.Mem = M;
@@ -470,6 +489,8 @@ private:
     vcgs::Value Ai;
     std::vector<vcgs::Cast::Point> Patrol;
     double Clock = 0;
+    /** How far round its circle a wanderer has skipped, past spots it could not get to. */
+    double WanderTurn = 0;
 };
 
 /** AbilityComponent: cooldowns, the resource, and what an ability does (as events). */
@@ -558,6 +579,7 @@ const ACTOR_H = String.raw`${HEAD}
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "VcgsCast.h"
+#include "VcgsNav.h"
 #include "VcgsCharacterActor.generated.h"
 
 class USceneComponent;
@@ -616,9 +638,21 @@ public:
     void PlanPosition(double& X, double& Y) const;
     /** Straight to a plan point (the core has already stepped it there); give an AI controller the same point for pathfinding. */
     void MoveTo(double X, double Y);
+    /**
+     * The next plan point on the way round walls from (AX, AY) to (TX, TY), on its level's
+     * navigation graph (spec §19 navmesh), in (VX, VY), and whether it is the last leg;
+     * false when there is no way there. With no graph, straight there.
+     */
+    bool Steer(double AX, double AY, double TX, double TY, double& VX, double& VY, bool& bLast);
 
     vcgs::Value Data;
     std::vector<vcgs::Cast::Point> Route;
+
+private:
+    /** The level it stands in (one with a navigation graph), found once, and the way it is walking. */
+    vcgs::NavPlace Place;
+    bool bPlaceFound = false;
+    vcgs::NavWay Way;
 
 protected:
     virtual void BeginPlay() override;
@@ -775,6 +809,31 @@ void AVcgsCharacterActor::MoveTo(double X, double Y)
     const FVector At = GetActorLocation();
     SetActorLocation(FVector(-Y * 100.0, X * 100.0, At.Z));
 }
+
+bool AVcgsCharacterActor::Steer(double AX, double AY, double TX, double TY, double& VX, double& VY, bool& bLast)
+{
+    const FVector At = GetActorLocation();
+    if (!bPlaceFound)
+    {
+        bPlaceFound = true;
+        if (const vcgs::NavPlace* Found = vcgs::NavPlaceAt(GetWorld(), At.X, At.Y, At.Z)) Place = *Found;
+    }
+    VX = TX;
+    VY = TY;
+    bLast = true;
+    if (!Place.Graph) return true;
+    // Plan to world (X = -y, Y = x, in centimetres, at its feet), then into the level's space.
+    const vcgs::NavPoint Goal = Place.ToLevel(-TY * 100.0, TX * 100.0, At.Z);
+    vcgs::NavPoint Next;
+    if (!Place.Graph->NextOnWay(Way, Place.ToLevel(-AY * 100.0, AX * 100.0, At.Z), Goal, Next)) return false;
+    if (Next == Goal) return true;
+    double WX = 0, WY = 0, WZ = 0;
+    Place.ToWorld(Next, WX, WY, WZ);
+    VX = WY / 100.0;
+    VY = -WX / 100.0;
+    bLast = false;
+    return true;
+}
 `;
 
 const COMPONENTS_CPP = String.raw`${HEAD}
@@ -817,6 +876,14 @@ void UVcgsActorBehavior::Tick(float DeltaSeconds, bool bHasTarget, double Target
 {
     if (!Actor) return;
     Clock += DeltaSeconds;
+    // The way round walls, on its level's navigation graph; bNoWay says when there is none.
+    AVcgsCharacterActor* Owner = Actor;
+    bool bNoWay = false;
+    const vcgs::Cast::Steer Way = [Owner, &bNoWay](double AX, double AY, double TX, double TY, double& VX, double& VY, bool& bLast) {
+        if (Owner->Steer(AX, AY, TX, TY, VX, VY, bLast)) return true;
+        bNoWay = true;
+        return false;
+    };
     if (!Ai.IsObject())
     {
         // No AI: its activity. Wander about its spot, walk its route, or stand.
@@ -824,14 +891,16 @@ void UVcgsActorBehavior::Tick(float DeltaSeconds, bool bHasTarget, double Target
         if (What == "wander" && Actor->WanderRadius > 0)
         {
             const vcgs::Cast::Point Home = Patrol[0];
-            const double A = Clock * 0.4 + Home.X;
-            vcgs::Cast::Walk(Memory, Home.X + std::cos(A) * Actor->WanderRadius * 0.5, Home.Y + std::sin(A) * Actor->WanderRadius * 0.5, 1.2, DeltaSeconds);
+            const double A = Clock * 0.4 + Home.X + WanderTurn;
+            vcgs::Cast::Walk(Memory, Home.X + std::cos(A) * Actor->WanderRadius * 0.5, Home.Y + std::sin(A) * Actor->WanderRadius * 0.5, 1.2, DeltaSeconds, Way);
+            // Somewhere it can't get to: it picks another, a third of the way round.
+            if (bNoWay) WanderTurn += 2.0943951023931953;
             Actor->MoveTo(Memory.X, Memory.Y);
         }
         else if (What == "patrol" && Patrol.size() > 1)
         {
             const vcgs::Cast::Point Goal = Patrol[static_cast<size_t>(Memory.PatrolIndex) % Patrol.size()];
-            if (vcgs::Cast::Walk(Memory, Goal.X, Goal.Y, 1.4, DeltaSeconds)) Memory.PatrolIndex = (Memory.PatrolIndex + 1) % static_cast<int>(Patrol.size());
+            if (vcgs::Cast::Walk(Memory, Goal.X, Goal.Y, 1.4, DeltaSeconds, Way)) Memory.PatrolIndex = (Memory.PatrolIndex + 1) % static_cast<int>(Patrol.size());
             Actor->MoveTo(Memory.X, Memory.Y);
         }
         return;
@@ -843,7 +912,7 @@ void UVcgsActorBehavior::Tick(float DeltaSeconds, bool bHasTarget, double Target
     Target.bAlive = bHasTarget;
     UVcgsActorPerception* Eyes = Actor->Perception;
     const vcgs::Cast::Step Step = vcgs::Cast::AiStep(Ai, Actor->Data["stats"]["speed"].Num(3), Memory, Target, Patrol, {}, DeltaSeconds,
-        [Eyes](double AX, double AY, double BX, double BY) { return Eyes && Eyes->Blocked(AX, AY, BX, BY); });
+        [Eyes](double AX, double AY, double BX, double BY) { return Eyes && Eyes->Blocked(AX, AY, BX, BY); }, Way);
     const std::string From = Memory.State;
     Memory = Step.Mem;
     Actor->MoveTo(Memory.X, Memory.Y);
@@ -1046,6 +1115,7 @@ void AVcgsSpawnGroup::HideGroup()
 }
 `;
 
+/** The cast's plugin files; VcgsNav.h comes with the levels' (NAV_PLUGIN_FILES), or on its own with no levels. */
 export const CHARACTER_PLUGIN_FILES: Record<string, string> = {
   'Source/VCGS/Public/VcgsCast.h': CORE,
   'Source/VCGS/Public/VcgsActorComponents.h': COMPONENTS_H,

@@ -23,6 +23,35 @@ static std::string Join(const std::vector<std::string>& list, const char* sep)
     return out;
 }
 
+// A 5 × 5 m yard of 1 m cells with a wall down x = 2.5: a gap at its north end (z 4–5) or none.
+static std::shared_ptr<const vcgs::NavGraph> Yard(bool gap)
+{
+    std::string nodes, links;
+    std::map<int, int> index;
+    for (int r = 0; r < 5; r++)
+        for (int c = 0; c < 5; c++)
+        {
+            if (c == 2 && (r < 4 || !gap)) continue;
+            const int n = static_cast<int>(index.size());
+            index[r * 5 + c] = n;
+            nodes += (nodes.empty() ? "" : ", ") + std::to_string(c) + ".5, 0, " + std::to_string(r) + ".5";
+        }
+    const int steps[4][2] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+    for (int r = 0; r < 5; r++)
+        for (int c = 0; c < 5; c++)
+        {
+            if (!index.count(r * 5 + c)) continue;
+            std::string out;
+            for (const auto& d : steps)
+            {
+                const int rr = r + d[0], cc = c + d[1];
+                if (rr >= 0 && rr < 5 && cc >= 0 && cc < 5 && index.count(rr * 5 + cc)) out += (out.empty() ? "" : ", ") + std::to_string(index[rr * 5 + cc]);
+            }
+            links += (links.empty() ? "[" : ", [") + out + "]";
+        }
+    return vcgs::NavGraph::FromData(vcgs::JsonReader::Parse("{\"cell\": 1, \"origin\": [0, 0], \"cols\": 5, \"rows\": 5, \"step_up\": 0.42, \"nodes\": [" + nodes + "], \"links\": [" + links + "]}"));
+}
+
 // The level: its rules on the story's state, the same walk as Godot and Unity.
 static void CheckLevel(const vcgs::Story& story)
 {
@@ -102,6 +131,40 @@ static void CheckLevel(const vcgs::Story& story)
         if (std::fabs(pose.X - 4) > 0.001 || pose.Moving) Fail("a companion should stop 2 m from the player");
         vcgs::LevelLogic::StepFollow(pose, follow, 0.1, 4, 0, 30);
         if (std::fabs(pose.Z - 28) > 0.001) Fail("a companion left 30 m behind should catch up at once");
+    }
+    // Navmesh pathing (spec §19): the level carries its graph; a way goes round a wall, through its gap.
+    {
+        if (!level.Nav || level.Nav->Nodes.size() < 100) Fail("the Sunken Vault should carry its navigation graph (Mara walks it)");
+        const auto yard = Yard(true);
+        const std::vector<vcgs::NavPoint> way = yard->FindPath({0.5, 0, 0.5}, {4.5, 0, 0.5});
+        double highest = 0;
+        std::string points;
+        for (const auto& p : way)
+        {
+            highest = std::max(highest, p.Z);
+            points += (points.empty() ? "" : " ") + std::string("(") + std::to_string(p.X) + ", " + std::to_string(p.Z) + ")";
+        }
+        std::printf("nav: way round the wall %s\n", points.c_str());
+        if (way.empty() || highest < 4 || std::fabs(way.back().X - 4.5) > 0.001 || std::fabs(way.back().Z - 0.5) > 0.001) Fail("the way should go round the wall through the gap at its north end, got " + points);
+        if (!Yard(false)->FindPath({0.5, 0, 0.5}, {4.5, 0, 0.5}).empty()) Fail("there should be no way through a wall with no gap");
+        if (yard->FindPath({0.5, 0, 4.5}, {4.5, 0, 4.5}).size() != 1) Fail("along open ground the way should go straight there");
+        const vcgs::Value beat = vcgs::JsonReader::Parse("{\"kind\": \"patrol\", \"speed\": 4, \"stops\": [{\"at\": [4.5, 0, 0.5], \"wait\": 30}]}", &error);
+        vcgs::ActorPose guard;
+        guard.X = 0.5;
+        guard.Z = 0.5;
+        bool through = false;
+        for (int i = 0; i < 60; i++)
+        {
+            vcgs::LevelLogic::StepPatrol(guard, beat, 0.1, 0, yard.get());
+            if (std::fabs(guard.X - 2.5) < 0.5 && guard.Z < 4) through = true;
+        }
+        if (through || std::fabs(guard.X - 4.5) > 0.001 || std::fabs(guard.Z - 0.5) > 0.001) Fail("a patrol should walk round the wall to its stop, got " + std::to_string(guard.X) + ", " + std::to_string(guard.Z) + (through ? " through the wall" : ""));
+        vcgs::ActorPose shut;
+        shut.X = 0.5;
+        shut.Z = 0.5;
+        const auto solid = Yard(false);
+        for (int i = 0; i < 10; i++) vcgs::LevelLogic::StepPatrol(shut, beat, 0.1, 0, solid.get());
+        if (shut.X != 0.5 || shut.Z != 0.5 || shut.Moving) Fail("with no way to its stop a patrol should stand, got " + std::to_string(shut.X) + ", " + std::to_string(shut.Z));
     }
     const std::string door = level.GuidOf("INT_VaultChamber_BronzeDoor_004");
     const std::string key = level.GuidOf("INV_SiltCamp_VaultKey_001");

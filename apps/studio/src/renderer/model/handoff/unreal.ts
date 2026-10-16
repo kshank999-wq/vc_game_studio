@@ -8,6 +8,7 @@ import { VCGS_CORE_H } from './unreal-core';
 import { CHARACTER_PLUGIN_FILES } from './unreal-characters';
 import { castFiles } from './cast-files';
 import { buildLevelScript, LEVEL_PLUGIN_FILES, levelJsonUnreal } from './unreal-levels';
+import { NAV_PLUGIN_FILES } from './unreal-nav';
 import { markupInline } from '../inline';
 
 /** Emphasis as URichTextBlock markup: one style row per run, named for what it combines. */
@@ -2139,6 +2140,8 @@ export const generateUnreal = (ir: HandoffIR, outputPath: string): EngineOutput 
   const cast = castFiles(ir.cast, root, 'unreal', 'Unreal', VERSION);
   if (cast.files.length) {
     for (const [name, content] of Object.entries(CHARACTER_PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
+    // Its people find their way round walls on a level's navigation graph: VcgsNav.h, here with the levels' runtime or on its own.
+    if (!ir.levels.length) for (const [name, content] of Object.entries(NAV_PLUGIN_FILES)) put(`${PLUGIN}/${name}`, content, 'runtime');
     for (const f of cast.files) put(f.path, f.content, f.kind);
     elements.push(...cast.elements);
   }

@@ -76,6 +76,25 @@ static class CastCheck
         var fireball = new Dictionary<string, object> { ["key"] = "fireball", ["name"] = "Fireball", ["enabled"] = true, ["kind"] = "active", ["cost"] = new Dictionary<string, object> { ["resource"] = "mana", ["amount"] = 15.0 }, ["failure"] = "" };
         if (VcgsCast.CanUse(fireball, new Dictionary<string, double>(), new Dictionary<string, double> { ["mana"] = 10 }, 0) != "Not enough mana.") Fail("a fireball should need mana");
         if (VcgsCast.CanUse(fireball, new Dictionary<string, double> { ["fireball"] = 5 }, new Dictionary<string, double> { ["mana"] = 100 }, 1) != "Fireball is cooling down.") Fail("a fireball should cool down");
+        // The way round walls (spec §19 navmesh): the machine heads for the corner steer gives it, and stands with no way.
+        var walker = new VcgsCast.Memory();
+        if (VcgsCast.Walk(walker, 3, 0, 1, 1, (ax, ay, tx, ty) => ay < 2.999 ? (0.0, 3.0, false) : (tx, ty, true)) || Math.Abs(walker.X) > 0.001 || Math.Abs(walker.Y - 1) > 0.001) Fail("an AI should walk to the corner of its way first, got " + walker.X + ", " + walker.Y);
+        var stuck = new VcgsCast.Memory();
+        if (VcgsCast.Walk(stuck, 3, 0, 1, 1, (ax, ay, tx, ty) => null) || stuck.X != 0) Fail("an AI with no way there should stand, got " + stuck.X + ", " + stuck.Y);
+        // In a level with a graph, an actor steers round its wall: the data's south (z) is Unity's −Z.
+        var yard = new GameObject("Yard").AddComponent<NavYard>();
+        yard.Nav = Yard(true);
+        var guard = new GameObject("Guard").AddComponent<VcgsActor>();
+        guard.transform.SetParent(yard.transform, false);
+        var corner = guard.Steer(0.5, -0.5, 4.5, -0.5);
+        Console.WriteLine("steer: round the wall by " + (corner == null ? "nothing" : corner.Value.x + ", " + corner.Value.y));
+        if (corner == null || corner.Value.last || corner.Value.x > 2.5 || corner.Value.y > -3.5) Fail("an actor should steer round the yard's wall through its gap (Unity −Z), got " + corner);
+        if (guard.Steer(0.5, -4.5, 4.5, -4.5) != (4.5, -4.5, true)) Fail("on open ground an actor should steer straight there");
+        yard.Nav = Yard(false);
+        var shut = new GameObject("Shut").AddComponent<VcgsActor>();
+        shut.transform.SetParent(yard.transform, false);
+        if (shut.Steer(0.5, -0.5, 4.5, -0.5) != null) Fail("with no way through the wall, steer should say so");
+        if (new GameObject("Loose").AddComponent<VcgsActor>().Steer(0, 0, 3, 4) != (3, 4, true)) Fail("with no level, an actor should steer straight there");
         // The spawn group: the Village Market's people where the studio put them, each with its components.
         Dictionary<string, object> market = null;
         foreach (var p in VcgsCast.Placements(cast)) if (D.Str(p, "kind") == "group") market = p;
@@ -107,5 +126,36 @@ static class CastCheck
         if (failures > 0) return 1;
         Console.WriteLine("cast OK");
         return 0;
+    }
+
+    /// <summary>A level stand-in that only carries a graph.</summary>
+    sealed class NavYard : MonoBehaviour, IVcgsNavHost
+    {
+        public VcgsNav Nav { get; set; }
+    }
+
+    /// <summary>A 5 × 5 m yard of 1 m cells with a wall down x = 2.5: a gap at its south end (data z 4–5) or none.</summary>
+    static VcgsNav Yard(bool gap)
+    {
+        var nodes = new List<object>();
+        var index = new Dictionary<int, int>();
+        for (var r = 0; r < 5; r++)
+            for (var c = 0; c < 5; c++)
+            {
+                if (c == 2 && (r < 4 || !gap)) continue;
+                index[r * 5 + c] = nodes.Count / 3;
+                nodes.AddRange(new object[] { c + 0.5, 0.0, r + 0.5 });
+            }
+        var links = new List<object>();
+        for (var r = 0; r < 5; r++)
+            for (var c = 0; c < 5; c++)
+            {
+                if (!index.ContainsKey(r * 5 + c)) continue;
+                var reach = new List<object>();
+                foreach (var (dr, dc) in new[] { (0, 1), (1, 0), (0, -1), (-1, 0) })
+                    if (r + dr >= 0 && r + dr < 5 && c + dc >= 0 && c + dc < 5 && index.TryGetValue((r + dr) * 5 + c + dc, out var k)) reach.Add((double)k);
+                links.Add(reach);
+            }
+        return VcgsNav.FromData(new Dictionary<string, object> { ["cell"] = 1.0, ["origin"] = new List<object> { 0.0, 0.0 }, ["cols"] = 5.0, ["rows"] = 5.0, ["step_up"] = 0.42, ["nodes"] = nodes, ["links"] = links });
     }
 }

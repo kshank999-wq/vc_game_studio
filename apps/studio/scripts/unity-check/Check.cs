@@ -457,6 +457,30 @@ static class Check
         if (Math.Abs(pose.X - 4) > 0.001 || pose.Moving) Fail("a companion should stop 2 m from the player, got " + pose.X);
         LevelLogic.StepFollow(pose, follow, 0.1, 4, 0, 30);
         if (Math.Abs(pose.Z - 28) > 0.001) Fail("a companion left 30 m behind should catch up at once, got " + pose.Z);
+        // Navmesh pathing (spec §19): the level carries its graph; a way goes round a wall, through its gap.
+        if (moving.Nav == null || moving.Nav.Nodes.Count < 100) Fail("the Sunken Vault should carry its navigation graph (Mara walks it)");
+        {
+            var yard = Yard(true);
+            var way = yard.FindPath(new double[] { 0.5, 0, 0.5 }, new double[] { 4.5, 0, 0.5 });
+            var highest = 0.0;
+            foreach (var p in way) highest = Math.Max(highest, p[2]);
+            Console.WriteLine("nav: way round the wall " + string.Join(" ", way.ConvertAll(p => "(" + p[0] + ", " + p[1] + ", " + p[2] + ")")));
+            if (way.Count == 0 || highest < 4 || VcgsNav.Flat(way[way.Count - 1], new double[] { 4.5, 0, 0.5 }) > 0.001) Fail("the way should go round the wall through the gap at its far end");
+            if (Yard(false).FindPath(new double[] { 0.5, 0, 0.5 }, new double[] { 4.5, 0, 0.5 }).Count != 0) Fail("there should be no way through a wall with no gap");
+            if (yard.FindPath(new double[] { 0.5, 0, 4.5 }, new double[] { 4.5, 0, 4.5 }).Count != 1) Fail("along open ground the way should go straight there");
+            var beat = new Dictionary<string, object> { ["kind"] = "patrol", ["speed"] = 4.0, ["stops"] = new List<object> { new Dictionary<string, object> { ["at"] = new List<object> { 4.5, 0.0, 0.5 }, ["wait"] = 30.0 } } };
+            var guard = new ActorPose { X = 0.5, Z = 0.5 };
+            var through = false;
+            for (var i = 0; i < 60; i++)
+            {
+                LevelLogic.StepPatrol(guard, beat, 0.1, 0, yard);
+                if (Math.Abs(guard.X - 2.5) < 0.5 && guard.Z < 4) through = true;
+            }
+            if (through || Math.Abs(guard.X - 4.5) > 0.001 || Math.Abs(guard.Z - 0.5) > 0.001) Fail("a patrol should walk round the wall to its stop, got " + guard.X + ", " + guard.Z + (through ? " through the wall" : ""));
+            var shut = new ActorPose { X = 0.5, Z = 0.5 };
+            for (var i = 0; i < 10; i++) LevelLogic.StepPatrol(shut, beat, 0.1, 0, Yard(false));
+            if (shut.X != 0.5 || shut.Z != 0.5 || shut.Moving) Fail("with no way to its stop a patrol should stand, got " + shut.X + ", " + shut.Z);
+        }
 
         // The editor builder, in the stubs' little scene.
         var path = "Assets/VCGS/Generated/Levels/sunken_vault.json";
@@ -606,5 +630,30 @@ static class Check
             case List<object> l: return "[" + string.Join(",", l.ConvertAll(Serialize)) + "]";
         }
         return "null";
+    }
+
+    /// <summary>A 5 × 5 m yard of 1 m cells with a wall down x = 2.5: a gap at its far end (z 4–5, the south) or none.</summary>
+    static VcgsNav Yard(bool gap)
+    {
+        var nodes = new List<object>();
+        var index = new Dictionary<int, int>();
+        for (var r = 0; r < 5; r++)
+            for (var c = 0; c < 5; c++)
+            {
+                if (c == 2 && (r < 4 || !gap)) continue;
+                index[r * 5 + c] = nodes.Count / 3;
+                nodes.AddRange(new object[] { c + 0.5, 0.0, r + 0.5 });
+            }
+        var links = new List<object>();
+        for (var r = 0; r < 5; r++)
+            for (var c = 0; c < 5; c++)
+            {
+                if (!index.ContainsKey(r * 5 + c)) continue;
+                var reach = new List<object>();
+                foreach (var (dr, dc) in new[] { (0, 1), (1, 0), (0, -1), (-1, 0) })
+                    if (r + dr >= 0 && r + dr < 5 && c + dc >= 0 && c + dc < 5 && index.TryGetValue((r + dr) * 5 + c + dc, out var k)) reach.Add((double)k);
+                links.Add(reach);
+            }
+        return VcgsNav.FromData(new Dictionary<string, object> { ["cell"] = 1.0, ["origin"] = new List<object> { 0.0, 0.0 }, ["cols"] = 5.0, ["rows"] = 5.0, ["step_up"] = 0.42, ["nodes"] = nodes, ["links"] = links });
     }
 }

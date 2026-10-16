@@ -527,10 +527,14 @@ each end, A* over the links, then pulled straight wherever every half cell
 along the line has a node within `step_up` of the height, each leading to the
 last. The way is kept and planned again once the target has moved a metre;
 with no way there, the actor stands. Patrols, companions and chasers use it
-(Godot's `VCGSNav` with `_travel` in `VCGSLevel`), and so does the AI
-character core: its walk takes a `steer` that gives the next point of the way
-(`VCGSCast._walk`, with the actor's `steer` from the level above it), and
-activities walk round walls too (`move_along_plan`). A level with nothing to
+(Godot's `VCGSNav` with `_travel` in `VCGSLevel`; Unity's `VcgsNav` with
+`LevelLogic.WalkWay`; Unreal's `vcgs::NavGraph` in `VcgsNav.h` with
+`LevelLogic::Travel`), and so does the AI character core: its walk takes a
+steer that gives the next point of the way (`VCGSCast._walk`,
+`VcgsCast.Walk`, `vcgs::Cast::Walk`), from the actor's level: in Godot and
+Unity the level above it in the scene, in Unreal the playing level whose
+ground is nearest its feet. Activities walk round walls too, and a wanderer
+with no way to its spot picks another. A level with nothing to
 stand on has no `nav`, and people there walk straight. The engine checks walk
 a small yard with a wall in it: round through the gap, never through, and
 standing still when the wall has no gap.

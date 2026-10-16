@@ -1,4 +1,5 @@
 import type { IrLevel } from './levels';
+import { NAV_PLUGIN_FILES } from './unreal-nav';
 
 /**
  * Levels for Unreal Engine 5 (spec §11.2). The level's data goes over as
@@ -7,7 +8,8 @@ import type { IrLevel } from './levels';
  * with its graybox pieces as attached StaticMeshActors from the engine's
  * basic shapes, its lights, and an AVcgsLevelDirector that runs the level on
  * the story's state. vcgs::LevelLogic is plain C++17, like the story core,
- * so it is tested outside the engine too.
+ * so it is tested outside the engine too. Its patrols, companions and chasers
+ * find their way round walls on the level's navigation graph (VcgsNav.h).
  *
  * Unreal is Z-up and left-handed, in centimetres, X forward: north in VC Game
  * Studio (−z) is +X, east (+x) is +Y. A turn counter-clockwise from above is
@@ -17,6 +19,7 @@ import type { IrLevel } from './levels';
 const RUNTIME_HEAD = '// VCGS Runtime for Unreal. The same for every project; safe to commit.';
 
 export const LEVEL_PLUGIN_FILES: Record<string, string> = {
+  ...NAV_PLUGIN_FILES,
   'Source/VCGS/Public/VcgsLevel.h': String.raw`${RUNTIME_HEAD}
 // A level from VC Game Studio in plain C++17: its items by GUID and their
 // rules, run on the story's GameState. AVcgsLevelDirector runs it in a world;
@@ -24,11 +27,13 @@ export const LEVEL_PLUGIN_FILES: Record<string, string> = {
 #pragma once
 
 #include "VcgsCore.h"
+#include "VcgsNav.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
 #include <limits>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -54,6 +59,8 @@ namespace vcgs
         /** The patrol stop it walks to, and the level time it waits until. */
         int Stop = 0;
         double Until = 0;
+        /** The way it is walking round walls (the points still ahead, and where it was planned to); an empty route is no way there. */
+        NavWay Way;
     };
 
     /** What a map remembers of the player's visit (structure spec §10), for the next. */
@@ -100,6 +107,8 @@ namespace vcgs
         double Time = 0;
         /** Actors that move (patrols, companions) by GUID: where each is now. AVcgsLevelDirector moves their actors to match. */
         std::map<std::string, ActorPose> Poses;
+        /** Where its people can walk (spec §19 navmesh): patrols, companions and chasers find their way round walls on it (null: they walk straight). */
+        std::shared_ptr<const NavGraph> Nav;
         /** Where the player is, in level space: companions follow it. The director sets it each frame. */
         /**
          * What the player is at (as the studio's Play Mode), in level space: a ladder within reach, and
@@ -455,6 +464,7 @@ namespace vcgs
             if (light["fuel"].Num(0) > 0) LightFuelFull = light["fuel"].Num(0);
             LightRange = light["range"].Num(8);
             LightFuel = LightFuelFull;
+            Nav = NavGraph::FromData(Data["nav"]);
             const Value& list = Data["items"];
             for (size_t i = 0; i < list.Size(); i++)
             {
@@ -856,14 +866,14 @@ namespace vcgs
                 const std::string reaction = Seen.count(pair.first) ? Param(pair.first, "onSight").Str() : std::string();
                 if (reaction == "chase" || reaction == "watch")
                 {
-                    if (HasPlayer) StepReaction(pair.second, reaction, Param(pair.first, "chaseSpeed").Num(3.5), dt, PlayerX, PlayerY, PlayerZ);
+                    if (HasPlayer) StepReaction(pair.second, reaction, Param(pair.first, "chaseSpeed").Num(3.5), dt, PlayerX, PlayerY, PlayerZ, Nav.get());
                     continue;
                 }
                 const Value& motion = Item(pair.first)["motion"];
                 // An actor that only watches stands where it is.
                 if (!motion.IsObject()) continue;
-                if (motion["kind"].Str() == "patrol") StepPatrol(pair.second, motion, dt, Time);
-                else if (HasPlayer) StepFollow(pair.second, motion, dt, PlayerX, PlayerY, PlayerZ);
+                if (motion["kind"].Str() == "patrol") StepPatrol(pair.second, motion, dt, Time, Nav.get());
+                else if (HasPlayer) StepFollow(pair.second, motion, dt, PlayerX, PlayerY, PlayerZ, Nav.get());
             }
             Watch();
             CloseTimed();
@@ -1028,17 +1038,19 @@ namespace vcgs
             return false;
         }
 
-        /** Walk a pose toward (x, y, z) at most by metres; true when it gets there. */
-        /** While an actor sees the player: face them, and for a chase close in to arm's reach (1 m) at its chase speed. */
-        static void StepReaction(ActorPose& p, const std::string& reaction, double speed, double dt, double x, double y, double z)
+        /** While an actor sees the player: face them, and for a chase close in to arm's reach (1 m) at its chase speed (round walls on graph, when there is one). */
+        static void StepReaction(ActorPose& p, const std::string& reaction, double speed, double dt, double x, double y, double z, const NavGraph* graph = nullptr)
         {
             const double dx = x - p.X, dz = z - p.Z;
             const double d = std::sqrt(dx * dx + dz * dz);
             if (d > 1e-6) { p.FacingX = dx; p.FacingZ = dz; p.Faces = true; }
-            if (reaction != "chase" || d <= 1) { p.Moving = false; return; }
-            Walk(p, p.X + dx * (d - 1) / d, y, p.Z + dz * (d - 1) / d, std::max(0.1, speed) * dt);
+            // A way planned to a patrol stop is no use now.
+            if (reaction != "chase" || d <= 1) { p.Moving = false; p.Way = NavWay(); return; }
+            if (graph) Travel(p, NavPoint{x, y, z}, std::max(0.1, speed) * dt, 1, *graph);
+            else Walk(p, p.X + dx * (d - 1) / d, y, p.Z + dz * (d - 1) / d, std::max(0.1, speed) * dt);
         }
 
+        /** Walk a pose toward (x, y, z) at most by metres; true when it gets there. */
         static bool Walk(ActorPose& p, double x, double y, double z, double by)
         {
             const double dx = x - p.X, dz = z - p.Z;
@@ -1056,22 +1068,74 @@ namespace vcgs
             return false;
         }
 
-        /** One patrol step: wait at a stop, else walk on to it; arriving starts the wait and aims at the next, round and round. now is the level time after the step. */
-        static void StepPatrol(ActorPose& p, const Value& motion, double dt, double now)
+        /**
+         * Walk a pose toward target at most by metres, stopping keep short of it, by the way round
+         * walls on the navigation graph (kept in the pose's Way, planned again when the target
+         * moves); with no way there it stands. True when it gets there. The same rules as the
+         * studio's Play Mode.
+         */
+        static bool Travel(ActorPose& p, const NavPoint& target, double by, double keep, const NavGraph& graph)
+        {
+            const NavPoint at{p.X, p.Y, p.Z};
+            NavWay& way = p.Way;
+            if (!way.Planned || NavGraph::Flat(way.Aim, target) > NavGraph::Replan || std::fabs(way.Aim.Y - target.Y) > 1)
+            {
+                way = NavWay();
+                way.Route = graph.FindPath(at, target);
+                way.Aim = target;
+                way.Planned = true;
+            }
+            std::vector<NavPoint>& route = way.Route;
+            // No way there: stand.
+            if (route.empty()) { p.Moving = false; return false; }
+            double remaining = NavGraph::Flat(at, route[0]);
+            for (size_t i = 1; i < route.size(); i++) remaining += NavGraph::Flat(route[i - 1], route[i]);
+            if (remaining <= keep + 1e-6)
+            {
+                const double fx = target.X - at.X, fz = target.Z - at.Z;
+                if (std::sqrt(fx * fx + fz * fz) > 1e-6) { p.FacingX = fx; p.FacingZ = fz; p.Faces = true; }
+                p.Moving = false;
+                p.Way = NavWay();
+                return true;
+            }
+            const bool arrived = remaining - keep <= by;
+            const NavPoint end = route.back();
+            double left = std::min(by, remaining - keep);
+            while (left > 1e-9 && !route.empty())
+            {
+                const NavPoint next = route.front();
+                const double d = NavGraph::Flat(NavPoint{p.X, p.Y, p.Z}, next);
+                if (!Walk(p, next.X, next.Y, next.Z, left)) break;
+                left -= d;
+                route.erase(route.begin());
+            }
+            if (arrived)
+            {
+                if (keep <= 0) { p.X = end.X; p.Y = end.Y; p.Z = end.Z; }
+                p.Way = NavWay();
+            }
+            else p.Moving = true;
+            return arrived;
+        }
+
+        /** One patrol step: wait at a stop, else walk on to it (round walls on graph, when there is one); arriving starts the wait and aims at the next, round and round. now is the level time after the step. */
+        static void StepPatrol(ActorPose& p, const Value& motion, double dt, double now, const NavGraph* graph = nullptr)
         {
             if (now < p.Until) { p.Moving = false; return; }
             const Value& stops = motion["stops"];
             if (stops.Size() == 0) return;
             const Value& stop = stops[static_cast<size_t>(p.Stop) % stops.Size()];
             const Value& at = stop["at"];
-            if (!Walk(p, at[0].Num(0), at[1].Num(0), at[2].Num(0), motion["speed"].Num(1.4) * dt)) return;
+            const NavPoint there{at[0].Num(0), at[1].Num(0), at[2].Num(0)};
+            const double by = motion["speed"].Num(1.4) * dt;
+            if (!(graph ? Travel(p, there, by, 0, *graph) : Walk(p, there.X, there.Y, there.Z, by))) return;
             p.Moving = false;
             p.Until = now + stop["wait"].Num(0);
             p.Stop = static_cast<int>((static_cast<size_t>(p.Stop) + 1) % stops.Size());
         }
 
         /** One follow step: keep within the follow distance of the player at (x, y, z), faster when far; more than CatchUp behind, or another floor, and it catches up at once. */
-        static void StepFollow(ActorPose& p, const Value& motion, double dt, double x, double y, double z)
+        static void StepFollow(ActorPose& p, const Value& motion, double dt, double x, double y, double z, const NavGraph* graph = nullptr)
         {
             const double dx = x - p.X, dz = z - p.Z;
             const double d = std::sqrt(dx * dx + dz * dz);
@@ -1082,13 +1146,15 @@ namespace vcgs
                 const double k = d > 1e-6 ? distance / d : 0;
                 p.X = x - dx * k; p.Y = y; p.Z = z - (d > 1e-6 ? dz * k : distance);
                 p.Moving = false;
+                p.Way = NavWay();
             }
-            else if (d <= distance) p.Moving = false;
+            else if (d <= distance) { p.Moving = false; p.Way = NavWay(); }
             else
             {
                 const double speed = motion["speed"].Num(3.5) * (d > distance * 2.5 ? 1.6 : 1.0);
                 const double k = (d - distance) / d;
-                Walk(p, p.X + dx * k, y, p.Z + dz * k, speed * dt);
+                if (graph) Travel(p, NavPoint{x, y, z}, speed * dt, distance, *graph);
+                else Walk(p, p.X + dx * k, y, p.Z + dz * k, speed * dt);
             }
         }
 
@@ -1562,6 +1628,7 @@ private:
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
+#include <algorithm>
 #include <cmath>
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
@@ -1578,6 +1645,12 @@ AVcgsLevelDirector::AVcgsLevelDirector()
 void AVcgsLevelDirector::EndPlay(const EEndPlayReason::Type Reason)
 {
     if (Logic && !Logic->Key.empty()) vcgs::LevelLogic::Places()[Logic->Key] = Logic->Remember();
+    // Its graph goes with it.
+    if (Logic && Logic->Nav)
+    {
+        auto& Places = vcgs::NavPlaces();
+        Places.erase(std::remove_if(Places.begin(), Places.end(), [this](const vcgs::NavPlace& P) { return P.Graph == Logic->Nav; }), Places.end());
+    }
     Super::EndPlay(Reason);
 }
 
@@ -1622,6 +1695,8 @@ void AVcgsLevelDirector::BeginPlay()
         FHitResult Hit;
         return World->LineTraceSingleByChannel(Hit, ToWorld(AX, AY, AZ), ToWorld(BX, BY, BZ), ECC_Visibility, Params);
     };
+    // Where its people can walk (spec §19 navmesh), where it lies in the world: AVcgsCharacterActors on it find their way round walls.
+    if (Logic->Nav) vcgs::NavPlaces().push_back(vcgs::NavPlace{GetWorld(), Logic->Nav, MapOrigin.X, MapOrigin.Y, MapOrigin.Z, MapYaw});
     // A streamed map starts unloaded: its parent's director brings it in.
     bMapLoaded = Boundary != TEXT("streamed");
     for (TActorIterator<AVcgsLevelItem> It(GetWorld()); It; ++It)

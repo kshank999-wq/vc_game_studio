@@ -1,4 +1,5 @@
 import type { IrLevel } from './levels';
+import { NAV_RUNTIME } from './unity-nav';
 
 /**
  * Levels for Unity (spec §11.2). The level's data goes over as JSON; an
@@ -46,6 +47,8 @@ namespace VCGS
         /// <summary>The patrol stop it walks to, and the level time it waits until.</summary>
         public int Stop;
         public double Until;
+        /// <summary>The way it is walking round walls (spec §19 navmesh), planned again when its target moves; null for none.</summary>
+        public VcgsNav.Way Way;
     }
 
     /// <summary>Something the player can do on the gear screen (spec §8): equip, unequip, use, learn or craft, and why not ("" when they can).</summary>
@@ -113,6 +116,8 @@ namespace VCGS
         public double[] Player;
         /// <summary>How far behind a companion may fall before it catches up at once.</summary>
         public const double CatchUp = 12;
+        /// <summary>Where its people can walk (spec §19 navmesh): patrols, companions and chasers find their way round walls on it (null: they walk straight).</summary>
+        public readonly VcgsNav Nav;
 
         /// <summary>The player's light (spec §6), from the player start: what lights it (a story item or mechanic), its fuel (0 for ever), its reach.</summary>
         public readonly string LightSource;
@@ -159,6 +164,7 @@ namespace VCGS
             names = D.Map(data, "names");
             Map = D.Map(data, "map");
             Structure = D.Map(data, "structure");
+            Nav = VcgsNav.FromData(D.Map(data, "nav"));
             foreach (var o in D.List(data, "travel")) Travel[D.Str(D.Map(o), "key")] = D.Map(o);
             foreach (var o in D.List(data, "items"))
             {
@@ -684,14 +690,14 @@ namespace VCGS
                 var reaction = Seen.Contains(pair.Key) ? ParamStr(pair.Key, "onSight") : "";
                 if (reaction == "chase" || reaction == "watch")
                 {
-                    if (Player != null && Player.Length > 2) StepReaction(pair.Value, reaction, ParamNum(pair.Key, "chaseSpeed", 3.5), dt, Player[0], Player[1], Player[2]);
+                    if (Player != null && Player.Length > 2) StepReaction(pair.Value, reaction, ParamNum(pair.Key, "chaseSpeed", 3.5), dt, Player[0], Player[1], Player[2], Nav);
                     continue;
                 }
                 var motion = D.Map(Item(pair.Key), "motion");
                 // An actor that only watches stands where it is.
                 if (motion.Count == 0) continue;
-                if (D.Str(motion, "kind") == "patrol") StepPatrol(pair.Value, motion, dt, Time);
-                else if (Player != null && Player.Length > 2) StepFollow(pair.Value, motion, dt, Player[0], Player[1], Player[2]);
+                if (D.Str(motion, "kind") == "patrol") StepPatrol(pair.Value, motion, dt, Time, Nav);
+                else if (Player != null && Player.Length > 2) StepFollow(pair.Value, motion, dt, Player[0], Player[1], Player[2], Nav);
             }
         }
 
@@ -1019,17 +1025,18 @@ namespace VCGS
             return !Blocked(new[] { p.X, eye, p.Z }, new[] { Player[0], eye, Player[2] });
         }
 
-        /// <summary>Walk a pose toward (x, y, z) at most by metres; true when it gets there.</summary>
-        /// <summary>While an actor sees the Player: face them, and for a chase close in to arm's reach (1 m) at its chase speed.</summary>
-        public static void StepReaction(ActorPose p, string reaction, double speed, double dt, double x, double y, double z)
+        /// <summary>While an actor sees the Player: face them, and for a chase close in to arm's reach (1 m) at its chase speed (round walls on graph, when there is one).</summary>
+        public static void StepReaction(ActorPose p, string reaction, double speed, double dt, double x, double y, double z, VcgsNav graph = null)
         {
             double dx = x - p.X, dz = z - p.Z;
             var d = Math.Sqrt(dx * dx + dz * dz);
             if (d > 1e-6) { p.FacingX = dx; p.FacingZ = dz; p.Faces = true; }
-            if (reaction != "chase" || d <= 1) { p.Moving = false; return; }
-            Walk(p, p.X + dx * (d - 1) / d, y, p.Z + dz * (d - 1) / d, Math.Max(0.1, speed) * dt);
+            if (reaction != "chase" || d <= 1) { p.Moving = false; p.Way = null; return; }
+            if (graph != null) WalkWay(p, new[] { x, y, z }, Math.Max(0.1, speed) * dt, 1, graph);
+            else Walk(p, p.X + dx * (d - 1) / d, y, p.Z + dz * (d - 1) / d, Math.Max(0.1, speed) * dt);
         }
 
+        /// <summary>Walk a pose toward (x, y, z) at most by metres; true when it gets there.</summary>
         static bool Walk(ActorPose p, double x, double y, double z, double by)
         {
             var dx = x - p.X;
@@ -1048,8 +1055,50 @@ namespace VCGS
             return false;
         }
 
-        /// <summary>One patrol step: wait at a stop, else walk on to it; arriving starts the wait and aims at the next, round and round. now is the level time after the step.</summary>
-        public static void StepPatrol(ActorPose p, Dictionary<string, object> motion, double dt, double now)
+        /// <summary>
+        /// Walk a pose toward target at most by metres, stopping keep short of it, by the way round
+        /// walls on the navigation graph (kept in its Way, planned again when the target moves);
+        /// with no way there it stands. True when it gets there. The same rules as the studio's Play Mode.
+        /// </summary>
+        static bool WalkWay(ActorPose p, double[] target, double by, double keep, VcgsNav graph)
+        {
+            var at = new[] { p.X, p.Y, p.Z };
+            if (p.Way == null || VcgsNav.Moved(p.Way, target)) p.Way = new VcgsNav.Way { Route = graph.FindPath(at, target), Aim = target };
+            var route = p.Way.Route;
+            // No way there: stand.
+            if (route.Count == 0) { p.Moving = false; return false; }
+            var remaining = VcgsNav.Flat(at, route[0]);
+            for (var i = 1; i < route.Count; i++) remaining += VcgsNav.Flat(route[i - 1], route[i]);
+            if (remaining <= keep + 1e-6)
+            {
+                double fx = target[0] - p.X, fz = target[2] - p.Z;
+                if (Math.Sqrt(fx * fx + fz * fz) > 1e-6) { p.FacingX = fx; p.FacingZ = fz; p.Faces = true; }
+                p.Moving = false;
+                p.Way = null;
+                return true;
+            }
+            var arrived = remaining - keep <= by;
+            var end = route[route.Count - 1];
+            var left = Math.Min(by, remaining - keep);
+            while (left > 1e-9 && route.Count > 0)
+            {
+                var next = route[0];
+                var d = VcgsNav.Flat(new[] { p.X, p.Y, p.Z }, next);
+                if (!Walk(p, next[0], next[1], next[2], left)) break;
+                left -= d;
+                route.RemoveAt(0);
+            }
+            if (arrived)
+            {
+                if (keep <= 0) { p.X = end[0]; p.Y = end[1]; p.Z = end[2]; }
+                p.Way = null;
+            }
+            else p.Moving = true;
+            return arrived;
+        }
+
+        /// <summary>One patrol step: wait at a stop, else walk on to it (round walls on graph, when there is one); arriving starts the wait and aims at the next, round and round. now is the level time after the step.</summary>
+        public static void StepPatrol(ActorPose p, Dictionary<string, object> motion, double dt, double now, VcgsNav graph = null)
         {
             if (now < p.Until) { p.Moving = false; return; }
             var stops = D.List(motion, "stops");
@@ -1057,14 +1106,15 @@ namespace VCGS
             var stop = D.Map(stops[p.Stop % stops.Count]);
             var at = D.List(stop, "at");
             if (at.Count < 3) return;
-            if (!Walk(p, D.Num(at[0], 0), D.Num(at[1], 0), D.Num(at[2], 0), D.Num(motion, "speed", 1.4) * dt)) return;
+            double x = D.Num(at[0], 0), y = D.Num(at[1], 0), z = D.Num(at[2], 0), by = D.Num(motion, "speed", 1.4) * dt;
+            if (!(graph != null ? WalkWay(p, new[] { x, y, z }, by, 0, graph) : Walk(p, x, y, z, by))) return;
             p.Moving = false;
             p.Until = now + D.Num(stop, "wait", 0);
             p.Stop = (p.Stop + 1) % stops.Count;
         }
 
         /// <summary>One follow step: keep within the follow distance of the player at (x, y, z), faster when far; more than CatchUp behind, or another floor, and it catches up at once.</summary>
-        public static void StepFollow(ActorPose p, Dictionary<string, object> motion, double dt, double x, double y, double z)
+        public static void StepFollow(ActorPose p, Dictionary<string, object> motion, double dt, double x, double y, double z, VcgsNav graph = null)
         {
             var dx = x - p.X;
             var dz = z - p.Z;
@@ -1076,13 +1126,15 @@ namespace VCGS
                 var k = d > 1e-6 ? distance / d : 0;
                 p.X = x - dx * k; p.Y = y; p.Z = z - (d > 1e-6 ? dz * k : distance);
                 p.Moving = false;
+                p.Way = null;
             }
-            else if (d <= distance) p.Moving = false;
+            else if (d <= distance) { p.Moving = false; p.Way = null; }
             else
             {
                 var speed = D.Num(motion, "speed", 3.5) * (d > distance * 2.5 ? 1.6 : 1);
                 var k = (d - distance) / d;
-                Walk(p, p.X + dx * k, y, p.Z + dz * k, speed * dt);
+                if (graph != null) WalkWay(p, new[] { x, y, z }, speed * dt, distance, graph);
+                else Walk(p, p.X + dx * k, y, p.Z + dz * k, speed * dt);
             }
         }
 
@@ -1195,7 +1247,7 @@ namespace VCGS
         }
     }
 
-    public sealed class VcgsLevel : MonoBehaviour
+    public sealed class VcgsLevel : MonoBehaviour, IVcgsNavHost
     {
         [Tooltip("The generated level data (Assets/VCGS/Generated/Levels/<level>.json).")]
         public TextAsset level = null;
@@ -1205,6 +1257,8 @@ namespace VCGS
         public string boundary = "continuous";
 
         public LevelLogic Logic { get; private set; }
+        /// <summary>Where its people can walk (spec §19 navmesh), in level space (z south): characters under it steer round walls on it.</summary>
+        public VcgsNav Nav => Logic?.Nav;
         readonly Dictionary<string, VcgsLevelItem> items = new Dictionary<string, VcgsLevelItem>();
 
         void Start()
@@ -1408,6 +1462,7 @@ namespace VCGS
 }
 `,
 
+  'VcgsNav.cs': NAV_RUNTIME,
   'VcgsTravelLink.cs': String.raw`${HEAD}
 using UnityEngine;
 
