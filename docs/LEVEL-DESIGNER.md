@@ -236,6 +236,20 @@ It counts, from what is placed, and shows as a bar against each limit (amber pas
 
 These are the studio's estimates, made to say early, while it is still cheap to move things, that a level is heading over: a graybox's triangles are a floor, not the final art. Over budget is a preflight warning naming what costs most (*Sunken Vault is over its Mobile budget for lights: 3 of 1. Most of it: Lantern (1), Camp embers (1), Seam glow (1).*). The engine handoff carries the budget and the counts (`levels[].budget`) and a `BUDGETS.md` for the engine and art teams to profile the real level against.
 
+## Streaming and world partition (spec §19)
+
+A big map is loaded a piece at a time. Tick **Cut into streaming cells** in a map's **Streaming** properties (with nothing selected) to plan it: a grid of square cells (**Cell size**, 64 m to start) over what is placed, named like a spreadsheet: **A1** is the north-west cell, letters go east and numbers south. The 2D map draws the grid with the names. **Load range** (128 m to start) is how far round the player cells stay loaded: with the player in a cell, every cell within that many metres of it is loaded.
+
+The player start stays loaded wherever the player is. Tick **Always loaded** in any item's properties to keep it loaded too (a boss's door, a lever the whole map listens to). The section shows, for each count of the performance budget, the most that is loaded at once and round which cell, against the budget when there is one.
+
+The preflight warns where the plan and the level disagree:
+
+- a rule acting on something that may not be loaded when it fires (*Lever (in A1) acts on Gate in D4, which may not be loaded then.*);
+- a patrol that walks out of what is loaded round its actor;
+- what is loaded at once going over the level's budget (*Round cell B2 the loaded cells cost 3,400,000 triangles, over the budget of 3,000,000.*).
+
+The engine handoff carries the plan (`levels[].streaming`: the cells, what is in each and its costs, what stays loaded, the worst) and a `STREAMING.md` saying how to build it: Unreal's World Partition grid, Unity's additive scenes or Addressables, Godot's scenes a cell. The studio plans the partition; the engine team builds it.
+
 ## Bringing changes back from the engine (spec §19)
 
 Once a level is in the engine, the engine team moves things, renames them, deletes some and adds their own. To keep the studio's outline true, they run the exporter the handoff gave them:
@@ -471,7 +485,7 @@ clockwise seen from above.
 | §11 Engine handoff | Done: Godot, Unity, Unreal and JSON (see *Sending a level to an engine*). Checked in Godot 4.3, and against Unity and Unreal stand-ins (C#, C++ with g++ and clang, and the Python builder). |
 | §12 Preflight | Done, including what can't be reached from the player start, doorways lower than the player, items from older library versions, engine-specific checks (roles an engine gets as data only, wedges in Unreal, locked art with no final asset) and files changed in the engine since the last export. |
 | §14 Undo, persistence | Done: every edit is one undo step, GUIDs survive save, load, duplicate (which gives new ones), rename and re-export, and the data is plain JSON in the project file. |
-| §19 Future | Navmesh pathing and authoring (see *Finding the way* and *Nav areas*) and performance budgets (see *Performance budgets*) done, in Play Mode and every engine. Bringing safe engine-side changes back done (see *Bringing changes back from the engine*). Terrain sculpting and foliage are out of scope: the engine team builds the biomes and terrain in the engine, from the maps' terrain and biome planning shapes. The rest not started, as the spec says. |
+| §19 Future | Navmesh pathing and authoring (see *Finding the way* and *Nav areas*) and performance budgets (see *Performance budgets*) done, in Play Mode and every engine. Bringing safe engine-side changes back done (see *Bringing changes back from the engine*). Streaming and world-partition planning done (see *Streaming and world partition*). Terrain sculpting and foliage are out of scope: the engine team builds the biomes and terrain in the engine, from the maps' terrain and biome planning shapes. The rest not started, as the spec says. |
 
 Against spec V2:
 

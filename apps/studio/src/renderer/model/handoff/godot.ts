@@ -2,6 +2,7 @@ import { puzzleRuntimeGd } from './godot-puzzles';
 import { characterRuntimeGd } from './godot-characters';
 import { castFiles } from './cast-files';
 import { budgetsMarkdown } from './budgets';
+import { streamingMarkdown } from './streaming-doc';
 import { tasksMarkdown, withCodeNotes } from './notes';
 import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GenerateOptions, GeneratedFile } from './engines';
@@ -2040,6 +2041,8 @@ export const generateGodot = (ir: HandoffIR, outputPath: string, options: Genera
   // Performance budgets (spec §19), when any level has one.
   const budgets = budgetsMarkdown(ir, 'Godot', (l) => `res://${root}/levels/${l.key}.tscn`);
   if (budgets) add('BUDGETS.md', budgets);
+  const streaming = streamingMarkdown(ir, 'godot', (l) => `res://${root}/levels/${l.key}.tscn`);
+  if (streaming) add('STREAMING.md', streaming);
   // The Character Creator's cast (character spec §10): characters.json, its schema and manifests, CHARACTERS.md, and the components.
   const cast = castFiles(ir.cast, root, 'godot', 'Godot', VERSION);
   if (cast.files.length) {

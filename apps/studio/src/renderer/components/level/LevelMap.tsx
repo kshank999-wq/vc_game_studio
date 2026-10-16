@@ -16,6 +16,7 @@ import { useDragPan, useWheelPanZoom } from '../../use-pan-zoom';
 import type { View } from '../../view';
 import { formatLength } from './units';
 import { pathBetween } from '../../model/level/nav';
+import { streamLayout } from '../../model/level/streaming';
 
 /** Pixels per metre at zoom 1. */
 export const PX = 24;
@@ -673,6 +674,7 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
   const px = (n: number) => n / scale; // screen pixels in world units
   const units = set.settings.units;
   const grid = mapGrid(set, levelId);
+  const stream = level?.streaming ? streamLayout(shown, levelId, global) : null;
   const minor = grid * scale >= 7 ? grid : grid * Math.ceil(7 / (grid * scale));
   // Room focus (spec V2 §7): the room and what is in it, the rest dimmed.
   const roomItem = props.focusRoom ? set.items.find((i) => i.id === props.focusRoom && i.levelId === levelId && i.floorId === floorId) : undefined;
@@ -994,6 +996,18 @@ export const LevelMap = forwardRef<MapApi, Props>((props, ref) => {
                   />
                 );
               })}
+            </g>
+          )}
+          {stream && (
+            <g className="lvl-stream-grid" pointerEvents="none">
+              {stream.cells.map((c) => (
+                <g key={c.key}>
+                  <rect x={c.x0} y={c.y0} width={c.x1 - c.x0} height={c.y1 - c.y0} fill="none" stroke="#5f8fb8" strokeOpacity={0.55} strokeWidth={px(1)} strokeDasharray={`${px(4)} ${px(4)}`} />
+                  <text x={c.x0 + px(4)} y={c.y0 + px(12)} fontSize={px(11)} fill="#7fa9cf" className="lvl-stream-key">
+                    {c.key}
+                  </text>
+                </g>
+              ))}
             </g>
           )}
           {extent && (

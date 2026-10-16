@@ -474,6 +474,8 @@ export interface Level {
   generation?: GenerationRun[];
   /** What it may cost on the platform it is made for (spec §19 performance budgets): none set, no warnings. */
   budget?: import('./budget').LevelBudget;
+  /** How it streams in (spec §19 world-partition planning): its cell grid, load range and what stays loaded. */
+  streaming?: import('./streaming').StreamingPlan;
 }
 
 /** How the generator lays a floor out (structure spec §6 rule presets). */

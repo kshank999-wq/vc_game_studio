@@ -1,4 +1,5 @@
 import { budgetsMarkdown } from './budgets';
+import { streamingMarkdown } from './streaming-doc';
 import { tasksMarkdown } from './notes';
 import { castFiles } from './cast-files';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
@@ -135,6 +136,22 @@ export const storySchema = () => ({
           budget: {
             description: 'Its performance budget (spec §19), when it has one: the platform it is made for (pc, console, mobile, vr), the limits, what the studio counted from the graybox (estimates: profile the real level against the limits), and which counts are over.',
             ...obj({ platform: str, limits: { type: 'object', additionalProperties: num }, counts: { type: 'object', additionalProperties: num }, over: strings }),
+          },
+          streaming: {
+            description: 'Its streaming plan (spec §19 world partition), when it has one: a grid of `cols` by `rows` cells of `cell` metres from `origin` [x, z], its north-west corner. Key A1 is the north-west cell (letters east, numbers south); `bounds` are [x0, z0, x1, z1]; `items` are the guids whose centre is in it (not those always loaded). With the player in a cell, every cell within `load_range` metres (Chebyshev, in whole cells: ceil(load_range / cell)) is loaded, and `always` throughout. `worst` is the most loaded at once per count, and round which cell.',
+            ...obj(
+              {
+                cell: num,
+                load_range: num,
+                origin: ref('corner'),
+                cols: num,
+                rows: num,
+                cells: { type: 'array', items: obj({ key: str, bounds: { type: 'array', items: num }, items: strings, counts: { type: 'object', additionalProperties: num } }, ['key', 'bounds', 'items', 'counts']) },
+                always: strings,
+                worst: { type: 'array', items: obj({ metric: str, count: num, around: str }, ['metric', 'count', 'around']) },
+              },
+              ['cell', 'load_range', 'origin', 'cols', 'rows', 'cells', 'always', 'worst'],
+            ),
           },
           revision: str,
         },
@@ -615,6 +632,8 @@ const generateJson = (ir: HandoffIR, outputPath: string): EngineOutput => {
   // Performance budgets (spec §19), when any level has one.
   const budgets = budgetsMarkdown(ir, 'your engine', (l) => `\`${l.key}\``);
   if (budgets) files.push({ path: `${root}/BUDGETS.md`, content: budgets, kind: 'generated' });
+  const streaming = streamingMarkdown(ir, 'json', (l) => `\`${l.key}\``);
+  if (streaming) files.push({ path: `${root}/STREAMING.md`, content: streaming, kind: 'generated' });
   const storyPath = `${root}/story.json`;
   const elements: ElementOutput[] = [];
   const row = (e: Omit<ElementOutput, 'fingerprint' | 'files'>, data: unknown) =>

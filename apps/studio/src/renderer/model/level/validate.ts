@@ -7,6 +7,7 @@ import { walkStructure } from './walkthrough';
 import { migrationFor } from './migrate';
 import { navGraph, navigate, nearestNode, reachableFrom } from './nav';
 import { countLabel, METRICS, overBudget, PLATFORMS } from './budget';
+import { streamingIssues } from './streaming';
 import { BODY, CROUCH } from './controller';
 import { engineSafe, exportNameOf, levelExportName } from './naming';
 import type { AssetDefinition, LevelItem } from './types';
@@ -218,6 +219,9 @@ export const levelIssues = (project: Project, global?: readonly AssetDefinition[
       add({ id: level.id, levelId: level.id, severity: 'warning', message: `${level.name} is over its ${platform} budget for ${label}: ${countLabel(o.count)} of ${countLabel(o.limit)}.`, export: `${most ? `Most of it: ${most}. ` : ''}The studio’s count is an estimate from the graybox; the engine team profiles the real level against the same budget, which goes over in the handoff.` });
     }
   }
+
+  // The streaming plan (spec §19): what may not be loaded when the story needs it, and loaded cells over budget.
+  for (const level of set.levels) for (const i of streamingIssues(project, level.id, global)) add({ ...i, levelId: level.id, severity: 'warning' });
 
   // Placed from an earlier version of a library asset: shown, never silently changed (spec §4.3).
   for (const item of set.items) {

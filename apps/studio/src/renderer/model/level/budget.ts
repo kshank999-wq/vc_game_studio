@@ -72,6 +72,8 @@ export interface Tally {
   counts: Limits;
   /** For each count, what adds most to it: item ids with what each adds, most first. */
   top: Record<Metric, { itemId: string; amount: number }[]>;
+  /** Every item's part of each count (nav cells under the level's id): for the streaming plan's cells. */
+  byItem: Record<Metric, ReadonlyMap<string, number>>;
 }
 
 // Per project: the people in a crowd come from its characters, not only the level.
@@ -118,7 +120,7 @@ export const tallyOf = (project: Project, levelId: string, floorId?: string, glo
   }
   const counts = Object.fromEntries(METRICS.map((m) => [m.id, [...by[m.id].values()].reduce((a, b) => a + b, 0)])) as Limits;
   const top = Object.fromEntries(METRICS.map((m) => [m.id, [...by[m.id]].map(([itemId, amount]) => ({ itemId, amount })).sort((a, b) => b.amount - a.amount).slice(0, 3)])) as Tally['top'];
-  const out = { counts, top };
+  const out = { counts, top, byItem: by };
   memo.set(key, out);
   return out;
 };

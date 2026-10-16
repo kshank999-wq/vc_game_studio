@@ -654,6 +654,20 @@ are `over`. Every adapter also writes `BUDGETS.md`, a table a level, for the
 engine and art teams to profile the real level against (`budgets.ts`). The
 counts are estimates; the limits are the target.
 
+A level with a streaming plan (spec §19 world partition) carries it as
+`streaming`: cells of `cell` metres from `origin` [x, z] (its north-west
+corner), `cols` by `rows`, each with its key (A1 north-west, letters east,
+numbers south), `bounds` [x0, z0, x1, z1], the guids of the items whose centre
+is in it and their counts; `load_range` (with the player in a cell, every cell
+within ceil(load_range / cell) cells of it is loaded); `always`, the guids that
+stay loaded wherever the player is (the player start and those marked); and
+`worst`, the most loaded at once per count. Every adapter writes
+`STREAMING.md` (`streaming-doc.ts`) with the grid and how to build it there:
+Unreal's World Partition (cell size and loading range in centimetres), Unity's
+additive scenes or Addressables groups a cell, Godot's scenes a cell loaded
+with `ResourceLoader.load_threaded_request`. The studio plans the partition;
+the engine team builds it.
+
 ## Saved games
 
 Every runtime saves and loads the game in one format, so a save from one

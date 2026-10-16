@@ -1,4 +1,5 @@
 import { budgetsMarkdown } from './budgets';
+import { streamingMarkdown } from './streaming-doc';
 import { tasksMarkdown, todoLines, withCodeNotes, withoutNotes } from './notes';
 import { customRegion } from './custom';
 import type { EngineAdapter, ElementOutput, EngineOutput, GeneratedFile } from './engines';
@@ -358,6 +359,8 @@ export const generateUnity = (ir: HandoffIR, outputPath: string): EngineOutput =
   // Performance budgets (spec §19), when any level has one.
   const budgets = budgetsMarkdown(ir, 'Unity', (l) => `${l.export_name} (VcgsLevel)`);
   if (budgets) put(`${root}/BUDGETS.md`, budgets, 'generated', 'text');
+  const streaming = streamingMarkdown(ir, 'unity', (l) => `${l.export_name} (VcgsLevel)`);
+  if (streaming) put(`${root}/STREAMING.md`, streaming, 'generated', 'text');
   return { files: withCodeNotes(files, ir), elements };
 };
 

@@ -2,6 +2,7 @@ import { motionOf, PATROLLERS } from '../level/actors';
 import { BODY } from '../level/controller';
 import { navGraph } from '../level/nav';
 import { limitsOf, METRICS, tallyOf, type Limits, type Metric } from '../level/budget';
+import { streamLayout } from '../level/streaming';
 import type { Effect, Rule } from '../rules';
 import type { Project } from '../types';
 import { assetOf, contains, frameOf, meshesFor, paramOf } from '../level/geometry';
@@ -193,6 +194,18 @@ export interface IrNav {
   costs?: number[];
 }
 
+export interface IrStreaming {
+  cell: number;
+  load_range: number;
+  origin: [number, number];
+  cols: number;
+  rows: number;
+  /** Key A1 is the north-west cell; `bounds` is [x0, z0, x1, z1]; `items` are guids. */
+  cells: { key: string; bounds: [number, number, number, number]; items: string[]; counts: Limits }[];
+  always: string[];
+  worst: { metric: Metric; count: number; around: string }[];
+}
+
 export interface IrLevel {
   guid: string;
   key: string;
@@ -213,6 +226,8 @@ export interface IrLevel {
   nav?: IrNav;
   /** Its performance budget (spec §19), when it has one: the platform, the limits, the studio's counts and which are over. */
   budget?: { platform: string; limits: Limits; counts: Limits; over: Metric[] };
+  /** Its streaming plan (spec §19 world partition), when it has one: cells of `cell` metres from `origin` [x, z] (the north-west corner), what is in each, what stays loaded, and the worst loaded at once. */
+  streaming?: IrStreaming;
   revision: string;
 }
 
@@ -299,6 +314,22 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
     const limits = limitsOf(level.budget);
     const counts = tallyOf(project, level.id).counts;
     return { budget: { platform: level.budget.platform, limits, counts, over: METRICS.filter((m) => counts[m.id] > limits[m.id]).map((m) => m.id) } };
+  };
+  const streamingOf = (levelId: string): Pick<IrLevel, 'streaming'> => {
+    const l = streamLayout(project, levelId);
+    if (!l) return {};
+    return {
+      streaming: {
+        cell: round(l.plan.cell),
+        load_range: round(l.plan.range),
+        origin: [round(l.x), round(l.y)],
+        cols: l.cols,
+        rows: l.rows,
+        cells: l.cells.map((c) => ({ key: c.key, bounds: [round(c.x0), round(c.y0), round(c.x1), round(c.y1)], items: c.items, counts: c.counts })),
+        always: l.always,
+        worst: l.worst.map((w) => ({ ...w, count: round(w.count) })),
+      },
+    };
   };
   const navOf = (levelId: string): { nav?: IrNav } => {
     if (!set.items.some((i) => i.levelId === levelId && !i.hidden && WALKERS.has(assetOf(set, i).role))) return {};
@@ -456,6 +487,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
       ...(level.structure ? { structure: structureManifest(project, set, level, floorKey, exportedIds(set, level.id), story) } : {}),
       ...navOf(level.id),
       ...budgetOf(level),
+      ...streamingOf(level.id),
     };
     return { ...out, revision: fingerprint(JSON.stringify(out)) };
   });
