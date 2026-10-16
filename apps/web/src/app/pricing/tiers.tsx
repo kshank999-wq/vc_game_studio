@@ -8,7 +8,7 @@ interface Tier {
   name: string;
   tagline: string;
   features: string[];
-  prices: Partial<Record<Interval, string>>;
+  prices: Partial<Record<Interval, string>> & { saving?: string };
 }
 
 export function PricingTiers({ tiers, signedIn }: { tiers: Tier[]; signedIn: boolean }) {
@@ -60,6 +60,7 @@ export function PricingTiers({ tiers, signedIn }: { tiers: Tier[]; signedIn: boo
             <p className="muted">{tier.tagline}</p>
             <div className="price">
               {tier.prices[interval] ?? '—'} <small>/ {interval === 'year' ? 'year' : 'month'}</small>
+              {interval === 'year' && tier.prices.saving ? <small> ({tier.prices.saving})</small> : null}
             </div>
             <ul>
               {tier.features.map((feature) => (
