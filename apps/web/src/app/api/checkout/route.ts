@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { env } from '@/lib/env';
-import { priceIdFor } from '@/lib/plans';
+import { licenseStatusFor, priceIdFor } from '@/lib/plans';
 import { RULES, rateLimit } from '@/lib/rate-limit';
 import { PRODUCT_TAG, stripe } from '@/lib/stripe';
 import { adminClient, currentUser } from '@/lib/supabase';
@@ -19,7 +19,8 @@ const bodySchema = z.object({ plan: z.literal('studio').default('studio'), inter
  * Signing in first is required, so the subscription lands on the right account
  * from the start (and a VC Writer customer's existing account is the one used).
  * A returning customer reuses their Stripe customer, so their cards and
- * invoices stay in one place.
+ * invoices stay in one place. Someone whose subscription is still running is
+ * sent to their account instead: a second checkout would bill them twice.
  */
 export async function POST(request: Request): Promise<Response> {
   const limited = await rateLimit(request, RULES.checkout);
@@ -32,12 +33,10 @@ export async function POST(request: Request): Promise<Response> {
   if (!user) return NextResponse.json({ error: 'Sign in first', signIn: true }, { status: 401 });
 
   try {
-    const { data: previous } = await adminClient()
-      .from('gs_subscriptions')
-      .select('stripe_customer_id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle();
+    const { data: subscriptions } = await adminClient().from('gs_subscriptions').select('stripe_customer_id, status').eq('user_id', user.id);
+    if ((subscriptions ?? []).some((sub) => licenseStatusFor(String(sub.status)) === 'active'))
+      return NextResponse.json({ error: 'You already have VC Game Studio. Change your plan or billing from your account page.', account: true }, { status: 409 });
+    const previous = subscriptions?.[0];
     const metadata = { product: PRODUCT_TAG, supabase_user_id: user.id, plan: parsed.data.plan };
     const session = await stripe().checkout.sessions.create({
       mode: 'subscription',
