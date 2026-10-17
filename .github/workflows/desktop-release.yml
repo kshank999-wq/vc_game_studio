@@ -154,7 +154,7 @@ jobs:
           # A tester build's installer says so in its name, so it is never mistaken for a release.
           tester_flags=""
           if [ "${{ inputs.tester }}" = "true" ]; then
-            tester_flags='-c.artifactName=VC-Game-Studio-Tester-${version}-${os}.${ext}'
+            tester_flags='-c.artifactName=VC-Game-Studio-Tester-${version}-${os}.${ext} -c.nsis.artifactName=VC-Game-Studio-Tester-Setup-${version}.${ext} -c.dmg.artifactName=VC-Game-Studio-Tester-${version}-${os}.${ext}'
             echo "::warning::Tester build: licensing is switched off. For our own testing only; never publish it."
           fi
           npm run ${{ matrix.script }} -w @vcgs/studio -- ${{ steps.notarize.outputs.flag }} $windows_flags $tester_flags
