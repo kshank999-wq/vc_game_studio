@@ -20,6 +20,8 @@ describe('the entitlement token', () => {
       expect(readToken(token(), key!)).toMatchObject({ plan: 'studio', fingerprint: FINGERPRINT });
     }
     expect(publicKeyFrom('')).toBeNull();
+    const b64 = Buffer.from(publicPem).toString('base64');
+    for (const pasted of [`MAIN_VITE_LICENSE_PUBLIC_KEY=${b64}`, `"${b64}"`, ` ${b64} `]) expect(publicKeyFrom(pasted)).not.toBeNull();
     expect(publicKeyFrom('not a key')).toBeNull();
   });
 

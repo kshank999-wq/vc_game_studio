@@ -34,4 +34,12 @@ describe('entitlements', () => {
       expect(publicKeyPem(privateKeyFrom(form))).toBe(pub);
     }
   });
+
+  it('takes the key as pasted: the whole NAME=value line, quotes, stray spaces', () => {
+    const pub = publicKeyPem(privateKey);
+    const b64 = Buffer.from(pem).toString('base64');
+    for (const form of [`LICENSE_SIGNING_PRIVATE_KEY=${b64}`, `"${b64}"`, `  ${b64}\n`, `LICENSE_SIGNING_PRIVATE_KEY="${b64}"`, `'${pem}'`]) {
+      expect(publicKeyPem(privateKeyFrom(form))).toBe(pub);
+    }
+  });
 });

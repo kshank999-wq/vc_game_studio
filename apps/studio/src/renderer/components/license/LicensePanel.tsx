@@ -81,6 +81,7 @@ export default function LicensePanel({ onClose }: { onClose: () => void }) {
                 void run(() => bridge.requestCode(email), (result) => !result.message && setStep('code'));
               }}
             >
+              <p className="dialog-text">We’ll email you a 6-digit sign-in code. It isn’t your license key: the app finds your license once you’re signed in.</p>
               <input type="email" required placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.currentTarget.value)} aria-label="Email address" autoFocus />
               <button className="tb-btn primary" disabled={busy}>
                 {busy ? 'Sending…' : 'Email me a code'}
@@ -115,7 +116,7 @@ export default function LicensePanel({ onClose }: { onClose: () => void }) {
             }}
           >
             <p className="dialog-text">Signed in as {access.email}.</p>
-            <input type="text" placeholder="License (optional): VCGS-…" value={serial} onChange={(e) => setSerial(e.currentTarget.value)} aria-label="License" />
+            <input type="text" placeholder="License key, only if you have more than one: VCGS-…" value={serial} onChange={(e) => setSerial(e.currentTarget.value)} aria-label="License" />
             <button className="tb-btn primary" disabled={busy}>
               {busy ? 'Activating…' : 'Activate this computer'}
             </button>

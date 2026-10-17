@@ -33,11 +33,23 @@ export interface Entitlement {
 
 const base64url = (data: Buffer | string): string => Buffer.from(data).toString('base64url');
 
-/** The key from its environment variable: PEM, or the PEM base64-encoded (one line, easier to paste). */
-export const privateKeyFrom = (value: string): KeyObject => {
-  const pem = value.includes('BEGIN') ? value.replace(/\\n/g, '\n') : Buffer.from(value, 'base64').toString('utf8');
-  return createPrivateKey(pem);
+/**
+ * A key as pasted: the line `npm run keys:license` prints is `NAME=value`, and
+ * the whole line, quotes or stray spaces easily come along into the
+ * dashboard. Keep only the key: a PEM (with real or `\\n` line breaks), or
+ * the PEM base64-encoded.
+ */
+export const pemFrom = (value: string): string => {
+  const text = value
+    .trim()
+    .replace(/^[A-Z0-9_]+=/, '')
+    .replace(/^(["'])([\s\S]*)\1$/, '$2')
+    .trim();
+  return text.includes('BEGIN') ? text.replace(/\\n/g, '\n') : Buffer.from(text.replace(/\s+/g, ''), 'base64').toString('utf8');
 };
+
+/** The key from its environment variable: PEM, or the PEM base64-encoded (one line, easier to paste). */
+export const privateKeyFrom = (value: string): KeyObject => createPrivateKey(pemFrom(value));
 
 export const publicKeyPem = (privateKey: KeyObject): string =>
   createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }).toString();

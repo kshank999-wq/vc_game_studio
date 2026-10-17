@@ -21,10 +21,15 @@ export interface Entitlement {
 
 /** The key from its build variable: PEM, or the PEM base64-encoded on one line. */
 export const publicKeyFrom = (value: string): KeyObject | null => {
-  const text = value.trim();
+  // As pasted: the whole `NAME=value` line, quotes or stray spaces can come along.
+  const text = value
+    .trim()
+    .replace(/^[A-Z0-9_]+=/, '')
+    .replace(/^(["'])([\s\S]*)\1$/, '$2')
+    .trim();
   if (!text) return null;
   try {
-    return createPublicKey(text.includes('BEGIN') ? text.replace(/\\n/g, '\n') : Buffer.from(text, 'base64').toString('utf8'));
+    return createPublicKey(text.includes('BEGIN') ? text.replace(/\\n/g, '\n') : Buffer.from(text.replace(/\s+/g, ''), 'base64').toString('utf8'));
   } catch {
     return null;
   }

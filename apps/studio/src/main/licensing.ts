@@ -193,7 +193,8 @@ export class Licensing {
     try {
       const { status, json } = await this.site('/api/licenses/activate', 'POST', { ...device, ...(serial ? { serial } : {}) });
       if (status === 200 && typeof json['token'] === 'string') return this.commit({ token: json['token'] }, null);
-      return this.commit({}, String(json['error'] ?? `Activation failed (${status}).`));
+      if (typeof json['error'] === 'string') return this.commit({}, json['error']);
+      return this.commit({}, status >= 500 ? `vc-gamestudio.com couldn’t activate this computer just now (error ${status}). Try again in a few minutes.` : `Activation failed (${status}).`);
     } catch {
       return this.commit({}, 'Could not reach vc-gamestudio.com. Check the connection and try again.');
     }
