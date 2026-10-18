@@ -20,7 +20,8 @@ smaller games that don't need a plot, characters and levels.
 
 - **Story game** goes on to the usual four setup steps.
 - **Castle defense**, **Arcade shooter**, **Head-to-head arena**, **Card
-  game**, **Puzzle game** and **Match-3** need only a name and a premise. The game it makes can be played straight away.
+  game**, **Puzzle game**, **Match-3** and **Runner** need only a name and a
+  premise. The game it makes can be played straight away.
 
 A project made before modules existed is a story game.
 
@@ -331,7 +332,64 @@ The handoff writes `match3.json` and `MATCH3.md`:
 - `MATCH3.md` covers the exact rules (scoring, specials, gravity, shuffling
   when no move is left) and how to load the levels in that engine.
 
+### Runner
+
+An endless side-scrolling runner. The player runs on their own, faster the
+further they get, and jumps and slides past blocks, bars and pits, picking
+up coins. The track is built from chunks you draw: short stretches strung
+together at random, with harder tiers joining further in.
+
+The **Runner** workspace replaces the story graph.
+
+| Step | Where | Done when |
+| --- | --- | --- |
+| Concept | Premise, theme, platform, notes | A premise |
+| The runner | Start speed, how much faster each 100 units, top speed, jump speed, gravity, slide time, a player's timing error | Set |
+| Chunks | Paint blocks and coins at four heights, pits in the ground; name, tier, length | 6 chunks, each passable at the speeds it comes at |
+| Mix and pace | When tiers 2 and 3 join, how often each chunk comes up, coin value; how far the studio's runs get and where they end | You tick it |
+| Play and test | Run it: Space, ↑ or W to jump, ↓ or S to slide; or let the studio run | You tick it |
+| Hand off | Engine Handoff | Sent |
+
+**The runner**
+
+The studio works out what the numbers mean:
+
+- how high a jump rises (and so whether it clears a wall one or two cells
+  high);
+- how far a jump carries at the start and at top speed;
+- how far a slide covers;
+- when top speed is reached.
+
+**Chunks**
+
+- Under each chunk the studio says whether it can be got through at the
+  slowest and fastest speeds it will come at. It searches every jump and
+  slide to find out.
+- **Show a way through** draws the path it found.
+- The studio's runner plays each chunk 24 times at each speed. It plans like
+  the search, but makes each move up to the timing error early or late (±70
+  ms to start). How often it gets through shows how tight the chunk is.
+
+**Mix and pace**
+
+- The studio's runner runs 12 endless runs to 1,500 units. You get its
+  middle, shortest and longest run, the coins it picks up, and how many runs
+  ended in each chunk.
+- Runs should end in the late, fast tiers, spread over a few chunks.
+- A chunk every player gets through on its own can still end runs where it
+  meets the next one. Keep the first and last few units of a chunk clear.
+
+**What the engine gets**
+
+The handoff writes `runner.json` and `RUNNER.md`:
+
+- `runner.json` has the physics, the player's box, the pacing, and every
+  chunk, with the speeds the studio checked it at.
+- `RUNNER.md` covers the frame-by-frame rules (movement, gravity, landing,
+  jump, slide, what ends a run, how chunks are picked) and how to load them
+  in that engine.
+
 ## Coming next
 
-Other kinds of game, such as a sports match, a runner or a platformer, will
-follow the same pattern.
+Other kinds of game, such as a sports match or a platformer, will follow the
+same pattern.

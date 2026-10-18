@@ -7,6 +7,8 @@ import { cardIssues } from './cards/cards';
 import { levelIssues, parseLevel } from './blocks/blocks';
 import { solveLevel } from './blocks/solver';
 import { levelIssues as matchLevelIssues } from './match/match';
+import { speedRange } from './runner/runner';
+import { passable } from './runner/sim';
 
 /**
  * Game modules: what kind of game a project is, which parts of the studio it
@@ -16,10 +18,10 @@ import { levelIssues as matchLevelIssues } from './match/match';
  * designer ticks it.
  */
 
-export type ModuleId = 'story' | 'defense' | 'shooter' | 'arena' | 'cards' | 'blocks' | 'match';
+export type ModuleId = 'story' | 'defense' | 'shooter' | 'arena' | 'cards' | 'blocks' | 'match' | 'runner';
 
 /** Where a step takes the designer: a part of the studio, the setup questions, or a tab of a module's own workspace ('tab:<id>'). */
-export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab | ArenaTab | CardTab | BlockTab | MatchTab}`;
+export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab | ArenaTab | CardTab | BlockTab | MatchTab | RunnerTab}`;
 
 export type DefenseTab = 'concept' | 'map' | 'towers' | 'enemies' | 'waves' | 'economy' | 'play';
 export type ShooterTab = 'concept' | 'ship' | 'invaders' | 'waves' | 'shields' | 'play';
@@ -27,6 +29,7 @@ export type ArenaTab = 'concept' | 'field' | 'units' | 'match' | 'decks' | 'play
 export type CardTab = 'concept' | 'rules' | 'cards' | 'decks' | 'play';
 export type BlockTab = 'concept' | 'rules' | 'levels' | 'order' | 'play';
 export type MatchTab = 'concept' | 'rules' | 'levels' | 'balance' | 'play';
+export type RunnerTab = 'concept' | 'runner' | 'chunks' | 'mix' | 'play';
 
 export interface PathStep {
   id: string;
@@ -161,7 +164,22 @@ const MATCH: GameModule = {
   ],
 };
 
-export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER, ARENA, CARDS, BLOCKS, MATCH];
+const RUNNER: GameModule = {
+  id: 'runner',
+  name: 'Runner',
+  blurb: 'An endless side-scrolling runner: the player runs on their own, faster and faster, jumping and sliding past blocks, bars and pits. You draw the track in chunks; the studio checks each can be got through. Mobile, PC or console.',
+  workspaces: ['graph', 'bible', 'notes', 'engine'],
+  steps: [
+    { id: 'concept', title: 'Concept', hint: 'What it is and where it plays: the premise, the theme, the platform.', go: 'tab:concept', done: (p) => !!p.runner?.concept.premise?.trim() },
+    { id: 'runner', title: 'The runner', hint: 'How fast the run starts and gets, how high the jump goes, how long a slide lasts.', go: 'tab:runner', done: (p) => !!p.runner && p.runner.rules.physics.startSpeed > 0 && p.runner.rules.physics.jumpSpeed > 0 },
+    { id: 'chunks', title: 'Chunks', hint: 'Six or more short stretches of track across three tiers. Ticks itself when every one can be got through at the speeds it comes at.', go: 'tab:chunks', done: (p) => !!p.runner && p.runner.chunks.length >= 6 && p.runner.chunks.every((c) => speedRange(p.runner!.rules, c.tier).every((v) => passable(p.runner!.rules, c, v))) },
+    { id: 'mix', title: 'Mix and pace', hint: 'When the harder tiers come in, how often each chunk comes up, and how far the studio’s runs get. Tick this when runs end where you want.', go: 'tab:mix' },
+    { id: 'play', title: 'Play and test', hint: 'Run it yourself. Tick this when it feels right.', go: 'tab:play' },
+    { id: 'handoff', title: 'Hand off', hint: 'Send it to Godot, Unity or Unreal as data the engine team builds on.', go: 'engine', done: (p) => !!p.handoff?.last },
+  ],
+};
+
+export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER, ARENA, CARDS, BLOCKS, MATCH, RUNNER];
 
 export const moduleOf = (p: Project): GameModule => MODULES.find((m) => m.id === (p.module ?? 'story')) ?? STORY;
 

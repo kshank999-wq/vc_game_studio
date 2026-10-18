@@ -15142,3 +15142,94 @@ button.bible-dual-col:hover {
 .m3-balance td:nth-child(3) {
   text-align: left;
 }
+
+/* Runner (game modules). */
+.run-strip {
+  width: 100%;
+  max-width: 980px;
+  display: block;
+  user-select: none;
+  touch-action: none;
+  border-radius: 6px;
+}
+.run-strip.paint {
+  cursor: crosshair;
+}
+.run-view {
+  width: 100%;
+  display: block;
+  border-radius: 8px;
+  max-height: calc(100vh - 330px);
+}
+.run-sky {
+  fill: color-mix(in srgb, var(--c-skill) 10%, var(--ground));
+}
+.run-cell {
+  fill: transparent;
+  stroke: color-mix(in srgb, var(--border) 50%, transparent);
+  stroke-width: 0.015;
+}
+.run-solid {
+  fill: color-mix(in srgb, var(--c-faction) 75%, var(--ground));
+  stroke: var(--ground);
+  stroke-width: 0.04;
+}
+.run-coin {
+  fill: var(--c-choice);
+  stroke: color-mix(in srgb, var(--c-choice) 50%, var(--ground));
+  stroke-width: 0.05;
+}
+.run-ground {
+  fill: color-mix(in srgb, var(--c-environment) 45%, var(--ground));
+}
+.run-pit {
+  fill: var(--ground);
+}
+.run-way {
+  fill: none;
+  stroke: var(--gold-hi);
+  stroke-width: 0.06;
+  stroke-dasharray: 0.15 0.12;
+  pointer-events: none;
+}
+.run-player {
+  fill: var(--gold-hi);
+  stroke: var(--ground);
+  stroke-width: 0.05;
+}
+.run-player.dead {
+  fill: var(--c-encounter);
+}
+.run-report {
+  max-width: 980px;
+}
+.run-mix {
+  max-width: 760px;
+}
+.run-mix th:nth-child(2),
+.run-mix td:nth-child(2),
+.run-mix th:last-child,
+.run-mix td:last-child {
+  text-align: left;
+}
+.run-mix .dfn-num span {
+  display: none;
+}
+.run-mix .dfn-num input {
+  width: 64px;
+}
+.run-bar {
+  display: inline-block;
+  width: 120px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--ground);
+  border: 1px solid var(--border);
+  vertical-align: middle;
+  overflow: hidden;
+}
+.run-bar span {
+  display: block;
+  height: 100%;
+  background: var(--c-encounter);
+}

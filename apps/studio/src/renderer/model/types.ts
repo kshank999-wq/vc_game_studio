@@ -327,4 +327,6 @@ export interface Project {
   blocks?: import('./blocks/blocks').BlockGame;
   /** A match-3 game's rules and levels. */
   match?: import('./match/match').MatchGame;
+  /** A runner's rules and chunks. */
+  runner?: import('./runner/runner').RunnerGame;
 }
