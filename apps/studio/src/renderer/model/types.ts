@@ -325,4 +325,6 @@ export interface Project {
   cards?: import('./cards/cards').CardGame;
   /** A puzzle game's rules and levels. */
   blocks?: import('./blocks/blocks').BlockGame;
+  /** A match-3 game's rules and levels. */
+  match?: import('./match/match').MatchGame;
 }

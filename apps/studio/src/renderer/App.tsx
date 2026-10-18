@@ -38,7 +38,7 @@ import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './
 import { LicenseDialog } from './components/license/lazy';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
-import { ArenaStudio, BlockStudio, CardStudio, CharacterCreator, DefenseStudio, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShooterStudio, ShotList } from './views';
+import { ArenaStudio, BlockStudio, CardStudio, MatchStudio, CharacterCreator, DefenseStudio, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShooterStudio, ShotList } from './views';
 import type { LevelMode } from './components/level/LevelDesigner';
 import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
@@ -1054,6 +1054,8 @@ export const App = () => {
                 <CardStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} />
               ) : gameModule.id === 'blocks' ? (
                 <BlockStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} />
+              ) : gameModule.id === 'match' ? (
+                <MatchStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} />
               ) : (
                 <DefenseStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} />
               )}

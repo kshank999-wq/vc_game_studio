@@ -20,7 +20,7 @@ smaller games that don't need a plot, characters and levels.
 
 - **Story game** goes on to the usual four setup steps.
 - **Castle defense**, **Arcade shooter**, **Head-to-head arena**, **Card
-  game** and **Puzzle game** need only a name and a premise. The game it makes can be played straight away.
+  game**, **Puzzle game** and **Match-3** need only a name and a premise. The game it makes can be played straight away.
 
 A project made before modules existed is a story game.
 
@@ -284,7 +284,54 @@ The handoff writes `puzzles.json` and `PUZZLES.md`:
   check the levels still solve.
 - `PUZZLES.md` covers the rules and how to load the levels in that engine.
 
+### Match-3
+
+Swap two gems side by side to line up three or more of a colour. They clear,
+the gems above fall, new ones drop in, and chains score more. Each level has
+a board shape, how many colours fall, a move limit and a goal. The goal is a
+score, gems of one colour to collect, or jelly to clear.
+
+The **Match-3** workspace replaces the story graph.
+
+| Step | Where | Done when |
+| --- | --- | --- |
+| Concept | Premise, theme, platform, notes | A premise |
+| Rules | The gems' names (up to 7), points a gem, the chain bonus, star steps, specials on or off | Set |
+| Levels | Name, colours, moves, goal; paint the board: cell, no cell, jelly; **Show it filled** to see gems on it | 5 levels, each ready |
+| Balance | How often the studio's player beats each level at its limit, the moves it needed, and the limit for the win rate you aim for | You tick it |
+| Play and test | Play each level; ask for the studio's move, or let it play | You tick it |
+| Hand off | Engine Handoff | Sent |
+
+**Specials**
+
+- Four in a line leaves a line gem. It clears its row (for an across line)
+  or its column (for a down line).
+- Five in a line, or a gem in two lines at once (an L or T), leaves a bomb.
+  It clears the 3×3 round it.
+- Specials go off when they're cleared, and can set each other off.
+
+**Balance**
+
+- The studio's player is a steady one, not a clever one. It takes the
+  biggest match it sees, counting specials it would make and the goal's gems
+  and jelly double.
+- It plays each level 40 times on different boards, with no move limit, and
+  notes how many moves it needed. From that the table shows:
+  - how often it wins within the level's limit;
+  - the moves it needed on its middle run, and on 4 runs in 5;
+  - the move limit at which it would win the share you aim for. **Use N**
+    sets that limit.
+- A gentle climb is 90% for the first levels, settling to 50–70%.
+
+**What the engine gets**
+
+The handoff writes `match3.json` and `MATCH3.md`:
+
+- `match3.json` has the rules and every level: shape, colours, moves, goal.
+- `MATCH3.md` covers the exact rules (scoring, specials, gravity, shuffling
+  when no move is left) and how to load the levels in that engine.
+
 ## Coming next
 
-Other kinds of game, such as a sports match, a match-3 or a runner, will
+Other kinds of game, such as a sports match, a runner or a platformer, will
 follow the same pattern.
