@@ -20,8 +20,8 @@ smaller games that don't need a plot, characters and levels.
 
 - **Story game** goes on to the usual four setup steps.
 - **Castle defense**, **Arcade shooter**, **Head-to-head arena**, **Card
-  game**, **Puzzle game**, **Match-3** and **Runner** need only a name and a
-  premise. The game it makes can be played straight away.
+  game**, **Puzzle game**, **Match-3**, **Runner** and **Platformer** need
+  only a name and a premise. The game it makes can be played straight away.
 
 A project made before modules existed is a story game.
 
@@ -389,7 +389,51 @@ The handoff writes `runner.json` and `RUNNER.md`:
   jump, slide, what ends a run, how chunks are picked) and how to load them
   in that engine.
 
+### Platformer
+
+A side-scrolling platformer, level by level. The hero runs and jumps across
+tiles to the goal flag, past spikes, pits and walking enemies, picking up
+coins. Stomp an enemy by landing on it; walk into one and the try ends.
+
+The **Platformer** workspace replaces the story graph.
+
+| Step | Where | Done when |
+| --- | --- | --- |
+| Concept | Premise, theme, platform, notes | A premise |
+| The hero | Run speed, jump speed, gravity, coyote time, enemy speed, coin value, lives | Set |
+| Levels | Paint solid ground, one-way platforms, spikes, coins, enemies, the start and the goal; name, time bonus, size | 3 levels, each with one start and one goal, each with a way to the goal |
+| Flow | The levels in order, each with its jumps, tight jumps, time and coins; reorder them | You tick it |
+| Play and test | Play it: ← → or A D to run, Space, ↑ or W to jump; or let the studio play | You tick it |
+| Hand off | Engine Handoff | Sent |
+
+**The hero**
+
+The studio says how high a jump rises in tiles and how wide a gap it
+clears, so you know what a level can ask of the player.
+
+**Levels**
+
+- The studio tries every step and jump from every place the hero can land,
+  starting at the start. The shaded cells are everywhere the hero can
+  stand.
+- It says whether the goal can be reached, and draws the shortest route.
+- A jump is **tight** when taking off a quarter tile early or late misses.
+- Coins no route reaches are faded and listed.
+- The studio's careful player takes the route and waits (up to three
+  seconds a move) for the enemies to pass. It says whether a careful player
+  gets past them. Enemies are left out of the reach map itself.
+
+**What the engine gets**
+
+The handoff writes `platformer.json` and `PLATFORMER.md`:
+
+- `platformer.json` has the hero's numbers and box, the rules, the tile
+  legend, and every level's rows, with what the studio checked (goal
+  reachable, jumps, tight jumps, route time, coins).
+- `PLATFORMER.md` covers the frame-by-frame rules (movement, gravity,
+  collision, one-way platforms, spikes, stomps, falling) and how to load
+  them in that engine.
+
 ## Coming next
 
-Other kinds of game, such as a sports match or a platformer, will follow the
-same pattern.
+Other kinds of game, such as a sports match, will follow the same pattern.

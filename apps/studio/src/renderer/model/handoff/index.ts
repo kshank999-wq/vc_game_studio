@@ -12,6 +12,7 @@ import { cardFiles } from './card-files';
 import { blockFiles } from './block-files';
 import { matchFiles } from './match-files';
 import { runnerFiles } from './runner-files';
+import { platformerFiles } from './platformer-files';
 import { buildIR } from './ir';
 import { levelChanges, levelRevisions, type IrLevel, type LevelChanges } from './levels';
 import { levelIssues } from '../level/validate';
@@ -90,7 +91,7 @@ export const planHandoff = (project: Project): Handoff => {
   // Each take's subtitle goes beside it, with the generated files.
   const subtitles = subtitleFiles(takes, ir.lines);
   // A module game's data and rules (game modules).
-  const modules = [defenseFiles(project.defense, adapter, target.outputPath), shooterFiles(project.shooter, adapter, target.outputPath), arenaFiles(project.arena, adapter, target.outputPath), cardFiles(project.cards, adapter, target.outputPath), blockFiles(project.blocks, adapter, target.outputPath), matchFiles(project.match, adapter, target.outputPath), runnerFiles(project.runner, adapter, target.outputPath)];
+  const modules = [defenseFiles(project.defense, adapter, target.outputPath), shooterFiles(project.shooter, adapter, target.outputPath), arenaFiles(project.arena, adapter, target.outputPath), cardFiles(project.cards, adapter, target.outputPath), blockFiles(project.blocks, adapter, target.outputPath), matchFiles(project.match, adapter, target.outputPath), runnerFiles(project.runner, adapter, target.outputPath), platformerFiles(project.platformer, adapter, target.outputPath)];
   const extra = [...subtitles, ...modules.flatMap((m) => m.files)];
   const output = extra.length ? { ...generated, files: [...generated.files, ...extra] } : generated;
   const takesElement = takesRow(takes, subtitles);

@@ -329,4 +329,6 @@ export interface Project {
   match?: import('./match/match').MatchGame;
   /** A runner's rules and chunks. */
   runner?: import('./runner/runner').RunnerGame;
+  /** A platformer's rules and levels. */
+  platformer?: import('./platformer/platformer').PlatformGame;
 }

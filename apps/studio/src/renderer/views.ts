@@ -25,6 +25,7 @@ const loaders = {
   blocks: () => import('./components/blocks/BlockStudio'),
   match: () => import('./components/match/MatchStudio'),
   runner: () => import('./components/runner/RunnerStudio'),
+  platformer: () => import('./components/platformer/PlatformStudio'),
   collab: preloadCollab,
 };
 
@@ -42,6 +43,7 @@ export const CardStudio = lazy(() => loaders.cards().then((m) => ({ default: m.C
 export const BlockStudio = lazy(() => loaders.blocks().then((m) => ({ default: m.BlockStudio })));
 export const MatchStudio = lazy(() => loaders.match().then((m) => ({ default: m.MatchStudio })));
 export const RunnerStudio = lazy(() => loaders.runner().then((m) => ({ default: m.RunnerStudio })));
+export const PlatformStudio = lazy(() => loaders.platformer().then((m) => ({ default: m.PlatformStudio })));
 export const EngineHandoff = lazy(() => loaders.engine().then((m) => ({ default: m.EngineHandoff })));
 
 /** The handoff model, for export on save, without putting the engines in the first load. */

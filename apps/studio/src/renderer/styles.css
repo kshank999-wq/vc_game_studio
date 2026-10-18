@@ -15233,3 +15233,84 @@ button.bible-dual-col:hover {
   height: 100%;
   background: var(--c-encounter);
 }
+
+/* Platformer (game modules). */
+.pf-scroll {
+  overflow: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 380px);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.pf-board {
+  display: block;
+  user-select: none;
+  touch-action: none;
+}
+.pf-board.paint {
+  cursor: crosshair;
+}
+.pf-view {
+  width: 100%;
+  display: block;
+  border-radius: 8px;
+  max-height: calc(100vh - 320px);
+}
+.pf-sky {
+  fill: color-mix(in srgb, var(--c-skill) 12%, var(--ground));
+}
+.pf-reach {
+  fill: color-mix(in srgb, var(--c-environment) 22%, transparent);
+}
+.pf-solid {
+  fill: color-mix(in srgb, var(--c-lore) 45%, var(--ground));
+  stroke: color-mix(in srgb, var(--c-lore) 25%, var(--ground));
+  stroke-width: 0.03;
+}
+.pf-oneway {
+  fill: color-mix(in srgb, var(--c-lore) 70%, var(--ground));
+}
+.pf-spikes {
+  fill: var(--c-encounter);
+}
+.pf-coin {
+  fill: var(--c-choice);
+}
+.pf-coin.lost {
+  opacity: 0.35;
+}
+.pf-enemy {
+  fill: color-mix(in srgb, var(--c-cinematic) 80%, var(--ground));
+  stroke: var(--ground);
+  stroke-width: 0.04;
+}
+.pf-start {
+  fill: none;
+  stroke: var(--gold-hi);
+  stroke-width: 0.06;
+  stroke-dasharray: 0.12 0.08;
+}
+.pf-goal rect {
+  fill: var(--text-soft);
+}
+.pf-goal path {
+  fill: var(--c-environment);
+}
+.pf-hero {
+  fill: var(--gold-hi);
+  stroke: var(--ground);
+  stroke-width: 0.05;
+}
+.pf-hero.dead {
+  fill: var(--c-encounter);
+}
+.pf-route {
+  fill: none;
+  stroke: var(--gold-hi);
+  stroke-width: 0.08;
+  stroke-dasharray: 0.18 0.14;
+  pointer-events: none;
+}
+.pf-flow {
+  max-width: 1100px;
+}
