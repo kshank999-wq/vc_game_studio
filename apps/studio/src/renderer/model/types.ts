@@ -321,4 +321,6 @@ export interface Project {
   shooter?: import('./shooter/shooter').ShooterGame;
   /** A head-to-head arena's towers, units, match rules and decks. */
   arena?: import('./arena/arena').ArenaGame;
+  /** A card game's rules, cards and decks. */
+  cards?: import('./cards/cards').CardGame;
 }

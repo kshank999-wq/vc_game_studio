@@ -19,8 +19,8 @@ smaller games that don't need a plot, characters and levels.
 *What are you making?*
 
 - **Story game** goes on to the usual four setup steps.
-- **Castle defense**, **Arcade shooter** and **Head-to-head arena** need
-  only a name and a premise. The game it makes can be played straight away.
+- **Castle defense**, **Arcade shooter**, **Head-to-head arena** and
+  **Card game** need only a name and a premise. The game it makes can be played straight away.
 
 A project made before modules existed is a story game.
 
@@ -177,7 +177,55 @@ The handoff writes `arena.json` (the whole game as data) and `ARENA.md`
 (what each field means, how to load it in that engine, the rules the studio
 plays by, and how its opponent chooses where to play).
 
+### Card game
+
+A one-on-one card duel. Each side has a hero and a deck, and mana that grows
+each turn. Minions fight on the board; spells do one thing well. The studio
+plays the opponent.
+
+The **Card game** workspace replaces the story graph.
+
+| Step | Where | Done when |
+| --- | --- | --- |
+| Concept | Premise, theme, platform, notes | A premise |
+| Rules | Hero health, mana on turn 1, how much more each turn, the most mana, opening hand, hand and board size, copies a deck | Set |
+| Cards | Each card beside how it looks: kind, cost, attack, health, guard, charge, and what it does (damage an enemy, damage every enemy minion, heal, draw, buff) | 8 cards |
+| Decks | Count up and down per card, for the player and the opponent, with a mana curve | No errors left |
+| Play and balance | Play against the studio's opponent; read a hundred games of the studio playing both decks | You tick it |
+| Hand off | Engine Handoff | Sent |
+
+**Cards**
+
+- Rules text is written from the numbers.
+- Each card shows where it sits against the curve. A card is worth about
+  twice its cost plus one: attack and health together, a point for each
+  keyword, and its effect.
+  - **+** means more than its cost buys.
+  - **−** means less.
+
+**Play and balance**
+
+- Click a card in your hand to play it. If it needs a target, click the
+  target next.
+- Click one of your minions, then what it should attack. Guards must be
+  attacked first.
+- **They go first** swaps who starts.
+- The report plays a hundred games, each side going first in turn. It shows:
+  - each deck's win rate;
+  - what going first is worth;
+  - how long games last;
+  - for every card, how often it was played and how often the side that
+    played it won.
+- A card won with far more or less than half the time is the one to look
+  at.
+
+**What the engine gets**
+
+The handoff writes `cards.json` (the rules, every card with its rules text,
+both decks) and `CARDS.md`. `CARDS.md` covers the turn, mana and fatigue,
+effects, attacks and guards, and how the studio's opponent plays.
+
 ## Coming next
 
-Other kinds of game, such as card games or a sports match, will follow the
-same pattern.
+Other kinds of game, such as a sports match or a puzzle game, will follow
+the same pattern.

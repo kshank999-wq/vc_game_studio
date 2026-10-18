@@ -3,6 +3,7 @@ import { defenseIssues } from './defense/defense';
 import { runDefense } from './defense/sim';
 import { shooterIssues } from './shooter/shooter';
 import { arenaIssues } from './arena/arena';
+import { cardIssues } from './cards/cards';
 
 /**
  * Game modules: what kind of game a project is, which parts of the studio it
@@ -12,14 +13,15 @@ import { arenaIssues } from './arena/arena';
  * designer ticks it.
  */
 
-export type ModuleId = 'story' | 'defense' | 'shooter' | 'arena';
+export type ModuleId = 'story' | 'defense' | 'shooter' | 'arena' | 'cards';
 
 /** Where a step takes the designer: a part of the studio, the setup questions, or a tab of a module's own workspace ('tab:<id>'). */
-export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab | ArenaTab}`;
+export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab | ArenaTab | CardTab}`;
 
 export type DefenseTab = 'concept' | 'map' | 'towers' | 'enemies' | 'waves' | 'economy' | 'play';
 export type ShooterTab = 'concept' | 'ship' | 'invaders' | 'waves' | 'shields' | 'play';
 export type ArenaTab = 'concept' | 'field' | 'units' | 'match' | 'decks' | 'play';
+export type CardTab = 'concept' | 'rules' | 'cards' | 'decks' | 'play';
 
 export interface PathStep {
   id: string;
@@ -109,7 +111,22 @@ const ARENA: GameModule = {
   ],
 };
 
-export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER, ARENA];
+const CARDS: GameModule = {
+  id: 'cards',
+  name: 'Card game',
+  blurb: 'A one-on-one card duel: two heroes, a deck each, mana that grows every turn, minions on the board and spells. The studio plays the opponent. Mobile, PC or console.',
+  workspaces: ['graph', 'bible', 'notes', 'engine'],
+  steps: [
+    { id: 'concept', title: 'Concept', hint: 'What it is and where it plays: the premise, the theme, the platform.', go: 'tab:concept', done: (p) => !!p.cards?.concept.premise?.trim() },
+    { id: 'rules', title: 'Rules', hint: 'Hero health, how mana grows, the opening hand, how big the board is.', go: 'tab:rules', done: (p) => !!p.cards && p.cards.rules.heroHealth > 0 && p.cards.rules.manaMax > 0 },
+    { id: 'cards', title: 'Cards', hint: 'A dozen cards across the costs: cheap minions, big ones, a few spells. Rough numbers; the curve tells you what’s off.', go: 'tab:cards', done: (p) => (p.cards?.cards.length ?? 0) >= 8 },
+    { id: 'decks', title: 'Decks', hint: 'The cards the player brings, and the opponent’s.', go: 'tab:decks', done: (p) => !!p.cards && !cardIssues(p.cards).some((i) => i.severity === 'error') },
+    { id: 'play', title: 'Play and balance', hint: 'Play the studio’s opponent and read a hundred games. Tick this when no card wins everything.', go: 'tab:play' },
+    { id: 'handoff', title: 'Hand off', hint: 'Send it to Godot, Unity or Unreal as data the engine team builds on.', go: 'engine', done: (p) => !!p.handoff?.last },
+  ],
+};
+
+export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER, ARENA, CARDS];
 
 export const moduleOf = (p: Project): GameModule => MODULES.find((m) => m.id === (p.module ?? 'story')) ?? STORY;
 
