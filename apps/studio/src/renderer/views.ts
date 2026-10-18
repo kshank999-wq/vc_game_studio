@@ -18,6 +18,7 @@ const loaders = {
   notes: () => import('./components/notes/NoteSorter'),
   puzzles: () => import('./components/puzzle/PuzzleCreator'),
   characters: () => import('./components/character/CharacterCreator'),
+  defense: () => import('./components/defense/DefenseStudio'),
   collab: preloadCollab,
 };
 
@@ -28,6 +29,7 @@ export const LevelDesigner = lazy(() => loaders.levels().then((m) => ({ default:
 export const PuzzleCreator = lazy(() => loaders.puzzles().then((m) => ({ default: m.PuzzleCreator })));
 export const CharacterCreator = lazy(() => loaders.characters().then((m) => ({ default: m.CharacterCreator })));
 export const NoteSorter = lazy(() => loaders.notes().then((m) => ({ default: m.NoteSorter })));
+export const DefenseStudio = lazy(() => loaders.defense().then((m) => ({ default: m.DefenseStudio })));
 export const EngineHandoff = lazy(() => loaders.engine().then((m) => ({ default: m.EngineHandoff })));
 
 /** The handoff model, for export on save, without putting the engines in the first load. */

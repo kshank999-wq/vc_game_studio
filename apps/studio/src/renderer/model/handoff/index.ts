@@ -5,6 +5,7 @@ import { godot } from './godot';
 import { json } from './json';
 import { unity } from './unity';
 import { unreal } from './unreal';
+import { defenseFiles } from './defense-files';
 import { buildIR } from './ir';
 import { levelChanges, levelRevisions, type IrLevel, type LevelChanges } from './levels';
 import { levelIssues } from '../level/validate';
@@ -82,9 +83,12 @@ export const planHandoff = (project: Project): Handoff => {
   const takes = takePlan(project, adapter, target.outputPath);
   // Each take's subtitle goes beside it, with the generated files.
   const subtitles = subtitleFiles(takes, ir.lines);
-  const output = subtitles.length ? { ...generated, files: [...generated.files, ...subtitles] } : generated;
+  // A castle defense game's data and rules (game modules).
+  const defense = defenseFiles(project.defense, adapter, target.outputPath);
+  const extra = [...subtitles, ...defense.files];
+  const output = extra.length ? { ...generated, files: [...generated.files, ...extra] } : generated;
   const takesElement = takesRow(takes, subtitles);
-  const rows: Row[] = [...output.elements, ...(takesElement ? [takesElement] : [])].map((e) => {
+  const rows: Row[] = [...output.elements, ...(takesElement ? [takesElement] : []), ...(defense.row ? [defense.row] : [])].map((e) => {
     const issue = issueOf.get(e.id);
     const status: Status = issue ? 'issue' : last?.fingerprints[e.id] === e.fingerprint ? 'ready' : 'changed';
     return { ...e, status, ...(issue ? { issue } : {}) };

@@ -12,12 +12,19 @@ const PARTS: { id: Workspace; label: string; hint: string }[] = [
   { id: 'play', label: 'Play-through', hint: 'Play the story through (F5)' },
 ];
 
-export const WorkspaceBar = ({ current, onOpen }: { current: Workspace | null; onOpen: (part: Workspace) => void }) => (
+/**
+ * A game module shows only its parts (`only`), in its order; its home takes the
+ * graph's place under its own name (`homeLabel`).
+ */
+export const WorkspaceBar = ({ current, onOpen, only, homeLabel }: { current: Workspace | null; onOpen: (part: Workspace) => void; only?: readonly Workspace[]; homeLabel?: string }) => (
   <nav className="workspace-bar" aria-label="Workspaces">
-    {PARTS.map((p) => (
-      <button key={p.id} className={`ws-btn${current === p.id ? ' on' : ''}`} aria-current={current === p.id ? 'page' : undefined} title={p.hint} onClick={() => onOpen(p.id)}>
-        {p.label}
-      </button>
-    ))}
+    {(only ? only.map((id) => PARTS.find((p) => p.id === id)!).filter(Boolean) : PARTS).map((p) => {
+      const label = p.id === 'graph' && homeLabel ? homeLabel : p.label;
+      return (
+        <button key={p.id} className={`ws-btn${current === p.id ? ' on' : ''}`} aria-current={current === p.id ? 'page' : undefined} title={p.id === 'graph' && homeLabel ? `${homeLabel}: every step of the game, from concept to play` : p.hint} onClick={() => onOpen(p.id)}>
+          {label}
+        </button>
+      );
+    })}
   </nav>
 );

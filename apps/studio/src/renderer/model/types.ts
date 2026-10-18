@@ -311,4 +311,10 @@ export interface Project {
   characterGroups?: import('./character/groups').CharacterGroup[];
   /** Each element's, connection's, level's and level item's edit history, by target key (spec §16). */
   revisions?: Record<string, import('./collab').Revision[]>;
+  /** What kind of game it is (game modules): its parts of the studio and its path. Absent: a story game. */
+  module?: import('./modules').ModuleId;
+  /** Path steps ticked done by hand. */
+  path?: { done?: string[] };
+  /** A castle defense game's map, towers, enemies, waves and economy. */
+  defense?: import('./defense/defense').DefenseGame;
 }

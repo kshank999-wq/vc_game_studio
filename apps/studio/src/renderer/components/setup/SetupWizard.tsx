@@ -10,6 +10,7 @@ import {
   type GameKind,
   type GameSetup,
 } from '../../model/setup';
+import { MODULES, type ModuleId } from '../../model/modules';
 
 const STEPS = ['The game', 'Premise and player', 'World and tone', 'Structure'] as const;
 
@@ -32,12 +33,16 @@ export const SetupWizard = ({
   initialName?: string;
   /** Changing an open project's answers: no name, no blank option, and Save instead of Create. */
   editing?: boolean;
-  onDone: (setup: GameSetup, name: string) => void;
+  /** For a new game, also what kind of module it is; a premise typed for one that isn't a story comes in the setup. */
+  onDone: (setup: GameSetup, name: string, module: ModuleId) => void;
   /** Skip the wizard and start an empty project. */
   onBlank?: () => void;
   onClose: () => void;
 }) => {
   const [step, setStep] = useState(0);
+  const [moduleId, setModuleId] = useState<ModuleId>('story');
+  // A game that isn't a story needs only its name and premise here: the rest is its own path.
+  const steps: readonly string[] = moduleId === 'story' || editing ? STEPS : ['The game'];
   const [name, setName] = useState(initialName);
   const [setup, setSetup] = useState<GameSetup>(initial ?? blankSetup());
   const [newResource, setNewResource] = useState('');
@@ -54,8 +59,8 @@ export const SetupWizard = ({
   );
   const chooseKind = (kind: GameKind) => setSetup((s) => (editing ? { ...s, kind } : { ...s, kind, ...defaultsFor(kind) }));
   const toggleResource = (r: string) => set({ resources: setup.resources.includes(r) ? setup.resources.filter((x) => x !== r) : [...setup.resources, r] });
-  const last = step === STEPS.length - 1;
-  const finish = () => onDone(setup, name);
+  const last = step === steps.length - 1;
+  const finish = () => onDone(setup, name, moduleId);
 
   return (
     <div className="dialog-backdrop" onPointerDown={onClose}>
@@ -78,7 +83,7 @@ export const SetupWizard = ({
           </button>
         </div>
         <ol className="setup-steps" aria-label="Steps">
-          {STEPS.map((label, i) => (
+          {steps.map((label, i) => (
             <li key={label}>
               <button type="button" className={`setup-step${i === step ? ' on' : ''}${i < step ? ' done' : ''}`} aria-current={i === step ? 'step' : undefined} onClick={() => setStep(i)}>
                 {i + 1}. {label}
@@ -95,7 +100,22 @@ export const SetupWizard = ({
                 <input className="inp" aria-label="Game name" placeholder="e.g. The Sunken Vault" value={name} autoFocus onChange={(e) => setName(e.target.value)} />
               </label>
             )}
-            <div className="dfld" role="radiogroup" aria-label="Kind of game">
+            {!editing && (
+              <div className="dfld" role="radiogroup" aria-label="What are you making?">
+                <span>What are you making?</span>
+                <div className="setup-modules">
+                  {MODULES.map((m) => (
+                    <label key={m.id} className={`setup-module${moduleId === m.id ? ' on' : ''}`}>
+                      <input type="radio" name="game-module" checked={moduleId === m.id} onChange={() => setModuleId(m.id)} />
+                      <b>{m.name}</b>
+                      <span>{m.blurb}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {moduleId !== 'story' && !editing && text('premise', 'Premise', 'What the game is, in a sentence or two', true)}
+            {(moduleId === 'story' || editing) && <div className="dfld" role="radiogroup" aria-label="Kind of game">
               <span>Kind of game</span>
               <div className="setup-chips">
                 {GAME_KINDS.map((k) => (
@@ -105,9 +125,10 @@ export const SetupWizard = ({
                   </label>
                 ))}
               </div>
-            </div>
-            {setup.kind === 'custom' && text('customKind', 'Your kind of game', 'e.g. Rhythm detective game')}
-            {!editing && <p className="pref-hint">Each kind starts you with a usual structure and resources. You can change all of it on the last step, and later.</p>}
+            </div>}
+            {(moduleId === 'story' || editing) && setup.kind === 'custom' && text('customKind', 'Your kind of game', 'e.g. Rhythm detective game')}
+            {!editing && moduleId === 'story' && <p className="pref-hint">Each kind starts you with a usual structure and resources. You can change all of it on the last step, and later.</p>}
+            {!editing && moduleId !== 'story' && <p className="pref-hint">It starts as a small game you can play straight away. Its path takes you through the rest, step by step.</p>}
           </>
         )}
 

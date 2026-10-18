@@ -4,6 +4,9 @@ import { Palette } from './components/Palette';
 import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } from './components/canvas/StoryCanvas';
 import { Symbol } from './components/Symbol';
 import { WorkspaceBar, type Workspace } from './components/WorkspaceBar';
+import { PathBar } from './components/path/PathBar';
+import { moduleOf, type DefenseTab, type PathStep } from './model/modules';
+import { createDefenseProject } from './model/defense/defense';
 import { sceneTrail } from './model/subscene';
 import { TopBar, type Crumb } from './components/TopBar';
 import { ExplodedScene } from './components/scene/ExplodedScene';
@@ -35,7 +38,7 @@ import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './
 import { LicenseDialog } from './components/license/lazy';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
-import { CharacterCreator, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShotList } from './views';
+import { CharacterCreator, DefenseStudio, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShotList } from './views';
 import type { LevelMode } from './components/level/LevelDesigner';
 import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
@@ -97,6 +100,11 @@ export const App = () => {
   // The legend is a full palette on the graph and a rail inside a scene, until the user says otherwise.
   const [rail, setRail] = useState({ graph: false, scene: true });
   const inSceneView = route.view === 'scene';
+  const [defenseTab, setDefenseTab] = useState<DefenseTab>('concept');
+  const gameModule = moduleOf(project);
+  /** A story game's home is the story graph; another module's is its own workspace. */
+  const storyHome = gameModule.id === 'story';
+  const homeName = storyHome ? 'Story Graph' : gameModule.name;
   const [view, setViewState] = useState<View>({ zoom: 1, panX: 180, panY: 300 });
   const setView = useCallback((update: (view: View) => View) => setViewState(update), []);
   const [selection, setSelection] = useState<string | null>(null);
@@ -932,27 +940,42 @@ export const App = () => {
         )}
       </>
     ) : null;
+  /** Take the designer where a path step's work is done. */
+  const goStep = (step: PathStep) => {
+    const go = step.go;
+    if (go === 'setup') setDialog('setup');
+    else if (go === 'graph') setRoute({ view: 'graph' });
+    else if (go === 'characters') openCharacters();
+    else if (go === 'level') openLevels();
+    else if (go === 'play') openPlay();
+    else if (go === 'engine') openEngine();
+    else if (go === 'bible') openBible();
+    else if (go.startsWith('defense:')) {
+      setDefenseTab(go.slice('defense:'.length) as DefenseTab);
+      setRoute({ view: 'graph' });
+    }
+  };
   const backLabel = (r: PlaceRoute): string => {
-    if (r.view === 'graph') return 'Story Graph';
+    if (r.view === 'graph') return homeName;
     const o = project.objects[r.sceneId];
     return `${o?.data.code ?? ''} ${o?.name ?? ''}${r.mode === 'timeline' ? ' · Timeline' : r.mode === 'exploded' ? ' · Mind map' : ''}`.trim();
   };
   const bibleCrumbs: Crumb[] | undefined =
     route.view === 'bible' ? [{ label: 'GAME BIBLE' }] : route.view === 'engine'
-        ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Engine Handoff' }]
+        ? [{ label: homeName, onClick: () => setRoute({ view: 'graph' }) }, { label: 'Engine Handoff' }]
         : route.view === 'play'
-          ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Play-through' }]
+          ? [{ label: homeName, onClick: () => setRoute({ view: 'graph' }) }, { label: 'Play-through' }]
         : route.view === 'level'
-          ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Levels' }]
+          ? [{ label: homeName, onClick: () => setRoute({ view: 'graph' }) }, { label: 'Levels' }]
         : route.view === 'notes'
-          ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Note Sorter' }]
+          ? [{ label: homeName, onClick: () => setRoute({ view: 'graph' }) }, { label: 'Note Sorter' }]
         : route.view === 'puzzles'
-          ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Puzzle Creator' }]
+          ? [{ label: homeName, onClick: () => setRoute({ view: 'graph' }) }, { label: 'Puzzle Creator' }]
         : route.view === 'characters'
-          ? [{ label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) }, { label: 'Character Creator' }]
+          ? [{ label: homeName, onClick: () => setRoute({ view: 'graph' }) }, { label: 'Character Creator' }]
           : route.view === 'cinematic'
             ? [
-                { label: 'Story Graph', onClick: () => setRoute({ view: 'graph' }) },
+                { label: homeName, onClick: () => setRoute({ view: 'graph' }) },
                 { label: project.objects[route.id]?.name ?? 'Cinematic', symbol: 'cinematic' as const },
                 { label: 'Shot list' },
               ]
@@ -970,7 +993,7 @@ export const App = () => {
   return (
     <NavContext.Provider value={nav}>
       <div
-        className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${isAside(route) ? ' no-palette' : ''}${preferences.showGrid ? '' : ' no-grid'}`}
+        className={`app${drag ? ' is-dragging' : ''}${railOn ? ' has-rail' : ''}${isAside(route) || !storyHome ? ' no-palette' : ''}${preferences.showGrid ? '' : ' no-grid'}`}
         style={{ '--script-size': `${preferences.scriptSize}px` } as React.CSSProperties}
       >
         <TopBar
@@ -991,11 +1014,13 @@ export const App = () => {
           onComments={() => setDialog(dialog === 'comments' ? null : 'comments')}
           openComments={(project.comments ?? []).filter((c) => !c.done).length}
           saveState={studio.saveState}
-          issueCount={route.view === 'graph' ? issues.length : 0}
+          issueCount={route.view === 'graph' && storyHome ? issues.length : 0}
           onIssues={showNextIssue}
           onSearch={() => setSearching(true)}
         />
         <WorkspaceBar
+          only={gameModule.workspaces as Workspace[]}
+          homeLabel={storyHome ? undefined : gameModule.name}
           current={route.view === 'scene' || route.view === 'cinematic' ? 'graph' : (route.view as Workspace)}
           onOpen={(part) => {
             if (part === route.view) return;
@@ -1009,7 +1034,8 @@ export const App = () => {
             else openPlay();
           }}
         />
-        {!isAside(route) && <Palette
+        {role.kind !== 'panel' && <PathBar project={project} onCommit={commit} onGo={goStep} />}
+        {!isAside(route) && storyHome && <Palette
           active={drag?.placing ? drag.type : null}
           onStart={startPaletteDrag}
           mode={inSceneView ? 'scene' : 'graph'}
@@ -1017,7 +1043,12 @@ export const App = () => {
           onToggleRail={() => setRail((r) => (inSceneView ? { ...r, scene: !r.scene } : { ...r, graph: !r.graph }))}
         />}
         <main className="main">
-          {route.view === 'graph' && (
+          {route.view === 'graph' && !storyHome && (
+            <Suspense fallback={<div className="view-loading" role="status">Opening…</div>}>
+              <DefenseStudio project={project} tab={defenseTab} onTab={setDefenseTab} onCommit={commit} />
+            </Suspense>
+          )}
+          {route.view === 'graph' && storyHome && (
             <>
               <StoryCanvas
                 ref={canvas}
@@ -1212,9 +1243,9 @@ export const App = () => {
         )}
         {dialog === 'newGame' && (
           <SetupWizard
-            onDone={(setup, name) => {
+            onDone={(setup, name, module) => {
               setDialog(null);
-              showProject(createFromSetup(name, setup), null);
+              showProject(module === 'defense' ? createDefenseProject(name, setup.premise) : createFromSetup(name, setup), null);
             }}
             onBlank={() => {
               setDialog(null);
