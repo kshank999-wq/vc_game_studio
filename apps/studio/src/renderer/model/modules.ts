@@ -2,6 +2,7 @@ import type { Project } from './types';
 import { defenseIssues } from './defense/defense';
 import { runDefense } from './defense/sim';
 import { shooterIssues } from './shooter/shooter';
+import { arenaIssues } from './arena/arena';
 
 /**
  * Game modules: what kind of game a project is, which parts of the studio it
@@ -11,13 +12,14 @@ import { shooterIssues } from './shooter/shooter';
  * designer ticks it.
  */
 
-export type ModuleId = 'story' | 'defense' | 'shooter';
+export type ModuleId = 'story' | 'defense' | 'shooter' | 'arena';
 
 /** Where a step takes the designer: a part of the studio, the setup questions, or a tab of a module's own workspace ('tab:<id>'). */
-export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab}`;
+export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab | ArenaTab}`;
 
 export type DefenseTab = 'concept' | 'map' | 'towers' | 'enemies' | 'waves' | 'economy' | 'play';
 export type ShooterTab = 'concept' | 'ship' | 'invaders' | 'waves' | 'shields' | 'play';
+export type ArenaTab = 'concept' | 'field' | 'units' | 'match' | 'decks' | 'play';
 
 export interface PathStep {
   id: string;
@@ -91,7 +93,23 @@ const SHOOTER: GameModule = {
   ],
 };
 
-export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER];
+const ARENA: GameModule = {
+  id: 'arena',
+  name: 'Head-to-head arena',
+  blurb: 'Two sides on one field: each spends energy to send units down the lanes and knock down the other’s towers. The studio plays the opponent. Mobile, PC or console.',
+  workspaces: ['graph', 'bible', 'notes', 'engine'],
+  steps: [
+    { id: 'concept', title: 'Concept', hint: 'What it is and where it plays: the premise, the theme, the platform.', go: 'tab:concept', done: (p) => !!p.arena?.concept.premise?.trim() },
+    { id: 'field', title: 'Field and towers', hint: 'How many lanes, and how tough the keep and guard towers are.', go: 'tab:field', done: (p) => !!p.arena && p.arena.keep.health > 0 && p.arena.guard.health > 0 },
+    { id: 'units', title: 'Units', hint: 'Four or five units that beat each other in a circle: tanky, ranged, swarm, splash, flying.', go: 'tab:units', done: (p) => (p.arena?.units.length ?? 0) >= 3 },
+    { id: 'match', title: 'Energy and time', hint: 'How fast energy builds, how much a player can hold, how long a match runs.', go: 'tab:match', done: (p) => !!p.arena && p.arena.match.energyRate > 0 && p.arena.match.length > 0 },
+    { id: 'decks', title: 'Decks', hint: 'The cards the player brings, and the opponent’s.', go: 'tab:decks', done: (p) => !!p.arena && !arenaIssues(p.arena).some((i) => i.severity === 'error') },
+    { id: 'play', title: 'Play and balance', hint: 'Play the studio’s opponent and read the matchups. Tick this when no unit wins everything.', go: 'tab:play' },
+    { id: 'handoff', title: 'Hand off', hint: 'Send it to Godot, Unity or Unreal as data the engine team builds on.', go: 'engine', done: (p) => !!p.handoff?.last },
+  ],
+};
+
+export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER, ARENA];
 
 export const moduleOf = (p: Project): GameModule => MODULES.find((m) => m.id === (p.module ?? 'story')) ?? STORY;
 

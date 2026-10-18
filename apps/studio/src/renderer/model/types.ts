@@ -319,4 +319,6 @@ export interface Project {
   defense?: import('./defense/defense').DefenseGame;
   /** An arcade shooter's ship, invaders, waves, shields and rules. */
   shooter?: import('./shooter/shooter').ShooterGame;
+  /** A head-to-head arena's towers, units, match rules and decks. */
+  arena?: import('./arena/arena').ArenaGame;
 }

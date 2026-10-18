@@ -14437,3 +14437,169 @@ button.bible-dual-col:hover {
   border-radius: 6px;
   padding: 6px;
 }
+
+/* Head-to-head arena (game modules). */
+.arn-stage {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.arn-field {
+  height: calc(100vh - 300px);
+  min-height: 360px;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  display: block;
+  user-select: none;
+  border-radius: 6px;
+}
+.arn-half.red {
+  fill: color-mix(in srgb, var(--c-encounter) 9%, var(--ground));
+}
+.arn-half.blue {
+  fill: color-mix(in srgb, var(--c-object) 9%, var(--ground));
+}
+.arn-half.blue.open {
+  cursor: crosshair;
+}
+.arn-mid {
+  stroke: var(--border-strong);
+  stroke-width: 0.06;
+  stroke-dasharray: 0.3 0.2;
+}
+.arn-lane {
+  stroke: color-mix(in srgb, var(--c-lore) 30%, transparent);
+  stroke-width: 0.9;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.arn-tower rect:first-child {
+  stroke: var(--ground);
+  stroke-width: 0.06;
+}
+.arn-tower.blue rect:first-child {
+  fill: var(--c-object);
+}
+.arn-tower.red rect:first-child {
+  fill: var(--c-encounter);
+}
+.arn-tower.down {
+  opacity: 0.2;
+}
+.arn-hp-back {
+  fill: var(--ground);
+}
+.arn-hp {
+  fill: var(--c-environment);
+}
+.arn-unit {
+  pointer-events: none;
+}
+.arn-unit circle {
+  stroke: var(--ground);
+  stroke-width: 0.05;
+}
+.arn-unit.blue circle {
+  fill: color-mix(in srgb, var(--c-object) 75%, white);
+}
+.arn-unit.red circle {
+  fill: color-mix(in srgb, var(--c-encounter) 75%, white);
+}
+.arn-unit.flying circle {
+  stroke: var(--text);
+  stroke-dasharray: 0.08 0.06;
+}
+.arn-unit text {
+  font-size: 0.3px;
+  font-weight: 700;
+  fill: var(--ground);
+}
+.arn-strike {
+  stroke-width: 0.05;
+  pointer-events: none;
+}
+.arn-strike.blue {
+  stroke: color-mix(in srgb, var(--c-object) 60%, white);
+}
+.arn-strike.red {
+  stroke: color-mix(in srgb, var(--c-encounter) 60%, white);
+}
+.arn-hand {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 200px;
+}
+.arn-energy {
+  position: relative;
+  height: 26px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--ground);
+}
+.arn-energy-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--c-puzzle) 55%, var(--ground));
+}
+.arn-energy span {
+  position: relative;
+  display: block;
+  text-align: center;
+  line-height: 24px;
+  font-size: 12px;
+  color: var(--text);
+}
+.dfn-pick-btn.short {
+  opacity: 0.5;
+}
+.arn-table-wrap {
+  overflow-x: auto;
+}
+.arn-table th,
+.arn-table td {
+  text-align: center;
+  white-space: nowrap;
+}
+.arn-table tbody th {
+  text-align: left;
+  font-weight: 500;
+}
+.arn-table td.win {
+  color: var(--c-environment);
+}
+.arn-table td.loss {
+  color: var(--c-encounter);
+}
+.arn-table td.even,
+.arn-table td.self {
+  color: var(--muted);
+}
+.arn-sub {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--gold);
+}
+.arn-decks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.arn-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.arn-deck legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+.arn-deck.blue legend {
+  color: var(--c-object);
+}
+.arn-deck.red legend {
+  color: var(--c-encounter);
+}

@@ -19,8 +19,8 @@ smaller games that don't need a plot, characters and levels.
 *What are you making?*
 
 - **Story game** goes on to the usual four setup steps.
-- **Castle defense** and **Arcade shooter** need only a name and a
-  premise. The game it makes can be played straight away.
+- **Castle defense**, **Arcade shooter** and **Head-to-head arena** need
+  only a name and a premise. The game it makes can be played straight away.
 
 A project made before modules existed is a story game.
 
@@ -130,8 +130,54 @@ The rules:
 - Shields stop shots from both sides.
 - A hit on the ship clears the falling shots.
 
+### Head-to-head arena
+
+Two sides face each other on one field. Each side has a keep and a guard
+tower in every lane. Players spend energy, which builds up over time, to
+send units down the lanes and knock the other side's towers down. The
+studio plays the opponent.
+
+- Knocking down the keep wins at once.
+- At time, the side that has knocked down more towers wins.
+
+The **Head-to-head arena** workspace replaces the story graph.
+
+| Step | Where | Done when |
+| --- | --- | --- |
+| Concept | Premise, theme, platform, notes | A premise |
+| Field and towers | 1, 2 or 3 lanes; the keep's and guards' health, damage, rate, range | Set |
+| Units | Cost, count, health, damage, rate, range, speed, splash, goes only for towers, flying, hits flying | 3 units |
+| Energy and time | Starting energy, the most a player can hold, how fast it builds, match length | Set |
+| Decks | The player's cards and the opponent's | No errors left |
+| Play and balance | Play against the studio's opponent, watch two decks play each other, read the matchups | You tick it |
+| Hand off | Engine Handoff | Sent |
+
+**Play and balance**
+
+- Pick a card, then click your half of the field to play it there.
+- **The studio plays your deck too** lets you watch the two decks play each
+  other.
+- The studio's opponent plays its deck in order as the energy comes:
+  - With your units on its half, it plays in their lane, between them and
+    its towers.
+  - Otherwise it plays at its back, in the lane whose guard tower of yours is
+    weakest.
+- The **matchup table** puts every unit against every other, the same energy
+  spent on each (6), played from both ends of the field.
+  - ✓ wins, with the share of health it has left.
+  - ✗ loses.
+  - = too close to call.
+  - It warns when one unit beats everything, and when one beats nothing.
+- **Deck against deck** says how the two decks do when the studio plays
+  both.
+
+**What the engine gets**
+
+The handoff writes `arena.json` (the whole game as data) and `ARENA.md`
+(what each field means, how to load it in that engine, the rules the studio
+plays by, and how its opponent chooses where to play).
+
 ## Coming next
 
-- Head-to-head on a field
-
-Other kinds of game (card games, for example) will follow the same pattern.
+Other kinds of game, such as card games or a sports match, will follow the
+same pattern.

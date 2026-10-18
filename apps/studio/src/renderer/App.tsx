@@ -38,7 +38,7 @@ import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './
 import { LicenseDialog } from './components/license/lazy';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
-import { CharacterCreator, DefenseStudio, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShooterStudio, ShotList } from './views';
+import { ArenaStudio, CharacterCreator, DefenseStudio, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShooterStudio, ShotList } from './views';
 import type { LevelMode } from './components/level/LevelDesigner';
 import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
@@ -1046,7 +1046,13 @@ export const App = () => {
         <main className="main">
           {route.view === 'graph' && !storyHome && (
             <Suspense fallback={<div className="view-loading" role="status">Opening…</div>}>
-              {gameModule.id === 'shooter' ? <ShooterStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} /> : <DefenseStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} />}
+              {gameModule.id === 'shooter' ? (
+                <ShooterStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} />
+              ) : gameModule.id === 'arena' ? (
+                <ArenaStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} />
+              ) : (
+                <DefenseStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} />
+              )}
             </Suspense>
           )}
           {route.view === 'graph' && storyHome && (
