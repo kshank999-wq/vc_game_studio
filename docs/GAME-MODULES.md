@@ -19,7 +19,7 @@ smaller games that don't need a plot, characters and levels.
 *What are you making?*
 
 - **Story game** goes on to the usual four setup steps.
-- **Castle defense** (and the modules to come) needs only a name and a
+- **Castle defense** and **Arcade shooter** need only a name and a
   premise. The game it makes can be played straight away.
 
 A project made before modules existed is a story game.
@@ -91,9 +91,47 @@ The handoff writes two files beside the engine's other output (in
   - Damage is `max(1, damage − armor)`.
   - Splash, slow and leaks work as in the studio.
 
+### Arcade shooter
+
+The classic arcade invader game. Rows of invaders sweep side to side and step
+down at each side. The player's ship slides along the bottom and fires up.
+The **Arcade shooter** workspace replaces the story graph.
+
+| Step | Where | Done when |
+| --- | --- | --- |
+| Concept | Premise, theme, platform, notes | A premise |
+| The ship | Speed, fire rate, shot speed, lives | All set |
+| Invaders | Health (hits), points, shots a minute | 2 invaders |
+| Waves | A formation each: which invader fills each row, how many a row, speed, step down, fire, bonus points. A small picture shows the formation | 3 waves |
+| Shields and scoring | Shields and their hits, an extra life every so many points, the speed-up as the formation thins, how fast their shots fall | No errors left |
+| Play and tune | Play it with ← → (or A D) and Space, or tick **Autopilot plays** and watch | You tick it |
+| Hand off | Engine Handoff | Sent |
+
+**The autopilot**
+
+- The autopilot is a steady player. It lines up under the nearest invader,
+  leads the formation's sweep, sidesteps shots, and holds fire under a
+  shield.
+- Its three runs give a verdict and a table of each wave: time, shots,
+  share of shots that hit, lives lost.
+- If it struggles, most players will. Use it as a guide to difficulty, not
+  a stand-in for playing.
+
+**What the engine gets**
+
+The handoff writes `shooter.json` (the whole game as data) and `SHOOTER.md`
+(what each field means, how to load it in that engine, and the rules the
+studio plays by).
+
+The rules:
+
+- Only the lowest invader in a column fires.
+- The formation's speed is `speed × (1 + speed-up × share destroyed)`.
+- Shields stop shots from both sides.
+- A hit on the ship clears the falling shots.
+
 ## Coming next
 
-- Arcade shooter
 - Head-to-head on a field
 
 Other kinds of game (card games, for example) will follow the same pattern.

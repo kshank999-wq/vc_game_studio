@@ -5,8 +5,8 @@ import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } fr
 import { Symbol } from './components/Symbol';
 import { WorkspaceBar, type Workspace } from './components/WorkspaceBar';
 import { PathBar } from './components/path/PathBar';
-import { moduleOf, type DefenseTab, type PathStep } from './model/modules';
-import { createDefenseProject } from './model/defense/defense';
+import { moduleOf, type PathStep } from './model/modules';
+import { createModuleProject } from './model/module-projects';
 import { sceneTrail } from './model/subscene';
 import { TopBar, type Crumb } from './components/TopBar';
 import { ExplodedScene } from './components/scene/ExplodedScene';
@@ -38,7 +38,7 @@ import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './
 import { LicenseDialog } from './components/license/lazy';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
-import { CharacterCreator, DefenseStudio, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShotList } from './views';
+import { CharacterCreator, DefenseStudio, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShooterStudio, ShotList } from './views';
 import type { LevelMode } from './components/level/LevelDesigner';
 import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
@@ -100,7 +100,8 @@ export const App = () => {
   // The legend is a full palette on the graph and a rail inside a scene, until the user says otherwise.
   const [rail, setRail] = useState({ graph: false, scene: true });
   const inSceneView = route.view === 'scene';
-  const [defenseTab, setDefenseTab] = useState<DefenseTab>('concept');
+  /** The tab open in a module's own workspace (each falls back to its first when it hasn't this one). */
+  const [homeTab, setHomeTab] = useState('concept');
   const gameModule = moduleOf(project);
   /** A story game's home is the story graph; another module's is its own workspace. */
   const storyHome = gameModule.id === 'story';
@@ -950,8 +951,8 @@ export const App = () => {
     else if (go === 'play') openPlay();
     else if (go === 'engine') openEngine();
     else if (go === 'bible') openBible();
-    else if (go.startsWith('defense:')) {
-      setDefenseTab(go.slice('defense:'.length) as DefenseTab);
+    else if (go.startsWith('tab:')) {
+      setHomeTab(go.slice('tab:'.length));
       setRoute({ view: 'graph' });
     }
   };
@@ -1045,7 +1046,7 @@ export const App = () => {
         <main className="main">
           {route.view === 'graph' && !storyHome && (
             <Suspense fallback={<div className="view-loading" role="status">Opening…</div>}>
-              <DefenseStudio project={project} tab={defenseTab} onTab={setDefenseTab} onCommit={commit} />
+              {gameModule.id === 'shooter' ? <ShooterStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} /> : <DefenseStudio project={project} tab={homeTab} onTab={setHomeTab} onCommit={commit} />}
             </Suspense>
           )}
           {route.view === 'graph' && storyHome && (
@@ -1245,7 +1246,7 @@ export const App = () => {
           <SetupWizard
             onDone={(setup, name, module) => {
               setDialog(null);
-              showProject(module === 'defense' ? createDefenseProject(name, setup.premise) : createFromSetup(name, setup), null);
+              showProject(module === 'story' ? createFromSetup(name, setup) : createModuleProject(module, name, setup.premise), null);
             }}
             onBlank={() => {
               setDialog(null);

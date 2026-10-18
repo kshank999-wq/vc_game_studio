@@ -13874,6 +13874,9 @@ button.bible-dual-col:hover {
   flex: 1 1 260px;
   min-width: 0;
 }
+.path-next .link-btn {
+  white-space: nowrap;
+}
 .path-hint {
   color: var(--muted);
   min-width: 0;
@@ -14353,4 +14356,84 @@ button.bible-dual-col:hover {
   .dfn-play {
     grid-template-columns: 1fr;
   }
+}
+
+/* Arcade shooter (game modules). */
+.sht-field {
+  width: 100%;
+  max-height: calc(100vh - 290px);
+  min-height: 240px;
+  display: block;
+  user-select: none;
+}
+.sht-space {
+  fill: color-mix(in srgb, var(--c-cinematic) 8%, var(--ground));
+  stroke: var(--border);
+  stroke-width: 0.03;
+}
+.sht-ground {
+  stroke: color-mix(in srgb, var(--c-environment) 50%, var(--ground));
+  stroke-width: 0.06;
+}
+.sht-eye {
+  fill: var(--ground);
+}
+.sht-ship path {
+  fill: var(--gold-hi);
+}
+.sht-ship.blink {
+  animation: sht-blink 0.25s steps(2) infinite;
+}
+@keyframes sht-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sht-ship.blink {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+.sht-shield {
+  fill: var(--c-environment);
+}
+.sht-shot {
+  fill: var(--gold-hi);
+}
+.sht-bomb {
+  fill: var(--c-error);
+}
+.sht-swatch {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  align-self: flex-end;
+  background: var(--ground);
+  border-radius: 6px;
+}
+.sht-wave {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
+}
+.sht-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sht-rows .dfn-row {
+  flex-wrap: nowrap;
+}
+.sht-rows .dfn-level {
+  min-width: 48px;
+}
+.sht-formation {
+  flex: 1 1 220px;
+  max-width: 360px;
+  max-height: 130px;
+  background: color-mix(in srgb, var(--c-cinematic) 8%, var(--ground));
+  border-radius: 6px;
+  padding: 6px;
 }

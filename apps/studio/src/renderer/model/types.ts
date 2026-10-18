@@ -317,4 +317,6 @@ export interface Project {
   path?: { done?: string[] };
   /** A castle defense game's map, towers, enemies, waves and economy. */
   defense?: import('./defense/defense').DefenseGame;
+  /** An arcade shooter's ship, invaders, waves, shields and rules. */
+  shooter?: import('./shooter/shooter').ShooterGame;
 }

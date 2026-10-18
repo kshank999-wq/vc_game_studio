@@ -19,6 +19,7 @@ const loaders = {
   puzzles: () => import('./components/puzzle/PuzzleCreator'),
   characters: () => import('./components/character/CharacterCreator'),
   defense: () => import('./components/defense/DefenseStudio'),
+  shooter: () => import('./components/shooter/ShooterStudio'),
   collab: preloadCollab,
 };
 
@@ -30,6 +31,7 @@ export const PuzzleCreator = lazy(() => loaders.puzzles().then((m) => ({ default
 export const CharacterCreator = lazy(() => loaders.characters().then((m) => ({ default: m.CharacterCreator })));
 export const NoteSorter = lazy(() => loaders.notes().then((m) => ({ default: m.NoteSorter })));
 export const DefenseStudio = lazy(() => loaders.defense().then((m) => ({ default: m.DefenseStudio })));
+export const ShooterStudio = lazy(() => loaders.shooter().then((m) => ({ default: m.ShooterStudio })));
 export const EngineHandoff = lazy(() => loaders.engine().then((m) => ({ default: m.EngineHandoff })));
 
 /** The handoff model, for export on save, without putting the engines in the first load. */

@@ -4,6 +4,7 @@ import { waveSheet } from '../../model/defense/sim';
 import type { DefenseTab } from '../../model/modules';
 import type { Project } from '../../model/types';
 import { Board } from './Board';
+import { ConceptPane, Intro, StepTabs } from '../modules/parts';
 import { Num, Text } from './fields';
 import { PlayTab } from './PlayTab';
 
@@ -22,31 +23,14 @@ const TABS: { id: DefenseTab; label: string }[] = [
  * concept to play. Everything is roughed in from a small starter game, so
  * there is something to play from the first minute, and refined from there.
  */
-export const DefenseStudio = ({ project, tab, onTab, onCommit }: { project: Project; tab: DefenseTab; onTab: (t: DefenseTab) => void; onCommit: (p: Project) => void }) => {
+export const DefenseStudio = ({ project, tab: asked, onTab, onCommit }: { project: Project; tab: string; onTab: (t: DefenseTab) => void; onCommit: (p: Project) => void }) => {
+  const tab: DefenseTab = TABS.find((t) => t.id === asked)?.id ?? 'concept';
   const game = project.defense ?? starterDefense();
   const change = (f: (g: DefenseGame) => DefenseGame) => onCommit(updateDefense(project, f));
   const issues = defenseIssues(game);
   return (
     <div className="dfn-studio">
-      <nav className="dfn-tabs" aria-label="Castle defense">
-        {TABS.map((t, i) => (
-          <button key={t.id} className={`dfn-tab${tab === t.id ? ' on' : ''}`} aria-current={tab === t.id ? 'page' : undefined} onClick={() => onTab(t.id)}>
-            <span className="dfn-tab-num">{i + 1}</span> {t.label}
-          </button>
-        ))}
-        {issues.length ? (
-          <div className="dfn-issues" role="status">
-            <h4>To look at</h4>
-            <ul>
-              {issues.map((x, i) => (
-                <li key={i} className={x.severity}>
-                  {x.message}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </nav>
+      <StepTabs label="Castle defense" tabs={TABS} tab={tab} onTab={onTab} issues={issues} />
       <section className="dfn-body">
         {tab === 'concept' && <ConceptTab game={game} change={change} />}
         {tab === 'map' && <MapTab game={game} change={change} />}
@@ -62,33 +46,15 @@ export const DefenseStudio = ({ project, tab, onTab, onCommit }: { project: Proj
 
 type Change = (f: (g: DefenseGame) => DefenseGame) => void;
 
-const Intro = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <header className="dfn-intro">
-    <h2>{title}</h2>
-    <p>{children}</p>
-  </header>
+const ConceptTab = ({ game, change }: { game: DefenseGame; change: Change }) => (
+  <ConceptPane
+    concept={game.concept}
+    set={(patch) => change((g) => ({ ...g, concept: { ...g.concept, ...patch } }))}
+    premiseHint="e.g. Hold the last mountain keep against the goblin horde through one long night."
+    themeHint="e.g. Cartoon medieval, warm colors"
+    notesHint="Ideas for later: hero units, spells, a map per region…"
+  />
 );
-
-const ConceptTab = ({ game, change }: { game: DefenseGame; change: Change }) => {
-  const set = (patch: Partial<DefenseGame['concept']>) => change((g) => ({ ...g, concept: { ...g.concept, ...patch } }));
-  return (
-    <div className="dfn-pane narrow">
-      <Intro title="Concept">What the game is, in a few lines. Keep it rough: you will come back to it.</Intro>
-      <Text label="Premise" area value={game.concept.premise ?? ''} placeholder="e.g. Hold the last mountain keep against the goblin horde through one long night." onCommit={(v) => set({ premise: v })} />
-      <Text label="Theme and look" value={game.concept.theme ?? ''} placeholder="e.g. Cartoon medieval, warm colors" onCommit={(v) => set({ theme: v })} />
-      <label className="dfn-text">
-        <span>Platform</span>
-        <select className="inp small" value={game.concept.platform ?? 'mobile'} aria-label="Platform" onChange={(e) => set({ platform: e.target.value as DefenseGame['concept']['platform'] })}>
-          <option value="mobile">Phone and tablet</option>
-          <option value="pc">PC</option>
-          <option value="console">Console</option>
-          <option value="web">Web</option>
-        </select>
-      </label>
-      <Text label="Notes" area value={game.concept.notes ?? ''} placeholder="Ideas for later: hero units, spells, a map per region…" onCommit={(v) => set({ notes: v })} />
-    </div>
-  );
-};
 
 const MapTab = ({ game, change }: { game: DefenseGame; change: Change }) => {
   const [tool, setTool] = useState<'path' | 'spots'>('path');

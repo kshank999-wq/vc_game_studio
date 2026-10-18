@@ -1,6 +1,7 @@
 import type { Project } from './types';
 import { defenseIssues } from './defense/defense';
 import { runDefense } from './defense/sim';
+import { shooterIssues } from './shooter/shooter';
 
 /**
  * Game modules: what kind of game a project is, which parts of the studio it
@@ -10,12 +11,13 @@ import { runDefense } from './defense/sim';
  * designer ticks it.
  */
 
-export type ModuleId = 'story' | 'defense';
+export type ModuleId = 'story' | 'defense' | 'shooter';
 
-/** Where a step takes the designer: a part of the studio, the setup questions, or a tab of a module's workspace. */
-export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `defense:${DefenseTab}`;
+/** Where a step takes the designer: a part of the studio, the setup questions, or a tab of a module's own workspace ('tab:<id>'). */
+export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab}`;
 
 export type DefenseTab = 'concept' | 'map' | 'towers' | 'enemies' | 'waves' | 'economy' | 'play';
+export type ShooterTab = 'concept' | 'ship' | 'invaders' | 'waves' | 'shields' | 'play';
 
 export interface PathStep {
   id: string;
@@ -62,18 +64,34 @@ const DEFENSE: GameModule = {
   blurb: 'Hold the castle: enemies come down a path in waves, the player builds and upgrades towers beside it. Mobile, PC or console.',
   workspaces: ['graph', 'bible', 'notes', 'engine'],
   steps: [
-    { id: 'concept', title: 'Concept', hint: 'What it is and where it plays: the premise, the theme, the platform.', go: 'defense:concept', done: (p) => !!p.defense?.concept.premise?.trim() },
-    { id: 'map', title: 'Map and path', hint: 'Lay the path the enemies walk to the castle, and the spots towers can go.', go: 'defense:map', done: (p) => (p.defense?.map.path.length ?? 0) >= 2 && (p.defense?.map.spots.length ?? 0) >= 3 },
-    { id: 'towers', title: 'Towers', hint: 'Two or three towers that do different jobs: fast, heavy, slowing, anti-air.', go: 'defense:towers', done: (p) => (p.defense?.towers.length ?? 0) >= 2 },
-    { id: 'enemies', title: 'Enemies', hint: 'Two or three enemies that ask different things of the towers: many and weak, few and armored, flying.', go: 'defense:enemies', done: (p) => (p.defense?.enemies.length ?? 0) >= 2 },
-    { id: 'waves', title: 'Waves', hint: 'Five waves or so, each a little harder, mixing the enemies.', go: 'defense:waves', done: (p) => (p.defense?.waves.length ?? 0) >= 3 },
-    { id: 'economy', title: 'Gold and lives', hint: 'What the player starts with, and what selling gives back.', go: 'defense:economy', done: (p) => !!p.defense && !defenseIssues(p.defense).some((i) => i.severity === 'error') },
-    { id: 'play', title: 'Play and balance', hint: 'Place towers and watch the waves. Ticks itself when the test layout wins.', go: 'defense:play', done: (p) => !!p.defense && runDefense(p.defense).outcome === 'won' },
+    { id: 'concept', title: 'Concept', hint: 'What it is and where it plays: the premise, the theme, the platform.', go: 'tab:concept', done: (p) => !!p.defense?.concept.premise?.trim() },
+    { id: 'map', title: 'Map and path', hint: 'Lay the path the enemies walk to the castle, and the spots towers can go.', go: 'tab:map', done: (p) => (p.defense?.map.path.length ?? 0) >= 2 && (p.defense?.map.spots.length ?? 0) >= 3 },
+    { id: 'towers', title: 'Towers', hint: 'Two or three towers that do different jobs: fast, heavy, slowing, anti-air.', go: 'tab:towers', done: (p) => (p.defense?.towers.length ?? 0) >= 2 },
+    { id: 'enemies', title: 'Enemies', hint: 'Two or three enemies that ask different things of the towers: many and weak, few and armored, flying.', go: 'tab:enemies', done: (p) => (p.defense?.enemies.length ?? 0) >= 2 },
+    { id: 'waves', title: 'Waves', hint: 'Five waves or so, each a little harder, mixing the enemies.', go: 'tab:waves', done: (p) => (p.defense?.waves.length ?? 0) >= 3 },
+    { id: 'economy', title: 'Gold and lives', hint: 'What the player starts with, and what selling gives back.', go: 'tab:economy', done: (p) => !!p.defense && !defenseIssues(p.defense).some((i) => i.severity === 'error') },
+    { id: 'play', title: 'Play and balance', hint: 'Place towers and watch the waves. Ticks itself when the test layout wins.', go: 'tab:play', done: (p) => !!p.defense && runDefense(p.defense).outcome === 'won' },
     { id: 'handoff', title: 'Hand off', hint: 'Send it to Godot, Unity or Unreal as data the engine team builds on.', go: 'engine', done: (p) => !!p.handoff?.last },
   ],
 };
 
-export const MODULES: readonly GameModule[] = [STORY, DEFENSE];
+const SHOOTER: GameModule = {
+  id: 'shooter',
+  name: 'Arcade shooter',
+  blurb: 'Classic arcade invaders: rows of them sweep and step down, the player’s ship slides along the bottom and fires up. Mobile, PC or console.',
+  workspaces: ['graph', 'bible', 'notes', 'engine'],
+  steps: [
+    { id: 'concept', title: 'Concept', hint: 'What it is and where it plays: the premise, the theme, the platform.', go: 'tab:concept', done: (p) => !!p.shooter?.concept.premise?.trim() },
+    { id: 'ship', title: 'The ship', hint: 'How fast the ship moves and fires, and how many lives it has.', go: 'tab:ship', done: (p) => !!p.shooter && p.shooter.ship.speed > 0 && p.shooter.ship.fireRate > 0 && p.shooter.ship.lives > 0 },
+    { id: 'invaders', title: 'Invaders', hint: 'Two or three invaders: weak and many, quick to fire, tough and worth more.', go: 'tab:invaders', done: (p) => (p.shooter?.invaders.length ?? 0) >= 2 },
+    { id: 'waves', title: 'Waves', hint: 'Three or four formations, each a little bigger, faster or quicker to fire.', go: 'tab:waves', done: (p) => (p.shooter?.waves.length ?? 0) >= 3 },
+    { id: 'shields', title: 'Shields and scoring', hint: 'The shields to hide behind, extra lives, how fast the formation speeds up.', go: 'tab:shields', done: (p) => !!p.shooter && !shooterIssues(p.shooter).some((i) => i.severity === 'error') },
+    { id: 'play', title: 'Play and tune', hint: 'Play it yourself and watch the autopilot. Tick this when it feels right: hard by the end, never unfair.', go: 'tab:play' },
+    { id: 'handoff', title: 'Hand off', hint: 'Send it to Godot, Unity or Unreal as data the engine team builds on.', go: 'engine', done: (p) => !!p.handoff?.last },
+  ],
+};
+
+export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER];
 
 export const moduleOf = (p: Project): GameModule => MODULES.find((m) => m.id === (p.module ?? 'story')) ?? STORY;
 
