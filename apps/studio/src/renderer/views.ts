@@ -22,6 +22,7 @@ const loaders = {
   shooter: () => import('./components/shooter/ShooterStudio'),
   arena: () => import('./components/arena/ArenaStudio'),
   cards: () => import('./components/cards/CardStudio'),
+  blocks: () => import('./components/blocks/BlockStudio'),
   collab: preloadCollab,
 };
 
@@ -36,6 +37,7 @@ export const DefenseStudio = lazy(() => loaders.defense().then((m) => ({ default
 export const ShooterStudio = lazy(() => loaders.shooter().then((m) => ({ default: m.ShooterStudio })));
 export const ArenaStudio = lazy(() => loaders.arena().then((m) => ({ default: m.ArenaStudio })));
 export const CardStudio = lazy(() => loaders.cards().then((m) => ({ default: m.CardStudio })));
+export const BlockStudio = lazy(() => loaders.blocks().then((m) => ({ default: m.BlockStudio })));
 export const EngineHandoff = lazy(() => loaders.engine().then((m) => ({ default: m.EngineHandoff })));
 
 /** The handoff model, for export on save, without putting the engines in the first load. */

@@ -323,4 +323,6 @@ export interface Project {
   arena?: import('./arena/arena').ArenaGame;
   /** A card game's rules, cards and decks. */
   cards?: import('./cards/cards').CardGame;
+  /** A puzzle game's rules and levels. */
+  blocks?: import('./blocks/blocks').BlockGame;
 }

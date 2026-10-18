@@ -14874,3 +14874,179 @@ button.bible-dual-col:hover {
   text-align: center;
   font-weight: 600;
 }
+
+/* Puzzle game (game modules). */
+.blk-board {
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 330px);
+  min-height: 200px;
+  display: block;
+  user-select: none;
+  touch-action: none;
+}
+.blk-board.paint {
+  cursor: crosshair;
+}
+.blk-board.blk-play {
+  max-width: 720px;
+}
+.blk-wall {
+  fill: color-mix(in srgb, var(--c-logic) 30%, var(--ground));
+  stroke: color-mix(in srgb, var(--c-logic) 40%, var(--ground));
+  stroke-width: 0.03;
+}
+.blk-floor,
+.blk-target {
+  fill: color-mix(in srgb, var(--c-lore) 10%, var(--ground));
+  stroke: color-mix(in srgb, var(--c-lore) 18%, var(--ground));
+  stroke-width: 0.02;
+}
+.blk-target-dot {
+  fill: none;
+  stroke: var(--c-environment);
+  stroke-width: 0.07;
+}
+.blk-crate {
+  fill: color-mix(in srgb, var(--c-dialogue) 70%, var(--ground));
+  stroke: var(--ground);
+  stroke-width: 0.05;
+}
+.blk-crate.home {
+  fill: var(--c-environment);
+}
+.blk-player {
+  fill: var(--gold-hi);
+  stroke: var(--ground);
+  stroke-width: 0.05;
+}
+.blk-editor {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.blk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.blk-stage {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.blk-stage > .blk-board {
+  flex: 1 1 320px;
+}
+.blk-side {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 240px;
+}
+.blk-text {
+  font-family: var(--font-mono);
+  white-space: pre;
+  line-height: 1.25;
+}
+.blk-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+.blk-swatch.wall {
+  background: color-mix(in srgb, var(--c-logic) 45%, var(--ground));
+}
+.blk-swatch.floor {
+  background: color-mix(in srgb, var(--c-lore) 20%, var(--ground));
+  border: 1px solid var(--border-strong);
+}
+.blk-swatch.target {
+  border: 2px solid var(--c-environment);
+  border-radius: 50%;
+}
+.blk-swatch.crate {
+  background: color-mix(in srgb, var(--c-dialogue) 70%, var(--ground));
+}
+.blk-swatch.player {
+  background: var(--gold-hi);
+  border-radius: 50%;
+}
+.dfn-issues-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+}
+.dfn-issues-list .error {
+  color: var(--c-encounter);
+}
+.dfn-issues-list .warning {
+  color: var(--c-choice);
+}
+.blk-curve {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 90px;
+  max-width: 640px;
+  margin: 6px 0 10px;
+}
+.blk-curve .crd-bar span {
+  background: var(--c-puzzle);
+}
+.blk-curve .crd-bar span.bad {
+  background: var(--c-encounter);
+  opacity: 0.5;
+}
+.blk-order {
+  max-width: 760px;
+}
+.blk-order th:nth-child(2),
+.blk-order td:nth-child(2) {
+  text-align: left;
+}
+.blk-order td:last-child {
+  white-space: nowrap;
+}
+.blk-order td:last-child .icon-btn {
+  display: inline-grid;
+  margin-left: 4px;
+}
+.blk-curve .crd-bar {
+  max-width: 48px;
+}
+.blk-levels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.blk-levels .dfn-tab {
+  width: 100%;
+}
+.blk-levels em {
+  font-style: normal;
+  margin-left: auto;
+  font-size: 11px;
+}
+.blk-pad {
+  display: inline-grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 4px;
+}
+.blk-stars {
+  color: var(--c-choice);
+  letter-spacing: 0.1em;
+}
+@media (max-width: 900px) {
+  .blk-editor {
+    grid-template-columns: 1fr;
+  }
+}

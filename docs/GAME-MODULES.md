@@ -19,8 +19,8 @@ smaller games that don't need a plot, characters and levels.
 *What are you making?*
 
 - **Story game** goes on to the usual four setup steps.
-- **Castle defense**, **Arcade shooter**, **Head-to-head arena** and
-  **Card game** need only a name and a premise. The game it makes can be played straight away.
+- **Castle defense**, **Arcade shooter**, **Head-to-head arena**, **Card
+  game** and **Puzzle game** need only a name and a premise. The game it makes can be played straight away.
 
 A project made before modules existed is a story game.
 
@@ -225,7 +225,66 @@ The handoff writes `cards.json` (the rules, every card with its rules text,
 both decks) and `CARDS.md`. `CARDS.md` covers the turn, mana and fatigue,
 effects, attacks and guards, and how the studio's opponent plays.
 
+### Puzzle game
+
+A push-block puzzle, level after level. The player walks a grid and pushes
+crates onto targets: one at a time, never pulled. The studio solves every
+level itself, so you know each one can be done, in how few moves, and how
+hard it is.
+
+The **Puzzle game** workspace replaces the story graph.
+
+| Step | Where | Done when |
+| --- | --- | --- |
+| Concept | Premise, theme, platform, notes | A premise |
+| Rules | What a crate and a target are called, whether the player can undo, how stars are earned | Set |
+| Levels | Paint each level: wall, floor, target, crate, player. Name, par, size. Paste or copy it as text | 5 levels, each ready to play |
+| Order and difficulty | The levels in order, each with its fewest moves, pushes and difficulty, and a chart of the climb | The studio has solved every level |
+| Play and test | Play each level with the arrow keys or WASD; undo, restart, hint, stars against par | You tick it |
+| Hand off | Engine Handoff | Sent |
+
+**Levels**
+
+- Pick a piece, then click or drag across cells. With **Crate** picked,
+  clicking a crate takes it off.
+- Under the level, the studio says whether it solves:
+  - **Solves in N moves** gives the pushes and a difficulty from 1 to 5.
+    **Show the solution** plays it out on the board.
+  - **Can't be solved** means a crate always gets stuck.
+  - **Too big** means there are too many positions for the studio to check
+    here. Play it to be sure, or make it smaller.
+- **As text** shows the level in the standard text format: `#` wall, space
+  floor, `.` target, `$` crate, `*` crate on a target, `@` player, `+` player
+  on a target. Paste a level in there to bring it in.
+
+**Order and difficulty**
+
+- It flags a level that jumps two or more steps harder than the one before,
+  or one that's much easier than the one before.
+- Difficulty comes from how much the solver had to search and how many
+  pushes the level takes. Use it as a guide to the order, not a measure of
+  fun.
+
+**Play and test**
+
+- **Hint** gives the studio's next move from where you are, or says when
+  you're stuck.
+- Stars:
+  - three at par;
+  - two within the slack set in Rules;
+  - one for finishing.
+- Par is the studio's fewest moves unless you set one on the level.
+
+**What the engine gets**
+
+The handoff writes `puzzles.json` and `PUZZLES.md`:
+
+- `puzzles.json` has every level as text rows, with its solution, par and
+  difficulty. The solutions can drive a hint button, and let the engine team
+  check the levels still solve.
+- `PUZZLES.md` covers the rules and how to load the levels in that engine.
+
 ## Coming next
 
-Other kinds of game, such as a sports match or a puzzle game, will follow
-the same pattern.
+Other kinds of game, such as a sports match, a match-3 or a runner, will
+follow the same pattern.

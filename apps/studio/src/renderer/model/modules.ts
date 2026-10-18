@@ -4,6 +4,8 @@ import { runDefense } from './defense/sim';
 import { shooterIssues } from './shooter/shooter';
 import { arenaIssues } from './arena/arena';
 import { cardIssues } from './cards/cards';
+import { levelIssues, parseLevel } from './blocks/blocks';
+import { solveLevel } from './blocks/solver';
 
 /**
  * Game modules: what kind of game a project is, which parts of the studio it
@@ -13,15 +15,16 @@ import { cardIssues } from './cards/cards';
  * designer ticks it.
  */
 
-export type ModuleId = 'story' | 'defense' | 'shooter' | 'arena' | 'cards';
+export type ModuleId = 'story' | 'defense' | 'shooter' | 'arena' | 'cards' | 'blocks';
 
 /** Where a step takes the designer: a part of the studio, the setup questions, or a tab of a module's own workspace ('tab:<id>'). */
-export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab | ArenaTab | CardTab}`;
+export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab | ArenaTab | CardTab | BlockTab}`;
 
 export type DefenseTab = 'concept' | 'map' | 'towers' | 'enemies' | 'waves' | 'economy' | 'play';
 export type ShooterTab = 'concept' | 'ship' | 'invaders' | 'waves' | 'shields' | 'play';
 export type ArenaTab = 'concept' | 'field' | 'units' | 'match' | 'decks' | 'play';
 export type CardTab = 'concept' | 'rules' | 'cards' | 'decks' | 'play';
+export type BlockTab = 'concept' | 'rules' | 'levels' | 'order' | 'play';
 
 export interface PathStep {
   id: string;
@@ -126,7 +129,22 @@ const CARDS: GameModule = {
   ],
 };
 
-export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER, ARENA, CARDS];
+const BLOCKS: GameModule = {
+  id: 'blocks',
+  name: 'Puzzle game',
+  blurb: 'A push-block puzzle, level after level: the player pushes crates onto targets. The studio solves every level, so you know each can be done and how hard it is. Mobile, PC or console.',
+  workspaces: ['graph', 'bible', 'notes', 'engine'],
+  steps: [
+    { id: 'concept', title: 'Concept', hint: 'What it is and where it plays: the premise, the theme, the platform.', go: 'tab:concept', done: (p) => !!p.blocks?.concept.premise?.trim() },
+    { id: 'rules', title: 'Rules', hint: 'What the pieces are called, whether the player can undo, how stars are earned.', go: 'tab:rules', done: (p) => !!p.blocks?.rules.crateWord.trim() },
+    { id: 'levels', title: 'Levels', hint: 'Draw five or more levels. Start tiny: one crate, one push. Each new level teaches one thing.', go: 'tab:levels', done: (p) => (p.blocks?.levels.length ?? 0) >= 5 && p.blocks!.levels.every((l) => !levelIssues(parseLevel(l.rows)).some((i) => i.severity === 'error')) },
+    { id: 'order', title: 'Order and difficulty', hint: 'Put the levels in order, easy to hard. Ticks itself when the studio has solved every one.', go: 'tab:order', done: (p) => (p.blocks?.levels.length ?? 0) > 0 && p.blocks!.levels.every((l) => solveLevel(l).status === 'solved') },
+    { id: 'play', title: 'Play and test', hint: 'Play every level yourself, against par. Tick this when each feels right.', go: 'tab:play' },
+    { id: 'handoff', title: 'Hand off', hint: 'Send it to Godot, Unity or Unreal as data the engine team builds on.', go: 'engine', done: (p) => !!p.handoff?.last },
+  ],
+};
+
+export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER, ARENA, CARDS, BLOCKS];
 
 export const moduleOf = (p: Project): GameModule => MODULES.find((m) => m.id === (p.module ?? 'story')) ?? STORY;
 
