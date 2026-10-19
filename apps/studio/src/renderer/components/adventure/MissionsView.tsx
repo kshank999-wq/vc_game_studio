@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { buildCell, builtCell, cellBlocked, holdingSpots } from '../../model/level/holding';
+import { buildCell, builtCell, CELL_WATCH, cellBlocked, cellGuard, holdingSpots, postGuard } from '../../model/level/holding';
 import { levelsOf } from '../../model/level/level';
 import { addEscapePuzzle, captureIssues, captureOn, escapePuzzleOf, clearCapture, describeCapture, setCapture, setUpCapture, type CaptureRule } from '../../model/capture';
 import { addLevelBand } from '../../model/level-lane';
@@ -210,6 +210,7 @@ const HeldIn = ({ project, onCommit }: { project: Project; onCommit: (p: Project
   const spots = holdingSpots(project);
   const built = builtCell(project);
   const builtIn = built && levelsOf(project).levels.find((l) => l.id === built.levelId);
+  const guard = cellGuard(project);
   if (!spots.length) return <p className="dfn-hint">Once the game has levels, a catch takes the hero to a room in the level: one named like a cell or jail, else the room farthest from the player start. Link a room to the holding cell to choose it yourself.</p>;
   const linked = spots.some((s) => s.spot && !s.spot.auto);
   return (
@@ -227,10 +228,19 @@ const HeldIn = ({ project, onCommit }: { project: Project; onCommit: (p: Project
       </ul>
       {built ? (
         <p className="dfn-hint">
-          The cell is built in {builtIn?.name ?? 'a level'}: {built.name}, with its door, the puzzle’s objects and the locker. In Play Mode a catch locks the hero in it; pick the lock to get out.
+          The cell is built in {builtIn?.name ?? 'a level'}: {built.name}, with its door, the puzzle’s objects and the locker. In Play Mode a catch locks the hero in it; pick the lock to get out.{' '}
+          {guard ? (
+            <>
+              {guard.name} patrols outside it ({CELL_WATCH}): past the door quickly, a long wait at the back. Slip out while it’s round the back; if it sees the hero, it catches them.
+            </>
+          ) : (
+            <button className="tb-btn small" onClick={() => onCommit(postGuard(project))}>
+              Post a guard
+            </button>
+          )}
         </p>
       ) : escapePuzzleOf(project) ? (
-        <p className="dfn-hint">Build the cell in a level to play the escape in Play Mode: a small room inside the room listed for that level, its door locked until the lock is picked, and the brick and scratches inside.</p>
+        <p className="dfn-hint">Build the cell in a level to play the escape in Play Mode: a small room inside the room listed for that level, its door locked until the lock is picked, the brick and scratches inside, and a guard patrolling outside.</p>
       ) : null}
       <p className="dfn-hint">
         {linked

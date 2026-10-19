@@ -140,8 +140,13 @@ holding, the hero could never leave.
   inside the room the level holds the hero in, linked to the holding cell so
   every catch brings the hero there; a door in its wall that plays the Cell
   door (shut and solid until its lock is picked with the nail, then opened);
-  the loose brick and the scratches as interaction points inside; and the
-  Evidence locker outside. The room needs to be 5.5 m each way, and the
+  the loose brick and the scratches as interaction points inside; the
+  Evidence locker outside; and a guard patrolling outside the cell. The guard
+  is one of the captors who is an enemy (else a new Cell guard, made from the
+  Guard archetype and made a captor), walking the Cell watch: four stops round
+  the cell, past the door quickly and a long wait at the back, so there is a
+  moment to slip out. If it sees the hero it chases them, and its blow
+  captures them, back into the cell. A cell built before has **Post a guard**. The room needs to be 5.5 m each way, and the
   player can't start where the cell goes. In Play Mode the hero is caught,
   locked in, and gets out by playing the puzzle; caught again, the cell is
   locked again. A door linked to a story object with an Open state always

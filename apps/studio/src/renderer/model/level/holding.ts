@@ -1,8 +1,9 @@
-import { captureOn, escapePuzzleOf } from '../capture';
+import { captureOn, escapePuzzleOf, setCapture } from '../capture';
+import { createCharacter, profileOf } from '../character/profile';
 import { elementsOf } from '../puzzle/elements';
 import type { Project } from '../types';
-import { assetOf, frameOf } from './geometry';
-import { levelsOf, linkItem, placeAsset, resizeItem } from './level';
+import { assetOf, frameOf, paramOf } from './geometry';
+import { levelsOf, linkItem, placeAsset, resizeItem, setParam } from './level';
 import type { AssetDefinition, AssetRole, LevelItem } from './types';
 
 /**
@@ -135,5 +136,66 @@ export const buildCell = (project: Project, levelId: string, global?: readonly A
     const placed = placeAsset(p, levelId, floorId, 'logic.interaction', { x: at.x, y: at.y + half + 0.7 }, { name: project.objects[locker]!.name, ...(global ? { global } : {}) });
     if (placed.ids[0]) p = linkItem(placed.project, placed.ids[0], locker);
   }
-  return p;
+  return postGuard(p, levelId, global);
 };
+
+// ---------------------------------------------------------------- the guard outside it
+
+/** The patrol the cell's guard walks, round the outside of the cell. */
+export const CELL_WATCH = 'Cell watch';
+
+/** The guard posted outside the built cell: an enemy walking the Cell watch in the cell's level. */
+export const cellGuard = (project: Project, global?: readonly AssetDefinition[]): LevelItem | undefined => {
+  const cell = builtCell(project);
+  if (!cell) return undefined;
+  const set = levelsOf(project);
+  return set.items.find((i) => i.levelId === cell.levelId && !i.hidden && assetOf(set, i, global).role === 'enemy' && String(paramOf(set, i, 'patrol', global) ?? '') === CELL_WATCH);
+};
+
+/**
+ * Post a guard outside the built cell: one of the captors who is an enemy
+ * (else a new Cell guard, from the Guard archetype, made a captor), walking
+ * the Cell watch, a loop of four stops round the cell inside the room it was
+ * built in. It passes the cell door quickly and waits at the back, so there
+ * is a moment to slip out; a guard who sees the hero chases them, and its
+ * blow captures them, back into the cell. Unchanged when there is no cell,
+ * or a guard is posted already.
+ */
+export const postGuard = (project: Project, levelId?: string, global?: readonly AssetDefinition[]): Project => {
+  const cell = builtCell(project);
+  if (!cell || (levelId && cell.levelId !== levelId) || cellGuard(project, global)) return project;
+  let p = project;
+  const enemy = (id: string) => p.objects[id]?.type === 'character' && profileOf(p.objects[id]!).roles.includes('enemy');
+  let who = (p.capture?.captors ?? []).find(enemy);
+  if (!who) {
+    const made = createCharacter(p, { name: 'Cell guard', roles: ['enemy'], archetype: 'guard' });
+    p = setCapture(made.project, { captors: [...(p.capture?.captors ?? []), made.id] });
+    who = made.id;
+  }
+  const set = levelsOf(p);
+  const at = frameOf(set, cell, global);
+  // Inside the room the cell was built in, a little way off the cell's walls.
+  const room = set.items.find((i) => i.id !== cell.id && i.levelId === cell.levelId && assetOf(set, i, global).role === 'room' && Math.abs(frameOf(set, i, global).x - at.x) < 0.01 && Math.abs(frameOf(set, i, global).y - at.y) < 0.01);
+  const roomHalf = room ? Math.min(frameOf(set, room, global).w, frameOf(set, room, global).d) / 2 : CELL_SIZE / 2 + 1.5;
+  const r = Math.max(CELL_SIZE / 2 + 0.5, Math.min(CELL_SIZE / 2 + 1, roomHalf - 0.3));
+  // Past the door (east) briskly; a long look at the back (west).
+  const stops: [number, number, number][] = [
+    [r, -r, 1],
+    [r, r, 1],
+    [-r, r, 5],
+    [-r, -r, 5],
+  ];
+  stops.forEach(([dx, dy, wait], n) => {
+    const placed = placeAsset(p, cell.levelId, cell.floorId, 'actor.patrol', { x: at.x + dx, y: at.y + dy }, { name: `${CELL_WATCH} ${n + 1}`, ...(global ? { global } : {}) });
+    const id = placed.ids[0];
+    if (!id) return;
+    p = setParam(setParam(setParam(placed.project, id, 'path', CELL_WATCH, global), id, 'order', n + 1, global), id, 'wait', wait, global);
+  });
+  const guard = placeAsset(p, cell.levelId, cell.floorId, 'actor.enemy', { x: at.x + r, y: at.y - r }, { name: p.objects[who]!.name, ...(global ? { global } : {}) });
+  const id = guard.ids[0];
+  if (!id) return p;
+  p = setParam(guard.project, id, 'character', who, global);
+  p = setParam(p, id, 'patrol', CELL_WATCH, global);
+  return setParam(p, id, 'speed', 1.2, global);
+};
+

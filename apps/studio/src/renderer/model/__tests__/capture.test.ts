@@ -6,7 +6,8 @@ import { setData } from '../details';
 import type { Project } from '../types';
 import { addLevel, levelsOf, linkItem, placeAsset, resizeItem } from '../level/level';
 import { interactWith, isOpen, offerFor, startLevelPlay, tick } from '../level/play';
-import { buildCell, builtCell, cellBlocked, holdingSpot, holdingSpots } from '../level/holding';
+import { buildCell, builtCell, CELL_SIZE, CELL_WATCH, cellBlocked, cellGuard, holdingSpot, holdingSpots, postGuard } from '../level/holding';
+import { profileOf } from '../character/profile';
 import { buildIR } from '../handoff/ir';
 import { collidersFrom } from '../level/controller';
 import { meshesFor } from '../level/geometry';
@@ -275,5 +276,47 @@ describe('capture in Play Mode', () => {
     s = tick(p, { ...s, health: 0 }, 0.1, { x: 0, y: 0, z: 0 });
     expect(isOpen(p, s, door)).toBe(false);
     expect(offerFor(p, s, at('Loose brick'))).toMatchObject({ verb: 'Pull out' });
+  });
+
+  it('a guard patrols outside the built cell: a captor, walking round it, never inside', () => {
+    let p = setUpCapture(addLevel(createProject('Keep'), 'Keep').project);
+    const levelId = p.levels!.levels[0]!.id;
+    const floorId = p.levels!.levels[0]!.floors[0]!.id;
+    p = placeAsset(p, levelId, floorId, 'actor.player', { x: 0, y: 0 }).project;
+    const hall = placeAsset(p, levelId, floorId, 'space.room', { x: 30, y: 30 });
+    p = resizeItem(hall.project, hall.ids[0]!, { w: 10, d: 10 });
+    p = buildCell(p, levelId);
+    const guard = cellGuard(p)!;
+    expect(guard).toBeDefined();
+    const set = levelsOf(p);
+    const who = String(guard.params?.character);
+    expect(p.objects[who]).toMatchObject({ type: 'character', name: 'Cell guard' });
+    expect(profileOf(p.objects[who]!).roles).toContain('enemy');
+    expect(p.capture!.captors).toContain(who);
+    const stops = set.items.filter((i) => i.params?.path === CELL_WATCH);
+    expect(stops).toHaveLength(4);
+    const half = CELL_SIZE / 2;
+    const outside = (x: number, y: number) => Math.abs(x - 30) > half + 0.3 || Math.abs(y - 30) > half + 0.3;
+    for (const st of stops) expect(outside(st.x, st.y)).toBe(true);
+    // Posted once only.
+    expect(postGuard(p)).toBe(p);
+    // In Play Mode the hero, caught, is in the cell; the guard walks its round outside, and its blow can't reach through the wall.
+    let s = startLevelPlay(p, levelId);
+    s = tick(p, { ...s, health: 0 }, 0.1, { x: 0, y: 0, z: 0 });
+    expect(s.placePlayer).toMatchObject({ x: 30, y: 30 });
+    const seen = new Set<string>();
+    for (let n = 0; n < 300; n++) {
+      s = tick(p, s, 0.1, { x: 30, y: 30, z: 0 });
+      const pose = s.cast?.[guard.id];
+      expect(pose).toBeDefined();
+      expect(outside(pose!.x, pose!.y)).toBe(true);
+      seen.add(`${Math.sign(Math.round(pose!.x - 30))},${Math.sign(Math.round(pose!.y - 30))}`);
+    }
+    // It went round: more than one side of the cell.
+    expect(seen.size).toBeGreaterThan(1);
+    expect(s.world.flags[p.capture!.countId!]).toBe('1');
+    // The engines get it: an enemy on the Cell watch, and its stops.
+    const items = buildIR(p).levels!.flatMap((l) => l.items);
+    expect(items.find((i) => i.guid === guard.id)).toMatchObject({ role: 'enemy', motion: { kind: 'patrol', name: CELL_WATCH } });
   });
 });

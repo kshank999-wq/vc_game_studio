@@ -112,9 +112,9 @@ const scenarios = (project: Project) => {
 const withCapture = (project: Project): Project => {
   let p = addSampleCast(setUpCapture(project)).project;
   p = setData(p, Object.values(p.objects).find((o) => o.name === 'Eel swarm')!.id, { onLose: 'Captured' });
-  // The cell built in the first level (level/holding.ts): a room linked to the holding cell, its door the escape puzzle's Cell door.
-  p = buildCell(p, levelsOf(p).levels[0]!.id);
-  return setCapture(p, { captors: [characters(p).find((c) => c.name === 'Orc Sentry')!.id] });
+  p = setCapture(p, { captors: [characters(p).find((c) => c.name === 'Orc Sentry')!.id] });
+  // The cell built in the first level (level/holding.ts): a room linked to the holding cell, its door the escape puzzle's Cell door, the Orc Sentry patrolling outside.
+  return buildCell(p, levelsOf(p).levels[0]!.id);
 };
 
 const dir = process.argv[2];
