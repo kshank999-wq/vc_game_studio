@@ -1,4 +1,4 @@
-import { levelBands } from './level-of';
+import { levelBands, levelOf } from './level-of';
 import { levelsOf } from './level/level';
 import { isEmpty, type Rule } from './rules';
 import type { LevelBand, Project } from './types';
@@ -24,6 +24,8 @@ export interface MissionCard {
   /** Where (or by whom) the player can be captured here, in a line; "none" when nowhere. */
   capture?: string;
   notes?: string;
+  /** The player may go on to the next level without the mission done (by default the mission holds them in the level). */
+  open?: boolean;
 }
 
 export type MissionSlot = 'mission' | 'puzzle' | 'clue' | 'gains' | 'capture' | 'map';
@@ -38,6 +40,25 @@ export const MISSION_SLOTS: { slot: MissionSlot; label: string; hint: string }[]
 ];
 
 export const missionOf = (band: LevelBand): MissionCard => band.mission ?? {};
+
+/**
+ * Whether going from one node to another leaves a level whose mission holds
+ * the player in it: the level's card has a mission (a quest), not marked
+ * open, and the other node is in another level. Until the quest is done, the
+ * way out is shut: the player goes back to the start of the level instead
+ * (an option that would leave shows what it needs). Endings, and the holding
+ * cell either way, are never held back.
+ */
+export const missionHolding = (project: Project, fromId: string, toId: string): { band: LevelBand; questId: string } | null => {
+  if (fromId === toId) return null;
+  const cell = project.capture?.cellId;
+  if (cell && (fromId === cell || toId === cell)) return null;
+  const from = levelOf(project, fromId);
+  const card = from?.mission;
+  if (!from || !card?.questId || card.open || project.objects[card.questId]?.type !== 'quest') return null;
+  const to = levelOf(project, toId);
+  return to && to.id !== from.id ? { band: from, questId: card.questId } : null;
+};
 
 /** Change a level's card. */
 export const setMission = (project: Project, bandId: string, patch: Partial<MissionCard>): Project => ({
@@ -82,7 +103,7 @@ export const missionWarnings = (project: Project, band: LevelBand): string[] => 
   const quest = c.questId ? project.objects[c.questId] : undefined;
   if (quest?.type === 'quest') {
     const completes = !isEmpty(quest.data.rule as Rule | undefined) || JSON.stringify([project.events, project.branches, project.connections, project.levels, Object.values(project.objects).map((o) => o.data)]).includes(`"completeQuest","ref":"${quest.id}"`);
-    if (!completes) out.push(`Nothing completes “${quest.name}” yet: give it a rule that completes it, or a Complete quest effect where the level ends.`);
+    if (!completes) out.push(`Nothing completes “${quest.name}” yet: give it a rule that completes it, or a Complete quest effect in the level.${c.open ? '' : ' Until then the player can never leave this level.'}`);
   }
   return out;
 };

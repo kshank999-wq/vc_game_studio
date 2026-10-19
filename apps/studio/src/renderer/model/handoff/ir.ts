@@ -1,4 +1,5 @@
 import { captureOn, type CaptureRule } from '../capture';
+import { missionHolding } from '../missions';
 import { takeFileOf } from '../audio-takes';
 import { lineSubtitle } from '../subtitles';
 import { buildCast, type IrCast } from './cast';
@@ -598,6 +599,31 @@ export const buildIR = (given: Project): HandoffIR => {
     return items.length ? { match: r.match, items } : undefined;
   };
   const one = (c: Condition | undefined): IrRule | undefined => (c ? rule({ match: 'all', items: [c] }) : undefined);
+  /** Leaving a level before its mission is done: the quest done, as a rule (none when the way is open). */
+  const missionRule = (from: string, to: string): IrRule | undefined => {
+    const hold = missionHolding(project, from, to);
+    return hold ? one({ kind: 'quest', ref: hold.questId, op: 'done' }) : undefined;
+  };
+  /**
+   * Routes out of a node, held by its level's mission: one into another level
+   * is taken only once the mission is done, and while it isn't, a last route
+   * goes back to the start of the level (before onward, when that leaves too).
+   */
+  const held = <R extends { to: string; target: string; when?: IrRule }>(from: string, routes: R[], onwardId: string | undefined): Omit<R, 'target'>[] => {
+    let back: { questId: string; start: string } | null = null;
+    const out = routes.map(({ target, ...r }) => {
+      const hold = missionHolding(project, from, target);
+      if (!hold) return r;
+      back = { questId: hold.questId, start: hold.band.startRef };
+      const done = missionRule(from, target)!;
+      return { ...r, when: r.when ? { match: 'all' as const, items: [r.when, done] } : done };
+    });
+    const onwardHold = onwardId ? missionHolding(project, from, onwardId) : null;
+    if (onwardHold) back = { questId: onwardHold.questId, start: onwardHold.band.startRef };
+    const b = back as { questId: string; start: string } | null;
+    if (b && key(b.start)) out.push({ to: key(b.start)!, label: 'Mission not done', when: one({ kind: 'quest', ref: b.questId, op: 'notDone' })! } as unknown as Omit<R, 'target'>);
+    return out;
+  };
   /** A puzzle's design for the runtimes: its steps (ids as they are), hints and cues. */
   const design = (o: StoryObject): IrPuzzleDesign => {
     const nodes = nodesOf(o);
@@ -711,7 +737,7 @@ export const buildIR = (given: Project): HandoffIR => {
         ...(t.branch!.hideUnavailable ? { hide: true } : {}),
       })),
       next: exits[0] ? key(exits[0].targetId) : onward,
-      exits: exits.map((c) => ({ to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
+      exits: held(s.id, exits.map((c) => ({ to: key(c.targetId)!, target: c.targetId, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })), at >= 0 ? spine[at + 1] : undefined),
       onward,
     };
   });
@@ -730,9 +756,13 @@ export const buildIR = (given: Project): HandoffIR => {
           ...node(id),
           ...(at === 0 ? { start: true as const } : {}),
           onward: at >= 0 && spine[at + 1] ? key(spine[at + 1]) : null,
-          routes: project.connections
-            .filter((c) => c.kind === 'branch' && c.sourceId === id && project.objects[c.targetId])
-            .map((c) => ({ to: key(c.targetId)!, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
+          routes: held(
+            id,
+            project.connections
+              .filter((c) => c.kind === 'branch' && c.sourceId === id && project.objects[c.targetId])
+              .map((c) => ({ to: key(c.targetId)!, target: c.targetId, label: c.label ?? '', ...ruled(rule(c.conditions), effects(c.effects)) })),
+            at >= 0 ? spine[at + 1] : undefined,
+          ),
           ...(outcome ? { outcome } : {}),
           ...(levelOf(project, id) ? { level: levelOf(project, id)!.name } : {}),
           ...(transitionLevels(project, id) ? { transition: transitionLevels(project, id)! } : {}),
@@ -905,7 +935,7 @@ export const buildIR = (given: Project): HandoffIR => {
         .map((c) => ({
           label: c.label ?? '',
           to: key(c.targetId),
-          ...ruled(rule(c.conditions), effects(c.effects)),
+          ...((r, m) => (m ? { ...r, when: r.when ? { match: 'all' as const, items: [r.when, m] } : m } : r))(ruled(rule(c.conditions), effects(c.effects)) as { when?: IrRule; effects?: IrEffect[] }, missionRule(o.id, c.targetId)),
           ...behaviour(c),
           // Into a room (rooms.ts): marked once been.
           ...(o.data.roomsOf && project.objects[c.targetId]?.data.parentSceneId === o.data.roomsOf ? { been: key(c.targetId)! } : {}),
@@ -919,7 +949,7 @@ export const buildIR = (given: Project): HandoffIR => {
       // A choice on a track also carries on along it: that is its first option.
       const spine = spineSequence(project);
       const at = spine.indexOf(o.id);
-      const onward = at >= 0 && spine[at + 1] ? [{ label: 'Carry on', to: key(spine[at + 1]) }] : [];
+      const onward = at >= 0 && spine[at + 1] ? [{ label: 'Carry on', to: key(spine[at + 1]), ...(missionRule(o.id, spine[at + 1]!) ? { when: missionRule(o.id, spine[at + 1]!) } : {}) }] : [];
       // Each option's key: its words as an identifier, numbered if two read the same.
       const used = new Set<string>();
       const options = [...onward, ...graph, ...inScene].map((opt) => {

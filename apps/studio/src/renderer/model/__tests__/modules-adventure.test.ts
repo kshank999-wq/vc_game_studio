@@ -8,6 +8,8 @@ import { blankSetup } from '../setup';
 import { makeObject } from '../project';
 import { addLevel, placeAsset } from '../level/level';
 import type { Project } from '../types';
+import { advance, startPlay, type Play } from '../play';
+import { buildIR } from '../handoff/ir';
 
 const NOW = '2026-10-19T00:00:00.000Z';
 const fresh = () => createAdventureFromSetup('The Warden’s Key', { ...blankSetup(), ...ADVENTURE_SETUP, premise: 'A thief, caught and caught again, works out who framed her.' }, NOW);
@@ -62,7 +64,7 @@ describe('adventure story', () => {
     const fence = add(puzzle.project, 'character', 'Old Fence');
     p = setMission(fence.project, level1.id, { questId: quest.id, puzzleId: puzzle.id, clueFromId: fence.id, clue: 'The safe opens on the warden’s birthday.', gains: [Object.values(fence.project.objects).find((o) => o.name === 'First power')!.id], capture: 'The night guard on the stairs' });
     expect(missionGaps(p, levelBands(p)[0]!)).toEqual(['map']);
-    expect(missionBoard(p)[0]!.warnings).toEqual(['Nothing completes “Steal the ledger” yet: give it a rule that completes it, or a Complete quest effect where the level ends.']);
+    expect(missionBoard(p)[0]!.warnings).toEqual(['Nothing completes “Steal the ledger” yet: give it a rule that completes it, or a Complete quest effect in the level. Until then the player can never leave this level.']);
     const map = levelBands(p)[0]!.mapId!;
     const floor = p.levels!.levels.find((l) => l.id === map)!.floors[0]!.id;
     p = placeAsset(p, map, floor, 'space.room', { x: 0, y: 0 }).project;
@@ -80,5 +82,53 @@ describe('adventure story', () => {
     // A map that isn't a level of the Level lane has no card.
     const p = addLevel({ ...fresh(), lanes: fresh().lanes.map((l) => (l.kind === 'level' ? { ...l, levels: [] } : l)) }, 'Loose map').project;
     expect(missionBoard(p)).toEqual([]);
+  });
+});
+
+describe('missions hold the hero in their level', () => {
+  const held = () => {
+    const p0 = fresh();
+    const quest = add(p0, 'quest', 'Steal the ledger');
+    const p = setMission(quest.project, levelBands(quest.project)[0]!.id, { questId: quest.id });
+    return { p, quest: quest.id };
+  };
+  /** Play on, continuing, until the story needs a choice or ends, or this many steps. */
+  const playOn = (p: Project, play: Play, steps = 40) => {
+    for (let i = 0; i < steps && play.cursor.at === 'wait'; i++) play = advance(p, play);
+    return play;
+  };
+
+  it('in the play-through, the hero is held in the level until the mission is done', () => {
+    const { p, quest } = held();
+    const level2 = levelBands(p)[1]!;
+    // Level 1 has nothing in it yet that gets the mission done: the hero is sent back, and stuck.
+    const play = playOn(p, startPlay(p));
+    expect(play.log.some((e) => e.kind === 'action' && e.text === 'Mission not done: Steal the ledger')).toBe(true);
+    expect(play.log.some((e) => e.kind === 'level' && e.id === level2.id)).toBe(false);
+    expect(play.cursor).toMatchObject({ at: 'end', outcome: 'deadEnd', text: 'Stuck in Level 1: nothing on the way gets “Steal the ledger” done, and the mission holds the player there.' });
+    // A mission that gets done on the way opens the next level.
+    const health = Object.values(p.objects).find((o) => o.name === 'Health')!.id;
+    const doable = { ...p, objects: { ...p.objects, [quest]: { ...p.objects[quest]!, data: { rule: { match: 'all', items: [{ kind: 'number', ref: health, op: 'atLeast', value: 1 }] } } } } } as Project;
+    const done = playOn(doable, startPlay(doable));
+    expect(done.log.some((e) => e.kind === 'action' && e.text.startsWith('Mission not done'))).toBe(false);
+    expect(done.log.some((e) => e.kind === 'level' && e.id === level2.id)).toBe(true);
+    // A card marked open lets the hero go on without it.
+    const open = setMission(p, levelBands(p)[0]!.id, { open: true });
+    const free = playOn(open, startPlay(open));
+    expect(free.log.some((e) => e.kind === 'action' && e.text.startsWith('Mission not done'))).toBe(false);
+    expect(free.log.some((e) => e.kind === 'level' && e.id === level2.id)).toBe(true);
+  });
+
+  it('in the engines, the route into the next level waits on the quest, and a route back to the start is taken until it is done', () => {
+    const { p } = held();
+    const ir = buildIR(p);
+    const band = levelBands(p)[0]!;
+    const start = ir.graph.find((n) => n.name === p.objects[band.startRef]!.name)!.key;
+    const leaving = ir.graph.filter((n) => n.routes.some((r) => r.label === 'Mission not done'));
+    expect(leaving.length).toBeGreaterThanOrEqual(1);
+    for (const n of leaving) {
+      const back = n.routes.find((r) => r.label === 'Mission not done')!;
+      expect(back).toMatchObject({ to: start, when: { match: 'all', items: [{ kind: 'quest', ref: 'steal_the_ledger', op: 'notDone' }] } });
+    }
   });
 });

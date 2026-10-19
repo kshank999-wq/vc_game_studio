@@ -98,7 +98,22 @@ One card for each level of the Level lane. It is the level's checklist:
 - **Map**: the level's map, with something built in it (**Build the level**
   opens it).
 
-A card warns when nothing can complete its mission yet.
+**The mission holds the hero in the level.** Until its quest is done, the
+way into the next level is shut:
+
+- In the play-through, reaching the next level sends the hero back to the
+  start of this one (*Mission not done: … back to the start of Level 1*).
+  An option that would lead into the next level shows what it needs. If the
+  hero is sent back again with nothing to decide on the way, nothing in the
+  level can get the mission done, and the play-through stops and says so.
+- In the engines, every route into the next level waits on the quest, and
+  a *Mission not done* route back to the level's start is taken first.
+- Endings, and the holding cell, are never held back.
+- Untick *The mission holds the hero here* on a card to let the hero go on
+  without it.
+
+A card warns when nothing can complete its mission yet: with the mission
+holding, the hero could never leave.
 
 **Captured**
 

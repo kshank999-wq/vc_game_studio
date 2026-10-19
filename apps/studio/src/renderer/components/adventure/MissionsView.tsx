@@ -143,6 +143,11 @@ const Card = ({ project, bandId, name, card, gaps, warnings, mapId, onCommit, on
         <Text label="The clue" value={card.clue ?? ''} placeholder="What they tell the hero, in a line" onCommit={(v) => set({ clue: v })} />
         <Text label="Where the hero can be captured" value={card.capture ?? ''} placeholder="The guard post by the gate · or “none”" onCommit={(v) => set({ capture: v })} />
       </div>
+      {card.questId && project.objects[card.questId] ? (
+        <label className="dfn-check">
+          <input type="checkbox" checked={!card.open} onChange={(e) => set({ open: e.target.checked ? undefined : true })} /> The mission holds the hero here: they can’t go on to the next level until it is done (they go back to the start of the level instead)
+        </label>
+      ) : null}
       <Ticks label="What the hero gains here" options={sorted(project, 'inventory', 'skill')} value={card.gains ?? []} onChange={(ids) => set({ gains: ids })} />
       <Text label="Notes" area value={card.notes ?? ''} placeholder="Anything else the level needs" onCommit={(v) => set({ notes: v })} />
       {warnings.map((w) => (

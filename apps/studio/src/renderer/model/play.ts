@@ -9,6 +9,7 @@ import { initialState, interactionsOf, statesOf } from './details';
 import { timeLimitOf, timeoutLabelOf, timeoutPick } from './timed';
 import { spineSequence } from './layout';
 import { levelOf } from './level-of';
+import { missionHolding } from './missions';
 import { captureOn, captureWorld, giveBackWorld, healthOut, LOCKER_VERB, lockerHolding } from './capture';
 import { transitionLevels } from './level-lane';
 import { parentSceneOf, subScenesOf } from './subscene';
@@ -206,6 +207,8 @@ interface Doing {
   project: Project;
   world: PlayWorld;
   log: Entry[];
+  /** Times a mission has sent the player back since they last decided anything. */
+  held?: number;
 }
 
 const doEffects = (d: Doing, effects: Effect[] | undefined) => {
@@ -534,6 +537,19 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
   if (cursor.at === 'node') {
     const o = project.objects[cursor.id];
     if (!o) return { at: 'end', outcome: 'deadEnd', text: 'The story points at something that is not there any more.' };
+    // Leaving a level before its mission is done: back to the level's start instead.
+    const hold = where.nodeId ? missionHolding(project, where.nodeId, o.id) : null;
+    if (hold && d.world.quests[hold.questId] !== 'done') {
+      d.log.push({ kind: 'action', text: `Mission not done: ${name(project, hold.questId)}`, detail: `back to the start of ${hold.band.name}` });
+      // Sent back again with nothing to decide on the way: nothing in the level can get it done.
+      d.held = (d.held ?? 0) + 1;
+      if (d.held > 2) {
+        const text = `Stuck in ${hold.band.name}: nothing on the way gets “${name(project, hold.questId)}” done, and the mission holds the player there.`;
+        d.log.push({ kind: 'end', text });
+        return { at: 'end', outcome: 'deadEnd', text };
+      }
+      return { at: 'node', id: hold.band.startRef };
+    }
     where.nodeId = o.id;
     where.sceneId = null;
     where.eventId = null;
@@ -775,10 +791,18 @@ interface GraphOption extends PlayOption {
 const graphOptions = (project: Project, world: PlayWorld, id: string): GraphOption[] => {
   const onward = spineNext(project, id);
   const list: GraphOption[] = [];
-  if (onward) list.push({ key: optionKey.onward(id), label: 'Carry on', available: true, to: onward });
+  // An option that would leave a level before its mission is done needs the mission.
+  const held = (to: string): Rule | undefined => {
+    const hold = missionHolding(project, id, to);
+    return hold ? { match: 'all', items: [{ kind: 'quest', ref: hold.questId, op: 'done' }] } : undefined;
+  };
+  if (onward) {
+    const o = offer(project, world, optionKey.onward(id), 'Carry on', held(onward), {});
+    if (o) list.push({ ...o, to: onward });
+  }
   for (const c of project.connections) {
     if (c.kind !== 'branch' || c.sourceId !== id || !project.objects[c.targetId]) continue;
-    const o = offer(project, world, c.id, c.label || name(project, c.targetId), c.conditions, c);
+    const o = offer(project, world, c.id, c.label || name(project, c.targetId), both(c.conditions, held(c.targetId)), c);
     if (o) list.push({ ...o, to: c.targetId, effects: c.effects });
   }
   return list;
