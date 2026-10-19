@@ -4,10 +4,12 @@ import { choose, endFreePlay, interact, playToDecision, promptOf, settleWorld, s
 import { sunkenVault } from '../sample';
 import { setData } from '../details';
 import type { Project } from '../types';
-import { addLevel, levelsOf, linkItem, placeAsset } from '../level/level';
-import { interactWith, offerFor, startLevelPlay, tick } from '../level/play';
-import { holdingSpot, holdingSpots } from '../level/holding';
+import { addLevel, levelsOf, linkItem, placeAsset, resizeItem } from '../level/level';
+import { interactWith, isOpen, offerFor, startLevelPlay, tick } from '../level/play';
+import { buildCell, builtCell, cellBlocked, holdingSpot, holdingSpots } from '../level/holding';
 import { buildIR } from '../handoff/ir';
+import { collidersFrom } from '../level/controller';
+import { meshesFor } from '../level/geometry';
 import { captureWorld } from '../capture';
 import { unlinkItem, updateItem } from '../level/level';
 import { createProject, makeObject } from '../project';
@@ -218,5 +220,57 @@ describe('capture in Play Mode', () => {
     p = linkItem(p, near.ids[0]!, p.capture!.cellId!);
     expect(holdingSpot(p, levelId)).toMatchObject({ auto: false, item: { id: near.ids[0] } });
     expect(buildIR(p).levels!.flatMap((l) => l.items).filter((i) => i.links.includes(cellKey)).map((i) => i.guid)).toEqual([near.ids[0]]);
+  });
+
+  it('the escape plays in Play Mode: built in the level, the hero is locked in the cell until the lock is picked', () => {
+    let p = setUpCapture(addLevel(createProject('Keep'), 'Keep').project);
+    const levelId = p.levels!.levels[0]!.id;
+    const floorId = p.levels!.levels[0]!.floors[0]!.id;
+    p = placeAsset(p, levelId, floorId, 'actor.player', { x: 0, y: 0 }).project;
+    const hall = placeAsset(p, levelId, floorId, 'space.room', { x: 30, y: 30 });
+    p = resizeItem(hall.project, hall.ids[0]!, { w: 10, d: 10 });
+    expect(cellBlocked(p, levelId)).toBe('');
+    p = buildCell(p, levelId);
+    const cell = builtCell(p)!;
+    expect(cell).toMatchObject({ name: 'Holding cell', x: 30, y: 30, links: [p.capture!.cellId] });
+    expect(cellBlocked(p, levelId)).toBe('The cell is built already.');
+    expect(holdingSpot(p, levelId)).toMatchObject({ auto: false, item: { id: cell.id } });
+    const items = levelsOf(p).items;
+    const at = (name: string) => items.find((i) => i.name === name)!;
+    const door = at('Cell door');
+    expect(door.host?.id).toBe(cell.id);
+    // Caught: taken into the cell, the door shut and locked.
+    let s = startLevelPlay(p, levelId);
+    s = tick(p, { ...s, health: 0 }, 0.1, { x: 0, y: 0, z: 0 });
+    expect(s.placePlayer).toMatchObject({ x: 30, y: 30 });
+    expect(isOpen(p, s, door)).toBe(false);
+    // Shut, it is solid, as Play Mode builds the walls: the hero can't walk out.
+    const solidDoor = (st: typeof s) => collidersFrom(meshesFor(levelsOf(p), levelId, { open: (i) => isOpen(p, st, i) })).some((c) => c.itemId === door.id);
+    expect(solidDoor(s)).toBe(true);
+    expect(offerFor(p, s, door)).toMatchObject({ blocked: expect.stringContaining('Bent nail') });
+    // Walking up to it doesn't open it.
+    s = tick(p, s, 0.1, { x: door.x - 0.3, y: door.y, z: 0 });
+    expect(isOpen(p, s, door)).toBe(false);
+    // The scratches, the brick, the lock, the door.
+    expect(offerFor(p, s, at('Scratches on the wall'))).toMatchObject({ verb: 'Read' });
+    s = interactWith(p, s, at('Scratches on the wall').id);
+    expect(offerFor(p, s, at('Loose brick'))).toMatchObject({ verb: 'Pull out' });
+    s = interactWith(p, s, at('Loose brick').id);
+    expect(s.world.items[named(p, 'Bent nail')]).toBe(1);
+    expect(offerFor(p, s, at('Loose brick'))).toBeNull();
+    expect(offerFor(p, s, door)).toMatchObject({ verb: 'Pick the lock' });
+    s = interactWith(p, s, door.id);
+    expect(isOpen(p, s, door)).toBe(false);
+    expect(offerFor(p, s, door)).toMatchObject({ verb: 'Open' });
+    s = interactWith(p, s, door.id);
+    expect(isOpen(p, s, door)).toBe(true);
+    expect(solidDoor(s)).toBe(false);
+    expect(s.world.solved[escapePuzzleOf(p)!.id]).toBe(true);
+    // Out: the locker is outside the cell.
+    expect(at('Evidence locker').links).toEqual([p.capture!.lockerId]);
+    // Caught again: locked in again.
+    s = tick(p, { ...s, health: 0 }, 0.1, { x: 0, y: 0, z: 0 });
+    expect(isOpen(p, s, door)).toBe(false);
+    expect(offerFor(p, s, at('Loose brick'))).toMatchObject({ verb: 'Pull out' });
   });
 });

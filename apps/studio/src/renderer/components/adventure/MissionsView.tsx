@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { holdingSpots } from '../../model/level/holding';
+import { buildCell, builtCell, cellBlocked, holdingSpots } from '../../model/level/holding';
+import { levelsOf } from '../../model/level/level';
 import { addEscapePuzzle, captureIssues, captureOn, escapePuzzleOf, clearCapture, describeCapture, setCapture, setUpCapture, type CaptureRule } from '../../model/capture';
 import { addLevelBand } from '../../model/level-lane';
 import { MISSION_SLOTS, missionBoard, setMission, type MissionCard } from '../../model/missions';
@@ -189,9 +190,26 @@ const EscapeLine = ({ project, onCommit }: { project: Project; onCommit: (p: Pro
   );
 };
 
+/** Build the escape puzzle's cell in a level, or say why not. */
+const BuildCell = ({ project, levelId, onCommit }: { project: Project; levelId: string; onCommit: (p: Project) => void }) => {
+  const why = cellBlocked(project, levelId);
+  return why ? (
+    <span className="dfn-hint"> · {why}</span>
+  ) : (
+    <>
+      {' '}
+      <button className="tb-btn small" onClick={() => onCommit(buildCell(project, levelId))}>
+        Build the cell here
+      </button>
+    </>
+  );
+};
+
 /** Where a catch takes the hero in each map: what is linked to the holding cell, or the room the studio picks. */
-const HeldIn = ({ project }: { project: Project }) => {
+const HeldIn = ({ project, onCommit }: { project: Project; onCommit: (p: Project) => void }) => {
   const spots = holdingSpots(project);
+  const built = builtCell(project);
+  const builtIn = built && levelsOf(project).levels.find((l) => l.id === built.levelId);
   if (!spots.length) return <p className="dfn-hint">Once the game has levels, a catch takes the hero to a room in the level: one named like a cell or jail, else the room farthest from the player start. Link a room to the holding cell to choose it yourself.</p>;
   const linked = spots.some((s) => s.spot && !s.spot.auto);
   return (
@@ -201,9 +219,19 @@ const HeldIn = ({ project }: { project: Project }) => {
         {spots.map((s) => (
           <li key={s.levelId}>
             <b>{s.level}</b>: {s.spot ? `${s.spot.item.name}${s.spot.auto ? ' (picked automatically)' : s.spot.item.levelId === s.levelId ? ' (linked)' : ' (linked, in another map)'}` : 'nowhere yet: add a room'}
+            {!built && escapePuzzleOf(project) && s.spot?.item.levelId === s.levelId ? (
+              <BuildCell project={project} levelId={s.levelId} onCommit={onCommit} />
+            ) : null}
           </li>
         ))}
       </ul>
+      {built ? (
+        <p className="dfn-hint">
+          The cell is built in {builtIn?.name ?? 'a level'}: {built.name}, with its door, the puzzle’s objects and the locker. In Play Mode a catch locks the hero in it; pick the lock to get out.
+        </p>
+      ) : escapePuzzleOf(project) ? (
+        <p className="dfn-hint">Build the cell in a level to play the escape in Play Mode: a small room inside the room listed for that level, its door locked until the lock is picked, and the brick and scratches inside.</p>
+      ) : null}
       <p className="dfn-hint">
         {linked
           ? 'Something in the levels is linked to the holding cell, so every catch goes there. Unlink it to let each level pick its own room again.'
@@ -277,7 +305,7 @@ const CapturePane = ({ project, onCommit, onOpenScene }: { project: Project; onC
       {r.take === 'all' ? <Ticks label="Never taken (the hero keeps these)" options={items} value={r.keep ?? []} onChange={(ids) => set({ keep: ids })} /> : null}
       <Ticks label="Captors: they catch the hero in Play Mode, rather than fight" options={sorted(project, 'character')} value={r.captors ?? []} onChange={(ids) => set({ captors: ids })} />
       <EscapeLine project={project} onCommit={onCommit} />
-      <HeldIn project={project} />
+      <HeldIn project={project} onCommit={onCommit} />
       <div className="dfn-controls">
         {r.cellId && project.objects[r.cellId] ? (
           <button className="tb-btn primary" onClick={() => onOpenScene(r.cellId!)}>

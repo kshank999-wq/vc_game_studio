@@ -1383,25 +1383,41 @@ export const applyStoryEffects = (project: Project, world: PlayWorld, effects: E
  * Use a story object the way free play does: its first interaction that is
  * allowed now. Returns what it needs instead when none is.
  */
-export const useStoryObject = (project: Project, world: PlayWorld, objectId: string): Changed & { verb?: string; needs?: string } => {
+/** Whether an interaction changes anything (its state, a flag, a trigger, effects), or is only a look. */
+const doesSomething = (i: ReturnType<typeof interactionsOf>[number]) => !!(i.becomes || i.setsFlag || i.fires || i.effects?.length);
+
+/**
+ * What using an object in Play Mode does next: the first interaction that
+ * changes something and can be done now, else a plain one (Inspect). When
+ * nothing can be done, what the next one needs (a lock wants the nail),
+ * unless all that is left waits on a state the object is past (a brick
+ * already pulled out): then there is nothing more to do.
+ */
+export const nextUse = (project: Project, world: PlayWorld, objectId: string, screens = true, looks = true): { interaction?: ReturnType<typeof interactionsOf>[number]; needs?: string } => {
+  const object = project.objects[objectId];
+  if (!object) return {};
+  const all = interactionsOf(object).filter((x) => (screens || !x.screen) && (looks || x.screen || doesSomething(x)));
+  const ordered = [...all.filter((x) => x.screen), ...all.filter((x) => !x.screen && doesSomething(x)), ...all.filter((x) => !x.screen && !doesSomething(x))];
+  const i = ordered.find((x) => interactionAllowed(project, world, object, x).ok);
+  if (i) return { interaction: i };
+  const waiting = ordered.find((x) => !x.when || x.when === world.objects[object.id]);
+  return waiting ? { needs: interactionAllowed(project, world, object, waiting).needs } : {};
+};
+
+export const useStoryObject = (project: Project, world: PlayWorld, objectId: string, looks = true): Changed & { verb?: string; needs?: string } => {
   const object = project.objects[objectId];
   if (!object) return { world, log: [] };
   // One that opens a screen puzzle waits for it to be solved.
-  const all = interactionsOf(object).filter((x) => !x.screen);
-  const i = all.find((x) => interactionAllowed(project, world, object, x).ok);
-  if (!i) return { world, log: [], needs: all[0] ? interactionAllowed(project, world, object, all[0]).needs : undefined };
+  const next = nextUse(project, world, objectId, false, looks);
+  const i = next.interaction;
+  if (!i) return { world, log: [], needs: next.needs };
   const d: Doing = { project, world, log: [{ kind: 'did', text: `${i.verb} the ${object.name}` }] };
   useInteraction(d, object, i);
   return { world: d.world, log: d.log, verb: i.verb };
 };
 
 /** What the player does with an object now in Play Mode: its screen puzzle when it can be opened (it is the point), else the first it can. */
-export const firstInteraction = (project: Project, world: PlayWorld, objectId: string) => {
-  const object = project.objects[objectId];
-  if (!object) return undefined;
-  const all = interactionsOf(object);
-  return [...all.filter((x) => x.screen), ...all.filter((x) => !x.screen)].find((x) => interactionAllowed(project, world, object, x).ok);
-};
+export const firstInteraction = (project: Project, world: PlayWorld, objectId: string) => nextUse(project, world, objectId).interaction;
 
 /** Do one interaction (a screen puzzle solved does what its interaction does). */
 export const useInteractionIn = (project: Project, world: PlayWorld, objectId: string, interactionId: string): Changed => {

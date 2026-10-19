@@ -6,8 +6,9 @@ import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
 import { cuesOf } from '../puzzle/staged';
 import { nodesOf, treeDrives } from '../puzzle/tree';
 import { captureOn, captureWorld, giveBackWorld, LOCKER_VERB, lockerHolding } from '../capture';
-import { applyStoryEffects, craftIn, firstInteraction, gearIn, learnSkillIn, sceneSpeech, screenWrongIn, settleWorld, startWorld, useInteractionIn, useStoryObject, type Entry, type PlayWorld, type Voice } from '../play';
+import { applyStoryEffects, craftIn, firstInteraction, gearIn, nextUse, learnSkillIn, sceneSpeech, screenWrongIn, settleWorld, startWorld, useInteractionIn, useStoryObject, type Entry, type PlayWorld, type Voice } from '../play';
 import { learnCheck, skillsOf } from '../skills';
+import { interactionsOf, statesOf } from '../details';
 import { describeEffect, describeRule, evaluate, isEmpty } from '../rules';
 import { cinematicTiming } from '../shots';
 import type { Project } from '../types';
@@ -280,8 +281,18 @@ export const present = (project: Project, state: LevelPlayState, item: LevelItem
 /** Switched on: as rules, levers and plates left it, else as it starts (on, unless it starts switched off). */
 const switchedOn = (state: LevelPlayState, item: LevelItem): boolean => (item.id in state.enabled ? state.enabled[item.id] !== false : item.params?.startsOff !== true);
 
+/**
+ * A door that plays a story object (a puzzle's Cell door, say): linked to an
+ * object with an Open state. It is open while that object is Open, and
+ * using it does the object's next interaction (pick the lock, then open).
+ */
+export const storyDoorOf = (project: Project, item: LevelItem): string | undefined =>
+  (item.links ?? []).find((l) => project.objects[l]?.type === 'object' && statesOf(project.objects[l]!).includes('Open'));
+
 export const isOpen = (project: Project, state: LevelPlayState, item: LevelItem, global?: readonly AssetDefinition[]): boolean => {
   if (state.broken?.[item.id]) return true;
+  const story = storyDoorOf(project, item);
+  if (story) return state.world.objects[story] === 'Open';
   if (item.id in state.open) return state.open[item.id]!;
   const set = levelsOf(project);
   return bool(paramOf(set, item, 'startsOpen', global), false) || String(paramOf(set, item, 'swing', global)) === 'open archway';
@@ -425,7 +436,7 @@ const approachDoors = (project: Project, state: LevelPlayState, at: Where, globa
     const bottom = (level?.floors.find((fl) => fl.id === item.floorId)?.elevation ?? 0) + f.z;
     if (Math.abs(at.z - bottom) > 1 || Math.hypot(at.x - f.x, at.y - f.y) > Math.max(DOOR_REACH, f.w / 2 + 0.4)) continue;
     near[item.id] = true;
-    if (s.atDoors?.[item.id] || isOpen(project, s, item, global) || !bool(paramOf(set, item, 'autoOpen', global), true)) continue;
+    if (s.atDoors?.[item.id] || isOpen(project, s, item, global) || !bool(paramOf(set, item, 'autoOpen', global), true) || storyDoorOf(project, item)) continue;
     // A secret door waits to be searched.
     if (doorRules(set, item, global).secret && !s.found?.[item.id]) continue;
     s = interactWith(project, s, item.id, global, at);
@@ -585,6 +596,13 @@ export const offerFor = (project: Project, state: LevelPlayState, item: LevelIte
     const inside = set.levels.find((l) => l.anchorId === item.id && l.structure);
     return inside ? { itemId: item.id, verb: 'Enter', label: inside.name } : null;
   }
+  if (def.role === 'door' && storyDoorOf(project, item)) {
+    if (isOpen(project, state, item, global)) return null;
+    // A door only does what moves it: no looking at it instead of opening it.
+    const next = nextUse(project, state.world, storyDoorOf(project, item)!, false, false);
+    if (next.interaction) return { itemId: item.id, verb: next.interaction.verb, label: item.name };
+    return { itemId: item.id, verb: prompt, label: item.name, blocked: next.needs ? `Needs ${next.needs}.` : 'It won’t open.' };
+  }
   if (def.role === 'door') {
     const open = isOpen(project, state, item, global);
     if (String(paramOf(set, item, 'swing', global)) === 'open archway' || state.broken?.[item.id]) return null;
@@ -615,6 +633,13 @@ export const offerFor = (project: Project, state: LevelPlayState, item: LevelIte
     const breaker = String(paramOf(set, item, 'breakWith', global) ?? '').trim();
     if (breaker && !((state.world.items[breaker] ?? 0) > 0)) return { itemId: item.id, verb: prompt, label: item.name, blocked: `Needs ${name(project, breaker)} to break it.` };
     return { itemId: item.id, verb: prompt, label: item.name };
+  }
+  // Tied to a story object (and no rules of its own): what it does next, by its verb; nothing left to do, nothing offered.
+  const story = (item.links ?? []).find((l) => project.objects[l]?.type === 'object');
+  if (story && !(item.rules ?? []).some((r) => r.on === 'interact') && interactionsOf(project.objects[story]!).length) {
+    const next = nextUse(project, state.world, story);
+    if (next.interaction) return { itemId: item.id, verb: next.interaction.verb, label: item.name };
+    return next.needs ? { itemId: item.id, verb: prompt, label: item.name, blocked: `Needs ${next.needs}.` } : null;
   }
   return { itemId: item.id, verb: prompt, label: item.name };
 };
@@ -704,7 +729,12 @@ export const interactWith = (project: Project, state: LevelPlayState, itemId: st
     const arrival = arrivalInto(project, inside.id, at, global);
     return log({ ...s, goTo: inside.id, ...(arrival ? { arrival } : {}) }, { kind: 'action', itemId, text: `Goes into ${inside.name}` });
   }
-  if (def.role === 'door') {
+  if (def.role === 'door' && storyDoorOf(project, item)) {
+    const story = storyDoorOf(project, item)!;
+    const used = useStoryObject(project, s.world, story, false);
+    s = changeWorld(project, s, used.world, used.log, itemId, 0);
+    if (isOpen(project, s, item, global)) s = log(s, { kind: 'action', itemId, text: `${item.name} opens` });
+  } else if (def.role === 'door') {
     const rules = doorRules(set, item, global);
     const open = isOpen(project, s, item, global);
     if (offer.verb === 'Search') {

@@ -135,6 +135,20 @@ holding, the hero could never leave.
   the brick back in the wall. Change any of it in the Puzzle Creator; a
   project from before gets one with **Add an escape puzzle** on the Captured
   tab.
+- *Escaping in Play Mode*: **Build the cell here**, beside a level on the
+  Captured tab, builds the cell in that level: a small room (3.5 m square)
+  inside the room the level holds the hero in, linked to the holding cell so
+  every catch brings the hero there; a door in its wall that plays the Cell
+  door (shut and solid until its lock is picked with the nail, then opened);
+  the loose brick and the scratches as interaction points inside; and the
+  Evidence locker outside. The room needs to be 5.5 m each way, and the
+  player can't start where the cell goes. In Play Mode the hero is caught,
+  locked in, and gets out by playing the puzzle; caught again, the cell is
+  locked again. A door linked to a story object with an Open state always
+  works this way: it is open while the object is Open, and using it does the
+  object's next interaction. Objects linked to interaction points offer their
+  next interaction by its verb (Pull out, Read), and nothing once there is
+  nothing left to do.
 - *The way out*: the holding cell's scene; when it ends, the story picks up
   where the hero was caught, past the fight (or at a scene you choose). The
   locker gives their things back (**Take back your things**); with no locker,
