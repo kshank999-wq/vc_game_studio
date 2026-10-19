@@ -239,6 +239,9 @@ describe('capture in Play Mode', () => {
     const at = (name: string) => items.find((i) => i.name === name)!;
     const door = at('Cell door');
     expect(door.host?.id).toBe(cell.id);
+    // The engines get the door as the Cell door: its key and what moves it, in order, with what each needs.
+    const exported = buildIR(p).levels!.flatMap((l) => l.items).find((i) => i.guid === door.id)!;
+    expect(exported.door_object).toMatchObject({ key: 'cell_door', uses: [{ verb: 'Pick the lock', when: 'Locked', becomes: 'Closed', needs: expect.stringContaining('Bent nail') }, { verb: 'Open', when: 'Closed', becomes: 'Open' }] });
     // Caught: taken into the cell, the door shut and locked.
     let s = startLevelPlay(p, levelId);
     s = tick(p, { ...s, health: 0 }, 0.1, { x: 0, y: 0, z: 0 });
