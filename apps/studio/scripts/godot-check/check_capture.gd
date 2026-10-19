@@ -75,8 +75,26 @@ func _initialize() -> void:
 		fail("taking things back should return the knife")
 	if box.available_verbs().has(rules.LOCKER_VERB):
 		fail("the locker should be empty now")
-	# Out of the cell: back to The Key.
-	cell_scene.advance()
+	# The escape puzzle: no lock picked without the nail; the brick gives it; picked and opened, the way out ends.
+	var relock: Array = rules.CAPTURE.get("relock", [])
+	if relock.is_empty():
+		fail("the holding cell should have an escape puzzle to relock")
+	var door: Node = load("res://vcgs/generated/objects/cell_door.gd").new()
+	var brick: Node = load("res://vcgs/generated/objects/loose_brick.gd").new()
+	root.add_child(door)
+	root.add_child(brick)
+	if door.interact("Pick the lock"):
+		fail("the cell door should not open without the nail")
+	if not brick.interact("Pull out") or not game.has_item("bent_nail"):
+		fail("the loose brick should give the bent nail")
+	if not door.interact("Pick the lock") or not door.interact("Open"):
+		fail("with the nail, the cell door should be picked and opened")
+	if not game.solved.has(relock[0]):
+		fail("the door open should solve " + str(relock[0]) + ", solved " + str(game.solved))
+	print("escaped the cell: ", relock[0], " solved, door ", game.object_states.get("cell_door", "?"))
+	# Out of the cell: back to The Key (the free play ended by the puzzle, or moved on from).
+	if out.is_empty():
+		cell_scene.advance()
 	if out != ["sc_02_the_key"] or not game.held.is_empty():
 		fail("out of the cell should go back to The Key, got " + str(out) + " held " + str(game.held))
 	cell_scene.queue_free()
@@ -100,6 +118,8 @@ func _initialize() -> void:
 	again.scene_finished.connect(func(next: String) -> void: to_cell.append(next))
 	if VCGSRules.catch_player("orc_sentry", game) != cell or to_cell != [cell] or caught != [[cell, "orc_sentry"]]:
 		fail("a catch in play should capture from the scene playing, got " + str(to_cell) + " / " + str(caught))
+	if game.solved.has(relock[0]) or str(game.object_states.get("cell_door", "")) != "Locked" or str(game.object_states.get("loose_brick", "")) != "In the wall":
+		fail("caught again, the cell should be locked again, got " + str(game.object_states))
 	if str(game.held.get("scene", "")) != "sc_02_the_key":
 		fail("a catch in play should keep the scene it was in, got " + str(game.held))
 	if VCGSRules.catch_player("orc_sentry", game) != "":

@@ -1553,6 +1553,16 @@ ${UNREAL_PUZZLES}
                     game.TakeItem(it.first, it.second);
                 }
             }
+            // The cell is locked again: its escape puzzle unsolved, its objects as they began.
+            const Value& relock = c["relock"];
+            for (size_t i = 0; i < relock.Size(); i++)
+            {
+                const std::string key = relock[i].Str();
+                game.Solved.erase(key);
+                game.PuzzleSteps.erase(key);
+                auto o = game.StoryData.Objects.find(key);
+                if (o != game.StoryData.Objects.end() && !(*o->second)["initial"].Str().empty()) game.ObjectStates[key] = (*o->second)["initial"].Str();
+            }
             const int limit = static_cast<int>(c["limit"].Num());
             if (limit > 0 && times >= limit && !c["limitTo"].Str().empty()) return c["limitTo"].Str();
             game.Held = ScenePlace{scene, branch, index, true};

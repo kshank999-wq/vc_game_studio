@@ -138,6 +138,9 @@ const element = (key: string, kind: ElementKind, name: string, data: Record<stri
 
 const step = (id: string, parentId: string | null, kind: PuzzleNode['kind'], label: string, extra: Partial<PuzzleNode> = {}): PuzzleNode => ({ id, parentId, kind, label, ...extra });
 
+/** The built-in template the holding cell's escape puzzle is made from. */
+export const CELL_ESCAPE = 'builtin.cellEscape';
+
 export const BUILT_IN_TEMPLATES: readonly PuzzleTemplate[] = [
   {
     id: 'builtin.safe',
@@ -247,5 +250,47 @@ export const BUILT_IN_TEMPLATES: readonly PuzzleTemplate[] = [
       cues: [{ id: 'cue_p1', kind: 'message', text: 'The passage grinds open.' }],
     },
     elements: [element('el1', 'plate', 'Sun plate'), element('el2', 'plate', 'Moon plate'), element('el3', 'plate', 'Star plate')],
+  },
+  {
+    id: CELL_ESCAPE,
+    name: 'Cell escape',
+    description: 'Locked in a cell with nothing: a loose brick hides something to pick the lock with, and scratches left by the last prisoner say where to look.',
+    scale: 'area',
+    builtIn: true,
+    created: '2026-01-01T00:00:00.000Z',
+    data: {
+      objective: 'Get out of the cell',
+      concept: 'Everything the player carried was taken. A brick in the wall is loose, and behind it is a bent nail; with it, the lock of the cell door can be picked.',
+      solution: 'Pull out the loose brick, take the nail, pick the lock, open the door.',
+      knows: 'The door is locked, and their things are gone.',
+      failState: 'Without the nail, the lock will not give.',
+      reset: 'never',
+      difficulty: '2',
+      minutes: '3',
+      tree: [
+        step('t_scratches', null, 'requirement', 'Read what the last prisoner scratched on the wall', { when: { kind: 'lore', ref: 'el5', op: 'known' }, optional: true, branch: 'clue' }),
+        step('t_tool', null, 'requirement', 'Find something to pick the lock with', { when: { kind: 'item', ref: 'el2', op: 'has' } }),
+        step('t_pick', null, 'interaction', 'Pick the lock of the cell door', { when: { kind: 'object', ref: 'el1', op: 'isNot', value: 'Locked' }, requires: ['t_tool'] }),
+        step('t_out', null, 'interaction', 'Open the cell door', { when: { kind: 'object', ref: 'el1', op: 'is', value: 'Open' }, requires: ['t_pick'] }),
+      ],
+      hints: [
+        { id: 'hint_c1', text: 'Someone was held here before you. Read the walls.', afterFails: 1 },
+        { id: 'hint_c2', text: 'One brick near the floor sits proud of the others.', afterFails: 2 },
+      ],
+      cues: [{ id: 'cue_c1', kind: 'audio', text: 'The lock clicks over' }],
+    },
+    elements: [
+      element('el1', 'door', 'Cell door', {}, [
+        { verb: 'Inspect' },
+        { verb: 'Pick the lock', when: 'Locked', becomes: 'Closed', requires: { match: 'all', items: [{ kind: 'item', ref: 'el2', op: 'has' }] } },
+        { verb: 'Open', when: 'Closed', becomes: 'Open' },
+      ]),
+      element('el2', 'key', 'Bent nail', { opens: 'The cell door' }),
+      element('el3', 'custom', 'Loose brick', { states: ['In the wall', 'Pulled out'] }, [
+        { verb: 'Pull out', when: 'In the wall', becomes: 'Pulled out', effects: [{ kind: 'give', ref: 'el2' }] },
+      ]),
+      element('el4', 'custom', 'Scratches on the wall', {}, [{ verb: 'Read', effects: [{ kind: 'revealLore', ref: 'el5' }] }]),
+      element('el5', 'clue', 'The last prisoner’s message', { clueForm: 'Text', clueContent: '“Third brick from the floor. Mind the guard.”', clueLocation: 'Scratched into the cell wall', clueDiscovery: 'Read', clueKnowledge: 'A brick near the floor is loose', clueStrength: 'Explicit', clueMandatory: 'no', supports: ['t_scratches', 't_tool'] }),
+    ],
   },
 ];

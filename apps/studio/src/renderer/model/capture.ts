@@ -1,7 +1,9 @@
 import { makeObject, nextCode, placeNew } from './project';
-import { addElement } from './scene';
-import { addEvent } from './timeline';
-import { setData, varTypeOf } from './details';
+import { addElement, useInScene } from './scene';
+import { addEvent, updateEvent } from './timeline';
+import { BUILT_IN_TEMPLATES, CELL_ESCAPE, puzzleFromTemplate } from './puzzle/templates';
+import { elementsOf } from './puzzle/elements';
+import { initialState, setData, varTypeOf } from './details';
 import { sceneTimeline } from './timeline';
 import { dropEquipped } from './rules';
 import type { PlayWorld } from './play';
@@ -97,12 +99,33 @@ export const captureWorld = (project: Project, world: PlayWorld): { world: PlayW
   if (r.healthId && r.healthAfter !== undefined) flags[r.healthId] = String(r.healthAfter);
   const { taken, left } = takenFrom(r, world.items);
   const next: PlayWorld = { ...world, flags, items: left, equipped: { ...world.equipped }, wear: { ...world.wear } };
+  // The cell is locked again: its escape puzzle unsolved, its objects as they began.
+  const relock = relockedBy(project);
+  if (relock.length) {
+    const solved = { ...world.solved };
+    const objects = { ...world.objects };
+    const steps = { ...world.steps };
+    for (const id of relock) {
+      delete solved[id];
+      delete steps[id];
+      const initial = project.objects[id] ? initialState(project.objects[id]!) : undefined;
+      if (initial !== undefined) objects[id] = initial;
+      else delete objects[id];
+    }
+    Object.assign(next, { solved, objects, ...(world.steps ? { steps } : {}) });
+  }
   for (const id of Object.keys(taken)) dropEquipped(next, id);
   const held = { ...world.taken };
   for (const [id, n] of Object.entries(taken)) held[id] = (held[id] ?? 0) + n;
   if (Object.keys(held).length) next.taken = held;
   const ends = (r.limit ?? 0) > 0 && times >= r.limit! && r.limitId && project.objects[r.limitId] ? r.limitId : undefined;
   return { world: next, times, taken: Object.keys(taken), ...(ends ? { ends } : {}) };
+};
+
+/** What each capture puts back as it began: the escape puzzle (unsolved) and its objects (the door locked again, the brick back in the wall). */
+export const relockedBy = (project: Project): string[] => {
+  const puzzle = escapePuzzleOf(project);
+  return puzzle ? [puzzle.id, ...elementsOf(project, puzzle.id).filter((e) => e.type === 'object').map((e) => e.id)] : [];
 };
 
 /** What a capture took, given back. */
@@ -170,6 +193,7 @@ export const setUpCapture = (project: Project, now = new Date().toISOString()): 
       cellId = placed.id;
       // A way out to fill in, and the locker on the way, where the player gets their things back.
       p = addEvent(p, cellId, 'freePlay', { label: 'Find a way out' })?.project ?? p;
+      p = addEscapePuzzle(p, cellId);
       if (!lockerId) {
         const locker = addElement(p, cellId, 'object', 'Evidence locker', now);
         if (locker) {
@@ -190,6 +214,39 @@ export const setUpCapture = (project: Project, now = new Date().toISOString()): 
   p = health.project;
   if (!(p.objects[health.id]!.data.initialValue)) p = setData(p, health.id, { initialValue: 100 });
   return setCapture(p, { cellId, lockerId, countId: count.id, healthId: health.id, healthAfter: r?.healthAfter ?? 50, take: r?.take ?? 'all' });
+};
+
+/** The holding cell's escape puzzle: a puzzle in the cell whose solving ends its free play (the way out). */
+export const escapePuzzleOf = (project: Project): StoryObject | undefined => {
+  const cell = project.capture?.cellId;
+  if (!cell) return undefined;
+  const ends = sceneTimeline(project, cell).flatMap((t) => t.events).filter((e) => e.kind === 'freePlay').map((e) => e.ends?.items ?? []);
+  for (const c of ends.flat()) if ('kind' in c && c.kind === 'puzzle' && c.op === 'solved' && project.objects[c.ref]?.type === 'puzzle') return project.objects[c.ref];
+  return undefined;
+};
+
+/**
+ * Give the holding cell an escape puzzle (the Cell escape template): a cell
+ * door to pick the lock of, a loose brick with a bent nail behind it, and
+ * the last prisoner's scratches saying where to look. Its objects are put
+ * in the cell, and its free play (the way out, added if there is none) ends
+ * when the puzzle is solved. A cell with one already is left as it is.
+ */
+export const addEscapePuzzle = (project: Project, cellId = project.capture?.cellId): Project => {
+  if (!cellId || project.objects[cellId]?.type !== 'scene') return project;
+  if (cellId === project.capture?.cellId && escapePuzzleOf(project)) return project;
+  const template = BUILT_IN_TEMPLATES.find((t) => t.id === CELL_ESCAPE)!;
+  const made = puzzleFromTemplate(project, template, 'Escape the cell');
+  let p = useInScene(made.project, cellId, made.id);
+  for (const e of elementsOf(p, made.id)) if (e.type === 'object') p = useInScene(p, cellId, e.id);
+  let way = sceneTimeline(p, cellId).flatMap((t) => t.events).find((e) => e.kind === 'freePlay');
+  if (!way) {
+    const added = addEvent(p, cellId, 'freePlay', { label: 'Find a way out' });
+    if (!added) return p;
+    p = added.project;
+    way = p.events.find((e) => e.id === added.id);
+  }
+  return updateEvent(p, cellId, way!.id, { ends: { match: 'all', items: [{ kind: 'puzzle', ref: made.id, op: 'solved' }] }, endsWhen: 'The cell door is open' });
 };
 
 /** The rule in a sentence, for the path and the Bible. */

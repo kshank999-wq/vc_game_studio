@@ -71,7 +71,7 @@ written once, here, and level items and other rules point at it.
 ## Templates (spec §9, §15)
 
 - **Save as a template** (with nothing selected, the puzzle's inspector) keeps its definition, steps, elements (with their states, interactions and clue fields), hints and cues on this computer, for any project. Anything outside the puzzle (a scene, a character) is left out, and counted.
-- **From a template…** makes a new puzzle with fresh elements in the Bible and fresh steps. Built in: **Safe code** (spec §7: a safe whose code is entered once two clues are found, a painting and a drawer that reveal them, an optional third clue, two staged hints), **Lever and door**, **Plates in order**. Forget one of yours with ×; puzzles made from it stay.
+- **From a template…** makes a new puzzle with fresh elements in the Bible and fresh steps. Built in: **Safe code** (spec §7: a safe whose code is entered once two clues are found, a painting and a drawer that reveal them, an optional third clue, two staged hints), **Lever and door**, **Plates in order**, **Cell escape** (locked in with nothing: a loose brick hides a bent nail that picks the cell door's lock, and the last prisoner's scratches say where to look; capture's holding cell is given one). Forget one of yours with ×; puzzles made from it stay.
 
 ## Screen puzzles (spec §8)
 

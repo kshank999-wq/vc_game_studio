@@ -1,4 +1,4 @@
-import { captureOn, type CaptureRule } from '../capture';
+import { captureOn, relockedBy, type CaptureRule } from '../capture';
 import { missionHolding } from '../missions';
 import { takeFileOf } from '../audio-takes';
 import { lineSubtitle } from '../subtitles';
@@ -320,6 +320,8 @@ export interface IrCapture {
   limitTo: string | null;
   /** Characters who catch the player in play, rather than fight them (character keys). */
   captors: string[];
+  /** Put back as they began on each capture: the escape puzzle (a puzzle key, unsolved again) and its objects (object keys, back to their first state). */
+  relock: string[];
 }
 
 export interface IrShot {
@@ -982,11 +984,11 @@ export const buildIR = (given: Project): HandoffIR => {
     levels,
     notes: notesOf(project, ids, levels),
     cast,
-    ...(captureOn(project) ? { capture: captureIR(project.capture!, key) } : {}),
+    ...(captureOn(project) ? { capture: captureIR(project.capture!, key, relockedBy(project)) } : {}),
   };
 };
 
-const captureIR = (r: CaptureRule, key: (id: string | undefined | null) => string | null): IrCapture => {
+const captureIR = (r: CaptureRule, key: (id: string | undefined | null) => string | null, relock: string[]): IrCapture => {
   const keys = (ids?: string[]) => (ids ?? []).map((id) => key(id)).filter((k): k is string => !!k);
   return {
     cell: key(r.cellId)!,
@@ -1001,6 +1003,7 @@ const captureIR = (r: CaptureRule, key: (id: string | undefined | null) => strin
     limit: (r.limit ?? 0) > 0 && key(r.limitId) ? r.limit! : 0,
     limitTo: (r.limit ?? 0) > 0 ? key(r.limitId) : null,
     captors: keys(r.captors),
+    relock: keys(relock),
   };
 };
 

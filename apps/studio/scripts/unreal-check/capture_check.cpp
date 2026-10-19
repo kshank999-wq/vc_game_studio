@@ -96,9 +96,14 @@ int main()
         playing.OnFinished = [&](const std::string& next) { toCell.push_back(next); };
         playing.Start();
         game.Taken.clear();
+        // The cell as an escape left it: solved, the door open. Caught again, it is locked again.
+        game.Solved.insert("escape_the_cell");
+        game.ObjectStates["cell_door"] = "Open";
+        game.ObjectStates["loose_brick"] = "Pulled out";
         if (vcgs::Rules::CatchPlayer("orc_sentry", game) != cell || toCell.size() != 1 || toCell[0] != cell || caught.size() != 1 || caught[0] != cell + "<orc_sentry") Fail("a catch in play should capture from the scene playing");
         if (game.Held.Scene != "sc_02_the_key") Fail("a catch in play should keep the scene it was in, got " + game.Held.Scene);
         if (!vcgs::Rules::CatchPlayer("orc_sentry", game).empty()) Fail("a player held already should not be caught again");
+        if (game.Solved.count("escape_the_cell") || game.GetObjectState("cell_door") != "Locked" || game.GetObjectState("loose_brick") != "In the wall") Fail("caught again, the cell should be locked again, got door " + game.GetObjectState("cell_door"));
     }
     if (game.FlowNow) Fail("a scene player gone should no longer be the one playing");
     // Caught with no scene playing: still captured; out of the cell, it goes on as the graph says.

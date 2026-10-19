@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { captureIssues, captureOn, describeCapture, LOCKER_VERB, setCapture, setUpCapture, takenFrom } from '../capture';
-import { choose, endFreePlay, interact, playToDecision, promptOf, startPlay, type Play } from '../play';
+import { addEscapePuzzle, captureIssues, captureOn, describeCapture, escapePuzzleOf, LOCKER_VERB, relockedBy, setCapture, setUpCapture, takenFrom } from '../capture';
+import { choose, endFreePlay, interact, playToDecision, promptOf, settleWorld, startPlay, type Play } from '../play';
 import { sunkenVault } from '../sample';
 import { setData } from '../details';
 import type { Project } from '../types';
@@ -8,6 +8,7 @@ import { addLevel, levelsOf, linkItem, placeAsset } from '../level/level';
 import { interactWith, offerFor, startLevelPlay, tick } from '../level/play';
 import { holdingSpot, holdingSpots } from '../level/holding';
 import { buildIR } from '../handoff/ir';
+import { captureWorld } from '../capture';
 import { unlinkItem, updateItem } from '../level/level';
 import { createProject, makeObject } from '../project';
 
@@ -76,6 +77,42 @@ describe('capture', () => {
     expect(play.world.held).toBeUndefined();
     expect(play.log.some((e) => e.kind === 'action' && e.text === 'Find the key in the silt')).toBe(true);
     expect(play.world.items[named(p, 'Vault Key')]).toBe(1);
+  });
+
+  it('the cell has an escape puzzle: pull the brick, take the nail, pick the lock, open the door, and the way out ends', () => {
+    const p = captured();
+    const puzzle = escapePuzzleOf(p)!;
+    expect(puzzle.name).toBe('Escape the cell');
+    let play = choose(p, toEels(p), 1);
+    const prompt = promptOf(p, play);
+    expect(prompt).toMatchObject({ kind: 'freePlay', title: 'Find a way out', endsByRule: true });
+    const objects = prompt.kind === 'freePlay' ? prompt.objects : [];
+    expect(objects.map((o) => o.name)).toEqual(expect.arrayContaining(['Cell door', 'Loose brick', 'Scratches on the wall']));
+    const verb = (name: string, v: string) => {
+      const o = objects.find((x) => x.name === name)!;
+      return [o.id, o.verbs.find((x) => x.verb === v)!.id] as const;
+    };
+    const door = objects.find((o) => o.name === 'Cell door')!;
+    // Without the nail the lock won't give.
+    expect(door.verbs.find((v) => v.verb === 'Pick the lock')).toMatchObject({ available: false });
+    play = interact(p, play, ...verb('Scratches on the wall', 'Read'));
+    play = interact(p, play, ...verb('Loose brick', 'Pull out'));
+    expect(play.world.items[named(p, 'Bent nail')]).toBe(1);
+    play = interact(p, play, ...verb('Cell door', 'Pick the lock'));
+    expect(play.cursor.at).toBe('freePlay');
+    play = interact(p, play, ...verb('Cell door', 'Open'));
+    expect(play.world.solved[puzzle.id]).toBe(true);
+    play = playToDecision(p, play);
+    expect(play.log.some((e) => e.kind === 'captured' && e.text === 'Escaped Holding cell')).toBe(true);
+    // Caught again, the cell is locked again: the puzzle unsolved, the door locked, the brick back.
+    expect(relockedBy(p)).toEqual(expect.arrayContaining([puzzle.id, door.id]));
+    const again = settleWorld(p, captureWorld(p, play.world).world).world;
+    expect(again.solved[puzzle.id]).toBeUndefined();
+    expect(again.objects[door.id]).toBe('Locked');
+    expect(again.objects[named(p, 'Loose brick')]).toBe('In the wall');
+    // Added once only; and a project from before gets one with the button.
+    expect(addEscapePuzzle(p)).toBe(p);
+    expect(buildIR(p).capture!.relock).toEqual(expect.arrayContaining(['escape_the_cell']));
   });
 
   it('without a locker, things come back on the way out; and the story can go on elsewhere', () => {

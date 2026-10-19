@@ -162,7 +162,9 @@ the studio's play-through:
   `OnCapturedElsewhere` so you can load the map that has it. Call
   `catch_player` yourself for your own moments (health gone, a trap);
   `capture()` / `Capture()` on the flow still works. `is_captor` /
-  `IsCaptor` says who catches. Saves keep
+  `IsCaptor` says who catches. Each capture puts back what `relock` names
+  (the cell's escape puzzle unsolved, its door and brick as they began), so
+  the cell is locked again. Saves keep
   `taken`, `held` and `resume`, in the same format in every engine. Godot's placeholder scenes stand in for the fight with Win and Lose
   buttons, and have a codex: press C, or the Codex button (which counts what's
   new), for the quest log (quests under way with their goals, then those done),

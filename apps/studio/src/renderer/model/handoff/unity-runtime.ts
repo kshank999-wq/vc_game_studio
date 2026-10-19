@@ -1315,6 +1315,14 @@ namespace VCGS
                     game.TakeItem(item, n);
                 }
             }
+            // The cell is locked again: its escape puzzle unsolved, its objects as they began.
+            foreach (var k in D.List(c, "relock"))
+            {
+                if (!(k is string key)) continue;
+                game.Solved.Remove(key);
+                game.PuzzleSteps.Remove(key);
+                if (game.Story.Objects.TryGetValue(key, out var o) && D.Str(o, "initial") != "") game.ObjectStates[key] = D.Str(o, "initial");
+            }
             var limit = (int)D.Num(c, "limit");
             if (limit > 0 && times >= limit && D.Str(c, "limitTo") != "") return D.Str(c, "limitTo");
             game.Held = new ScenePlace(scene ?? "", branch, index);

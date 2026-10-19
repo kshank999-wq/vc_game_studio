@@ -66,6 +66,7 @@ export const storySchema = () => ({
         limit: { type: 'integer', minimum: 0 },
         limitTo: { type: ['string', 'null'] },
         captors: strings,
+        relock: strings,
       }),
     },
     equipment: {
@@ -549,7 +550,9 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
    they were caught; give back what was taken then, unless there is a
    \`locker\`: that object gives it back when used. Characters in \`captors\`
    catch the player in play rather than fight them: treat their catch as a
-   captured loss.
+   captured loss. On each capture, put back what \`relock\` names as it began:
+   a puzzle there is unsolved again, an object goes back to its first state
+   (the cell's escape puzzle and its door, locked again).
 7. **Skills** (\`skills\`) are learned when the player chooses, a rank at a time
    up to \`ranks\`. Keep each one's rank (0 to start). A rank can be learned when
    it is below \`ranks\`, every skill in \`requires\` is at rank 1 or more,

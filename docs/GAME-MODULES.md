@@ -66,8 +66,8 @@ A new adventure starts with:
   Level lane, with a mission card to fill in;
 - its endings waiting in the Endings column;
 - capture set up: a Holding cell (a scene off the spine, with a free play to
-  find the way out), an Evidence locker in it, and two number states, Times
-  captured and Health (100 to start);
+  find the way out and an escape puzzle in it), an Evidence locker in it, and
+  two number states, Times captured and Health (100 to start);
 - a First power (a skill), when the game has powers.
 
 It has a **Missions** workspace beside the story graph: the mission cards,
@@ -126,6 +126,15 @@ holding, the hero could never leave.
   in the play-through its scene plays; in Play Mode, to whatever in the
   levels is linked to it, or, with nothing linked, the room the level picks
   (see below).
+- *The escape puzzle*: **Escape the cell**, made from the Cell escape
+  template. The hero's things are gone, so the way out is found in the cell:
+  a loose brick hides a bent nail, the nail picks the lock of the cell door,
+  and scratches left by the last prisoner say where to look (an optional
+  clue, with two staged hints). The free play ends when the door is open.
+  Each capture locks the cell again: the puzzle unsolved, the door locked,
+  the brick back in the wall. Change any of it in the Puzzle Creator; a
+  project from before gets one with **Add an escape puzzle** on the Captured
+  tab.
 - *The way out*: the holding cell's scene; when it ends, the story picks up
   where the hero was caught, past the fight (or at a scene you choose). The
   locker gives their things back (**Take back your things**); with no locker,

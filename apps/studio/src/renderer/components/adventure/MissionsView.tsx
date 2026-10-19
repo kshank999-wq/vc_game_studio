@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { holdingSpots } from '../../model/level/holding';
-import { captureIssues, captureOn, clearCapture, describeCapture, setCapture, setUpCapture, type CaptureRule } from '../../model/capture';
+import { addEscapePuzzle, captureIssues, captureOn, escapePuzzleOf, clearCapture, describeCapture, setCapture, setUpCapture, type CaptureRule } from '../../model/capture';
 import { addLevelBand } from '../../model/level-lane';
 import { MISSION_SLOTS, missionBoard, setMission, type MissionCard } from '../../model/missions';
 import { codeFormatFor, makeObject, nextCode } from '../../model/project';
@@ -170,6 +170,25 @@ const Card = ({ project, bandId, name, card, gaps, warnings, mapId, onCommit, on
   );
 };
 
+/** The way out of the cell: its escape puzzle, or a button to add one. */
+const EscapeLine = ({ project, onCommit }: { project: Project; onCommit: (p: Project) => void }) => {
+  const puzzle = escapePuzzleOf(project);
+  if (puzzle)
+    return (
+      <p className="dfn-hint">
+        The way out: <b>{puzzle.name}</b>, a puzzle in the holding cell. Its free play ends when it is solved, and each capture locks the cell again. Change it in the Puzzle Creator.
+      </p>
+    );
+  return (
+    <div className="dfn-controls">
+      <button className="tb-btn" onClick={() => onCommit(addEscapePuzzle(project))}>
+        Add an escape puzzle
+      </button>
+      <span className="dfn-hint">A cell door to pick the lock of, a loose brick with a bent nail behind it, and the last prisoner’s scratches saying where to look. The way out ends when the door is open.</span>
+    </div>
+  );
+};
+
 /** Where a catch takes the hero in each map: what is linked to the holding cell, or the room the studio picks. */
 const HeldIn = ({ project }: { project: Project }) => {
   const spots = holdingSpots(project);
@@ -257,6 +276,7 @@ const CapturePane = ({ project, onCommit, onOpenScene }: { project: Project; onC
       {r.take === 'listed' ? <Ticks label="Taken" options={items} value={r.items ?? []} onChange={(ids) => set({ items: ids })} /> : null}
       {r.take === 'all' ? <Ticks label="Never taken (the hero keeps these)" options={items} value={r.keep ?? []} onChange={(ids) => set({ keep: ids })} /> : null}
       <Ticks label="Captors: they catch the hero in Play Mode, rather than fight" options={sorted(project, 'character')} value={r.captors ?? []} onChange={(ids) => set({ captors: ids })} />
+      <EscapeLine project={project} onCommit={onCommit} />
       <HeldIn project={project} />
       <div className="dfn-controls">
         {r.cellId && project.objects[r.cellId] ? (
