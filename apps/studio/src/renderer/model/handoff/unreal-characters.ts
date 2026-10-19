@@ -480,6 +480,8 @@ public:
     /** One step: where the player is on the plan (metres), whether they make noise. */
     void Tick(float DeltaSeconds, bool bHasTarget, double TargetX, double TargetY, bool bNoisy);
     void Hit(float Health);
+    /** A captor's blow: the story captures the player (vcgs::Rules::CatchPlayer). False when this character is no captor, there is no story, the story has no capture, or the player is held already. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") bool Catch();
 
     vcgs::Cast::Memory Memory;
     std::string LastReason;
@@ -840,6 +842,8 @@ const COMPONENTS_CPP = String.raw`${HEAD}
 #include "VcgsActorComponents.h"
 #include "VcgsCharacterActor.h"
 #include "VcgsConvert.h"
+#include "VcgsSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include <cmath>
 
@@ -924,6 +928,19 @@ void UVcgsActorBehavior::Tick(float DeltaSeconds, bool bHasTarget, double Target
         Actor->Send(TEXT("state"), ToF(Step.Reason));
     }
     if (Step.bAttacked) Actor->Send(TEXT("attack"), ToF(vcgs::Cast::NumText(Memory.Attacks)));
+    // A captor catches the player (the story's capture) rather than fighting them.
+    if (Step.bAttacked && Catch()) Actor->Send(TEXT("caught"), TEXT(""));
+}
+
+bool UVcgsActorBehavior::Catch()
+{
+    const std::string Key = Actor ? Actor->Data["story_key"].Str() : std::string();
+    UWorld* World = GetWorld();
+    UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+    UVcgsSubsystem* Story = GameInstance ? GameInstance->GetSubsystem<UVcgsSubsystem>() : nullptr;
+    vcgs::GameState* Game = Story ? Story->State() : nullptr;
+    if (Key.empty() || !Game || !vcgs::Rules::IsCaptor(Key, *Game)) return false;
+    return !vcgs::Rules::CatchPlayer(Key, *Game).empty();
 }
 
 void UVcgsActorBehavior::Hit(float Health)

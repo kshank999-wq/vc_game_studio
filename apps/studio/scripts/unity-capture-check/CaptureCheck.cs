@@ -75,6 +75,25 @@ static class CaptureCheck
         if (kinds.Count == 0 || kinds[0] == "encounter" || !game.HasItem("vault_key")) Fail("The Key should pick up past the eels, got " + string.Join(",", kinds));
         if (!game.Resume.IsNone) Fail("the resume point should be used up");
         Console.WriteLine("capture: to " + cell + ", back with the knife " + game.HasItem("diving_knife") + ", on with " + string.Join(",", kinds) + " · captures " + game.GetFlag(count));
+        // Caught in play while a scene plays: captured from where it is, past the event on now.
+        var caught = new List<string>();
+        game.Captured += (to, by) => caught.Add(to + "<" + by);
+        var toCell = new List<string>();
+        again.SceneFinished += next => toCell.Add(next);
+        if (Rules.CatchPlayer("orc_sentry", game) != cell || toCell.Count != 1 || toCell[0] != cell || caught.Count != 1 || caught[0] != cell + "<orc_sentry") Fail("a catch in play should capture from the scene playing");
+        if (game.Held.Scene != "sc_02_the_key") Fail("a catch in play should keep the scene it was in, got " + game.Held.Scene);
+        if (Rules.CatchPlayer("orc_sentry", game) != "") Fail("a player held already should not be caught again");
+        // Caught with no scene playing: still captured; out of the cell, it goes on as the graph says.
+        game.Reset();
+        game.FlowNow = null;
+        if (Rules.CatchPlayer("", game) != cell || !game.Held.IsNone && game.Held.Scene != "") Fail("a catch with no scene playing should still capture");
+        var leaving = new ScenePlayer(game, cell);
+        var after = new List<string>();
+        leaving.SceneFinished += next => after.Add(next);
+        leaving.Start();
+        leaving.Advance();
+        if (!game.Held.IsNone || after.Count != 1) Fail("out of the cell should finish it");
+        Console.WriteLine("caught in play: " + string.Join(",", caught));
         return failures == 0 ? 0 : 1;
     }
 }

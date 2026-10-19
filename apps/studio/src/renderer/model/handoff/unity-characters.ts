@@ -617,10 +617,24 @@ namespace VCGS
             {
                 var damage = D.Num(actor.Data, "hit", 5) * (0.5 + D.Num(D.Map(ai, "skill"), "accuracy", 50) / 200);
                 actor.Send("attack", new Dictionary<string, object> { ["damage"] = damage });
-                var victim = player.GetComponent<VcgsActor>();
-                if (victim != null) victim.Hurt((float)damage);
+                // A captor catches the player (the story's capture) rather than hurting them.
+                if (Catch()) actor.Send("caught", new Dictionary<string, object>());
+                else
+                {
+                    var victim = player.GetComponent<VcgsActor>();
+                    if (victim != null) victim.Hurt((float)damage);
+                }
             }
             actor.MoveTo(Memory.X, Memory.Y);
+        }
+
+        /// <summary>A captor's blow: the story captures the player (Rules.CatchPlayer). False when this character is no captor, there is no story, the story has no capture, or the player is held already.</summary>
+        public bool Catch()
+        {
+            var key = D.Str(actor.Data, "story_key");
+            var game = VcgsGame.Instance != null ? VcgsGame.Instance.State : null;
+            if (key == "" || game == null || !Rules.IsCaptor(key, game)) return false;
+            return Rules.CatchPlayer(key, game) != "";
         }
 
         void Activity(float dt, double speed)

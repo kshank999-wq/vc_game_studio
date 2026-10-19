@@ -157,7 +157,11 @@ namespace UnityEngine
             set => localEulerAngles = value.euler;
         }
         /// <summary>Parents' offsets added up (turns are not modelled).</summary>
-        public Vector3 position => parent == null ? localPosition : parent.position + localPosition;
+        public Vector3 position
+        {
+            get => parent == null ? localPosition : parent.position + localPosition;
+            set => localPosition = parent == null ? value : value - parent.position;
+        }
         public int childCount => children.Count;
         public Transform GetChild(int i) => children[i];
 
@@ -194,6 +198,7 @@ namespace UnityEngine
     public static class Physics
     {
         public static RaycastHit[] RaycastAll(Vector3 origin, Vector3 direction, float maxDistance) => new RaycastHit[0];
+        public static void SyncTransforms() { }
     }
 
     public class Behaviour : Component { }

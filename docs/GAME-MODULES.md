@@ -139,8 +139,12 @@ holding, the hero could never leave.
 
 The story data has a `capture` block, and each runtime (Godot, Unity,
 Unreal) plays it: the captured loss, the holding cell, the locker's verb, the
-way back past the fight, and a `capture()` call for the game's own moments
-(a captor's catch). Saves keep what was taken and where the hero was caught.
+way back past the fight. Guards catch the hero in the engine too: a captor
+that reaches the hero in its attack captures them instead of hurting them,
+and the level moves the hero to whatever on the map is linked to the holding
+cell (link the cell to a room or spot in the level). A `catch_player` call
+does the same for the game's own moments. Saves keep what was taken and where
+the hero was caught.
 
 ### Castle defense
 

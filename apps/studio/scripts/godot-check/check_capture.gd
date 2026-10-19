@@ -92,5 +92,97 @@ func _initialize() -> void:
 	if not game.resume.is_empty():
 		fail("the resume point should be used up")
 	print("capture: to ", cell, ", taken ", saved.get("taken"), ", back with the knife ", game.has_item("diving_knife"), ", on with ", kinds, " · captures ", game.get_flag(count))
+
+	# Caught in play while a scene plays: captured from where it is, past the event on now.
+	var caught: Array = []
+	game.captured.connect(func(to: String, by: String) -> void: caught.append([to, by]))
+	var to_cell: Array = []
+	again.scene_finished.connect(func(next: String) -> void: to_cell.append(next))
+	if VCGSRules.catch_player("orc_sentry", game) != cell or to_cell != [cell] or caught != [[cell, "orc_sentry"]]:
+		fail("a catch in play should capture from the scene playing, got " + str(to_cell) + " / " + str(caught))
+	if str(game.held.get("scene", "")) != "sc_02_the_key":
+		fail("a catch in play should keep the scene it was in, got " + str(game.held))
+	if VCGSRules.catch_player("orc_sentry", game) != "":
+		fail("a player held already should not be caught again")
 	again.queue_free()
+
+	# The rest needs the tree running: a level, and the Orc Sentry (once its data is in).
+	rules.reset(game)
+	game.flow_now = null
+
+var orc: VCGSActor
+var hero: Node3D
+var level: Node
+var frames := 0
+
+## Caught with no scene playing, in the level: taken to the room linked to the holding cell.
+func caught_in_level(game: Node, cell: String) -> void:
+	var dir := DirAccess.open("res://vcgs/generated/levels")
+	for f in dir.get_files():
+		if not f.ends_with(".tscn") or f.begins_with("play_") or level != null:
+			continue
+		var made: Node = (load("res://vcgs/generated/levels/" + f) as PackedScene).instantiate()
+		if not made.has_method("setup"):
+			made.free()
+			continue
+		root.add_child(made)
+		made.setup(game)
+		for guid in made._data:
+			if made._data[guid].get("links", []).has(cell):
+				level = made
+		if level == null:
+			made.queue_free()
+	if level == null:
+		fail("a level should have a room linked to the holding cell")
+		return
+	hero = Node3D.new()
+	hero.add_to_group("player")
+	root.add_child(hero)
+	hero.global_position = Vector3(40, 0, 40)
+	level.player = hero
+	var room: Node3D = null
+	for guid in level._data:
+		if level._data[guid].get("links", []).has(cell):
+			room = level.nodes[guid]
+	if VCGSRules.catch_player("", game) != cell or str(game.held.get("scene", "-")) != "":
+		fail("a catch with no scene playing should still capture, got " + str(game.held))
+	if hero.global_position.distance_to(room.global_position) > 0.01:
+		fail("the level should take the player to the room linked to the cell, got " + str(hero.global_position) + " vs " + str(room.global_position))
+	# Out of the cell with nowhere to go back to: the cell goes on as the graph says.
+	var out_of: Node = load("res://vcgs/generated/scenes/%s.gd" % cell).new()
+	root.add_child(out_of)
+	var next: Array = []
+	out_of.scene_finished.connect(func(n: String) -> void: next.append(n))
+	out_of.start()
+	out_of.advance()
+	if not game.held.is_empty() or next.size() != 1:
+		fail("out of the cell should finish it, got " + str(next))
+	print("caught in the level: to ", room.name, " at ", hero.global_position)
+	out_of.queue_free()
+	# No player in the way of the Orc Sentry's own physics.
+	hero.remove_from_group("player")
+	VCGSRules.reset(game)
+	game.flow_now = null
+
+func _process(_delta: float) -> bool:
+	frames += 1
+	var game: Node = root.get_node_or_null("GameState")
+	var cell := str(VCGSRules.CAPTURE.get("cell", ""))
+	if frames == 1:
+		caught_in_level(game, cell)
+		orc = VCGSActor.new()
+		orc.character_key = "orc_sentry"
+		root.add_child(orc)
+		return false
+	if frames < 3:
+		return false
+	# The Orc Sentry is a captor: its blow catches the player.
+	var count := str(VCGSRules.CAPTURE.get("count", ""))
+	if orc.behavior == null:
+		fail("the Orc Sentry should be set up with its behaviour")
+	elif not orc.behavior._catch() or game.get_flag(count) != "1":
+		fail("the Orc Sentry's blow should capture the player, got " + game.get_flag(count) + " / " + str(game.held))
+	else:
+		print("caught by the Orc Sentry: captures ", game.get_flag(count))
 	quit(1 if failures else 0)
+	return true

@@ -147,9 +147,20 @@ the studio's play-through:
   (`scene_finished` / `SceneFinished` / `OnFinished`), so your driver plays
   it as any next scene. When the cell's scene ends, it goes back to the scene
   the player was caught in, which picks up past the fight. The locker object
-  offers *Take back your things* among its verbs. Call `capture()` /
-  `Capture()` on the scene flow when your gameplay catches the player (a
-  captor, health gone); `is_captor` / `IsCaptor` says who catches. Saves keep
+  offers *Take back your things* among its verbs. Captors catch on their
+  own: a character listed as a captor that reaches the player in its attack
+  (its behaviour) catches them instead of hurting them, through
+  `VCGSRules.catch_player(by, game)` / `Rules.CatchPlayer(by, game)` /
+  `Rules::CatchPlayer(by, game)`. That captures from the scene playing (the
+  flow sets itself as `flow_now` / `FlowNow` as it starts), or from nowhere
+  when none is, and raises `captured(to, by)` / `Captured` /
+  `OnCaptured` + `ListenCaptured`. The level runtime listens: it moves the
+  player to the item linked to the holding cell, or, when nothing in this map
+  is, raises `player_captured_elsewhere(to)` / `PlayerCapturedElsewhere` /
+  `OnCapturedElsewhere` so you can load the map that has it. Call
+  `catch_player` yourself for your own moments (health gone, a trap);
+  `capture()` / `Capture()` on the flow still works. `is_captor` /
+  `IsCaptor` says who catches. Saves keep
   `taken`, `held` and `resume`, in the same format in every engine. Godot's placeholder scenes stand in for the fight with Win and Lose
   buttons, and have a codex: press C, or the Codex button (which counts what's
   new), for the quest log (quests under way with their goals, then those done),

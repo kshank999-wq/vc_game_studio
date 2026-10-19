@@ -365,6 +365,11 @@ namespace VCGS
         public ScenePlace Held = ScenePlace.None;
         /// <summary>Where the scene the player goes back to picks up, once out of the cell (Scene "" for none).</summary>
         public ScenePlace Resume = ScenePlace.None;
+        /// <summary>The scene playing now (it sets itself as it starts): a catch in play captures the player from where it is.</summary>
+        public ScenePlayer FlowNow;
+        /// <summary>Captured in play (Rules.CatchPlayer): where the story goes now (the holding cell, or where one capture too many ends it), and who caught the player. A level moves the player to what is linked to the cell.</summary>
+        public event Action<string, string> Captured;
+        internal void RaiseCaptured(string to, string by) => Captured?.Invoke(to, by);
         /// <summary>Each puzzle's step progress (PuzzleRuntime), by puzzle.</summary>
         public readonly Dictionary<string, StepProgress> PuzzleSteps = new Dictionary<string, StepProgress>();
         /// <summary>Staged hints given, and wrong answers at each object's screen puzzle.</summary>
@@ -1312,7 +1317,7 @@ namespace VCGS
             }
             var limit = (int)D.Num(c, "limit");
             if (limit > 0 && times >= limit && D.Str(c, "limitTo") != "") return D.Str(c, "limitTo");
-            game.Held = new ScenePlace(scene, branch, index);
+            game.Held = new ScenePlace(scene ?? "", branch, index);
             return D.Str(c, "cell");
         }
 
@@ -1324,8 +1329,8 @@ namespace VCGS
             game.Held = ScenePlace.None;
             if (D.Str(c, "locker") == "") GiveBack(game);
             if (D.Str(c, "backTo") != "") return D.Str(c, "backTo");
-            game.Resume = back;
-            return back.Scene;
+            if (!string.IsNullOrEmpty(back.Scene)) game.Resume = back;
+            return back.Scene ?? "";
         }
 
         /// <summary>What a capture took, given back.</summary>
@@ -1338,6 +1343,21 @@ namespace VCGS
 
         /// <summary>Whether this object is the locker, holding what a capture took.</summary>
         public static bool LockerHolding(string obj, GameState game) => !string.IsNullOrEmpty(obj) && D.Str(game.Story.Capture, "locker") == obj && game.Taken.Count > 0;
+
+        /// <summary>
+        /// The player is caught in play: by a captor (its story key), or by the
+        /// game's own code ("" for by). Captured from the scene playing (it picks
+        /// up past what is on now once they are out), or from nowhere when none
+        /// is. GameState.Captured says where to go; returns it ("" when the player
+        /// was not captured: no capture, or held already).
+        /// </summary>
+        public static string CatchPlayer(string by, GameState game)
+        {
+            if (!Captures("captured", game)) return "";
+            var to = game.FlowNow != null ? game.FlowNow.CaptureTo() : Capture(game, "", -1, 0);
+            game.RaiseCaptured(to, by ?? "");
+            return to;
+        }
 
         /// <summary>Whether this character catches the player rather than fights them.</summary>
         public static bool IsCaptor(string character, GameState game) => Listed(game.Story.Capture, "captors", character);
@@ -1511,11 +1531,12 @@ namespace VCGS
         public readonly string Scene;
         public readonly int Branch;
         public readonly int Index;
-        public ScenePlace(string scene, int branch, int index) { Scene = scene ?? ""; Branch = branch; Index = index; }
-        public static readonly ScenePlace None = new ScenePlace("", -1, 0);
-        public bool IsNone => string.IsNullOrEmpty(Scene);
+        /// <param name="scene">The scene; "" for none playing (caught in play with no scene on).</param>
+        public ScenePlace(string scene, int branch, int index) { Scene = scene; Branch = branch; Index = index; }
+        public static readonly ScenePlace None = new ScenePlace(null, -1, 0);
+        public bool IsNone => Scene == null;
         public string ToJson() => IsNone ? "{}" : "{\"scene\": " + GameState.Q(Scene) + ", \"branch\": " + Branch.ToString(System.Globalization.CultureInfo.InvariantCulture) + ", \"index\": " + Index.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}";
-        public static ScenePlace FromJson(Dictionary<string, object> d) => D.Str(d, "scene") == "" ? None : new ScenePlace(D.Str(d, "scene"), (int)D.Num(d, "branch", -1), (int)D.Num(d, "index"));
+        public static ScenePlace FromJson(Dictionary<string, object> d) => !d.ContainsKey("scene") ? None : new ScenePlace(D.Str(d, "scene"), (int)D.Num(d, "branch", -1), (int)D.Num(d, "index"));
     }
 
     public sealed class ScenePlayer
@@ -1577,6 +1598,7 @@ namespace VCGS
             // What a save keeps: the game as this scene begins.
             game.Checkpoint(SceneKey);
             game.Loaded = false;
+            game.FlowNow = this;
             game.Visit(SceneKey);
             game.VisitLocation(D.Str(scene, "location"));
             track = Main;
@@ -1753,11 +1775,15 @@ namespace VCGS
         /// the event on now once they are out. False (and nothing happens) when the
         /// story has no capture, or they are held already.
         /// </summary>
-        public bool Capture()
+        public bool Capture() => CaptureTo() != "";
+
+        /// <summary>The same, returning where the story goes now ("" when the player was not captured).</summary>
+        public string CaptureTo()
         {
-            if (!Rules.Captures("captured", game)) return false;
-            SceneFinished?.Invoke(Rules.Capture(game, SceneKey, branch, index + 1));
-            return true;
+            if (!Rules.Captures("captured", game)) return "";
+            var to = Rules.Capture(game, SceneKey, branch, index + 1);
+            SceneFinished?.Invoke(to);
+            return to;
         }
 
         string EncounterNow()
@@ -1770,7 +1796,12 @@ namespace VCGS
         /// <summary>Where the story goes after this scene: out of the holding cell, back where the player was caught; else the first exit whose conditions hold, else onward.</summary>
         public string NextNode()
         {
-            if (!game.Held.IsNone && SceneKey == D.Str(game.Story.Capture, "cell")) return Rules.Escape(game);
+            if (!game.Held.IsNone && SceneKey == D.Str(game.Story.Capture, "cell"))
+            {
+                var back = Rules.Escape(game);
+                // Caught with no scene playing: the cell goes on as the graph says.
+                if (back != "") return back;
+            }
             foreach (var e in D.List(scene, "exits"))
             {
                 var exit = D.Map(e);

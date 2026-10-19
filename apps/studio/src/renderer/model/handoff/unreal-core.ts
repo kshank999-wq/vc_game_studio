@@ -352,12 +352,16 @@ namespace vcgs
     class GameState;
 
     /** A place in a scene's timeline: the scene, its branch (-1 the main track) and the event. */
+    class ScenePlayer;
+
     struct ScenePlace
     {
+        /** The scene; "" for none playing (caught in play with no scene on). */
         std::string Scene;
         int Branch = -1;
         int Index = 0;
-        bool IsNone() const { return Scene.empty(); }
+        bool Set = false;
+        bool IsNone() const { return !Set; }
     };
 
     namespace Rules
@@ -427,6 +431,10 @@ ${UNREAL_STEP_PROGRESS}
         ScenePlace Held;
         /** Where the scene the player goes back to picks up, once out of the cell. */
         ScenePlace Resume;
+        /** The scene playing now (it sets itself as it starts): a catch in play captures the player from where it is. */
+        ScenePlayer* FlowNow = nullptr;
+        /** Captured in play (Rules::CatchPlayer): where the story goes now (the holding cell, or where one capture too many ends it), and who caught the player. A level moves the player to what is linked to the cell. */
+        std::function<void(const std::string&, const std::string&)> OnCaptured;
         /** An item went into a slot, or came out of it: its key and the slot. */
         std::function<void(const std::string&, const std::string&)> OnItemEquipped, OnItemUnequipped;
         /** An item of equipment was used, or broke. */
@@ -522,6 +530,27 @@ ${UNREAL_STEP_PROGRESS}
         {
             for (auto it = listeners.begin(); it != listeners.end(); ++it)
                 if (it->first == id) { listeners.erase(it); return; }
+        }
+
+        /** Listen for the player being captured in play (as OnCaptured, for more than one listener, a level among them); returns an id to stop with. */
+        int ListenCaptured(std::function<void(const std::string&, const std::string&)> listener)
+        {
+            capturedListeners.emplace_back(++lastId, std::move(listener));
+            return lastId;
+        }
+
+        void StopCaptured(int id)
+        {
+            for (auto it = capturedListeners.begin(); it != capturedListeners.end(); ++it)
+                if (it->first == id) { capturedListeners.erase(it); return; }
+        }
+
+        /** Tell OnCaptured, and each captured listener, where the player was taken and by whom. */
+        void RaiseCaptured(const std::string& to, const std::string& by)
+        {
+            if (OnCaptured) OnCaptured(to, by);
+            auto calling = capturedListeners;
+            for (auto& l : calling) l.second(to, by);
         }
 
         std::string GetFlag(const std::string& flag) const { auto it = Flags.find(flag); return it == Flags.end() ? "" : it->second; }
@@ -959,7 +988,8 @@ ${UNREAL_STEP_PROGRESS}
             auto at = [](const Value& v)
             {
                 ScenePlace p;
-                if (v["scene"].Str().empty()) return p;
+                if (v["scene"].type != Value::Type::String) return p;
+                p.Set = true;
                 p.Scene = v["scene"].Str();
                 p.Branch = v["branch"].IsNumber() ? static_cast<int>(v["branch"].number) : -1;
                 p.Index = static_cast<int>(v["index"].Num());
@@ -1137,6 +1167,7 @@ ${UNREAL_STEP_PROGRESS}
 
     private:
         std::vector<std::pair<int, std::function<void()>>> listeners;
+        std::vector<std::pair<int, std::function<void(const std::string&, const std::string&)>>> capturedListeners;
         int lastId = 0;
         bool settling = false;
 
@@ -1524,7 +1555,7 @@ ${UNREAL_PUZZLES}
             }
             const int limit = static_cast<int>(c["limit"].Num());
             if (limit > 0 && times >= limit && !c["limitTo"].Str().empty()) return c["limitTo"].Str();
-            game.Held = ScenePlace{scene, branch, index};
+            game.Held = ScenePlace{scene, branch, index, true};
             return c["cell"].Str();
         }
 
@@ -1544,7 +1575,7 @@ ${UNREAL_PUZZLES}
             game.Held = ScenePlace();
             if (c["locker"].Str().empty()) GiveBack(game);
             if (!c["backTo"].Str().empty()) return c["backTo"].Str();
-            game.Resume = back;
+            if (!back.Scene.empty()) game.Resume = back;
             return back.Scene;
         }
 
@@ -2260,7 +2291,11 @@ ${UNREAL_PUZZLES}
 
         ScenePlayer(GameState& state, std::string sceneKey)
             : game(state), key(std::move(sceneKey)), scene(Story::Find(state.StoryData.Scenes, key)), track(&scene["main"]) {}
-        ~ScenePlayer() { if (subscription) game.Unsubscribe(subscription); }
+        ~ScenePlayer()
+        {
+            if (subscription) game.Unsubscribe(subscription);
+            if (game.FlowNow == this) game.FlowNow = nullptr;
+        }
         ScenePlayer(const ScenePlayer&) = delete;
         ScenePlayer& operator=(const ScenePlayer&) = delete;
 
@@ -2271,6 +2306,7 @@ ${UNREAL_PUZZLES}
         {
             // What a save keeps: the game as this scene begins.
             game.Checkpoint(key);
+            game.FlowNow = this;
             game.Loaded = false;
             game.Visit(key);
             game.VisitLocation(scene["location"].Str());
@@ -2449,18 +2485,26 @@ ${UNREAL_PUZZLES}
          * the event on now once they are out. False (and nothing happens) when the
          * story has no capture, or they are held already.
          */
-        bool Capture()
+        bool Capture() { return !CaptureTo().empty(); }
+
+        /** The same, returning where the story goes now ("" when the player was not captured). */
+        std::string CaptureTo()
         {
-            if (!Rules::Captures("captured", game)) return false;
+            if (!Rules::Captures("captured", game)) return "";
             const std::string to = Rules::Capture(game, key, branch, index + 1);
             if (OnFinished) OnFinished(to);
-            return true;
+            return to;
         }
 
         /** Where the story goes after this scene: out of the holding cell, back where the player was caught; else the first exit whose conditions hold, else onward. */
         std::string NextNode()
         {
-            if (!game.Held.IsNone() && key == game.StoryData.Root["capture"]["cell"].Str()) return Rules::Escape(game);
+            if (!game.Held.IsNone() && key == game.StoryData.Root["capture"]["cell"].Str())
+            {
+                const std::string back = Rules::Escape(game);
+                // Caught with no scene playing: the cell goes on as the graph says.
+                if (!back.empty()) return back;
+            }
             for (const auto& exit : scene["exits"].items)
             {
                 if (!Rules::Check(exit["when"], game)) continue;
@@ -2534,6 +2578,24 @@ ${UNREAL_PUZZLES}
             });
         }
     };
+
+    namespace Rules
+    {
+        /**
+         * The player is caught in play: by a captor (its story key), or by the
+         * game's own code ("" for by). Captured from the scene playing (it picks
+         * up past what is on now once they are out), or from nowhere when none
+         * is. GameState::OnCaptured says where to go; returns it ("" when the
+         * player was not captured: no capture, or held already).
+         */
+        inline std::string CatchPlayer(const std::string& by, GameState& game)
+        {
+            if (!Captures("captured", game)) return "";
+            const std::string to = game.FlowNow ? game.FlowNow->CaptureTo() : Capture(game, "", -1, 0);
+            game.RaiseCaptured(to, by);
+            return to;
+        }
+    }
 
     // ------------------------------------------------------------ the graph
 

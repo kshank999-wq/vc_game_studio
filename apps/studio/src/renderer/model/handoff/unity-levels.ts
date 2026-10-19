@@ -1288,6 +1288,7 @@ namespace VCGS
                 item.Level = this;
             }
             Logic.Refreshed += Refresh;
+            state.Captured += OnCaptured;
             Dress();
             // Sight is blocked by anything solid but the player and the actors themselves.
             Logic.Blocked = (a, b) =>
@@ -1432,6 +1433,31 @@ namespace VCGS
         }
 
         public VcgsLevelItem ItemFor(string guid) => items.TryGetValue(guid, out var item) ? item : null;
+
+        /// <summary>Captured, and what the story goes to (the holding cell) is linked to nothing here: for the game to load the level that has it.</summary>
+        public event System.Action<string> PlayerCapturedElsewhere;
+
+        /// <summary>Captured: the player is taken to what in this level is linked to where the story goes (the holding cell).</summary>
+        public void OnCaptured(string to, string by)
+        {
+            if (player == null) player = GameObject.FindWithTag("Player")?.transform;
+            foreach (var e in Logic.Items)
+            {
+                if (to == "" || !items.TryGetValue(e.Key, out var item)) continue;
+                foreach (var link in D.List(e.Value, "links"))
+                {
+                    if (!(link is string k) || k != to) continue;
+                    if (player != null)
+                    {
+                        player.position = item.transform.position;
+                        // A CharacterController keeps its old place otherwise.
+                        Physics.SyncTransforms();
+                    }
+                    return;
+                }
+            }
+            PlayerCapturedElsewhere?.Invoke(to);
+        }
 
         /// <summary>The nearest item the player can use from where they stand, or "".</summary>
         public string NearestOffer(Vector3 from, Vector3 facing)

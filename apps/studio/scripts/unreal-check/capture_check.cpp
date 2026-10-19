@@ -88,5 +88,30 @@ int main()
     if (kinds.empty() || kinds[0] == "encounter" || !game.HasItem("vault_key")) Fail("The Key should pick up past the eels");
     if (!game.Resume.IsNone()) Fail("the resume point should be used up");
     std::printf("capture: to %s, back with the knife %s, on with %s · captures %s\n", cell.c_str(), game.HasItem("diving_knife") ? "true" : "false", kinds.empty() ? "-" : kinds[0].c_str(), game.GetFlag(count).c_str());
+    // Caught in play while a scene plays: captured from where it is, past the event on now.
+    std::vector<std::string> caught, toCell;
+    game.OnCaptured = [&](const std::string& to, const std::string& by) { caught.push_back(to + "<" + by); };
+    {
+        vcgs::ScenePlayer playing(game, "sc_02_the_key");
+        playing.OnFinished = [&](const std::string& next) { toCell.push_back(next); };
+        playing.Start();
+        game.Taken.clear();
+        if (vcgs::Rules::CatchPlayer("orc_sentry", game) != cell || toCell.size() != 1 || toCell[0] != cell || caught.size() != 1 || caught[0] != cell + "<orc_sentry") Fail("a catch in play should capture from the scene playing");
+        if (game.Held.Scene != "sc_02_the_key") Fail("a catch in play should keep the scene it was in, got " + game.Held.Scene);
+        if (!vcgs::Rules::CatchPlayer("orc_sentry", game).empty()) Fail("a player held already should not be caught again");
+    }
+    if (game.FlowNow) Fail("a scene player gone should no longer be the one playing");
+    // Caught with no scene playing: still captured; out of the cell, it goes on as the graph says.
+    game.Reset();
+    if (vcgs::Rules::CatchPlayer("", game) != cell || game.Held.IsNone() || !game.Held.Scene.empty()) Fail("a catch with no scene playing should still capture");
+    std::vector<std::string> after;
+    {
+        vcgs::ScenePlayer outOf(game, cell);
+        outOf.OnFinished = [&](const std::string& next) { after.push_back(next); };
+        outOf.Start();
+        outOf.Advance();
+    }
+    if (!game.Held.IsNone() || after.size() != 1) Fail("out of the cell should finish it");
+    std::printf("caught in play: %s\n", caught.empty() ? "-" : caught[0].c_str());
     return failures == 0 ? 0 : 1;
 }

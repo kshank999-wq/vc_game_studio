@@ -1562,6 +1562,8 @@ public:
     /** An actor with a sight saw the player, or lost sight of them (its GUID); its "spotted" / "lost" rules run too. */
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelKeyEvent OnActorSpotted;
     UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelKeyEvent OnActorLostSight;
+    /** The player was captured in play to a scene with nothing in this map linked to it (its story key): load the level that has the cell. When something here is linked to it, the player is moved there instead. */
+    UPROPERTY(BlueprintAssignable, Category = "VCGS") FVcgsLevelKeyEvent OnCapturedElsewhere;
 
     /** Take a travel link by key (backwards with bReverse); returns why not, or "" when the player goes. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") FString Travel(const FString& LinkKey, bool bReverse = false);
@@ -1603,6 +1605,11 @@ protected:
 private:
     std::unique_ptr<vcgs::LevelLogic> Logic;
     TMap<FString, AVcgsLevelItem*> ItemsByGuid;
+    vcgs::GameState* CaptureGame = nullptr;
+    int CaptureListener = 0;
+
+    /** Captured in play (Rules::CatchPlayer): move the player to the item linked to the scene they were taken to. */
+    void PlayerCaptured(const std::string& To);
 
     void Refresh();
     void MoveActors();
@@ -1644,6 +1651,9 @@ AVcgsLevelDirector::AVcgsLevelDirector()
 
 void AVcgsLevelDirector::EndPlay(const EEndPlayReason::Type Reason)
 {
+    if (CaptureGame && CaptureListener) CaptureGame->StopCaptured(CaptureListener);
+    CaptureGame = nullptr;
+    CaptureListener = 0;
     if (Logic && !Logic->Key.empty()) vcgs::LevelLogic::Places()[Logic->Key] = Logic->Remember();
     // Its graph goes with it.
     if (Logic && Logic->Nav)
@@ -1652,6 +1662,23 @@ void AVcgsLevelDirector::EndPlay(const EEndPlayReason::Type Reason)
         Places.erase(std::remove_if(Places.begin(), Places.end(), [this](const vcgs::NavPlace& P) { return P.Graph == Logic->Nav; }), Places.end());
     }
     Super::EndPlay(Reason);
+}
+
+void AVcgsLevelDirector::PlayerCaptured(const std::string& To)
+{
+    if (!Logic || To.empty()) return;
+    APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0);
+    for (const auto& Pair : ItemsByGuid)
+    {
+        const vcgs::Value& Links = Logic->Item(ToStd(Pair.Key))["links"];
+        for (size_t i = 0; i < Links.Size(); i++)
+            if (Links[i].Str() == To)
+            {
+                if (Pawn && Pair.Value) Pawn->SetActorLocation(Pair.Value->GetActorLocation());
+                return;
+            }
+    }
+    OnCapturedElsewhere.Broadcast(ToF(To));
 }
 
 void AVcgsLevelDirector::BeginPlay()
@@ -1684,6 +1711,8 @@ void AVcgsLevelDirector::BeginPlay()
     };
     Logic->OnActorSpotted = [this](const std::string& Guid) { OnActorSpotted.Broadcast(ToF(Guid)); };
     Logic->OnActorLostSight = [this](const std::string& Guid) { OnActorLostSight.Broadcast(ToF(Guid)); };
+    CaptureGame = Story->State();
+    CaptureListener = CaptureGame->ListenCaptured([this](const std::string& To, const std::string&) { PlayerCaptured(To); });
     // Sight is blocked by anything solid but the player and the actors themselves (a visibility trace).
     Logic->Blocked = [this](double AX, double AY, double AZ, double BX, double BY, double BZ) {
         UWorld* World = GetWorld();
