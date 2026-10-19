@@ -10,7 +10,8 @@ import {
   type GameKind,
   type GameSetup,
 } from '../../model/setup';
-import { MODULES, type ModuleId } from '../../model/modules';
+import { MODULES, storyBased, type ModuleId } from '../../model/modules';
+import { ADVENTURE_SETUP } from '../../model/adventure';
 
 const STEPS = ['The game', 'Premise and player', 'World and tone', 'Structure'] as const;
 
@@ -42,7 +43,7 @@ export const SetupWizard = ({
   const [step, setStep] = useState(0);
   const [moduleId, setModuleId] = useState<ModuleId>('story');
   // A game that isn't a story needs only its name and premise here: the rest is its own path.
-  const steps: readonly string[] = moduleId === 'story' || editing ? STEPS : ['The game'];
+  const steps: readonly string[] = storyBased(moduleId) || editing ? STEPS : ['The game'];
   const [name, setName] = useState(initialName);
   const [setup, setSetup] = useState<GameSetup>(initial ?? blankSetup());
   const [newResource, setNewResource] = useState('');
@@ -106,7 +107,16 @@ export const SetupWizard = ({
                 <div className="setup-modules">
                   {MODULES.map((m) => (
                     <label key={m.id} className={`setup-module${moduleId === m.id ? ' on' : ''}`}>
-                      <input type="radio" name="game-module" checked={moduleId === m.id} onChange={() => setModuleId(m.id)} />
+                      <input
+                        type="radio"
+                        name="game-module"
+                        checked={moduleId === m.id}
+                        onChange={() => {
+                          // An adventure starts on missions, several endings, keys, quest items and powers.
+                          if (m.id === 'adventure' && moduleId !== 'adventure') setSetup((s) => ({ ...s, ...ADVENTURE_SETUP }));
+                          setModuleId(m.id);
+                        }}
+                      />
                       <b>{m.name}</b>
                       <span>{m.blurb}</span>
                     </label>
@@ -114,8 +124,8 @@ export const SetupWizard = ({
                 </div>
               </div>
             )}
-            {moduleId !== 'story' && !editing && text('premise', 'Premise', 'What the game is, in a sentence or two', true)}
-            {(moduleId === 'story' || editing) && <div className="dfld" role="radiogroup" aria-label="Kind of game">
+            {!storyBased(moduleId) && !editing && text('premise', 'Premise', 'What the game is, in a sentence or two', true)}
+            {(storyBased(moduleId) || editing) && <div className="dfld" role="radiogroup" aria-label="Kind of game">
               <span>Kind of game</span>
               <div className="setup-chips">
                 {GAME_KINDS.map((k) => (
@@ -126,9 +136,9 @@ export const SetupWizard = ({
                 ))}
               </div>
             </div>}
-            {(moduleId === 'story' || editing) && setup.kind === 'custom' && text('customKind', 'Your kind of game', 'e.g. Rhythm detective game')}
-            {!editing && moduleId === 'story' && <p className="pref-hint">Each kind starts you with a usual structure and resources. You can change all of it on the last step, and later.</p>}
-            {!editing && moduleId !== 'story' && <p className="pref-hint">It starts as a small game you can play straight away. Its path takes you through the rest, step by step.</p>}
+            {(storyBased(moduleId) || editing) && setup.kind === 'custom' && text('customKind', 'Your kind of game', 'e.g. Rhythm detective game')}
+            {!editing && storyBased(moduleId) && <p className="pref-hint">Each kind starts you with a usual structure and resources. You can change all of it on the last step, and later.</p>}
+            {!editing && !storyBased(moduleId) && <p className="pref-hint">It starts as a small game you can play straight away. Its path takes you through the rest, step by step.</p>}
           </>
         )}
 

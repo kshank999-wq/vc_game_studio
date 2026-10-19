@@ -1,3 +1,4 @@
+import { captureOn, type CaptureRule } from '../capture';
 import { takeFileOf } from '../audio-takes';
 import { lineSubtitle } from '../subtitles';
 import { buildCast, type IrCast } from './cast';
@@ -287,8 +288,37 @@ export interface IrEncounter extends IrThing {
   winWhen?: IrRule;
   onWin?: IrEffect[];
   onLose?: IrEffect[];
-  /** What a loss leads to: the encounter again, the game over, or on through the scene. */
-  loss: 'retry' | 'gameOver' | 'carryOn';
+  /** What a loss leads to: the encounter again, the game over, on through the scene, or the holding cell (see `capture`). */
+  loss: 'retry' | 'gameOver' | 'carryOn' | 'captured';
+}
+
+/**
+ * Captured (adventure games): a loss can take the player to a holding cell
+ * instead of ending the game. What is carried is taken into the locker, the
+ * count goes up, health is set; once out of the cell the story picks up past
+ * the fight where they were caught (or at `backTo`). Captured `limit` times,
+ * the story ends at `limitTo`.
+ */
+export interface IrCapture {
+  /** The holding cell: a scene key. */
+  cell: string;
+  take: 'all' | 'listed' | 'none';
+  /** With 'listed', the items taken; `keep` are never taken. Item keys. */
+  items: string[];
+  keep: string[];
+  /** The object that keeps what was taken; using it gives it back. None: given back on the way out. */
+  locker: string | null;
+  /** Number states (flag keys): the captures counted, and health (a loss leaving it below 1 captures the player). */
+  count: string | null;
+  health: string | null;
+  /** Health once captured; null leaves it. */
+  healthAfter: number | null;
+  /** Where the story goes on once out: a node key; null for back where the player was caught, past the fight. */
+  backTo: string | null;
+  limit: number;
+  limitTo: string | null;
+  /** Characters who catch the player in play, rather than fight them (character keys). */
+  captors: string[];
 }
 
 export interface IrShot {
@@ -480,6 +510,8 @@ export interface HandoffIR {
   notes: IrNote[];
   /** The Character Creator's characters, groups and placements (character spec §10), written to characters.json, not story.json. */
   cast?: IrCast;
+  /** Captured: the holding cell, what is taken, and the way back. Absent when capture is off. */
+  capture?: IrCapture;
 }
 
 /** An open comment or task, and what it is about in the engine's terms. */
@@ -799,7 +831,8 @@ export const buildIR = (given: Project): HandoffIR => {
       const winWhen = rule(o.data.rule as Rule | undefined);
       const onWin = effects(o.data.effects as Effect[] | undefined);
       const onLose = effects(o.data.loseEffects as Effect[] | undefined);
-      const loss = ({ 'Game over': 'gameOver', 'Carry on': 'carryOn' } as const)[loseOf(o) as 'Game over' | 'Carry on'] ?? 'retry';
+      // Captured without a holding cell ends the game, as the play-through plays it.
+      const loss = ({ 'Game over': 'gameOver', 'Carry on': 'carryOn', Captured: captureOn(project) ? 'captured' : 'gameOver' } as const)[loseOf(o) as 'Game over' | 'Carry on' | 'Captured'] ?? 'retry';
       return { ...thing(o), ...(winWhen ? { winWhen } : {}), ...(onWin ? { onWin } : {}), ...(onLose ? { onLose } : {}), loss };
     }),
     skills: of('skill').map((o): IrSkill => {
@@ -919,6 +952,25 @@ export const buildIR = (given: Project): HandoffIR => {
     levels,
     notes: notesOf(project, ids, levels),
     cast,
+    ...(captureOn(project) ? { capture: captureIR(project.capture!, key) } : {}),
+  };
+};
+
+const captureIR = (r: CaptureRule, key: (id: string | undefined | null) => string | null): IrCapture => {
+  const keys = (ids?: string[]) => (ids ?? []).map((id) => key(id)).filter((k): k is string => !!k);
+  return {
+    cell: key(r.cellId)!,
+    take: r.take,
+    items: r.take === 'listed' ? keys(r.items) : [],
+    keep: keys(r.keep),
+    locker: key(r.lockerId),
+    count: key(r.countId),
+    health: key(r.healthId),
+    healthAfter: r.healthAfter ?? null,
+    backTo: key(r.backTo),
+    limit: (r.limit ?? 0) > 0 && key(r.limitId) ? r.limit! : 0,
+    limitTo: (r.limit ?? 0) > 0 ? key(r.limitId) : null,
+    captors: keys(r.captors),
   };
 };
 

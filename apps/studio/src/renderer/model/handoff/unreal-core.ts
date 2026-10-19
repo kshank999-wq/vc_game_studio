@@ -351,6 +351,15 @@ namespace vcgs
 
     class GameState;
 
+    /** A place in a scene's timeline: the scene, its branch (-1 the main track) and the event. */
+    struct ScenePlace
+    {
+        std::string Scene;
+        int Branch = -1;
+        int Index = 0;
+        bool IsNone() const { return Scene.empty(); }
+    };
+
     namespace Rules
     {
         bool Check(const Value& rule, const GameState& game);
@@ -412,6 +421,12 @@ ${UNREAL_STEP_PROGRESS}
         std::map<std::string, std::string> Equipped;
         /** How many times each item of equipment has been used, toward its durability. */
         std::map<std::string, int> Wear;
+        /** Captured (Rules::Capture): what was taken, kept until given back. */
+        std::map<std::string, int> Taken;
+        /** Where the player was caught, while in the holding cell (none when not held). */
+        ScenePlace Held;
+        /** Where the scene the player goes back to picks up, once out of the cell. */
+        ScenePlace Resume;
         /** An item went into a slot, or came out of it: its key and the slot. */
         std::function<void(const std::string&, const std::string&)> OnItemEquipped, OnItemUnequipped;
         /** An item of equipment was used, or broke. */
@@ -484,6 +499,7 @@ ${UNREAL_STEP_PROGRESS}
             Loaded = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
             Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); Bookmarks.clear(); Notes.clear(); NoteTimes.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear(); Equipped.clear(); Wear.clear();
+            Taken.clear(); Held = ScenePlace(); Resume = ScenePlace();
             PuzzleSteps.clear(); Hinted.clear(); ScreenFails.clear(); Clock = 0; Level.clear(); LevelMap.clear();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
@@ -867,6 +883,10 @@ ${UNREAL_STEP_PROGRESS}
                 }
                 return out + "}";
             };
+            auto place = [](const ScenePlace& at)
+            {
+                return at.IsNone() ? std::string("{}") : "{\"scene\": " + JsonQuote(at.Scene) + ", \"branch\": " + std::to_string(at.Branch) + ", \"index\": " + std::to_string(at.Index) + "}";
+            };
             auto learned = [this]()
             {
                 std::string out = "{";
@@ -886,7 +906,8 @@ ${UNREAL_STEP_PROGRESS}
                    ",\n  \"characters\": " + list(MetCharacters) + ",\n  \"found\": " + list(FoundItems) + ",\n  \"locations\": " + list(VisitedLocations) +
                    ",\n  \"used\": " + list(UsedObjects) + ",\n  \"lore\": " + list(KnownLore) + ",\n  \"mechanics\": " + list(MechanicOrder) +
                    ",\n  \"skills\": " + learned() + ",\n  \"equipped\": " + strings(Equipped) + ",\n  \"wear\": " + numbers(Wear) +
-                   ",\n  \"puzzles\": " + puzzles() + ",\n  \"hinted\": " + list(Hinted) + ",\n  \"screenFails\": " + numbers(ScreenFails) + ",\n  \"clock\": " + Number(Clock) + ",\n  \"level\": " + JsonQuote(Level) + ",\n  \"levelMap\": " + JsonQuote(LevelMap);
+                   ",\n  \"puzzles\": " + puzzles() + ",\n  \"hinted\": " + list(Hinted) + ",\n  \"screenFails\": " + numbers(ScreenFails) + ",\n  \"clock\": " + Number(Clock) + ",\n  \"level\": " + JsonQuote(Level) + ",\n  \"levelMap\": " + JsonQuote(LevelMap) +
+                   ",\n  \"taken\": " + numbers(Taken) + ",\n  \"held\": " + place(Held) + ",\n  \"resume\": " + place(Resume);
         }
 
         /** Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it. */
@@ -927,12 +948,25 @@ ${UNREAL_STEP_PROGRESS}
             AutoRules = false;
             Flags.clear(); ObjectStates.clear(); Chosen.clear(); Items.clear(); Arcs.clear();
             Solved.clear(); Visited.clear(); Fired.clear(); Picked.clear(); Quests.clear(); QuestOrder.clear(); Won.clear(); MetEncounters.clear(); MetCharacters.clear(); FoundItems.clear(); VisitedLocations.clear(); UsedObjects.clear(); KnownLore.clear(); Mechanics.clear(); MechanicOrder.clear(); Skills.clear(); SkillOrder.clear(); Equipped.clear(); Wear.clear();
+            Taken.clear(); Held = ScenePlace(); Resume = ScenePlace();
             for (const auto& f : StoryData.Flags) Flags[f.first] = (*f.second)["initial"].Str();
             for (const auto& o : StoryData.Objects)
             {
                 std::string initial = (*o.second)["initial"].Str();
                 if ((*o.second)["kind"].Str() == "object" && !initial.empty()) ObjectStates[o.first] = initial;
             }
+            for (const auto& e : data["taken"].fields) Taken[e.first] = static_cast<int>(e.second.Num());
+            auto at = [](const Value& v)
+            {
+                ScenePlace p;
+                if (v["scene"].Str().empty()) return p;
+                p.Scene = v["scene"].Str();
+                p.Branch = v["branch"].IsNumber() ? static_cast<int>(v["branch"].number) : -1;
+                p.Index = static_cast<int>(v["index"].Num());
+                return p;
+            };
+            Held = at(data["held"]);
+            Resume = at(data["resume"]);
             for (const auto& e : data["flags"].fields) Flags[e.first] = e.second.Str();
             for (const auto& e : data["objects"].fields) ObjectStates[e.first] = e.second.Str();
             for (const auto& e : data["chosen"].fields) Chosen[e.first] = e.second.Str();
@@ -1438,6 +1472,88 @@ ${UNREAL_PUZZLES}
             Apply(Story::Find(game.StoryData.Quests, quest)["reward"], game);
         }
 
+        /** The locker's verb, while it holds what a capture took. */
+        inline const char* LockerVerb() { return "Take back your things"; }
+
+        inline int NumberFlag(const GameState& game, const std::string& flag) { return std::atoi(game.GetFlag(flag).c_str()); }
+
+        inline bool Listed(const Value& list, const std::string& key)
+        {
+            for (const auto& k : list.items) if (k.Str() == key) return true;
+            return false;
+        }
+
+        /** Whether a loss now captures the player: the story has capture, they aren't held already, and the loss says so ("captured") or left their health below 1. */
+        inline bool Captures(const std::string& loss, const GameState& game)
+        {
+            const Value& c = game.StoryData.Root["capture"];
+            if (!c.IsObject() || !game.Held.IsNone()) return false;
+            if (loss == "captured") return true;
+            const std::string health = c["health"].Str();
+            return !health.empty() && NumberFlag(game, health) < 1;
+        }
+
+        /**
+         * Captured: counted, health set, what is carried taken (and unequipped) to
+         * keep. Returns the node to go to: the holding cell, or where one capture
+         * too many ends the story. scene, branch and index are where the scene
+         * picks up once the player is out.
+         */
+        inline std::string Capture(GameState& game, const std::string& scene, int branch, int index)
+        {
+            const Value& c = game.StoryData.Root["capture"];
+            const std::string count = c["count"].Str();
+            int times = 1;
+            if (!count.empty())
+            {
+                times = NumberFlag(game, count) + 1;
+                game.SetFlag(count, std::to_string(times));
+            }
+            const std::string health = c["health"].Str();
+            if (!health.empty() && c["healthAfter"].IsNumber()) game.SetFlag(health, std::to_string(static_cast<int>(c["healthAfter"].number)));
+            const std::string take = c["take"].Str();
+            std::vector<std::pair<std::string, int>> carried(game.Items.begin(), game.Items.end());
+            for (const auto& it : carried)
+            {
+                if (it.second <= 0 || Listed(c["keep"], it.first)) continue;
+                if (take == "all" || (take == "listed" && Listed(c["items"], it.first)))
+                {
+                    game.Taken[it.first] += it.second;
+                    game.TakeItem(it.first, it.second);
+                }
+            }
+            const int limit = static_cast<int>(c["limit"].Num());
+            if (limit > 0 && times >= limit && !c["limitTo"].Str().empty()) return c["limitTo"].Str();
+            game.Held = ScenePlace{scene, branch, index};
+            return c["cell"].Str();
+        }
+
+        /** What a capture took, given back. */
+        inline void GiveBack(GameState& game)
+        {
+            const std::map<std::string, int> was = game.Taken;
+            game.Taken.clear();
+            for (const auto& e : was) game.GiveItem(e.first, e.second);
+        }
+
+        /** Out of the holding cell: their things back when there is no locker. Returns where the story goes on: backTo, or the scene they were caught in (it picks up past the fight). */
+        inline std::string Escape(GameState& game)
+        {
+            const Value& c = game.StoryData.Root["capture"];
+            const ScenePlace back = game.Held;
+            game.Held = ScenePlace();
+            if (c["locker"].Str().empty()) GiveBack(game);
+            if (!c["backTo"].Str().empty()) return c["backTo"].Str();
+            game.Resume = back;
+            return back.Scene;
+        }
+
+        /** Whether this object is the locker, holding what a capture took. */
+        inline bool LockerHolding(const std::string& obj, const GameState& game) { return !obj.empty() && game.StoryData.Root["capture"]["locker"].Str() == obj && !game.Taken.empty(); }
+
+        /** Whether this character catches the player rather than fights them. */
+        inline bool IsCaptor(const std::string& character, const GameState& game) { return Listed(game.StoryData.Root["capture"]["captors"], character); }
+
         /** Whether a win against this encounter counts now (its win rule holds). */
         inline bool CanWin(const std::string& encounter, const GameState& game) { return Check(Story::Find(game.StoryData.Encounters, encounter)["winWhen"], game); }
 
@@ -1447,7 +1563,7 @@ ${UNREAL_PUZZLES}
             Apply(Story::Find(game.StoryData.Encounters, encounter)["onWin"], game);
         }
 
-        /** Do a loss's effects; returns what it leads to: "retry", "gameOver" or "carryOn". */
+        /** Do a loss's effects; returns what it leads to: "retry", "gameOver", "carryOn" or "captured". */
         inline std::string Lose(const std::string& encounter, GameState& game)
         {
             const Value& e = Story::Find(game.StoryData.Encounters, encounter);
@@ -2029,6 +2145,8 @@ ${UNREAL_PUZZLES}
             std::vector<std::string> verbs;
             for (const auto& i : Story::Find(game.StoryData.Objects, obj)["interactions"].items)
                 if (Allowed(i, obj, game)) verbs.push_back(i["verb"].Str());
+            // The locker, while it holds what a capture took.
+            if (Rules::LockerHolding(obj, game)) verbs.push_back(Rules::LockerVerb());
             return verbs;
         }
 
@@ -2044,6 +2162,11 @@ ${UNREAL_PUZZLES}
 
         inline bool Interact(GameState& game, const std::string& obj, const std::string& verb)
         {
+            if (verb == Rules::LockerVerb() && Rules::LockerHolding(obj, game))
+            {
+                Rules::GiveBack(game);
+                return true;
+            }
             for (const auto& i : Story::Find(game.StoryData.Objects, obj)["interactions"].items)
             {
                 if (i["verb"].Str() != verb || !Allowed(i, obj, game)) continue;
@@ -2154,6 +2277,18 @@ ${UNREAL_PUZZLES}
             track = &scene["main"];
             index = -1;
             branch = -1;
+            // Back from the holding cell: on past the fight where the player was caught.
+            if (game.Resume.Scene == key)
+            {
+                const int b = game.Resume.Branch;
+                if (b >= 0 && b < static_cast<int>(scene["branches"].items.size()))
+                {
+                    branch = b;
+                    track = &scene["branches"][static_cast<size_t>(b)]["events"];
+                }
+                index = game.Resume.Index - 1;
+                game.Resume = ScenePlace();
+            }
             Advance();
         }
 
@@ -2296,14 +2431,36 @@ ${UNREAL_PUZZLES}
             const std::string encounter = EncounterNow();
             if (encounter.empty()) return;
             const std::string loss = Rules::Lose(encounter, game);
-            if (loss == "gameOver") { if (OnGameOver) OnGameOver(encounter); }
+            // Captured: to the holding cell; the scene picks up past the fight once the player is out.
+            if (Rules::Captures(loss, game))
+            {
+                const std::string to = Rules::Capture(game, key, branch, index + 1);
+                if (OnFinished) OnFinished(to);
+                return;
+            }
+            if (loss == "gameOver" || loss == "captured") { if (OnGameOver) OnGameOver(encounter); }
             else if (loss == "carryOn") Advance();
             else if (OnEncounter) OnEncounter(encounter, Rules::CanWin(encounter, game));
         }
 
-        /** Where the story goes after this scene: the first exit whose conditions hold, else onward. */
+        /**
+         * The player is caught in play (a captor got them, their health ran out):
+         * to the holding cell, as a captured loss would. The scene picks up after
+         * the event on now once they are out. False (and nothing happens) when the
+         * story has no capture, or they are held already.
+         */
+        bool Capture()
+        {
+            if (!Rules::Captures("captured", game)) return false;
+            const std::string to = Rules::Capture(game, key, branch, index + 1);
+            if (OnFinished) OnFinished(to);
+            return true;
+        }
+
+        /** Where the story goes after this scene: out of the holding cell, back where the player was caught; else the first exit whose conditions hold, else onward. */
         std::string NextNode()
         {
+            if (!game.Held.IsNone() && key == game.StoryData.Root["capture"]["cell"].Str()) return Rules::Escape(game);
             for (const auto& exit : scene["exits"].items)
             {
                 if (!Rules::Check(exit["when"], game)) continue;

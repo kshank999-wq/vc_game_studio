@@ -5,6 +5,7 @@ import { craftCheck, recipeOf, recipesOf } from '../crafting';
 import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
 import { cuesOf } from '../puzzle/staged';
 import { nodesOf, treeDrives } from '../puzzle/tree';
+import { captureOn, captureWorld, giveBackWorld, LOCKER_VERB, lockerHolding } from '../capture';
 import { applyStoryEffects, craftIn, firstInteraction, gearIn, learnSkillIn, sceneSpeech, screenWrongIn, settleWorld, startWorld, useInteractionIn, useStoryObject, type Entry, type PlayWorld, type Voice } from '../play';
 import { learnCheck, skillsOf } from '../skills';
 import { describeEffect, describeRule, evaluate, isEmpty } from '../rules';
@@ -575,6 +576,9 @@ export const offerFor = (project: Project, state: LevelPlayState, item: LevelIte
     const source = lightOf(project, state.levelId, global).source;
     return { itemId: item.id, verb: prompt, label: item.name, blocked: hasLightSource(project, state, global) ? 'Too dark to see. Turn your light on (L).' : `Too dark to see.${source ? ` It needs ${name(project, source)} for light.` : ''}` };
   }
+  // The locker, holding what a capture took: the player takes it back.
+  const locker = lockerHolding(project, state.world);
+  if (locker && (item.links ?? []).includes(locker)) return { itemId: item.id, verb: LOCKER_VERB.verb, label: item.name };
   if (def.role === 'building') {
     // A structure's mass (structure spec §12): the player goes in.
     const inside = set.levels.find((l) => l.anchorId === item.id && l.structure);
@@ -655,6 +659,30 @@ const workTarget = (project: Project, state: LevelPlayState, worker: LevelItem, 
 };
 
 /** The player uses an item: what each kind of thing does, then its rules. */
+/**
+ * Captured in Play Mode (health gone, or a captor's blow): counted and
+ * searched as in the story, health back to what the rule says, and taken to
+ * the holding cell: the place in the levels linked to it (in this level or
+ * another). Captured once too often, the play ends.
+ */
+export const caught = (project: Project, state: LevelPlayState, global?: readonly AssetDefinition[], by?: string): LevelPlayState => {
+  const r = project.capture!;
+  const c = captureWorld(project, state.world);
+  const health = r.healthAfter !== undefined ? Math.min(100, Math.max(1, r.healthAfter)) : 100;
+  let s: LevelPlayState = { ...state, world: c.world, health };
+  const what = c.taken.length ? `takes ${c.taken.map((id) => name(project, id)).join(', ')}` : 'takes nothing';
+  if (c.ends) return log({ ...s, over: { text: `Captured once too often: ${name(project, c.ends)}.` } }, { kind: 'warn', text: `Captured${by ? ` by ${by}` : ''} (${c.times} times): the story ends at ${name(project, c.ends)}` });
+  const set = levelsOf(project);
+  const cell = set.items.find((i) => !i.hidden && (i.links ?? []).includes(r.cellId!));
+  s = log(s, { kind: 'warn', text: `Captured${by ? ` by ${by}` : ''}: ${what}${cell ? `, and is taken to ${cell.name}` : ''}` });
+  if (!cell) return say(log(s, { kind: 'warn', text: `Nothing in the levels is linked to ${name(project, r.cellId!)}: link a room to it to be taken there.` }), 'Captured!');
+  const f = frameOf(set, cell, global);
+  const floor = set.levels.find((l) => l.id === cell.levelId)?.floors.find((fl) => fl.id === cell.floorId);
+  const where = { x: f.x, y: f.y, z: (floor?.elevation ?? 0) + cell.z };
+  s = cell.levelId === s.levelId ? { ...s, placePlayer: where } : { ...s, goTo: cell.levelId, arrival: { ...where, yaw: 0, floorId: cell.floorId } };
+  return say(s, `Captured! Taken to ${cell.name}.`, 4);
+};
+
 export const interactWith = (project: Project, state: LevelPlayState, itemId: string, global?: readonly AssetDefinition[], at?: Point): LevelPlayState => {
   const set = levelsOf(project);
   const item = set.items.find((i) => i.id === itemId);
@@ -665,6 +693,10 @@ export const interactWith = (project: Project, state: LevelPlayState, itemId: st
   let s = log(state, { kind: 'event', itemId, text: `${offer.verb} · ${item.name}` });
   if (offer.blocked) return say(log(s, { kind: 'check', itemId, pass: false, text: `${item.name}: ${offer.blocked}` }), offer.blocked);
 
+  if (offer.verb === LOCKER_VERB.verb) {
+    const back = giveBackWorld(s.world);
+    return say(changeWorld(project, s, back.world, [{ kind: 'effect', text: `Takes back ${back.items.map((id) => name(project, id)).join(', ')}` }], itemId, 0), 'Got your things back');
+  }
   if (def.role === 'building') {
     const inside = set.levels.find((l) => l.anchorId === item.id && l.structure)!;
     const arrival = arrivalInto(project, inside.id, at, global);
@@ -838,6 +870,9 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
     s = { ...s, cast: step.poses };
     for (const text of step.events) s = log(s, { kind: 'event', text });
     if (step.damage > 0) s = { ...s, health: Math.max(0, s.health - step.damage) };
+    // A captor's blow catches the player instead.
+    const captor = captureOn(project) ? step.hitBy.find((c) => project.capture!.captors?.includes(c)) : undefined;
+    if (captor) return caught(project, s, global, name(project, captor));
     // A placed actor's own pose follows its machine, so it is drawn (and talked to) where it is.
     let moved: Record<string, ActorPose> | null = null;
     for (const c of here) {
@@ -897,6 +932,7 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
     const perSecond = num(paramOf(set, item, 'damage', global), 10);
     if (perSecond > 0) s = { ...s, health: Math.max(0, s.health - perSecond * dt) };
   }
+  if (s.health <= 0 && !s.over && captureOn(project)) return caught(project, s, global);
   if (s.health <= 0 && !s.over) s = log({ ...s, over: { text: 'You didn’t make it.' } }, { kind: 'warn', text: 'The player is dead' });
 
   // A structure's objectives, and its completion (structure spec §10).

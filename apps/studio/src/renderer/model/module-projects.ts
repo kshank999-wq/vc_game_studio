@@ -10,5 +10,5 @@ import { createRunnerProject } from './runner/runner';
 import { createPlatformProject } from './platformer/platformer';
 
 /** A new project of a module other than the story game: its starter game, with the name and premise from the New Game wizard. */
-export const createModuleProject = (module: Exclude<ModuleId, 'story'>, name: string, premise = ''): Project =>
+export const createModuleProject = (module: Exclude<ModuleId, 'story' | 'adventure'>, name: string, premise = ''): Project =>
   module === 'shooter' ? createShooterProject(name, premise) : module === 'arena' ? createArenaProject(name, premise) : module === 'cards' ? createCardProject(name, premise) : module === 'blocks' ? createBlockProject(name, premise) : module === 'match' ? createMatchProject(name, premise) : module === 'runner' ? createRunnerProject(name, premise) : module === 'platformer' ? createPlatformProject(name, premise) : createDefenseProject(name, premise);

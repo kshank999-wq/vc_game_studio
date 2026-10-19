@@ -11,6 +11,7 @@ import { speedRange } from './runner/runner';
 import { passable } from './runner/sim';
 import { platformIssues } from './platformer/platformer';
 import { mapLevel } from './platformer/sim';
+import { adventureDone } from './adventure';
 
 /**
  * Game modules: what kind of game a project is, which parts of the studio it
@@ -20,10 +21,10 @@ import { mapLevel } from './platformer/sim';
  * designer ticks it.
  */
 
-export type ModuleId = 'story' | 'defense' | 'shooter' | 'arena' | 'cards' | 'blocks' | 'match' | 'runner' | 'platformer';
+export type ModuleId = 'story' | 'adventure' | 'defense' | 'shooter' | 'arena' | 'cards' | 'blocks' | 'match' | 'runner' | 'platformer';
 
 /** Where a step takes the designer: a part of the studio, the setup questions, or a tab of a module's own workspace ('tab:<id>'). */
-export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | `tab:${DefenseTab | ShooterTab | ArenaTab | CardTab | BlockTab | MatchTab | RunnerTab | PlatformTab}`;
+export type StepGo = 'setup' | 'graph' | 'characters' | 'level' | 'play' | 'engine' | 'bible' | 'missions' | `tab:${DefenseTab | ShooterTab | ArenaTab | CardTab | BlockTab | MatchTab | RunnerTab | PlatformTab}`;
 
 export type DefenseTab = 'concept' | 'map' | 'towers' | 'enemies' | 'waves' | 'economy' | 'play';
 export type ShooterTab = 'concept' | 'ship' | 'invaders' | 'waves' | 'shields' | 'play';
@@ -197,7 +198,29 @@ const PLATFORMER: GameModule = {
   ],
 };
 
-export const MODULES: readonly GameModule[] = [STORY, DEFENSE, SHOOTER, ARENA, CARDS, BLOCKS, MATCH, RUNNER, PLATFORMER];
+const ADVENTURE: GameModule = {
+  id: 'adventure',
+  name: 'Adventure story',
+  blurb: 'One hero, in first or third person, level by level: a mission each, puzzles, clues from the people met, items, powers and health; captured, and escaping. The whole story first, every ending known.',
+  workspaces: ['graph', 'missions', 'bible', 'notes', 'characters', 'puzzles', 'level', 'engine', 'play'],
+  steps: [
+    { id: 'setup', title: 'Concept', hint: 'Name it, its premise, who the hero is, first and third person. Missions, several endings.', go: 'setup', done: (p) => !!p.setup?.premise?.trim() },
+    { id: 'story', title: 'The whole story and every ending', hint: 'Write it all through first: the plot points along the spine, and every ending, each with what earns it (a condition on the way in).', go: 'graph', done: adventureDone.story },
+    { id: 'levels', title: 'Levels and mission cards', hint: 'A level for each part of the story, each with its mission: the quest that opens the next level.', go: 'missions', done: adventureDone.levels },
+    { id: 'characters', title: 'Hero, clue-givers, captors', hint: 'The hero, the people who give clues, and who can catch them.', go: 'characters', done: adventureDone.characters },
+    { id: 'systems', title: 'Items, powers, health, capture', hint: 'Define once what every level uses: an item or two, a power, health, and what happens when the hero is captured.', go: 'missions', done: adventureDone.systems },
+    { id: 'first', title: 'Level 1, all the way', hint: 'Fill in level 1’s card and build all of it: its map, puzzle, clue, mission, what is gained, and where capture can happen. Play it.', go: 'missions', done: adventureDone.first },
+    { id: 'paths', title: 'Play every ending', hint: 'In the play-through, play to each ending and save it as an expected path; and one where the hero is captured and escapes.', go: 'play', done: adventureDone.paths },
+    { id: 'every', title: 'Every level', hint: 'The same card for each level after: fill it in, build it, play it.', go: 'missions', done: adventureDone.every },
+    { id: 'refine', title: 'Refine', hint: 'Dialogue, voice, cinematics; health and damage. Check the expected paths after each change. Tick this when it feels right.', go: 'bible' },
+    { id: 'handoff', title: 'Hand off', hint: 'Send it to Godot, Unity or Unreal.', go: 'engine', done: (p) => !!p.handoff?.last },
+  ],
+};
+
+export const MODULES: readonly GameModule[] = [STORY, ADVENTURE, DEFENSE, SHOOTER, ARENA, CARDS, BLOCKS, MATCH, RUNNER, PLATFORMER];
+
+/** A story game, the graph its home: the story module and those built on it. */
+export const storyBased = (id: ModuleId): boolean => id === 'story' || id === 'adventure';
 
 export const moduleOf = (p: Project): GameModule => MODULES.find((m) => m.id === (p.module ?? 'story')) ?? STORY;
 

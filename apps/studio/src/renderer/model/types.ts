@@ -98,6 +98,8 @@ export interface LevelBand {
   endRef: string;
   /** Its map in the Level Designer. */
   mapId?: string;
+  /** Its mission card (adventure games): the mission, puzzle, clue, gains and capture it is built around. */
+  mission?: import('./missions').MissionCard;
 }
 
 export type ConnectionKind = 'spine' | 'branch' | 'contains' | 'references' | 'arcEvent' | 'laneTie' | 'gate';
@@ -311,6 +313,8 @@ export interface Project {
   characterGroups?: import('./character/groups').CharacterGroup[];
   /** Each element's, connection's, level's and level item's edit history, by target key (spec §16). */
   revisions?: Record<string, import('./collab').Revision[]>;
+  /** Captured (adventure games): where a lost fight takes the player, what is taken, and the way back. */
+  capture?: import('./capture').CaptureRule;
   /** What kind of game it is (game modules): its parts of the studio and its path. Absent: a story game. */
   module?: import('./modules').ModuleId;
   /** Path steps ticked done by hand. */

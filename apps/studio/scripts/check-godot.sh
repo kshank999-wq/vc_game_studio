@@ -57,3 +57,10 @@ cp "$here/godot-check/project.godot" "$here/godot-check/check_structure.gd" "$to
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$tomb" godot structure > /dev/null)
 "$GODOT" --headless --path "$tomb" --import > /dev/null 2>&1 || true
 "$GODOT" --headless --path "$tomb" -s check_structure.gd
+# Captured (adventure games): the sample with capture set up, the eels capturing the player who loses.
+caught="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast" "$tomb" "$caught"' EXIT
+cp "$here/godot-check/project.godot" "$here/godot-check/check_capture.gd" "$caught/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$caught" godot capture > /dev/null)
+"$GODOT" --headless --path "$caught" --import > /dev/null 2>&1 || true
+"$GODOT" --headless --path "$caught" -s check_capture.gd

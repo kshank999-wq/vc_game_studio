@@ -316,11 +316,11 @@ export const eventDetail = (project: Project, event: TimelineEvent): string => {
   }
 };
 
-export type EncounterLoss = 'Try again' | 'Game over' | 'Carry on';
+export type EncounterLoss = 'Try again' | 'Game over' | 'Carry on' | 'Captured';
 
-/** What losing an encounter leads to (its "If the player loses" field): trying again, unless it says otherwise. */
+/** What losing an encounter leads to (its "If the player loses" field): trying again, unless it says otherwise. Captured takes the player to the holding cell. */
 export const loseOf = (o: { data: Record<string, unknown> } | undefined): EncounterLoss =>
-  o?.data.onLose === 'Game over' || o?.data.onLose === 'Carry on' ? o.data.onLose : 'Try again';
+  o?.data.onLose === 'Game over' || o?.data.onLose === 'Carry on' || o?.data.onLose === 'Captured' ? o.data.onLose : 'Try again';
 
 /** The script line behind a dialogue event. */
 export const eventLine = lineOf;

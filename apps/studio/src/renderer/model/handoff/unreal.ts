@@ -1556,8 +1556,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VCGS") void ChoiceTimedOut();
     /** The player won the encounter on now; false (and nothing happens) when a win doesn't count yet. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") bool Win();
-    /** The player lost the encounter on now: it plays again, the game is over, or the scene goes on. */
+    /** The player lost the encounter on now: it plays again, the game is over, the scene goes on, or they are captured. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") void Lose();
+    /** The player is caught in play (a captor got them, their health ran out): to the holding cell. False when the story has no capture, or they are held already. */
+    UFUNCTION(BlueprintCallable, Category = "VCGS") bool Capture();
     /** Every option of the choice on offer, including ones that can't be picked now. */
     UFUNCTION(BlueprintPure, Category = "VCGS") TArray<FVcgsOption> GetOptionsDetail() const;
 
@@ -1683,6 +1685,11 @@ bool UVcgsSceneFlowComponent::Win()
 void UVcgsSceneFlowComponent::Lose()
 {
     if (Player) Player->Lose();
+}
+
+bool UVcgsSceneFlowComponent::Capture()
+{
+    return Player && Player->Capture();
 }
 
 TArray<FVcgsOption> UVcgsSceneFlowComponent::GetOptionsDetail() const

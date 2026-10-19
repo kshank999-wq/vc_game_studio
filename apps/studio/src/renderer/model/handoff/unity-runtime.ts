@@ -222,12 +222,16 @@ namespace VCGS
         /// <summary>Locations (environments), by key: name, notes and fields (the codex entry is fields.codex).</summary>
         public readonly Dictionary<string, Dictionary<string, object>> LocationDefs = new Dictionary<string, Dictionary<string, object>>();
 
+        /// <summary>Captured: the holding cell, what is taken, and the way back (see the README); empty when the story has no capture.</summary>
+        public readonly Dictionary<string, object> Capture;
+
         public static Story FromJson(string json) => new Story(D.Map(Json.Parse(json)));
 
         public Story(Dictionary<string, object> root)
         {
             Root = root;
             Name = D.Str(D.Map(root, "project"), "name");
+            Capture = D.Map(root, "capture");
             var marked = false;
             foreach (var n in D.List(root, "graph"))
             {
@@ -355,6 +359,12 @@ namespace VCGS
         public readonly Dictionary<string, string> Equipped = new Dictionary<string, string>();
         /// <summary>How many times each item of equipment has been used, toward its durability.</summary>
         public readonly Dictionary<string, int> Wear = new Dictionary<string, int>();
+        /// <summary>Captured (Rules.Capture): what was taken, kept until given back.</summary>
+        public readonly Dictionary<string, int> Taken = new Dictionary<string, int>();
+        /// <summary>Where the player was caught, while in the holding cell (Scene "" when not held).</summary>
+        public ScenePlace Held = ScenePlace.None;
+        /// <summary>Where the scene the player goes back to picks up, once out of the cell (Scene "" for none).</summary>
+        public ScenePlace Resume = ScenePlace.None;
         /// <summary>Each puzzle's step progress (PuzzleRuntime), by puzzle.</summary>
         public readonly Dictionary<string, StepProgress> PuzzleSteps = new Dictionary<string, StepProgress>();
         /// <summary>Staged hints given, and wrong answers at each object's screen puzzle.</summary>
@@ -438,6 +448,7 @@ namespace VCGS
             Loaded = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
             Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); Bookmarks.Clear(); Notes.Clear(); NoteTimes.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear(); Equipped.Clear(); Wear.Clear();
+            Taken.Clear(); Held = ScenePlace.None; Resume = ScenePlace.None;
             PuzzleSteps.Clear(); Hinted.Clear(); ScreenFails.Clear(); Clock = 0; Level = ""; LevelMap = "";
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
@@ -826,7 +837,7 @@ namespace VCGS
         /// <summary>True after a load, until the scene it resumes at starts.</summary>
         public bool Loaded;
 
-        static string Q(string s)
+        internal static string Q(string s)
         {
             var b = new System.Text.StringBuilder("\"");
             foreach (var c in s ?? "")
@@ -871,7 +882,8 @@ namespace VCGS
                 ",\n  \"equipped\": " + Map(Equipped, Q) + ",\n  \"wear\": " + Map(Wear, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
                 ",\n  \"puzzles\": " + Map(PuzzleSteps, p => p.ToJson()) + ",\n  \"hinted\": " + Sorted(Hinted) + ",\n  \"screenFails\": " + Map(ScreenFails, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) +
                 ",\n  \"clock\": " + Clock.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
-                ",\n  \"level\": " + Q(Level) + ",\n  \"levelMap\": " + Q(LevelMap);
+                ",\n  \"level\": " + Q(Level) + ",\n  \"levelMap\": " + Q(LevelMap) +
+                ",\n  \"taken\": " + Map(Taken, n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)) + ",\n  \"held\": " + Held.ToJson() + ",\n  \"resume\": " + Resume.ToJson();
         }
 
         /// <summary>Keep the game as it is now, as the scene starting (sceneKey) begins: what a save keeps. The scene player calls it.</summary>
@@ -908,6 +920,7 @@ namespace VCGS
             AutoRules = false;
             Flags.Clear(); ObjectStates.Clear(); Items.Clear(); Arcs.Clear(); Chosen.Clear();
             Solved.Clear(); Visited.Clear(); Fired.Clear(); Picked.Clear(); Quests.Clear(); Won.Clear(); MetEncounters.Clear(); MetCharacters.Clear(); FoundItems.Clear(); VisitedLocations.Clear(); UsedObjects.Clear(); KnownLore.Clear(); Mechanics.Clear(); AvailableMechanics.Clear(); Skills.Clear(); Equipped.Clear(); Wear.Clear();
+            Taken.Clear(); Held = ScenePlace.None; Resume = ScenePlace.None;
             PuzzleSteps.Clear(); Hinted.Clear(); ScreenFails.Clear();
             foreach (var f in Story.Flags) Flags[f.Key] = D.Str(f.Value, "initial");
             foreach (var o in Story.Objects)
@@ -929,6 +942,9 @@ namespace VCGS
             foreach (var e in D.Map(data, "skills")) Skills[e.Key] = (int)D.Num(e.Value, 0);
             foreach (var e in D.Map(data, "equipped")) Equipped[e.Key] = D.Str(data["equipped"] as Dictionary<string, object>, e.Key);
             foreach (var e in D.Map(data, "wear")) Wear[e.Key] = (int)D.Num(e.Value, 0);
+            foreach (var e in D.Map(data, "taken")) Taken[e.Key] = (int)D.Num(e.Value, 0);
+            Held = ScenePlace.FromJson(D.Map(data, "held"));
+            Resume = ScenePlace.FromJson(D.Map(data, "resume"));
             foreach (var q in D.List(data, "quests"))
                 if (q is Dictionary<string, object> quest && D.Str(quest, "key") != "") Quests[D.Str(quest, "key")] = D.Str(quest, "state");
             void Keys(string field, Action<string> add)
@@ -1244,6 +1260,88 @@ namespace VCGS
             Apply(D.Get(q, "reward"), game);
         }
 
+        /// <summary>The locker's verb, while it holds what a capture took.</summary>
+        public const string LockerVerb = "Take back your things";
+
+        static int Number(GameState game, string flag) => int.TryParse(game.GetFlag(flag), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 0;
+
+        static bool Listed(Dictionary<string, object> capture, string field, string key)
+        {
+            foreach (var k in D.List(capture, field)) if (k is string s && s == key) return true;
+            return false;
+        }
+
+        /// <summary>Whether a loss now captures the player: the story has capture, they aren't held already, and the loss says so ("captured") or left their health below 1.</summary>
+        public static bool Captures(string loss, GameState game)
+        {
+            var c = game.Story.Capture;
+            if (c.Count == 0 || !game.Held.IsNone) return false;
+            if (loss == "captured") return true;
+            var health = D.Str(c, "health");
+            return health != "" && Number(game, health) < 1;
+        }
+
+        /// <summary>
+        /// Captured: counted, health set, what is carried taken (and unequipped) to
+        /// keep. Returns the node to go to: the holding cell, or where one capture
+        /// too many ends the story. scene, branch and index are where the scene
+        /// picks up once the player is out.
+        /// </summary>
+        public static string Capture(GameState game, string scene, int branch, int index)
+        {
+            var c = game.Story.Capture;
+            var count = D.Str(c, "count");
+            var times = 1;
+            if (count != "")
+            {
+                times = Number(game, count) + 1;
+                game.SetFlag(count, times.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            var health = D.Str(c, "health");
+            if (health != "" && D.Get(c, "healthAfter") != null) game.SetFlag(health, ((int)D.Num(c, "healthAfter")).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            var take = D.Str(c, "take");
+            foreach (var item in new List<string>(game.Items.Keys))
+            {
+                var n = game.Items[item];
+                if (n <= 0 || Listed(c, "keep", item)) continue;
+                if (take == "all" || (take == "listed" && Listed(c, "items", item)))
+                {
+                    game.Taken[item] = (game.Taken.TryGetValue(item, out var had) ? had : 0) + n;
+                    game.TakeItem(item, n);
+                }
+            }
+            var limit = (int)D.Num(c, "limit");
+            if (limit > 0 && times >= limit && D.Str(c, "limitTo") != "") return D.Str(c, "limitTo");
+            game.Held = new ScenePlace(scene, branch, index);
+            return D.Str(c, "cell");
+        }
+
+        /// <summary>Out of the holding cell: their things back when there is no locker. Returns where the story goes on: backTo, or the scene they were caught in (it picks up past the fight).</summary>
+        public static string Escape(GameState game)
+        {
+            var c = game.Story.Capture;
+            var back = game.Held;
+            game.Held = ScenePlace.None;
+            if (D.Str(c, "locker") == "") GiveBack(game);
+            if (D.Str(c, "backTo") != "") return D.Str(c, "backTo");
+            game.Resume = back;
+            return back.Scene;
+        }
+
+        /// <summary>What a capture took, given back.</summary>
+        public static void GiveBack(GameState game)
+        {
+            var was = new Dictionary<string, int>(game.Taken);
+            game.Taken.Clear();
+            foreach (var e in was) game.GiveItem(e.Key, e.Value);
+        }
+
+        /// <summary>Whether this object is the locker, holding what a capture took.</summary>
+        public static bool LockerHolding(string obj, GameState game) => !string.IsNullOrEmpty(obj) && D.Str(game.Story.Capture, "locker") == obj && game.Taken.Count > 0;
+
+        /// <summary>Whether this character catches the player rather than fights them.</summary>
+        public static bool IsCaptor(string character, GameState game) => Listed(game.Story.Capture, "captors", character);
+
         /// <summary>Whether a win against this encounter counts now (its win rule holds).</summary>
         public static bool CanWin(string encounter, GameState game) =>
             Check(D.Get(game.Story.Encounters.TryGetValue(encounter, out var e) ? e : null, "winWhen"), game);
@@ -1255,7 +1353,7 @@ namespace VCGS
             Apply(D.Get(e, "onWin"), game);
         }
 
-        /// <summary>Do a loss's effects; returns what it leads to: "retry", "gameOver" or "carryOn".</summary>
+        /// <summary>Do a loss's effects; returns what it leads to: "retry", "gameOver", "carryOn" or "captured".</summary>
         public static string Lose(string encounter, GameState game)
         {
             game.Story.Encounters.TryGetValue(encounter, out var e);
@@ -1306,11 +1404,18 @@ namespace VCGS
                 var i = D.Map(item);
                 if (Allowed(i, obj, game)) verbs.Add(D.Str(i, "verb"));
             }
+            // The locker, while it holds what a capture took.
+            if (Rules.LockerHolding(obj, game)) verbs.Add(Rules.LockerVerb);
             return verbs;
         }
 
         public static bool Interact(GameState game, string obj, string verb)
         {
+            if (verb == Rules.LockerVerb && Rules.LockerHolding(obj, game))
+            {
+                Rules.GiveBack(game);
+                return true;
+            }
             if (!game.Story.Objects.TryGetValue(obj, out var o)) return false;
             foreach (var item in D.List(o, "interactions"))
             {
@@ -1400,6 +1505,19 @@ namespace VCGS
     /// The game answers (shows the line, plays the cinematic, hands back
     /// control) and calls Advance() or Choose() when it is done.
     /// </summary>
+    /// <summary>A place in a scene's timeline: the scene, its branch (-1 the main track) and the event.</summary>
+    public readonly struct ScenePlace
+    {
+        public readonly string Scene;
+        public readonly int Branch;
+        public readonly int Index;
+        public ScenePlace(string scene, int branch, int index) { Scene = scene ?? ""; Branch = branch; Index = index; }
+        public static readonly ScenePlace None = new ScenePlace("", -1, 0);
+        public bool IsNone => string.IsNullOrEmpty(Scene);
+        public string ToJson() => IsNone ? "{}" : "{\"scene\": " + GameState.Q(Scene) + ", \"branch\": " + Branch.ToString(System.Globalization.CultureInfo.InvariantCulture) + ", \"index\": " + Index.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}";
+        public static ScenePlace FromJson(Dictionary<string, object> d) => D.Str(d, "scene") == "" ? None : new ScenePlace(D.Str(d, "scene"), (int)D.Num(d, "branch", -1), (int)D.Num(d, "index"));
+    }
+
     public sealed class ScenePlayer
     {
         public event Action<Dictionary<string, object>> EventStarted;
@@ -1464,6 +1582,14 @@ namespace VCGS
             track = Main;
             index = -1;
             branch = -1;
+            // Back from the holding cell: on past the fight where the player was caught.
+            if (game.Resume.Scene == SceneKey)
+            {
+                branch = game.Resume.Branch >= 0 && game.Resume.Branch < Branches.Count ? game.Resume.Branch : -1;
+                if (branch >= 0) track = D.List(D.Map(Branches[branch]), "events");
+                index = game.Resume.Index - 1;
+                game.Resume = ScenePlace.None;
+            }
             Advance();
         }
 
@@ -1605,12 +1731,33 @@ namespace VCGS
         {
             var encounter = EncounterNow();
             if (encounter == "") return;
-            switch (Rules.Lose(encounter, game))
+            var loss = Rules.Lose(encounter, game);
+            // Captured: to the holding cell; the scene picks up past the fight once the player is out.
+            if (Rules.Captures(loss, game))
             {
-                case "gameOver": GameOver?.Invoke(encounter); break;
+                SceneFinished?.Invoke(Rules.Capture(game, SceneKey, branch, index + 1));
+                return;
+            }
+            switch (loss)
+            {
+                case "gameOver":
+                case "captured": GameOver?.Invoke(encounter); break;
                 case "carryOn": Advance(); break;
                 default: EncounterRequested?.Invoke(encounter, Rules.CanWin(encounter, game)); break;
             }
+        }
+
+        /// <summary>
+        /// The player is caught in play (a captor got them, their health ran out):
+        /// to the holding cell, as a captured loss would. The scene picks up after
+        /// the event on now once they are out. False (and nothing happens) when the
+        /// story has no capture, or they are held already.
+        /// </summary>
+        public bool Capture()
+        {
+            if (!Rules.Captures("captured", game)) return false;
+            SceneFinished?.Invoke(Rules.Capture(game, SceneKey, branch, index + 1));
+            return true;
         }
 
         string EncounterNow()
@@ -1620,9 +1767,10 @@ namespace VCGS
             return D.Str(ev, "kind") == "encounter" ? D.Str(ev, "ref") : "";
         }
 
-        /// <summary>Where the story goes after this scene: the first exit whose conditions hold, else onward.</summary>
+        /// <summary>Where the story goes after this scene: out of the holding cell, back where the player was caught; else the first exit whose conditions hold, else onward.</summary>
         public string NextNode()
         {
+            if (!game.Held.IsNone && SceneKey == D.Str(game.Story.Capture, "cell")) return Rules.Escape(game);
             foreach (var e in D.List(scene, "exits"))
             {
                 var exit = D.Map(e);

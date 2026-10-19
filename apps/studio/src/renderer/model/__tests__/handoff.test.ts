@@ -373,7 +373,7 @@ describe('quests and encounters in the engines', () => {
     const { storySchema } = await import('../handoff/json');
     // Read as plain JSON, the way a game would.
     const schema = JSON.parse(JSON.stringify(storySchema()));
-    expect(schema.$defs.encounter.allOf[1].properties.loss.enum).toEqual(['retry', 'gameOver', 'carryOn']);
+    expect(schema.$defs.encounter.allOf[1].properties.loss.enum).toEqual(['retry', 'gameOver', 'carryOn', 'captured']);
     expect(schema.$defs.event.properties.kind.enum).toContain('encounter');
   });
 

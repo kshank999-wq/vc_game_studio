@@ -137,8 +137,20 @@ the studio's play-through:
   `OnEncounter`. The game plays the fight and then calls `win()` / `Win()`
   (refused while the *Can be won when* rule doesn't hold) or `lose()` /
   `Lose()`. A loss does its effects, then plays the encounter again, ends the
-  game (`game_over` / `GameOver` / `OnGameOver`), or carries on through the
-  scene. Godot's placeholder scenes stand in for the fight with Win and Lose
+  game (`game_over` / `GameOver` / `OnGameOver`), carries on through the
+  scene, or captures the player.
+- **Captured**: with capture on, the data has a `capture` block (the cell,
+  what is taken, the locker, the count and health, where the story goes on,
+  the limit, the captors). A captured loss counts the capture, sets health,
+  takes what the player carries into `taken`, remembers where they were
+  (`held`), and finishes the scene toward the holding cell
+  (`scene_finished` / `SceneFinished` / `OnFinished`), so your driver plays
+  it as any next scene. When the cell's scene ends, it goes back to the scene
+  the player was caught in, which picks up past the fight. The locker object
+  offers *Take back your things* among its verbs. Call `capture()` /
+  `Capture()` on the scene flow when your gameplay catches the player (a
+  captor, health gone); `is_captor` / `IsCaptor` says who catches. Saves keep
+  `taken`, `held` and `resume`, in the same format in every engine. Godot's placeholder scenes stand in for the fight with Win and Lose
   buttons, and have a codex: press C, or the Codex button (which counts what's
   new), for the quest log (quests under way with their goals, then those done),
   the characters met (anyone with a *Codex entry* in the Bible, once they have

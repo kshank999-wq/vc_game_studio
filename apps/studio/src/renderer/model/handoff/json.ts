@@ -51,6 +51,23 @@ export const storySchema = () => ({
     quests: { type: 'array', items: ref('quest'), description: 'Quests and objectives: each starts when `starts` holds (at once without it) and is done when `completes` holds, paying `reward`.' },
     mechanics: { type: 'array', items: ref('mechanic'), description: 'Mechanics: how a system works, in the designer\'s words, and its tuning in `fields`; each usable once `availableWhen` holds.' },
     encounters: { type: 'array', items: ref('encounter'), description: 'Encounters and enemies: played by the game where an `encounter` event puts them, then won or lost.' },
+    capture: {
+      description: 'Captured: where a loss takes the player instead of ending the game, what is taken, and the way back. See the README.',
+      ...obj({
+        cell: str,
+        take: { enum: ['all', 'listed', 'none'] },
+        items: strings,
+        keep: strings,
+        locker: { type: ['string', 'null'] },
+        count: { type: ['string', 'null'] },
+        health: { type: ['string', 'null'] },
+        healthAfter: { type: ['number', 'null'] },
+        backTo: { type: ['string', 'null'] },
+        limit: { type: 'integer', minimum: 0 },
+        limitTo: { type: ['string', 'null'] },
+        captors: strings,
+      }),
+    },
     equipment: {
       type: 'array',
       description: 'Items that can be equipped: see the README.',
@@ -337,8 +354,8 @@ export const storySchema = () => ({
       description: 'A skill, ability or upgrade, learned rank by rank up to `ranks`.',
     },
     encounter: {
-      allOf: [ref('thing'), obj({ winWhen: ref('rule'), onWin: ref('effects'), onLose: ref('effects'), loss: { enum: ['retry', 'gameOver', 'carryOn'] } }, ['loss'])],
-      description: 'An encounter: a win counts only when `winWhen` holds; a win does `onWin`, a loss does `onLose` and then plays it again (retry), ends the game (gameOver) or goes on through the scene (carryOn).',
+      allOf: [ref('thing'), obj({ winWhen: ref('rule'), onWin: ref('effects'), onLose: ref('effects'), loss: { enum: ['retry', 'gameOver', 'carryOn', 'captured'] } }, ['loss'])],
+      description: 'An encounter: a win counts only when `winWhen` holds; a win does `onWin`, a loss does `onLose` and then plays it again (retry), ends the game (gameOver), goes on through the scene (carryOn) or takes the player to the holding cell (captured: see `capture`).',
     },
     thing: obj({ id: str, ident, code: str, name: str, type: str, notes: str, fields: { type: 'object', additionalProperties: str }, shots: { type: 'array', items: ref('shot') } }, ['id', 'ident', 'code', 'name', 'type', 'notes', 'fields']),
     shot: obj({ framing: str, move: str, lens: str, characters: strings, action: str, line: str, audio: str, vfx: str, seconds: num, transition: str, notes: str }, ['framing', 'move', 'seconds', 'transition']),
@@ -520,8 +537,19 @@ read, such as codex text, a quest log or tuning. All four also play, as below.
 6. **An \`encounter\` event** is a fight, chase or the like for your game to play;
    its \`ref\` is a key in \`encounters\`. A win counts only when \`winWhen\` holds;
    it does \`onWin\` and the scene goes on. A loss does \`onLose\`, then plays the
-   encounter again (\`loss: "retry"\`), ends the game (\`"gameOver"\`), or goes on
-   (\`"carryOn"\`).
+   encounter again (\`loss: "retry"\`), ends the game (\`"gameOver"\`), goes on
+   (\`"carryOn"\`), or captures the player (\`"captured"\`, below).
+   **Captured** (\`capture\`, when the story has it): on a \`"captured"\` loss, or any
+   loss that leaves the \`health\` flag below 1, add 1 to the \`count\` flag, set
+   \`health\` to \`healthAfter\` (when not null), and take what the player carries:
+   everything but \`keep\` (\`take: "all"\`), only \`items\` (\`"listed"\`), or nothing.
+   Keep what was taken. If \`count\` has reached \`limit\` (above 0), go to
+   \`limitTo\` instead. Otherwise remember where the player was (past the fight)
+   and play the \`cell\` scene. When it ends, go on at \`backTo\`, or back where
+   they were caught; give back what was taken then, unless there is a
+   \`locker\`: that object gives it back when used. Characters in \`captors\`
+   catch the player in play rather than fight them: treat their catch as a
+   captured loss.
 7. **Skills** (\`skills\`) are learned when the player chooses, a rank at a time
    up to \`ranks\`. Keep each one's rank (0 to start). A rank can be learned when
    it is below \`ranks\`, every skill in \`requires\` is at rank 1 or more,

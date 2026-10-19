@@ -190,6 +190,13 @@ const EntryView = ({ entry, voices }: { entry: Entry; voices?: Voices }) => {
           </span>
         </div>
       );
+    case 'captured':
+      return (
+        <div className="play-captured" role="note">
+          ⛓ {entry.text}
+          {entry.detail && <span className="play-note"> · {entry.detail}</span>}
+        </div>
+      );
     case 'end':
       return <div className="play-end">{entry.text}</div>;
   }

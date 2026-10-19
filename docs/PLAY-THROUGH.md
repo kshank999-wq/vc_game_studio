@@ -85,8 +85,17 @@ monitor while you fix it on another.
   from the Bible). The preview offers **Win**, only when the encounter's *Can be
   won when* rule holds (otherwise it says what it needs), and **Lose**. A win
   does its *On a win* effects and carries on. A loss does its *On a loss*
-  effects, then tries again, ends the game, or carries on, as its *If the
-  player loses* says. Edit them in the timeline inspector or the Game Bible.
+  effects, then tries again, ends the game, carries on, or captures the
+  player, as its *If the player loses* says. Edit them in the timeline
+  inspector or the Game Bible.
+- **Captured** (when the game has capture: Missions › Captured). A loss set to
+  *Captured*, or any loss that leaves Health below 1, takes the player to the
+  holding cell. The transcript shows ⛓ *Captured: taken to Holding cell*, what
+  was taken, and the count. In the cell's free play, the locker offers **Take
+  back your things**. When the cell's scene ends, the player is out: *Escaped*,
+  and the story picks up where they were caught, just past the fight (or where
+  the rule says). Captured one time too many, the story ends at the ending the
+  rule names. Saved paths replay captures like any other loss.
 - **The codex** (the Codex button, or C) shows what the player has found, as
   the engines' codex screens do: the quest log (quests under way with their
   goals, then those done), the characters met (anyone with a *Codex entry* in

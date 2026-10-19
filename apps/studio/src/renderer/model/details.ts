@@ -89,7 +89,7 @@ export const FIELDS: Partial<Record<ObjectType, readonly FieldSpec[]>> = {
   encounter: [
     { key: 'enemies', label: 'Enemies', placeholder: 'Eels, a dozen or so' },
     { key: 'weakness', label: 'Weakness', placeholder: 'Lantern light' },
-    { key: 'onLose', label: 'If the player loses', options: ['Try again', 'Game over', 'Carry on'] },
+    { key: 'onLose', label: 'If the player loses', options: ['Try again', 'Game over', 'Carry on', 'Captured'] },
   ],
   skill: [
     { key: 'kind', label: 'Kind', options: ['Skill', 'Ability', 'Upgrade'] },

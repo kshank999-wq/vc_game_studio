@@ -54,3 +54,10 @@ cp "$here/unity-check/UnityStubs.cs" "$here/unity-structure-check/"* "$tomb/"
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$tomb" unity structure > /dev/null)
 cd "$tomb"
 dotnet run --nologo -v q
+# Captured (adventure games): the sample with capture set up, the eels capturing the player who loses.
+caught="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast" "$tomb" "$caught"' EXIT
+cp "$here/unity-check/UnityStubs.cs" "$here/unity-capture-check/"* "$caught/"
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$caught" unity capture > /dev/null)
+cd "$caught"
+dotnet run --nologo -v q

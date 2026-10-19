@@ -208,6 +208,8 @@ export interface CastStep {
   poses: Record<string, CastPose>;
   /** Damage done to the player this step. */
   damage: number;
+  /** The characters whose attacks landed this step (a captor's catches the player). */
+  hitBy: string[];
   /** What happened, for the play log: "Orc Guard: Patrol → Alert: Sees it…". */
   events: string[];
 }
@@ -230,6 +232,7 @@ export const stepCast = (
 ): CastStep => {
   const next: Record<string, CastPose> = { ...poses };
   let damage = 0;
+  const hitBy: string[] = [];
   const events: string[] = [];
   // Danger: AI enemies chasing or attacking, for those who flee from fights.
   const danger = cast.filter((c) => c.ai && ['chase', 'attack'].includes(poses[c.key]?.mem?.state ?? '')).map((c) => poses[c.key]!);
@@ -268,6 +271,7 @@ export const stepCast = (
         if (attackers <= c.maxAttackers) {
           // Accuracy decides how much of a blow lands.
           damage += c.damage * (0.5 + c.ai.skill.accuracy / 200);
+          hitBy.push(c.character);
           events.push(`${c.name} attacks`);
         }
       }
@@ -323,7 +327,7 @@ export const stepCast = (
     }
     if (p !== p0) next[c.key] = p;
   }
-  return { poses: next, damage, events };
+  return { poses: next, damage, hitBy, events };
 };
 
 /** For a test or the view: how a member stands right now, in words. */

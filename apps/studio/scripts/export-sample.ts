@@ -21,6 +21,8 @@ import { levelsOf, placeAsset, resizeItem, setParam } from '../src/renderer/mode
 import { buildIR } from '../src/renderer/model/handoff/ir';
 import { runScenario } from '../src/renderer/model/handoff/cast';
 import { tombWalk, withTomb } from '../src/renderer/model/level/sample-structure';
+import { setCapture, setUpCapture } from '../src/renderer/model/capture';
+import { setData } from '../src/renderer/model/details';
 
 /**
  * With "puzzles": the sample and the built-in puzzle templates (puzzle spec
@@ -99,11 +101,24 @@ const scenarios = (project: Project) => {
   ];
 };
 
+/**
+ * With "capture": the sample with capture set up (a Holding cell off the
+ * spine, the Evidence locker in it, Times captured and Health), the Eel swarm
+ * capturing the player who loses to it, and the Orc Sentry a captor. To check
+ * the runtimes: captured, searched, out of the cell, things back from the
+ * locker, and back in The Key past the fight.
+ */
+const withCapture = (project: Project): Project => {
+  let p = addSampleCast(setUpCapture(project)).project;
+  p = setData(p, Object.values(p.objects).find((o) => o.name === 'Eel swarm')!.id, { onLose: 'Captured' });
+  return setCapture(p, { captors: [characters(p).find((c) => c.name === 'Orc Sentry')!.id] });
+};
+
 const dir = process.argv[2];
 if (!dir) throw new Error('Usage: export-sample.ts <godot project folder>');
 const engine = (process.argv[3] ?? 'godot') as EngineId;
 const tomb = process.argv[4] === 'structure' ? withTomb(sunkenVault()) : null;
-const base = process.argv[4] === 'puzzles' ? withPuzzles(sunkenVault()) : process.argv[4] === 'rooms' ? withRooms(sunkenVault()) : process.argv[4] === 'cast' ? withCast(sunkenVault()) : tomb ? tomb.project : sunkenVault();
+const base = process.argv[4] === 'puzzles' ? withPuzzles(sunkenVault()) : process.argv[4] === 'rooms' ? withRooms(sunkenVault()) : process.argv[4] === 'cast' ? withCast(sunkenVault()) : process.argv[4] === 'capture' ? withCapture(sunkenVault()) : tomb ? tomb.project : sunkenVault();
 // The project exactly as exported (its GUIDs are new each time the sample is made), for the round-trip check to read changes against.
 mkdirSync(dir!, { recursive: true });
 writeFileSync(join(dir!, 'project.json'), JSON.stringify(base));

@@ -5,7 +5,8 @@ import { StoryCanvas, type CanvasApi, type ConfirmRequest, type PaletteDrag } fr
 import { Symbol } from './components/Symbol';
 import { WorkspaceBar, type Workspace } from './components/WorkspaceBar';
 import { PathBar } from './components/path/PathBar';
-import { moduleOf, type PathStep } from './model/modules';
+import { moduleOf, storyBased, type PathStep } from './model/modules';
+import { createAdventureFromSetup } from './model/adventure';
 import { createModuleProject } from './model/module-projects';
 import { sceneTrail } from './model/subscene';
 import { TopBar, type Crumb } from './components/TopBar';
@@ -38,7 +39,7 @@ import { canExport, currentAccess, isPreview, PURCHASE_URL, useAccess } from './
 import { LicenseDialog } from './components/license/lazy';
 import { setPreferences, usePreferences } from './preferences';
 import { SearchPalette } from './components/search/SearchPalette';
-import { ArenaStudio, BlockStudio, CardStudio, MatchStudio, PlatformStudio, RunnerStudio, CharacterCreator, DefenseStudio, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShooterStudio, ShotList } from './views';
+import { MissionsView, ArenaStudio, BlockStudio, CardStudio, MatchStudio, PlatformStudio, RunnerStudio, CharacterCreator, DefenseStudio, EngineHandoff, GameBible, LevelDesigner, loadHandoff, loadSample, NoteSorter, PlayView, preloadViews, PuzzleCreator, ShooterStudio, ShotList } from './views';
 import type { LevelMode } from './components/level/LevelDesigner';
 import { NavContext } from './nav';
 import type { SearchResult } from './model/search';
@@ -60,7 +61,8 @@ export type Route =
   | { view: 'level'; focus?: string; mode?: LevelMode; back: PlaceRoute }
   | { view: 'notes'; back: PlaceRoute }
   | { view: 'puzzles'; focus?: string; back: PlaceRoute }
-  | { view: 'characters'; focus?: string; back: PlaceRoute };
+  | { view: 'characters'; focus?: string; back: PlaceRoute }
+  | { view: 'missions'; back: PlaceRoute };
 
 /** Views that stand aside from the graph and scenes, with a way back to where they were opened. */
 const isAside = (r: Route): r is Extract<Route, { back: PlaceRoute }> => 'back' in r;
@@ -104,7 +106,7 @@ export const App = () => {
   const [homeTab, setHomeTab] = useState('concept');
   const gameModule = moduleOf(project);
   /** A story game's home is the story graph; another module's is its own workspace. */
-  const storyHome = gameModule.id === 'story';
+  const storyHome = storyBased(gameModule.id);
   const homeName = storyHome ? 'Story Graph' : gameModule.name;
   const [view, setViewState] = useState<View>({ zoom: 1, panX: 180, panY: 300 });
   const setView = useCallback((update: (view: View) => View) => setViewState(update), []);
@@ -176,6 +178,7 @@ export const App = () => {
   const openBible = (focus?: string, report?: ReportKey) => setRoute((r) => ({ view: 'bible', focus, report, back: placeOf(r) }));
   const openEngine = (focus?: string) => setRoute((r) => ({ view: 'engine', focus, back: placeOf(r) }));
   const openNotes = () => setRoute((r) => ({ view: 'notes', back: placeOf(r) }));
+  const openMissions = () => setRoute((r) => ({ view: 'missions', back: placeOf(r) }));
 
   // Desktop, first run or signed out: offer to sign in and activate before anything else.
   if (__LICENSING__) {
@@ -947,6 +950,7 @@ export const App = () => {
     if (go === 'setup') setDialog('setup');
     else if (go === 'graph') setRoute({ view: 'graph' });
     else if (go === 'characters') openCharacters();
+    else if (go === 'missions') openMissions();
     else if (go === 'level') openLevels();
     else if (go === 'play') openPlay();
     else if (go === 'engine') openEngine();
@@ -974,6 +978,8 @@ export const App = () => {
           ? [{ label: homeName, onClick: () => setRoute({ view: 'graph' }) }, { label: 'Puzzle Creator' }]
         : route.view === 'characters'
           ? [{ label: homeName, onClick: () => setRoute({ view: 'graph' }) }, { label: 'Character Creator' }]
+        : route.view === 'missions'
+          ? [{ label: homeName, onClick: () => setRoute({ view: 'graph' }) }, { label: 'Missions' }]
           : route.view === 'cinematic'
             ? [
                 { label: homeName, onClick: () => setRoute({ view: 'graph' }) },
@@ -1028,6 +1034,7 @@ export const App = () => {
             if (part === 'graph') setRoute({ view: 'graph' });
             else if (part === 'bible') openBible(route.view === 'scene' ? (sceneSelection ?? route.sceneId) : route.view === 'graph' ? (selection ?? undefined) : undefined);
             else if (part === 'notes') openNotes();
+            else if (part === 'missions') openMissions();
             else if (part === 'puzzles') openPuzzles();
             else if (part === 'characters') openCharacters(route.view === 'scene' && sceneSelection && project.objects[sceneSelection]?.type === 'character' ? sceneSelection : route.view === 'graph' && selection && project.objects[selection]?.type === 'character' ? selection : undefined);
             else if (part === 'level') openLevels(route.view === 'scene' ? route.sceneId : route.view === 'graph' ? (selection ?? undefined) : undefined);
@@ -1155,6 +1162,9 @@ export const App = () => {
             {route.view === 'notes' && (
               <NoteSorter project={project} onCommit={commit} onUndo={studio.undo} canUndo={studio.canUndo} onOpenBible={openBible} onSay={say} />
             )}
+            {route.view === 'missions' && (
+              <MissionsView project={project} onCommit={commit} onOpenLevels={(id) => openLevels(id)} onOpenScene={(id) => openScene(id, 'open')} onOpenPuzzles={(id) => openPuzzles(id)} />
+            )}
             {route.view === 'puzzles' && (
               <PuzzleCreator key={route.focus ?? 'puzzles'} project={project} onCommit={commit} onOpenBible={openBible} onOpenLevels={(id) => openLevels(id)} onSay={say} focus={route.focus} />
             )}
@@ -1262,7 +1272,7 @@ export const App = () => {
           <SetupWizard
             onDone={(setup, name, module) => {
               setDialog(null);
-              showProject(module === 'story' ? createFromSetup(name, setup) : createModuleProject(module, name, setup.premise), null);
+              showProject(module === 'story' ? createFromSetup(name, setup) : module === 'adventure' ? createAdventureFromSetup(name, setup) : createModuleProject(module, name, setup.premise), null);
             }}
             onBlank={() => {
               setDialog(null);

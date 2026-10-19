@@ -19,6 +19,8 @@ smaller games that don't need a plot, characters and levels.
 *What are you making?*
 
 - **Story game** goes on to the usual four setup steps.
+- **Adventure story** goes on to the same setup steps, starting on missions,
+  several endings, keys, quest items and powers.
 - **Castle defense**, **Arcade shooter**, **Head-to-head arena**, **Card
   game**, **Puzzle game**, **Match-3**, **Runner** and **Platformer** need
   only a name and a premise. The game it makes can be played straight away.
@@ -49,6 +51,81 @@ Click a step to go where its work is done.
 | Play it | You tick it |
 | Refine | You tick it |
 | Hand off | It has been sent to an engine |
+
+### Adventure story
+
+A story game for one hero, played in first or third person, level by level:
+a mission each, a puzzle in the way, clues from the people met, items,
+powers and health. The hero can be captured, and escape. The whole story
+comes first, with every ending known; then one level is built all the way,
+and the rest follow the same card.
+
+A new adventure starts with:
+
+- a mission for each part along the spine, and a level for each on the
+  Level lane, with a mission card to fill in;
+- its endings waiting in the Endings column;
+- capture set up: a Holding cell (a scene off the spine, with a free play to
+  find the way out), an Evidence locker in it, and two number states, Times
+  captured and Health (100 to start);
+- a First power (a skill), when the game has powers.
+
+It has a **Missions** workspace beside the story graph: the mission cards,
+and **Captured**.
+
+| Step | Where | Done when |
+| --- | --- | --- |
+| Concept | Game setup | A premise |
+| The whole story and every ending | Story graph | 3 plot points; 2 or more endings, each with a way in, and all but one with a condition that earns it |
+| Levels and mission cards | Missions | 2 or more levels, each card with its mission (a quest) |
+| Hero, clue-givers, captors | Characters | 3 characters |
+| Items, powers, health, capture | Missions › Captured | An item, a power, and capture set up with nothing wrong |
+| Level 1, all the way | Missions | Level 1's card complete, and its map built |
+| Play every ending | Play-through | An expected path to each ending, and one through the holding cell |
+| Every level | Missions | Every card complete |
+| Refine | Game Bible | You tick it |
+| Hand off | Engine Handoff | Sent |
+
+**Mission cards**
+
+One card for each level of the Level lane. It is the level's checklist:
+
+- **Mission**: the quest that, done, opens the next level (**+ New** makes one).
+- **Puzzle**: the puzzle in the way.
+- **Clue**: who gives it (a character), and what it is, in a line.
+- **Gains**: what the hero gains here, items and powers.
+- **Capture**: where (or by whom) the hero can be captured here, or "none".
+- **Map**: the level's map, with something built in it (**Build the level**
+  opens it).
+
+A card warns when nothing can complete its mission yet.
+
+**Captured**
+
+- *What captures the hero*: losing an encounter whose *If the player loses* is
+  **Captured**; or, with Health set, any loss that leaves it below 1. In Play
+  Mode, health running out, or a captor's blow.
+- *What happens*: Times captured goes up, Health is set (50 to start), and
+  what the hero carries is taken (everything but what is kept, only what is
+  listed, or nothing) into the locker. The hero is taken to the holding cell:
+  in the play-through its scene plays; in Play Mode, to whatever in the
+  levels is linked to it.
+- *The way out*: the holding cell's scene; when it ends, the story picks up
+  where the hero was caught, past the fight (or at a scene you choose). The
+  locker gives their things back (**Take back your things**); with no locker,
+  they come back on the way out.
+- *Too many*: captured a set number of times, the story ends at an ending
+  you choose. Endings and choices can also depend on Times captured, like any
+  number.
+- **Captors** are characters who catch the hero in Play Mode rather than
+  fight them.
+
+**What the engine gets**
+
+The story data has a `capture` block, and each runtime (Godot, Unity,
+Unreal) plays it: the captured loss, the holding cell, the locker's verb, the
+way back past the fight, and a `capture()` call for the game's own moments
+(a captor's catch). Saves keep what was taken and where the hero was caught.
 
 ### Castle defense
 

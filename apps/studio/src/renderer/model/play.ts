@@ -9,6 +9,7 @@ import { initialState, interactionsOf, statesOf } from './details';
 import { timeLimitOf, timeoutLabelOf, timeoutPick } from './timed';
 import { spineSequence } from './layout';
 import { levelOf } from './level-of';
+import { captureOn, captureWorld, giveBackWorld, healthOut, LOCKER_VERB, lockerHolding } from './capture';
 import { transitionLevels } from './level-lane';
 import { parentSceneOf, subScenesOf } from './subscene';
 import { apply, dropEquipped, describeEffect, describeRule, evaluate, isEmpty, type Effect, type PlayState, type QuestState, type Rule } from './rules';
@@ -55,6 +56,10 @@ export interface PlayWorld extends PlayState {
   screenFails?: Record<string, number>;
   /** What each structure the player has been in remembers of it, by map (structure spec §10): carried from map to map with the story. */
   places?: Record<string, PlaceMemory>;
+  /** Captured, and not out yet: where the story picks up once the player escapes the holding cell. */
+  held?: { back: Cursor };
+  /** What a capture took from the player, kept in the locker until they take it back. */
+  taken?: Record<string, number>;
 }
 
 export type { QuestState };
@@ -92,6 +97,8 @@ export type Entry =
   /** Something crafted: what it made, and what it took (spec §8). */
   | { kind: 'craft'; text: string; detail: string }
   | { kind: 'skip'; text: string; needs: string }
+  /** Captured: taken to the holding cell (and what was taken), or out again. */
+  | { kind: 'captured'; text: string; detail?: string }
   /** Into a level of the Level lane: the one it is, and the one just finished, if any. */
   | { kind: 'level'; id: string; text: string; from?: string }
   | { kind: 'end'; text: string };
@@ -473,6 +480,48 @@ const enterLevel = (d: Doing, id: string) => {
 };
 
 /** A choice with nothing left to pick: every option gone, locked or not on offer. */
+// ---------------------------------------------------------------- captured
+
+/**
+ * The player is captured: counted, what they carry taken into the locker,
+ * health set, and taken to the holding cell (or, captured once too often,
+ * to the end the rule names). `back` is where the story picks up once out.
+ */
+const captureHere = (d: Doing, back: Cursor): Cursor => {
+  const { project } = d;
+  const r = project.capture!;
+  const c = captureWorld(project, d.world);
+  d.world = c.world;
+  if (c.ends) {
+    d.log.push({ kind: 'captured', text: `Captured (${c.times} times)`, detail: 'Once too often: the story ends here.' });
+    return { at: 'after', id: c.ends };
+  }
+  d.world = { ...d.world, held: { back } };
+  d.log.push({ kind: 'captured', text: `Captured: taken to ${name(project, r.cellId!)}`, detail: [c.taken.length ? `Taken: ${c.taken.map((id) => name(project, id)).join(', ')}` : 'Nothing taken', r.countId ? `${name(project, r.countId)}: ${c.times}` : ''].filter(Boolean).join(' · ') });
+  settle(d);
+  return { at: 'node', id: r.cellId! };
+};
+
+/** What was taken, given back (from the locker, or on the way out when there is none). */
+const giveBack = (d: Doing) => {
+  const back = giveBackWorld(d.world);
+  if (!back.items.length) return;
+  d.world = back.world;
+  d.log.push({ kind: 'captured', text: 'Got your things back', detail: back.items.map((id) => name(d.project, id)).join(', ') });
+  settle(d);
+};
+
+/** Out of the holding cell: back where the player was caught (or where the rule says), their things back if there is no locker. */
+const escape = (d: Doing): Cursor => {
+  const r = d.project.capture!;
+  const back = d.world.held!.back;
+  const { held: _out, ...rest } = d.world;
+  d.world = rest;
+  d.log.push({ kind: 'captured', text: `Escaped ${name(d.project, r.cellId!)}` });
+  if (!r.lockerId) giveBack(d);
+  return r.backTo && d.project.objects[r.backTo] ? { at: 'node', id: r.backTo } : back;
+};
+
 const stuck = (d: Doing, label: string): Cursor => {
   const text = `Stuck at ${label}: no option is left to pick.`;
   d.log.push({ kind: 'end', text });
@@ -540,6 +589,8 @@ const step = (d: Doing, cursor: Cursor, where: Play['where']): Cursor => {
     // A room played through: back to the scene it is in, to pick another or leave.
     const inside = o ? parentSceneOf(project, o.id) : undefined;
     if (inside) return { at: 'rooms', id: inside.id };
+    // The holding cell played through: the player is out.
+    if (d.world.held && captureOn(project) && cursor.id === project.capture!.cellId) return escape(d);
     // Ending's own script has played: the story ends there.
     if (o?.type === 'end') {
       d.log.push({ kind: 'end', text: o.name || 'The End' });
@@ -807,7 +858,12 @@ const chooseHere = (project: Project, play: Play, index: number): Play => {
     doEffects(d, o.data.loseEffects as Effect[] | undefined);
     settle(d);
     const loss = loseOf(o);
-    if (loss === 'Game over') {
+    // Captured: by this loss, or because it left the player's health at nothing. Already held, it plays as it would.
+    if (captureOn(project) && !d.world.held && (loss === 'Captured' || healthOut(project, d.world))) {
+      const cursor = captureHere(d, onward);
+      return run(project, { ...play, world: d.world, log: d.log, cursor });
+    }
+    if (loss === 'Game over' || loss === 'Captured') {
       const text = `Game over: lost to ${o.name}`;
       d.log.push({ kind: 'end', text });
       return { ...play, world: d.world, log: d.log, cursor: { at: 'end', outcome: 'gameOver', text } };
@@ -1354,6 +1410,12 @@ const interactHere = (project: Project, play: Play, objectId: string, interactio
   const c = play.cursor;
   const object = project.objects[objectId];
   if (c.at !== 'freePlay' || !object) return play;
+  if (interactionId === LOCKER_VERB.id) {
+    if (lockerHolding(project, play.world) !== objectId) return play;
+    const d: Doing = { project, world: play.world, log: [...play.log, { kind: 'did', text: `${LOCKER_VERB.verb} from the ${object.name}` }] };
+    giveBack(d);
+    return { ...play, world: d.world, log: d.log };
+  }
   const i = interactionsOf(object).find((x) => x.id === interactionId);
   if (!i || !interactionAllowed(project, play.world, object, i).ok) return play;
   const d: Doing = { project, world: play.world, log: [...play.log, { kind: 'did', text: `${i.verb} the ${object.name}` }] };
@@ -1519,17 +1581,21 @@ export const promptOf = (project: Project, play: Play): Prompt => {
     }
     case 'freePlay': {
       const event = eventAt(project, c)!;
+      const locker = lockerHolding(project, play.world);
       const objects = elementsIn(project, c.sceneId, 'objects')
         .concat(elementsIn(project, c.sceneId, 'puzzles'))
-        .filter((o) => interactionsOf(o).length)
+        .filter((o) => interactionsOf(o).length || o.id === locker)
         .map((o) => ({
           id: o.id,
           name: o.name,
           ...(play.world.objects[o.id] ? { state: play.world.objects[o.id] } : {}),
-          verbs: interactionsOf(o).map((i) => {
-            const allowed = interactionAllowed(project, play.world, o, i);
-            return { id: i.id, verb: i.verb, available: allowed.ok, ...(allowed.needs ? { needs: allowed.needs } : {}), does: interactionDoes(project, o, i) };
-          }),
+          verbs: [
+            ...interactionsOf(o).map((i) => {
+              const allowed = interactionAllowed(project, play.world, o, i);
+              return { id: i.id, verb: i.verb, available: allowed.ok, ...(allowed.needs ? { needs: allowed.needs } : {}), does: interactionDoes(project, o, i) };
+            }),
+            ...(o.id === locker ? [{ id: LOCKER_VERB.id, verb: LOCKER_VERB.verb, available: true, does: `Gives back ${Object.keys(play.world.taken ?? {}).map((id) => name(project, id)).join(', ')}` }] : []),
+          ],
         }));
       return {
         kind: 'freePlay',

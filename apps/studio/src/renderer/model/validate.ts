@@ -71,6 +71,8 @@ export const findIssues = (project: Project): Issue[] => {
         if (!incoming.get(id)) issues.push({ id, message: 'Nothing leads to this ending yet. Connect a plot point, scene or choice to it.' });
         continue;
       }
+      // The holding cell is reached by capture, and left by escaping.
+      if (id === project.capture?.cellId && object.type === 'scene') continue;
       if (!incoming.get(id)) issues.push({ id, message: 'Nothing leads here. Connect a choice or node to it.' });
       else if (!outgoing.get(id) && !object.data.outcome) {
         issues.push({ id, message: 'Dead end. Connect it onward, or mark it as an ending or game over.' });

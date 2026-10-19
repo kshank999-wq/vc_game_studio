@@ -41,16 +41,22 @@ trap 'rm -rf "$work" "$puzzles"' EXIT
 "$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$puzzles/Plugins/VCGS/Source/VCGS/Public" -o "$puzzles/puzzle_check" "$here/unreal-check/puzzle_check.cpp"
 (cd "$puzzles" && ./puzzle_check)
 
+# Captured (adventure games): the sample with capture set up, the eels capturing the player who loses.
+caught="$(mktemp -d)"
+trap 'rm -rf "$work" "$puzzles" "$caught"' EXIT
+(cd "$here/.." && npx vite-node scripts/export-sample.ts "$caught" unreal capture > /dev/null)
+"$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$caught/Plugins/VCGS/Source/VCGS/Public" -o "$caught/capture_check" "$here/unreal-check/capture_check.cpp"
+(cd "$caught" && ./capture_check)
 # Rooms (sub-scenes): the sample with rooms in The Cave Mouth.
 rooms="$(mktemp -d)"
-trap 'rm -rf "$work" "$puzzles" "$rooms"' EXIT
+trap 'rm -rf "$work" "$puzzles" "$caught" "$rooms"' EXIT
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$rooms" unreal rooms > /dev/null)
 "$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$rooms/Plugins/VCGS/Source/VCGS/Public" -o "$rooms/rooms_check" "$here/unreal-check/rooms_check.cpp"
 (cd "$rooms" && ./rooms_check)
 
 # The Character Creator's cast (character spec §10): the sample cast, a group area and a placed Orc Sentry.
 cast="$(mktemp -d)"
-trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast"' EXIT
+trap 'rm -rf "$work" "$puzzles" "$caught" "$rooms" "$cast"' EXIT
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$cast" unreal cast > /dev/null)
 castpublic="$cast/Plugins/VCGS/Source/VCGS/Public"
 "$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$castpublic" -o "$cast/cast_check" "$here/unreal-check/cast_check.cpp"
@@ -65,7 +71,7 @@ echo "cast classes compile against the stubs"
 
 # The Structure Creator's Old Tomb (structure spec §7, §10, §14): door rules, objectives, completion and memory, as the studio plays them.
 tomb="$(mktemp -d)"
-trap 'rm -rf "$work" "$puzzles" "$rooms" "$cast" "$tomb"' EXIT
+trap 'rm -rf "$work" "$puzzles" "$caught" "$rooms" "$cast" "$tomb"' EXIT
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$tomb" unreal structure > /dev/null)
 "$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$tomb/Plugins/VCGS/Source/VCGS/Public" -o "$tomb/structure_check" "$here/unreal-check/structure_check.cpp"
 (cd "$tomb" && ./structure_check)
