@@ -6,6 +6,9 @@ import { setData } from '../details';
 import type { Project } from '../types';
 import { addLevel, levelsOf, linkItem, placeAsset } from '../level/level';
 import { interactWith, offerFor, startLevelPlay, tick } from '../level/play';
+import { holdingSpot, holdingSpots } from '../level/holding';
+import { buildIR } from '../handoff/ir';
+import { unlinkItem, updateItem } from '../level/level';
 import { createProject, makeObject } from '../project';
 
 const named = (p: Project, name: string) => Object.values(p.objects).find((o) => o.name === name)!.id;
@@ -150,5 +153,33 @@ describe('capture in Play Mode', () => {
     let s = startLevelPlay(p, levelId);
     s = tick(p, { ...s, health: 0 }, 0.1, { x: 0, y: 0, z: 0 });
     expect(s.over?.text).toContain('Captured once too often');
+  });
+
+  it('with nothing linked to the cell, each level picks a room: one named like a cell, else the one farthest from the start', () => {
+    const { p: linked, levelId, cellId } = level();
+    let p = unlinkItem(linked, cellId, linked.capture!.cellId!);
+    const floorId = p.levels!.levels[0]!.floors[0]!.id;
+    const start = placeAsset(p, levelId, floorId, 'actor.player', { x: 0, y: 0 });
+    const near = placeAsset(start.project, levelId, floorId, 'space.room', { x: 5, y: 5 });
+    p = near.project;
+    expect(holdingSpot(p, levelId)).toMatchObject({ auto: true, item: { id: cellId } });
+    const jail = placeAsset(p, levelId, floorId, 'space.room', { x: 8, y: 0 });
+    p = updateItem(jail.project, jail.ids[0]!, { name: 'Old jail' });
+    expect(holdingSpot(p, levelId)).toMatchObject({ auto: true, item: { name: 'Old jail' } });
+    expect(holdingSpots(p)).toEqual([{ levelId, level: 'Keep', spot: expect.objectContaining({ auto: true }) }]);
+    // Play Mode takes the hero there.
+    let s = startLevelPlay(p, levelId);
+    s = tick(p, { ...s, health: 0 }, 0.1, { x: 0, y: 0, z: 0 });
+    expect(s.placePlayer).toMatchObject({ x: 8, y: 0 });
+    expect(s.log.some((e) => e.text.includes('Old jail (picked as the holding cell'))).toBe(true);
+    // The engines get it as a link to the cell.
+    const ir = buildIR(p);
+    const cellKey = ir.capture!.cell;
+    const items = ir.levels!.flatMap((l) => l.items);
+    expect(items.filter((i) => i.links.includes(cellKey)).map((i) => i.name)).toEqual(['Old jail']);
+    // A room linked by hand wins, and nothing is picked.
+    p = linkItem(p, near.ids[0]!, p.capture!.cellId!);
+    expect(holdingSpot(p, levelId)).toMatchObject({ auto: false, item: { id: near.ids[0] } });
+    expect(buildIR(p).levels!.flatMap((l) => l.items).filter((i) => i.links.includes(cellKey)).map((i) => i.guid)).toEqual([near.ids[0]]);
   });
 });

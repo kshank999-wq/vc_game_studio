@@ -15413,3 +15413,15 @@ button.bible-dual-col:hover {
 .adv-left.done {
   color: var(--c-environment);
 }
+.adv-held {
+  margin: 10px 0;
+}
+.adv-held h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.adv-held ul {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  font-size: 13px;
+}

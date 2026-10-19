@@ -17,7 +17,7 @@ import { groupsOf } from '../src/renderer/model/character/groups';
 import { characters, profileOf, updateProfile } from '../src/renderer/model/character/profile';
 import { generateVariants } from '../src/renderer/model/character/variants';
 import { frameOf } from '../src/renderer/model/level/geometry';
-import { levelsOf, linkItem, placeAsset, resizeItem, setParam } from '../src/renderer/model/level/level';
+import { levelsOf, placeAsset, resizeItem, setParam } from '../src/renderer/model/level/level';
 import { buildIR } from '../src/renderer/model/handoff/ir';
 import { runScenario } from '../src/renderer/model/handoff/cast';
 import { tombWalk, withTomb } from '../src/renderer/model/level/sample-structure';
@@ -111,10 +111,7 @@ const scenarios = (project: Project) => {
 const withCapture = (project: Project): Project => {
   let p = addSampleCast(setUpCapture(project)).project;
   p = setData(p, Object.values(p.objects).find((o) => o.name === 'Eel swarm')!.id, { onLose: 'Captured' });
-  // The holding cell is the Cave Mouth's room in the levels, where Play Mode (and each level runtime) takes the player.
-  const set = levelsOf(p);
-  const room = set.items.find((i) => i.levelId === set.levels[0]!.id && i.name === 'Cave Mouth') ?? set.items.find((i) => i.levelId === set.levels[0]!.id)!;
-  p = linkItem(p, room.id, p.capture!.cellId!);
+  // Nothing is linked to the holding cell by hand: each level picks its own room, and the export links it (level/holding.ts).
   return setCapture(p, { captors: [characters(p).find((c) => c.name === 'Orc Sentry')!.id] });
 };
 

@@ -8,6 +8,7 @@ import type { Effect, Rule } from '../rules';
 import type { Project } from '../types';
 import { assetOf, contains, frameOf, meshesFor, paramOf } from '../level/geometry';
 import { levelsOf } from '../level/level';
+import { holdingSpot } from '../level/holding';
 import { boundsOf, childOfItem, childrenOf, gridOf, kindOf, statusOf } from '../level/hierarchy';
 import { travelLabel, travelLength, travelOf, travelPoints } from '../level/travel';
 import { exportNameOf, levelExportName } from '../level/naming';
@@ -381,6 +382,9 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
     const meshes = meshesFor(set, level.id, { ceilings: true });
     const byItem = new Map<string, typeof meshes>();
     for (const m of meshes) byItem.set(m.itemId, [...(byItem.get(m.itemId) ?? []), m]);
+    // Where a catch takes the player in this map, when nothing is linked to the holding cell by hand: that spot links to it.
+    const held = holdingSpot(project, level.id);
+    const autoCell = held?.auto && project.capture?.cellId ? story.key(project.capture.cellId) : undefined;
     // Darkness zones that need a light, for the items in them.
     const darkZones = set.items.filter((i) => i.levelId === level.id && !i.hidden && paramOf(set, i, 'export') !== false && assetOf(set, i).role === 'darkness' && paramOf(set, i, 'needsLight') !== false);
     const inDark = (item: LevelItem): string[] => {
@@ -451,7 +455,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
           turn: round(-f.rotation),
           size: [round(f.w), round(f.h), round(f.d)],
           params,
-          links: (item.links ?? []).map((l) => story.key(l)).filter((k): k is string => !!k),
+          links: [...(item.links ?? []).map((l) => story.key(l)).filter((k): k is string => !!k), ...(autoCell && held!.item.id === item.id ? [autoCell] : [])],
           scenes: (item.links ?? []).filter((l) => project.objects[l]?.type === 'scene').map((l) => story.key(l)!).filter(Boolean),
           ...(item.host && itemsById.has(item.host.id) ? { host: { guid: item.host.id, wall: item.host.wall } } : {}),
           ...(f.outline ? { outline: f.outline.map((q): [number, number] => [round(q.x), round(q.y)]) } : {}),

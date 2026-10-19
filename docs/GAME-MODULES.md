@@ -124,7 +124,8 @@ holding, the hero could never leave.
   what the hero carries is taken (everything but what is kept, only what is
   listed, or nothing) into the locker. The hero is taken to the holding cell:
   in the play-through its scene plays; in Play Mode, to whatever in the
-  levels is linked to it.
+  levels is linked to it, or, with nothing linked, the room the level picks
+  (see below).
 - *The way out*: the holding cell's scene; when it ends, the story picks up
   where the hero was caught, past the fight (or at a scene you choose). The
   locker gives their things back (**Take back your things**); with no locker,
@@ -141,8 +142,11 @@ The story data has a `capture` block, and each runtime (Godot, Unity,
 Unreal) plays it: the captured loss, the holding cell, the locker's verb, the
 way back past the fight. Guards catch the hero in the engine too: a captor
 that reaches the hero in its attack captures them instead of hurting them,
-and the level moves the hero to whatever on the map is linked to the holding
-cell (link the cell to a room or spot in the level). A `catch_player` call
+and the level moves the hero to the holding cell's place on the map. Nothing
+has to be linked by hand: each level picks a room named like a cell (a jail,
+a prison, a dungeon…), else the room farthest from the player start, and the
+Captured tab lists the pick for every level. Link a room to the holding cell
+to choose it yourself; then every catch goes there. A `catch_player` call
 does the same for the game's own moments. Saves keep what was taken and where
 the hero was caught.
 

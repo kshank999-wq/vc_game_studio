@@ -16,6 +16,7 @@ import { doorRules, doorSide } from './doors';
 import { navGraph } from './nav';
 import { footprintOf, insidePolygon, OUTSIDE, structureGraph } from './structure';
 import { guid, levelsOf } from './level';
+import { holdingSpot } from './holding';
 import type { AssetDefinition, LevelAction, LevelEvent, LevelItem, LevelSet, PlayNote, PlayPreset, StructureObjective } from './types';
 
 /**
@@ -673,9 +674,10 @@ export const caught = (project: Project, state: LevelPlayState, global?: readonl
   const what = c.taken.length ? `takes ${c.taken.map((id) => name(project, id)).join(', ')}` : 'takes nothing';
   if (c.ends) return log({ ...s, over: { text: `Captured once too often: ${name(project, c.ends)}.` } }, { kind: 'warn', text: `Captured${by ? ` by ${by}` : ''} (${c.times} times): the story ends at ${name(project, c.ends)}` });
   const set = levelsOf(project);
-  const cell = set.items.find((i) => !i.hidden && (i.links ?? []).includes(r.cellId!));
-  s = log(s, { kind: 'warn', text: `Captured${by ? ` by ${by}` : ''}: ${what}${cell ? `, and is taken to ${cell.name}` : ''}` });
-  if (!cell) return say(log(s, { kind: 'warn', text: `Nothing in the levels is linked to ${name(project, r.cellId!)}: link a room to it to be taken there.` }), 'Captured!');
+  const spot = holdingSpot(project, s.levelId, global);
+  const cell = spot?.item;
+  s = log(s, { kind: 'warn', text: `Captured${by ? ` by ${by}` : ''}: ${what}${cell ? `, and is taken to ${cell.name}${spot!.auto ? ' (picked as the holding cell: link a room to it to choose)' : ''}` : ''}` });
+  if (!cell) return say(log(s, { kind: 'warn', text: `Nowhere in this level to hold the hero: add a room, or link one to ${name(project, r.cellId!)}.` }), 'Captured!');
   const f = frameOf(set, cell, global);
   const floor = set.levels.find((l) => l.id === cell.levelId)?.floors.find((fl) => fl.id === cell.floorId);
   const where = { x: f.x, y: f.y, z: (floor?.elevation ?? 0) + cell.z };

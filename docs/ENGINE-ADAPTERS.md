@@ -155,7 +155,9 @@ the studio's play-through:
   flow sets itself as `flow_now` / `FlowNow` as it starts), or from nowhere
   when none is, and raises `captured(to, by)` / `Captured` /
   `OnCaptured` + `ListenCaptured`. The level runtime listens: it moves the
-  player to the item linked to the holding cell, or, when nothing in this map
+  player to the item linked to the holding cell (when nothing is linked by
+  hand, the export links the room each map picks: one named like a cell,
+  else the room farthest from the player start), or, when nothing in this map
   is, raises `player_captured_elsewhere(to)` / `PlayerCapturedElsewhere` /
   `OnCapturedElsewhere` so you can load the map that has it. Call
   `catch_player` yourself for your own moments (health gone, a trap);

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { holdingSpots } from '../../model/level/holding';
 import { captureIssues, captureOn, clearCapture, describeCapture, setCapture, setUpCapture, type CaptureRule } from '../../model/capture';
 import { addLevelBand } from '../../model/level-lane';
 import { MISSION_SLOTS, missionBoard, setMission, type MissionCard } from '../../model/missions';
@@ -169,6 +170,31 @@ const Card = ({ project, bandId, name, card, gaps, warnings, mapId, onCommit, on
   );
 };
 
+/** Where a catch takes the hero in each map: what is linked to the holding cell, or the room the studio picks. */
+const HeldIn = ({ project }: { project: Project }) => {
+  const spots = holdingSpots(project);
+  if (!spots.length) return <p className="dfn-hint">Once the game has levels, a catch takes the hero to a room in the level: one named like a cell or jail, else the room farthest from the player start. Link a room to the holding cell to choose it yourself.</p>;
+  const linked = spots.some((s) => s.spot && !s.spot.auto);
+  return (
+    <div className="adv-held">
+      <h4>Where a catch takes the hero</h4>
+      <ul>
+        {spots.map((s) => (
+          <li key={s.levelId}>
+            <b>{s.level}</b>: {s.spot ? `${s.spot.item.name}${s.spot.auto ? ' (picked automatically)' : s.spot.item.levelId === s.levelId ? ' (linked)' : ' (linked, in another map)'}` : 'nowhere yet: add a room'}
+          </li>
+        ))}
+      </ul>
+      <p className="dfn-hint">
+        {linked
+          ? 'Something in the levels is linked to the holding cell, so every catch goes there. Unlink it to let each level pick its own room again.'
+          : 'Picked in each level: a room named like a cell, jail or prison, else the room farthest from the player start. Link a room to the holding cell to choose it yourself. The engines get the same spots.'}{' '}
+        The locker is whatever is linked to it.
+      </p>
+    </div>
+  );
+};
+
 const CapturePane = ({ project, onCommit, onOpenScene }: { project: Project; onCommit: (p: Project) => void; onOpenScene: (id: string) => void }) => {
   const r = project.capture;
   const set = (patch: Partial<CaptureRule>) => onCommit(setCapture(project, patch));
@@ -231,7 +257,7 @@ const CapturePane = ({ project, onCommit, onOpenScene }: { project: Project; onC
       {r.take === 'listed' ? <Ticks label="Taken" options={items} value={r.items ?? []} onChange={(ids) => set({ items: ids })} /> : null}
       {r.take === 'all' ? <Ticks label="Never taken (the hero keeps these)" options={items} value={r.keep ?? []} onChange={(ids) => set({ keep: ids })} /> : null}
       <Ticks label="Captors: they catch the hero in Play Mode, rather than fight" options={sorted(project, 'character')} value={r.captors ?? []} onChange={(ids) => set({ captors: ids })} />
-      <p className="dfn-hint">In Play Mode the hero is taken to whatever in the levels is linked to the holding cell (a room, say), and the locker is whatever is linked to it.</p>
+      <HeldIn project={project} />
       <div className="dfn-controls">
         {r.cellId && project.objects[r.cellId] ? (
           <button className="tb-btn primary" onClick={() => onOpenScene(r.cellId!)}>
