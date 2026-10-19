@@ -319,8 +319,41 @@ namespace VCGS
             Refreshed?.Invoke();
         }
 
-        public bool IsOpen(string guid) =>
-            Broken.Contains(guid) || (Open.TryGetValue(guid, out var open) ? open : ParamBool(guid, "startsOpen", false) || ParamStr(guid, "swing") == "open archway");
+        public bool IsOpen(string guid)
+        {
+            if (Broken.Contains(guid)) return true;
+            // A door that plays a story object (the cell door): open while that object is Open.
+            var door = D.Map(Item(guid), "door_object");
+            if (door.Count > 0) return Game.GetObjectState(D.Str(door, "key")) == "Open";
+            return Open.TryGetValue(guid, out var open) ? open : ParamBool(guid, "startsOpen", false) || ParamStr(guid, "swing") == "open archway";
+        }
+
+        /// <summary>A story door: what using it does now (the first of its uses whose when and requires hold), or null.</summary>
+        public Dictionary<string, object> DoorUse(string guid)
+        {
+            var door = D.Map(Item(guid), "door_object");
+            var state = Game.GetObjectState(D.Str(door, "key"));
+            foreach (var u in D.List(door, "uses"))
+            {
+                var use = D.Map(u);
+                if (D.Str(use, "when") != "" && D.Str(use, "when") != state) continue;
+                if (Rules.Check(D.Get(use, "requires"), Game)) return use;
+            }
+            return null;
+        }
+
+        /// <summary>What a story door waits on: the needs of the first use its state allows ("" for none).</summary>
+        public string DoorNeeds(string guid)
+        {
+            var door = D.Map(Item(guid), "door_object");
+            var state = Game.GetObjectState(D.Str(door, "key"));
+            foreach (var u in D.List(door, "uses"))
+            {
+                var use = D.Map(u);
+                if (D.Str(use, "when") == "" || D.Str(use, "when") == state) return D.Str(use, "needs");
+            }
+            return "";
+        }
 
         bool HasRule(string guid, params string[] on)
         {
@@ -340,6 +373,14 @@ namespace VCGS
             if (prompt == "") prompt = "Use";
             var label = D.Str(Item(guid), "name");
             if (TooDark(guid)) return new LevelOffer { Verb = prompt, Label = label, Blocked = HasLightSource() ? "Too dark to see. Turn your light on (L)." : "Too dark to see." + (LightSource != "" ? " It needs " + StoryName(LightSource) + " for light." : "") };
+            if (Role(guid) == "door" && D.Map(Item(guid), "door_object").Count > 0)
+            {
+                if (IsOpen(guid)) return null;
+                var use = DoorUse(guid);
+                if (use != null) return new LevelOffer { Verb = D.Str(use, "verb"), Label = label };
+                var waits = DoorNeeds(guid);
+                return new LevelOffer { Verb = prompt, Label = label, Blocked = waits != "" ? "Needs " + waits + "." : "It won\u2019t open." };
+            }
             if (Role(guid) == "door")
             {
                 if (ParamStr(guid, "swing") == "open archway" || Broken.Contains(guid)) return null;
@@ -394,7 +435,13 @@ namespace VCGS
             var said = "";
             var item = Item(guid);
             var role = Role(guid);
-            if (role == "door")
+            var storyDoor = D.Map(item, "door_object");
+            if (role == "door" && storyDoor.Count > 0)
+            {
+                Interactions.Use(Game, D.Str(storyDoor, "key"), DoorUse(guid));
+                Refreshed?.Invoke();
+            }
+            else if (role == "door")
             {
                 if (offer.Verb == "Search")
                 {
@@ -776,7 +823,7 @@ namespace VCGS
                 double dx = Player[0] - D.Num(at[0], 0), dz = Player[2] - D.Num(at[2], 0);
                 if (Math.Abs(Player[1] - D.Num(at[1], 0)) > 1 || Math.Sqrt(dx * dx + dz * dz) > Math.Max(1.1, width / 2 + 0.4)) continue;
                 near.Add(guid);
-                if (AtDoors.Contains(guid) || IsOpen(guid) || !ParamBool(guid, "autoOpen", true)) continue;
+                if (AtDoors.Contains(guid) || IsOpen(guid) || !ParamBool(guid, "autoOpen", true) || D.Map(Item(guid), "door_object").Count > 0) continue;
                 // A secret door waits to be searched.
                 if (ParamBool(guid, "secret", false) && !Found.Contains(guid)) continue;
                 Interact(guid);

@@ -164,7 +164,13 @@ the studio's play-through:
   `capture()` / `Capture()` on the flow still works. `is_captor` /
   `IsCaptor` says who catches. Each capture puts back what `relock` names
   (the cell's escape puzzle unsolved, its door and brick as they began), so
-  the cell is locked again. Saves keep
+  the cell is locked again. A level door with a `door_object` (the cell
+  door the studio builds in a level) plays that story object: `is_open` /
+  `IsOpen` is true while the object is "Open" (its collision is off then,
+  on until then), `offer` / `Offer` gives the first of its `uses` that can
+  be done now (Pick the lock, then Open) or what the next one needs, and
+  `interact` / `Interact` does it as the object's own interaction would. It
+  never opens by itself as the player walks up. Saves keep
   `taken`, `held` and `resume`, in the same format in every engine. Godot's placeholder scenes stand in for the fight with Win and Lose
   buttons, and have a codex: press C, or the Codex button (which counts what's
   new), for the quest log (quests under way with their goals, then those done),

@@ -17,6 +17,7 @@ import { groupsOf } from '../src/renderer/model/character/groups';
 import { characters, profileOf, updateProfile } from '../src/renderer/model/character/profile';
 import { generateVariants } from '../src/renderer/model/character/variants';
 import { frameOf } from '../src/renderer/model/level/geometry';
+import { buildCell } from '../src/renderer/model/level/holding';
 import { levelsOf, placeAsset, resizeItem, setParam } from '../src/renderer/model/level/level';
 import { buildIR } from '../src/renderer/model/handoff/ir';
 import { runScenario } from '../src/renderer/model/handoff/cast';
@@ -111,7 +112,8 @@ const scenarios = (project: Project) => {
 const withCapture = (project: Project): Project => {
   let p = addSampleCast(setUpCapture(project)).project;
   p = setData(p, Object.values(p.objects).find((o) => o.name === 'Eel swarm')!.id, { onLose: 'Captured' });
-  // Nothing is linked to the holding cell by hand: each level picks its own room, and the export links it (level/holding.ts).
+  // The cell built in the first level (level/holding.ts): a room linked to the holding cell, its door the escape puzzle's Cell door.
+  p = buildCell(p, levelsOf(p).levels[0]!.id);
   return setCapture(p, { captors: [characters(p).find((c) => c.name === 'Orc Sentry')!.id] });
 };
 

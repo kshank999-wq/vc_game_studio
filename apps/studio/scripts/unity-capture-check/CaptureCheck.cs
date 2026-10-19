@@ -99,6 +99,24 @@ static class CaptureCheck
         leaving.Advance();
         if (!game.Held.IsNone || after.Count != 1) Fail("out of the cell should finish it");
         Console.WriteLine("caught in play: " + string.Join(",", caught));
+        // The cell built in the level: its door plays the puzzle's Cell door, shut until the lock is picked with the nail.
+        game.Reset();
+        var level = LevelLogic.FromJson(File.ReadAllText("Assets/VCGS/Generated/Levels/sunken_vault.json"), game);
+        var door = "";
+        foreach (var g in level.Items.Keys) if (D.Map(level.Item(g), "door_object").Count > 0) door = g;
+        if (door == "") Fail("the built cell's door should play the cell door");
+        else
+        {
+            if (level.IsOpen(door) || level.Offer(door)?.Blocked == "") Fail("the cell door should be shut and locked, got " + level.Offer(door)?.Verb);
+            Console.WriteLine("cell door: " + level.Offer(door)?.Blocked);
+            game.GiveItem("bent_nail", 1);
+            if (level.Offer(door)?.Verb != "Pick the lock") Fail("with the nail the door should offer to pick the lock, got " + level.Offer(door)?.Verb);
+            level.Interact(door);
+            if (level.IsOpen(door) || level.Offer(door)?.Verb != "Open") Fail("picked, the door should be closed and ready to open, got " + level.Offer(door)?.Verb);
+            level.Interact(door);
+            if (!level.IsOpen(door) || level.Offer(door) != null) Fail("opened, the door should be open and out of the way");
+            Console.WriteLine("cell door opened: " + game.GetObjectState("cell_door"));
+        }
         return failures == 0 ? 0 : 1;
     }
 }

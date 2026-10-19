@@ -265,6 +265,10 @@ export const storySchema = () => ({
               obj({ kind: { const: 'follow' }, speed: num, distance: num }),
             ],
           },
+          door_object: {
+            description: 'A door that plays a story object (a puzzle\'s cell door): open while the object `key` is in its "Open" state, and solid until then. Using it does the first of `uses` whose `when` is the object\'s state and whose `requires` holds, as the object\'s own interaction would; with none, it says what the first waiting one `needs`. It never opens by walking up to it.',
+            ...obj({ key: str, uses: { type: 'array', items: ref('interaction') } }, ['key', 'uses']),
+          },
           in_dark: { ...strings, description: 'The darkness zones (by GUID) it is in: while any is in the level and the player’s light is off, it is too dark to use.' },
           puzzles: {
             type: 'array',

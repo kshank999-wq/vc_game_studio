@@ -14,7 +14,10 @@ import { travelLabel, travelLength, travelOf, travelPoints } from '../level/trav
 import { exportNameOf, levelExportName } from '../level/naming';
 import type { LevelItem, ParamValue } from '../level/types';
 import { fingerprint } from './engines';
-import type { IrEffect, IrRule } from './ir';
+import type { IrEffect, IrInteraction, IrRule } from './ir';
+import { storyDoorOf } from '../level/play';
+import { interactionsOf } from '../details';
+import { describeRule } from '../rules';
 import { exportedIds, structureManifest, type IrStructure } from './structures';
 
 /**
@@ -82,6 +85,14 @@ export interface IrLevelItem {
   links: string[];
   /** The scenes among them: a character here starts the first when talked to. */
   scenes: string[];
+  /**
+   * A door that plays a story object (a puzzle's cell door): its object key,
+   * open while that object is "Open", and what using the door does, in
+   * order: the object's interactions that change something. The first whose
+   * \`when\` is the object's state and whose \`requires\` holds is done; when
+   * none can be, the door says what the first waiting one \`needs\`.
+   */
+  door_object?: { key: string; uses: (IrInteraction & { needs?: string })[] };
   /** A door or window's space and wall: 0–3 north, east, south, west, or the outline's wall n (corner n to the next). */
   host?: { guid: string; wall: number };
   /** A freeform space's corners [x, z] in metres around its position, in its own frame, clockwise seen from above. */
@@ -382,6 +393,27 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
     const meshes = meshesFor(set, level.id, { ceilings: true });
     const byItem = new Map<string, typeof meshes>();
     for (const m of meshes) byItem.set(m.itemId, [...(byItem.get(m.itemId) ?? []), m]);
+    // A door linked to a story object with an Open state plays it (the cell door, locked until its lock is picked).
+    const doorObject = (item: LevelItem): { door_object?: NonNullable<IrLevelItem['door_object']> } => {
+      if (assetOf(set, item).role !== 'door') return {};
+      const id = storyDoorOf(project, item);
+      const k = id && story.key(id);
+      if (!id || !k) return {};
+      const uses = interactionsOf(project.objects[id]).filter((i) => !i.screen && (i.becomes || i.setsFlag || i.fires || i.effects?.length)).map((i) => {
+        const requires = story.rule(i.requires);
+        const effects = story.effects(i.effects);
+        return {
+          verb: i.verb,
+          ...(i.when ? { when: i.when } : {}),
+          ...(i.becomes ? { becomes: i.becomes } : {}),
+          ...(i.setsFlag && story.key(i.setsFlag) ? { sets: { flag: story.key(i.setsFlag)!, value: i.flagValue ?? '' } } : {}),
+          ...(i.fires && story.key(i.fires) ? { fires: story.key(i.fires)! } : {}),
+          ...(requires ? { requires, needs: describeRule(project, i.requires) } : {}),
+          ...(effects ? { effects } : {}),
+        };
+      });
+      return { door_object: { key: k, uses } };
+    };
     // Where a catch takes the player in this map, when nothing is linked to the holding cell by hand: that spot links to it.
     const held = holdingSpot(project, level.id);
     const autoCell = held?.auto && project.capture?.cellId ? story.key(project.capture.cellId) : undefined;
@@ -457,6 +489,7 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
           params,
           links: [...(item.links ?? []).map((l) => story.key(l)).filter((k): k is string => !!k), ...(autoCell && held!.item.id === item.id ? [autoCell] : [])],
           scenes: (item.links ?? []).filter((l) => project.objects[l]?.type === 'scene').map((l) => story.key(l)!).filter(Boolean),
+          ...doorObject(item),
           ...(item.host && itemsById.has(item.host.id) ? { host: { guid: item.host.id, wall: item.host.wall } } : {}),
           ...(f.outline ? { outline: f.outline.map((q): [number, number] => [round(q.x), round(q.y)]) } : {}),
           ...(story.rule(item.activeWhen) ? { active_when: story.rule(item.activeWhen) } : {}),

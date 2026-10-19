@@ -168,6 +168,34 @@ func caught_in_level(game: Node, cell: String) -> void:
 		fail("a catch with no scene playing should still capture, got " + str(game.held))
 	if hero.global_position.distance_to(room.global_position) > 0.01:
 		fail("the level should take the player to the room linked to the cell, got " + str(hero.global_position) + " vs " + str(room.global_position))
+	# The cell door in the level plays the puzzle's Cell door: shut and solid until the lock is picked with the nail.
+	var door := ""
+	for guid in level._data:
+		if level._data[guid].has("door_object"):
+			door = guid
+	if door == "":
+		fail("the built cell's door should play the cell door")
+		return
+	if game.has_item("bent_nail"):
+		game.consume_item("bent_nail", 1)
+	var shut: Node = level.nodes[door].get_node_or_null("Collision")
+	if level.is_open(door) or not level.offer(door).has("blocked") or (shut != null and not (shut as Node3D).visible):
+		fail("the cell door should be shut and locked, got " + str(level.offer(door)))
+	print("cell door: ", level.offer(door).get("blocked", ""))
+	game.give_item("bent_nail", 1)
+	if str(level.offer(door).get("verb", "")) != "Pick the lock":
+		fail("with the nail the door should offer to pick the lock, got " + str(level.offer(door)))
+	level.interact(door)
+	if level.is_open(door) or str(level.offer(door).get("verb", "")) != "Open":
+		fail("picked, the door should be closed and ready to open, got " + str(level.offer(door)))
+	level.interact(door)
+	if not level.is_open(door) or not level.offer(door).is_empty() or (shut != null and (shut as Node3D).visible):
+		fail("opened, the door should be open and out of the way")
+	print("cell door opened: ", game.object_states.get("cell_door", "?"))
+	# Locked in again for what follows (as a capture would).
+	game.object_states["cell_door"] = "Locked"
+	game.solved.erase("escape_the_cell")
+	game.puzzle_steps.erase("escape_the_cell")
 	# Out of the cell with nowhere to go back to: the cell goes on as the graph says.
 	var out_of: Node = load("res://vcgs/generated/scenes/%s.gd" % cell).new()
 	root.add_child(out_of)

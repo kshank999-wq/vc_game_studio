@@ -3,6 +3,8 @@
 // health set, the knife taken, to the Holding cell; the Evidence locker gives
 // it back; out of the cell, back in The Key past the fight.
 #include "VcgsCore.h"
+#include "VcgsLevel.h"
+#include <memory>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -118,5 +120,30 @@ int main()
     }
     if (!game.Held.IsNone() || after.size() != 1) Fail("out of the cell should finish it");
     std::printf("caught in play: %s\n", caught.empty() ? "-" : caught[0].c_str());
+    // The cell built in the level: its door plays the puzzle's Cell door, shut until the lock is picked with the nail.
+    game.Reset();
+    {
+        std::ifstream lin("Content/VCGS/Generated/Levels/sunken_vault.json");
+        std::stringstream lbuf;
+        lbuf << lin.rdbuf();
+        std::string lerror;
+        auto level = std::make_unique<vcgs::LevelLogic>(vcgs::JsonReader::Parse(lbuf.str(), &lerror), game);
+        std::string door;
+        for (const auto& it : level->Items)
+            if ((*it.second)["door_object"].IsObject()) door = it.first;
+        if (door.empty()) Fail("the built cell's door should play the cell door");
+        else
+        {
+            if (level->IsOpen(door) || level->Offer(door).Blocked.empty()) Fail("the cell door should be shut and locked, got " + level->Offer(door).Verb);
+            std::printf("cell door: %s\n", level->Offer(door).Blocked.c_str());
+            game.GiveItem("bent_nail", 1);
+            if (level->Offer(door).Verb != "Pick the lock") Fail("with the nail the door should offer to pick the lock, got " + level->Offer(door).Verb);
+            level->Interact(door);
+            if (level->IsOpen(door) || level->Offer(door).Verb != "Open") Fail("picked, the door should be closed and ready to open, got " + level->Offer(door).Verb);
+            level->Interact(door);
+            if (!level->IsOpen(door) || level->Offer(door).Any) Fail("opened, the door should be open and out of the way");
+            std::printf("cell door opened: %s\n", game.GetObjectState("cell_door").c_str());
+        }
+    }
     return failures == 0 ? 0 : 1;
 }

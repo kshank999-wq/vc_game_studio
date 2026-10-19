@@ -222,7 +222,7 @@ namespace vcgs
                 const double dx = PlayerX - at[0].Num(0), dz = PlayerZ - at[2].Num(0);
                 if (std::fabs(PlayerY - at[1].Num(0)) > 1 || std::sqrt(dx * dx + dz * dz) > std::max(1.1, width / 2 + 0.4)) continue;
                 near.insert(guid);
-                if (AtDoors.count(guid) || IsOpen(guid) || !ParamBool(guid, "autoOpen", true)) continue;
+                if (AtDoors.count(guid) || IsOpen(guid) || !ParamBool(guid, "autoOpen", true) || Item(guid)["door_object"].IsObject()) continue;
                 // A secret door waits to be searched.
                 if (ParamBool(guid, "secret", false) && !Found.count(guid)) continue;
                 Interact(guid);
@@ -647,9 +647,38 @@ namespace vcgs
         bool IsOpen(const std::string& guid) const
         {
             if (Broken.count(guid)) return true;
+            // A door that plays a story object (the cell door): open while that object is Open.
+            const Value& door = Item(guid)["door_object"];
+            if (door.IsObject()) return Game.GetObjectState(door["key"].Str()) == "Open";
             auto o = Open.find(guid);
             if (o != Open.end()) return o->second;
             return ParamBool(guid, "startsOpen", false) || Param(guid, "swing").Str() == "open archway";
+        }
+
+        /** A story door: what using it does now (the first of its uses whose when and requires hold), or nullptr. */
+        const Value* DoorUse(const std::string& guid) const
+        {
+            const Value& door = Item(guid)["door_object"];
+            const std::string state = Game.GetObjectState(door["key"].Str());
+            const Value& uses = door["uses"];
+            for (size_t i = 0; i < uses.Size(); i++)
+            {
+                const Value& use = uses[i];
+                if (!use["when"].Str().empty() && use["when"].Str() != state) continue;
+                if (!use["requires"].IsObject() || Rules::Check(use["requires"], Game)) return &use;
+            }
+            return nullptr;
+        }
+
+        /** What a story door waits on: the needs of the first use its state allows (empty for none). */
+        std::string DoorNeeds(const std::string& guid) const
+        {
+            const Value& door = Item(guid)["door_object"];
+            const std::string state = Game.GetObjectState(door["key"].Str());
+            const Value& uses = door["uses"];
+            for (size_t i = 0; i < uses.Size(); i++)
+                if (uses[i]["when"].Str().empty() || uses[i]["when"].Str() == state) return uses[i]["needs"].Str();
+            return "";
         }
 
         /** What Interact would do now (Any is false for nothing). */
@@ -671,6 +700,18 @@ namespace vcgs
             if (TooDark(guid))
             {
                 out.Blocked = HasLightSource() ? "Too dark to see. Turn your light on (L)." : std::string("Too dark to see.") + (LightSource.empty() ? "" : " It needs " + StoryName(LightSource) + " for light.");
+                return out;
+            }
+            if (Role(guid) == "door" && Item(guid)["door_object"].IsObject())
+            {
+                if (IsOpen(guid)) return LevelOffer();
+                if (const Value* use = DoorUse(guid))
+                {
+                    out.Verb = (*use)["verb"].Str();
+                    return out;
+                }
+                const std::string waits = DoorNeeds(guid);
+                out.Blocked = waits.empty() ? std::string("It won\xE2\x80\x99t open.") : "Needs " + waits + ".";
                 return out;
             }
             if (Role(guid) == "door")
@@ -744,7 +785,12 @@ namespace vcgs
             std::string said;
             std::string role = Role(guid);
             static const std::set<std::string> pickups = {"pickup", "inventory", "weapon", "ammo", "health"};
-            if (role == "door")
+            if (role == "door" && Item(guid)["door_object"].IsObject())
+            {
+                if (const Value* use = DoorUse(guid)) Interactions::Use(Game, Item(guid)["door_object"]["key"].Str(), *use);
+                if (OnRefresh) OnRefresh();
+            }
+            else if (role == "door")
             {
                 if (offer.Verb == "Search")
                 {

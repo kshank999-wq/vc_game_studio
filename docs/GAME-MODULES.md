@@ -148,7 +148,10 @@ holding, the hero could never leave.
   works this way: it is open while the object is Open, and using it does the
   object's next interaction. Objects linked to interaction points offer their
   next interaction by its verb (Pull out, Read), and nothing once there is
-  nothing left to do.
+  nothing left to do. The engines play the cell door the same way: in Godot,
+  Unity and Unreal the door is shut and solid until the lock is picked and it
+  is opened, never opens by walking up to it, and locks again with the cell
+  on the next capture.
 - *The way out*: the holding cell's scene; when it ends, the story picks up
   where the hero was caught, past the fight (or at a scene you choose). The
   locker gives their things back (**Take back your things**); with no locker,
