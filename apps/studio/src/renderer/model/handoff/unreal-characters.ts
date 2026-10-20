@@ -652,6 +652,8 @@ public:
     void Send(const FString& What, const FString& Detail = FString()) { OnHappened.Broadcast(What, Detail); }
     /** Where it is on the plan (metres, x east, y south). */
     void PlanPosition(double& X, double& Y) const;
+    /** The height of its feet in the world (cm): the bottom of what it collides with, so it holds whether its origin is at its feet (as here) or at its capsule's centre (as a Character's); its origin with nothing colliding. */
+    double FeetZ() const;
     /** Straight to a plan point (the core has already stepped it there); give an AI controller the same point for pathfinding. */
     void MoveTo(double X, double Y);
     /**
@@ -827,6 +829,13 @@ void AVcgsCharacterActor::PlanPosition(double& X, double& Y) const
     Y = -At.X / 100.0;
 }
 
+double AVcgsCharacterActor::FeetZ() const
+{
+    FVector Origin, Extent;
+    GetActorBounds(true, Origin, Extent);
+    return Extent.Z > 0 ? Origin.Z - Extent.Z : GetActorLocation().Z;
+}
+
 void AVcgsCharacterActor::MoveTo(double X, double Y)
 {
     const FVector At = GetActorLocation();
@@ -836,19 +845,20 @@ void AVcgsCharacterActor::MoveTo(double X, double Y)
 bool AVcgsCharacterActor::Steer(double AX, double AY, double TX, double TY, double& VX, double& VY, bool& bLast)
 {
     const FVector At = GetActorLocation();
+    const double Feet = FeetZ();
     if (!bPlaceFound)
     {
         bPlaceFound = true;
-        if (const vcgs::NavPlace* Found = vcgs::NavPlaceAt(GetWorld(), At.X, At.Y, At.Z)) Place = *Found;
+        if (const vcgs::NavPlace* Found = vcgs::NavPlaceAt(GetWorld(), At.X, At.Y, Feet)) Place = *Found;
     }
     VX = TX;
     VY = TY;
     bLast = true;
     if (!Place.Graph) return true;
     // Plan to world (X = -y, Y = x, in centimetres, at its feet), then into the level's space.
-    const vcgs::NavPoint Goal = Place.ToLevel(-TY * 100.0, TX * 100.0, At.Z);
+    const vcgs::NavPoint Goal = Place.ToLevel(-TY * 100.0, TX * 100.0, Feet);
     vcgs::NavPoint Next;
-    if (!Place.Graph->NextOnWay(Way, Place.ToLevel(-AY * 100.0, AX * 100.0, At.Z), Goal, Next)) return false;
+    if (!Place.Graph->NextOnWay(Way, Place.ToLevel(-AY * 100.0, AX * 100.0, Feet), Goal, Next)) return false;
     if (Next == Goal) return true;
     double WX = 0, WY = 0, WZ = 0;
     Place.ToWorld(Next, WX, WY, WZ);
@@ -875,8 +885,8 @@ bool UVcgsActorPerception::Blocked(double AX, double AY, double BX, double BY) c
 {
     UWorld* World = Actor ? Actor->GetWorld() : nullptr;
     if (!World) return false;
-    // At eye height (0.9 of its height) above where it stands (its root is at its feet, so a child map's floor counts), plan to world: X = -y, Y = x, in centimetres.
-    const double Eye = Actor->GetActorLocation().Z + Actor->Data["stats"]["height"].Num(1.75) * 90.0;
+    // At eye height (0.9 of its height) above its feet, wherever its origin is and on any map's floor; plan to world: X = -y, Y = x, in centimetres.
+    const double Eye = Actor->FeetZ() + Actor->Data["stats"]["height"].Num(1.75) * 90.0;
     FCollisionQueryParams Params(FName(TEXT("VcgsSight")), false, Actor);
     FHitResult Hit;
     return World->LineTraceSingleByChannel(Hit, FVector(-AY * 100.0, AX * 100.0, Eye), FVector(-BY * 100.0, BX * 100.0, Eye), ECC_Visibility, Params);
