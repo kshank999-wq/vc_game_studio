@@ -38,7 +38,7 @@ export interface CastMember {
   wanderRadius: number;
   fleeFrom: 'combat' | 'player' | 'never';
   /** Patrol stops for a patrolling member: the group's route, offset to its place in the formation. */
-  route: { x: number; y: number }[];
+  route: { x: number; y: number; wait?: number }[];
   /** An enemy (or ally) with AI: its effective profile (variant applied). */
   ai?: AIProfile;
   health: number;
@@ -71,7 +71,7 @@ const effective = (c: StoryObject, variant?: string): CharacterProfile => {
 
 const hasAI = (p: CharacterProfile) => p.roles.includes('enemy');
 
-const memberOf = (project: Project, m: CrowdMember | { key: string; character: string; variant?: string; activity: Activity; x: number; y: number; yaw: number }, itemId: string, z: number, route: { x: number; y: number }[], wanderRadius: number, placed: boolean): CastMember | undefined => {
+const memberOf = (project: Project, m: CrowdMember | { key: string; character: string; variant?: string; activity: Activity; x: number; y: number; yaw: number }, itemId: string, z: number, route: { x: number; y: number; wait?: number }[], wanderRadius: number, placed: boolean): CastMember | undefined => {
   const c = project.objects[m.character];
   if (c?.type !== 'character') return undefined;
   const p = effective(c, m.variant);
@@ -138,7 +138,7 @@ export const castOf = (project: Project, set: LevelSet, levelId: string, global?
       if (o?.type !== 'character' || !hasAI(profileOf(o))) continue;
       const f = frameOf(set, item, global);
       const name = String(paramOf(set, item, 'patrol', global) ?? '').trim();
-      const stops = name ? patrolStops(set, levelId, name, global).map((s) => ({ x: s.x, y: s.y })) : [];
+      const stops = name ? patrolStops(set, levelId, name, global).map((s) => ({ x: s.x, y: s.y, ...(s.wait > 0 ? { wait: s.wait } : {}) })) : [];
       const variant = String(paramOf(set, item, 'variant', global) ?? '') || undefined;
       const c = memberOf(project, { key: item.id, character, ...(variant ? { variant } : {}), activity: stops.length ? 'patrol' : 'guard', x: f.x, y: f.y, yaw: (item.rotation * Math.PI) / 180 }, item.id, z, stops, 0, true);
       if (c) out.push(c);

@@ -154,7 +154,7 @@ export interface IrPlacement {
   kind: 'group' | 'actor';
   group: string | null;
   /** Group members, as the studio spread them; one for a placed actor. */
-  members: { id: string; character: string; variant: string | null; activity: string; position: [number, number, number]; turn: number; route: [number, number, number][]; wander_radius: number; area: { center: [number, number]; size: [number, number]; turn: number; outline: [number, number][] | null } | null }[];
+  members: { id: string; character: string; variant: string | null; activity: string; position: [number, number, number]; turn: number; route: [number, number, number][]; route_wait?: number[]; wander_radius: number; area: { center: [number, number]; size: [number, number]; turn: number; outline: [number, number][] | null } | null }[];
 }
 
 export interface IrCastIssue {
@@ -399,6 +399,7 @@ export const buildCast = (project: Project, story: StoryKeys & { line: (lineId: 
         position: [r3(c.home.x), r3(c.z), r3(c.home.y)],
         turn: r3(-((c.yaw * 180) / Math.PI)),
         route: c.route.map((p) => [r3(p.x), r3(c.z), r3(p.y)]),
+        ...(c.route.some((p) => (p.wait ?? 0) > 0) ? { route_wait: c.route.map((p) => r3(p.wait ?? 0)) } : {}),
         wander_radius: c.wanderRadius,
         area: c.area ? { center: [r3(c.area.x), r3(c.area.y)], size: [r3(c.area.w), r3(c.area.d)], turn: r3(-c.area.rotation), outline: c.area.outline ? c.area.outline.map((o) => [r3(o.x), r3(o.y)]) : null } : null,
       });
@@ -509,7 +510,8 @@ export interface AiScenario {
   character: string;
   speed: number;
   health: number;
-  patrol: [number, number][];
+  /** Its post and stops: x, y, and (third, when there is one) how long it stands there, in seconds. */
+  patrol: ([number, number] | [number, number, number])[];
   walls: [[number, number], [number, number]][];
   /** The target at step i: (x + vx·i, y + vy·i). */
   target: { x: number; y: number; vx: number; vy: number; noisy: boolean };
@@ -523,7 +525,7 @@ export interface AiScenario {
 /** Run a scenario with the studio's machine, for the engines' checks to compare against. */
 export const runScenario = (c: IrCastCharacter, s: Omit<AiScenario, 'trail' | 'final' | 'character' | 'speed' | 'health'>): AiScenario => {
   const ai = aiFromIr(c.ai!);
-  const world: AIWorld = { patrol: s.patrol.map(([x, y]) => ({ x, y })), walls: s.walls.map(([a, b]) => [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }]), target: { x: s.target.x, y: s.target.y, noisy: s.target.noisy, alive: true } };
+  const world: AIWorld = { patrol: s.patrol.map(([x, y, wait]) => ({ x, y, ...(wait ? { wait } : {}) })), walls: s.walls.map(([a, b]) => [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }]), target: { x: s.target.x, y: s.target.y, noisy: s.target.noisy, alive: true } };
   let m = studioStart(world, ai, c.stats.health);
   const trail: string[] = [];
   for (let i = 0; i < s.steps; i++) {

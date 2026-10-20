@@ -260,8 +260,8 @@ export interface Vec {
 /** The flat world the preview runs in: walls (segments) block sight; the target may be making noise. */
 export interface AIWorld {
   target: Vec & { noisy: boolean; alive: boolean };
-  /** The actor's post and patrol stops (the first is its post). */
-  patrol: Vec[];
+  /** The actor's post and patrol stops (the first is its post); a stop's wait is how long it stands there, in seconds. */
+  patrol: (Vec & { wait?: number })[];
   walls: [Vec, Vec][];
   /** What else blocks sight between two points (a level's solids). */
   blocked?: (a: Vec, b: Vec) => boolean;
@@ -280,6 +280,8 @@ export interface AIMemory {
   sinceSeen: number;
   lastKnown?: Vec;
   patrolIndex: number;
+  /** Seconds left standing at the patrol stop it reached. */
+  pause?: number;
   health: number;
   maxHealth: number;
   cooldown: number;
@@ -406,6 +408,7 @@ export const aiStep = (ai: AIProfile, speed: number, m0: AIMemory, world: AIWorl
       reason = `${stateLabel(m.state)} → ${stateLabel(t.to)}: ${why}`;
       m.state = t.to;
       m.timer = 0;
+      delete m.pause;
       break;
     }
   }
@@ -431,8 +434,17 @@ export const aiStep = (ai: AIProfile, speed: number, m0: AIMemory, world: AIWorl
   switch (m.state) {
     case 'patrol': {
       const stops = world.patrol.length ? world.patrol : [post];
+      // Standing at the stop it reached, for as long as the stop says.
+      if ((m.pause ?? 0) > 0) {
+        m.pause = Math.max(0, m.pause! - dt);
+        if (!m.pause) delete m.pause;
+        break;
+      }
       const goal = stops[m.patrolIndex % stops.length]!;
-      if (walk(goal, speed * 0.45)) m.patrolIndex = (m.patrolIndex + 1) % stops.length;
+      if (walk(goal, speed * 0.45)) {
+        m.patrolIndex = (m.patrolIndex + 1) % stops.length;
+        if ((goal.wait ?? 0) > 0) m.pause = goal.wait;
+      }
       break;
     }
     case 'alert':

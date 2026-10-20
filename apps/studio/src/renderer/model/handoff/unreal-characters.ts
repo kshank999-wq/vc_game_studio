@@ -127,6 +127,8 @@ namespace Cast
     struct Point
     {
         double X = 0, Y = 0;
+        /** Seconds to stand there, as a patrol stop. */
+        double Wait = 0;
     };
 
     struct Wall
@@ -150,6 +152,8 @@ namespace Cast
         bool bHasLastKnown = false;
         double LastX = 0, LastY = 0;
         int PatrolIndex = 0, Attacks = 0;
+        /** Seconds left standing at the patrol stop it reached. */
+        double Pause = 0;
         bool bHit = false;
     };
 
@@ -332,6 +336,7 @@ namespace Cast
                 Reason = Label(M.State) + " → " + Label(To) + ": " + Why;
                 M.State = To;
                 M.Timer = 0;
+                M.Pause = 0;
                 break;
             }
         }
@@ -339,9 +344,18 @@ namespace Cast
         bool bAttacked = false;
         if (M.State == "patrol")
         {
-            const std::vector<Point> Stops = Patrol.empty() ? std::vector<Point>{Post} : Patrol;
-            const Point Goal = Stops[static_cast<size_t>(M.PatrolIndex) % Stops.size()];
-            if (Walk(M, Goal.X, Goal.Y, Speed * 0.45, Dt, Way)) M.PatrolIndex = (M.PatrolIndex + 1) % static_cast<int>(Stops.size());
+            // Standing at the stop it reached, for as long as the stop says.
+            if (M.Pause > 0) M.Pause = std::fmax(0, M.Pause - Dt);
+            else
+            {
+                const std::vector<Point> Stops = Patrol.empty() ? std::vector<Point>{Post} : Patrol;
+                const Point Goal = Stops[static_cast<size_t>(M.PatrolIndex) % Stops.size()];
+                if (Walk(M, Goal.X, Goal.Y, Speed * 0.45, Dt, Way))
+                {
+                    M.PatrolIndex = (M.PatrolIndex + 1) % static_cast<int>(Stops.size());
+                    if (Goal.Wait > 0) M.Pause = Goal.Wait;
+                }
+            }
         }
         else if (M.State == "alert")
         {
@@ -868,7 +882,7 @@ void UVcgsActorBehavior::Setup(AVcgsCharacterActor* Owner)
     Patrol = Owner->Route;
     double X = 0, Y = 0;
     Owner->PlanPosition(X, Y);
-    if (Patrol.empty()) Patrol.push_back(vcgs::Cast::Point{X, Y});
+    if (Patrol.empty()) Patrol.push_back(vcgs::Cast::Point{X, Y, 0});
     if (Ai.IsObject()) Memory = vcgs::Cast::StartMemory(Ai, Patrol, Owner->Health);
     Memory.X = X;
     Memory.Y = Y;
@@ -1115,7 +1129,13 @@ void AVcgsSpawnGroup::Spawn(const vcgs::Value& Cast)
             Actor->VariantKey = ToF(M["variant"].Str());
             Actor->Activity = ToF(M["activity"].Str());
             Actor->WanderRadius = static_cast<float>(M["wander_radius"].Num());
-            for (const auto& R : M["route"].items) Actor->Route.push_back(vcgs::Cast::Point{R[0].Num(), R[2].Num()});
+            // Each stop, and how long it stands there (route_wait).
+            const vcgs::Value& Waits = M["route_wait"];
+            for (size_t N = 0; N < M["route"].items.size(); N++)
+            {
+                const vcgs::Value& R = M["route"].items[N];
+                Actor->Route.push_back(vcgs::Cast::Point{R[0].Num(), R[2].Num(), N < Waits.Size() ? Waits[N].Num() : 0.0});
+            }
             if (Actor->Setup(Cast)) Spawned.Add(Actor);
         }
     }

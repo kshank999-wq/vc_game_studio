@@ -501,7 +501,7 @@ A placed actor's id is its level item's GUID. A group member's id is
 
 Each engine does the following:
 
-- **The core** plays the AI state machine exactly as the studio's preview does. The engine checks replay the studio's own scenarios step for step, reasons included: seeing, reacting, chasing, attacking, disengaging, hearing, a wall in the way and proximity.
+- **The core** plays the AI state machine exactly as the studio's preview does. The engine checks replay the studio's own scenarios step for step, reasons included: seeing, reacting, chasing, attacking, disengaging, hearing, a wall in the way, proximity, and standing at patrol stops. A patrol stop's **Wait** holds a patrolling AI there that long before it walks on (in Play Mode and every engine; characters.json gives each placed actor's `route_wait`).
 - **Spawn groups** put their people (and their patrol routes) where the studio spread them, in the level's own space: under the level in Unity they stand on the same floors as the level builder's items (Unity's z runs the other way to the studio's, so both flip it).
 - **Inventory** works out capacity and overflow.
 - **Abilities** check cost and cooldown. Damage, heal, stun and set-flag actions run. Other effects, and each ability's cue, VFX and SFX, are sent as events.

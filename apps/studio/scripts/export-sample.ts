@@ -99,6 +99,8 @@ const scenarios = (project: Project) => {
     runScenario(orc, { ...base, name: 'hears behind it, investigates', target: { x: -5, y: 0, vx: 0, vy: 0, noisy: true }, steps: 80 }),
     runScenario(orc, { ...base, name: 'blind behind a wall', walls: [[[4, -3], [4, 3]]], target: { x: 8, y: 0, vx: 0, vy: 0, noisy: false }, steps: 30 }),
     runScenario(lurker, { ...base, name: 'proximity aggro', target: { x: -1.5, y: 1, vx: 0, vy: 0, noisy: false }, steps: 40 }),
+    // A guard's round (the cell watch): standing at each stop as long as it says, then on.
+    runScenario(orc, { ...base, name: 'waits at its patrol stops', patrol: [[0, 0], [6, 0, 3], [6, 6, 1], [0, 6]], target: { x: 200, y: 200, vx: 0, vy: 0, noisy: false }, steps: 100 }),
   ];
 };
 

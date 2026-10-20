@@ -19,7 +19,8 @@ static class CastCheck
         Console.Error.WriteLine("FAIL: " + message);
     }
 
-    static List<double[]> Points(object o) => D.List(o).ConvertAll(p => new[] { D.Num(D.List(p)[0], 0), D.Num(D.List(p)[1], 0) });
+    // x, y, and how long it stands there (a patrol stop's wait) when given.
+    static List<double[]> Points(object o) => D.List(o).ConvertAll(p => new[] { D.Num(D.List(p)[0], 0), D.Num(D.List(p)[1], 0), D.List(p).Count > 2 ? D.Num(D.List(p)[2], 0) : 0 });
 
     static int Main()
     {

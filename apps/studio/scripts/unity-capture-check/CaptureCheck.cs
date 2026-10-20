@@ -117,6 +117,34 @@ static class CaptureCheck
             if (!level.IsOpen(door) || level.Offer(door) != null) Fail("opened, the door should be open and out of the way");
             Console.WriteLine("cell door opened: " + game.GetObjectState("cell_door"));
         }
+        // The cell's guard, spawned as the studio placed it: it walks the Cell watch, standing at each stop as long as it says.
+        var cast = VcgsCast.Load(File.ReadAllText("Assets/VCGS/Generated/characters.json"));
+        Dictionary<string, object> post = null;
+        foreach (var p in VcgsCast.Placements(cast))
+            foreach (var m in D.List(p, "members"))
+                if (D.Str(D.Map(m), "character") == "orc_sentry" && D.List(D.Map(m), "route").Count > 0) post = p;
+        if (post == null) Fail("the cell's guard should be placed on its round");
+        else
+        {
+            var spawner = new UnityEngine.GameObject("Cell watch").AddComponent<VcgsSpawnGroup>();
+            spawner.itemGuid = D.Str(post, "item");
+            var guard = spawner.Spawn(cast)[0];
+            var reached = new HashSet<int>();
+            double still = 0, longest = 0;
+            var last = guard.PlanPosition();
+            for (var tick = 0; tick < 600; tick++)
+            {
+                guard.Behavior.Tick(0.1f);
+                var at = guard.PlanPosition();
+                for (var k = 0; k < guard.route.Count; k++)
+                    if (Math.Abs(at[0] - guard.route[k].x) < 0.3 && Math.Abs(at[1] - guard.route[k].z) < 0.3) reached.Add(k);
+                still = Math.Abs(at[0] - last[0]) < 1e-6 && Math.Abs(at[1] - last[1]) < 1e-6 ? still + 0.1 : 0;
+                longest = Math.Max(longest, still);
+                last = at;
+            }
+            Console.WriteLine("guard round: " + guard.Behavior.State + " · stops reached " + reached.Count + " of " + guard.route.Count + " · waits " + string.Join(",", guard.routeWait) + " · longest stand " + longest.ToString("0.0") + " s");
+            if (reached.Count != guard.route.Count || guard.routeWait.Count != guard.route.Count || longest < 4 || longest > 5.5) Fail("the guard should walk every stop of the Cell watch, standing at them as long as they say");
+        }
         return failures == 0 ? 0 : 1;
     }
 }

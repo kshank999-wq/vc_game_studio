@@ -305,15 +305,31 @@ describe('capture in Play Mode', () => {
     s = tick(p, { ...s, health: 0 }, 0.1, { x: 0, y: 0, z: 0 });
     expect(s.placePlayer).toMatchObject({ x: 30, y: 30 });
     const seen = new Set<string>();
-    for (let n = 0; n < 300; n++) {
+    // How long it stands still at each place it stops (seconds), to see the waits.
+    const stood: { x: number; y: number; for: number }[] = [];
+    let last: { x: number; y: number } | undefined;
+    for (let n = 0; n < 600; n++) {
       s = tick(p, s, 0.1, { x: 30, y: 30, z: 0 });
       const pose = s.cast?.[guard.id];
       expect(pose).toBeDefined();
       expect(outside(pose!.x, pose!.y)).toBe(true);
-      seen.add(`${Math.sign(Math.round(pose!.x - 30))},${Math.sign(Math.round(pose!.y - 30))}`);
+      for (const st of stops) if (Math.hypot(st.x - pose!.x, st.y - pose!.y) < 0.3) seen.add(st.id);
+      if (last && Math.hypot(pose!.x - last.x, pose!.y - last.y) < 1e-6) {
+        const top = stood[stood.length - 1];
+        if (top && Math.hypot(top.x - pose!.x, top.y - pose!.y) < 1e-6) top.for += 0.1;
+        else stood.push({ x: pose!.x, y: pose!.y, for: 0.1 });
+      }
+      last = { x: pose!.x, y: pose!.y };
     }
-    // It went round: more than one side of the cell.
-    expect(seen.size).toBeGreaterThan(1);
+    // It went round: every stop of the Cell watch.
+    expect(seen.size).toBe(4);
+    // It waits at the stops: about 5 s at the back ones (west), about 1 s by the door (east).
+    const back = stood.filter((w) => w.x < 30 && w.for > 3);
+    const door = stood.filter((w) => w.x > 30 && w.for > 0.5);
+    expect(back.length).toBeGreaterThan(0);
+    expect(Math.max(...back.map((w) => w.for))).toBeLessThan(5.5);
+    expect(door.length).toBeGreaterThan(0);
+    expect(Math.max(...door.map((w) => w.for))).toBeLessThan(1.5);
     expect(s.world.flags[p.capture!.countId!]).toBe('1');
     // The engines get it: an enemy on the Cell watch, and its stops.
     const items = buildIR(p).levels!.flatMap((l) => l.items);

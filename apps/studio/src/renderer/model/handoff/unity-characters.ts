@@ -105,6 +105,8 @@ namespace VCGS
             public bool HasLastKnown;
             public double LastX, LastY;
             public int PatrolIndex, Attacks;
+            /// <summary>Seconds left standing at the patrol stop it reached.</summary>
+            public double Pause;
             public bool Hit;
             public Memory Copy() => (Memory)MemberwiseClone();
         }
@@ -238,6 +240,7 @@ namespace VCGS
                     reason = Label(m.State) + " → " + Label(to) + ": " + why;
                     m.State = to;
                     m.Timer = 0;
+                    m.Pause = 0;
                     break;
                 }
             }
@@ -247,9 +250,19 @@ namespace VCGS
             {
                 case "patrol":
                 {
+                    // Standing at the stop it reached, for as long as the stop says (its third value).
+                    if (m.Pause > 0)
+                    {
+                        m.Pause = Math.Max(0, m.Pause - dt);
+                        break;
+                    }
                     var stops = patrol.Count > 0 ? patrol : new List<double[]> { post };
                     var goal = stops[m.PatrolIndex % stops.Count];
-                    if (Walk(m, goal[0], goal[1], speed * 0.45, dt, steer)) m.PatrolIndex = (m.PatrolIndex + 1) % stops.Count;
+                    if (Walk(m, goal[0], goal[1], speed * 0.45, dt, steer))
+                    {
+                        m.PatrolIndex = (m.PatrolIndex + 1) % stops.Count;
+                        if (goal.Length > 2 && goal[2] > 0) m.Pause = goal[2];
+                    }
                     break;
                 }
                 case "alert":
@@ -380,6 +393,8 @@ namespace VCGS
         /// <summary>What it does when it has no AI: wander, idle, talk, work, patrol, guard.</summary>
         public string activity = "guard";
         public List<Vector3> route = new List<Vector3>();
+        /// <summary>Seconds it stands at each stop of its route (characters.json route_wait).</summary>
+        public List<float> routeWait = new List<float>();
         public float wanderRadius;
 
         public Dictionary<string, object> Data { get; private set; }
@@ -566,7 +581,11 @@ namespace VCGS
             actor = owner;
             patrol.Clear();
             patrol.Add(owner.PlanPosition());
-            foreach (var p in owner.route) patrol.Add(new double[] { p.x, p.z });
+            for (var n = 0; n < owner.route.Count; n++)
+            {
+                var p = owner.route[n];
+                patrol.Add(new double[] { p.x, p.z, n < owner.routeWait.Count ? owner.routeWait[n] : 0 });
+            }
             if (D.Get(owner.Data, "ai") is Dictionary<string, object> a)
             {
                 ai = a;
@@ -919,6 +938,7 @@ namespace VCGS
                     {
                         actor.route.Add(ToUnity(D.List(r)));
                     }
+                    foreach (var w in D.List(m, "route_wait")) actor.routeWait.Add(System.Convert.ToSingle(w, System.Globalization.CultureInfo.InvariantCulture));
                     actor.Setup(cast);
                     Spawned.Add(actor);
                 }

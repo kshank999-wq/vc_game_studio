@@ -28,7 +28,7 @@ static vcgs::Value Read(const char* path)
 static std::vector<vcgs::Cast::Point> Points(const vcgs::Value& list)
 {
     std::vector<vcgs::Cast::Point> out;
-    for (const auto& p : list.items) out.push_back(vcgs::Cast::Point{p[0].Num(), p[1].Num()});
+    for (const auto& p : list.items) out.push_back(vcgs::Cast::Point{p[0].Num(), p[1].Num(), p.Size() > 2 ? p[2].Num() : 0.0});
     return out;
 }
 

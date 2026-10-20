@@ -131,6 +131,15 @@ func _initialize() -> void:
 	game.flow_now = null
 
 var orc: VCGSActor
+var guards: VCGSSpawnGroup
+var guard_place: Dictionary = {}
+var guard_near := {}
+var guard_inside := false
+var guard_from := -1
+var guard_last := Vector2.INF
+var guard_tick := 0
+var guard_still := 0.0
+var guard_longest := 0.0
 var hero: Node3D
 var level: Node
 var frames := 0
@@ -221,9 +230,50 @@ func _process(_delta: float) -> bool:
 		orc = VCGSActor.new()
 		orc.character_key = "orc_sentry"
 		root.add_child(orc)
+		# The cell's guard, as the studio placed it (characters.json): spawned on the Cell watch.
+		var cast: Dictionary = VCGSCast.load_cast("res://vcgs/generated/characters.json")
+		for p in cast.get("placements", []):
+			for m in p.get("members", []):
+				if str(m.get("character", "")) == "orc_sentry" and not (m.get("route", []) as Array).is_empty():
+					guard_place = m
+					guards = VCGSSpawnGroup.new()
+					guards.item_guid = p["item"]
+					root.add_child(guards)
 		return false
 	if frames < 3:
 		return false
+	# The guard walks the Cell watch, round the outside of the cell, as the engine runs (20 s of frames).
+	if guards == null or guards.spawned.is_empty():
+		fail("the cell's guard should be spawned on its round")
+	else:
+		var g: VCGSActor = guards.spawned[0]
+		var route: Array = guard_place["route"]
+		var mid := Vector2(0, 0)
+		for p in route:
+			mid += Vector2(float(p[0]), float(p[2])) / route.size()
+		var at: Vector2 = g.plan_position()
+		if absf(at.x - mid.x) < 1.75 and absf(at.y - mid.y) < 1.75:
+			guard_inside = true
+		for k in route.size():
+			if at.distance_to(Vector2(float(route[k][0]), float(route[k][2]))) < 0.4:
+				guard_near[k] = true
+		# How long it stands still at a stop (the waits), in physics time.
+		var tick := Engine.get_physics_frames()
+		if guard_last != Vector2.INF and at.distance_to(guard_last) < 1e-4:
+			guard_still += float(tick - guard_tick) / 60.0
+		else:
+			guard_still = 0.0
+		guard_longest = maxf(guard_longest, guard_still)
+		guard_last = at
+		guard_tick = tick
+		if guard_from < 0:
+			guard_from = Engine.get_physics_frames()
+		# 40 s of physics (60 ticks a second): two rounds, waits and all.
+		if Engine.get_physics_frames() - guard_from < 2400:
+			return false
+		print("guard round: ", g.behavior.memory.get("state", "?"), " · stops reached ", guard_near.keys(), " · inside the cell ", guard_inside, " · longest stand %.1f s" % guard_longest)
+		if guard_near.size() < route.size() or guard_inside or guard_longest < 4.0 or guard_longest > 5.6:
+			fail("the guard should walk every stop of the Cell watch and stay out of the cell, reached " + str(guard_near.keys()))
 	# The Orc Sentry is a captor: its blow catches the player.
 	var count := str(VCGSRules.CAPTURE.get("count", ""))
 	if orc.behavior == null:
