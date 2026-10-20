@@ -458,11 +458,17 @@ const COMPONENTS_H = String.raw`${HEAD}
 #include <string>
 #include "VcgsActorComponents.generated.h"
 
+class AActor;
 class AVcgsCharacterActor;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVcgsStateEvent, const FString&, From, const FString&, To);
 
-/** PerceptionComponent: sight blocked by the world (a visibility trace between plan points). */
+/**
+ * PerceptionComponent: sight blocked by the world, a visibility trace from the
+ * character's eyes to the target's body (its head, chest and knees, from the
+ * bottom to the top of what it collides with), so a target taller or shorter,
+ * crouched or standing above or below, is seen by what shows of it.
+ */
 UCLASS(ClassGroup = (VCGS), meta = (BlueprintSpawnableComponent))
 class VCGS_API UVcgsActorPerception : public UActorComponent
 {
@@ -470,10 +476,16 @@ class VCGS_API UVcgsActorPerception : public UActorComponent
 
 public:
     void Setup(AVcgsCharacterActor* Owner) { Actor = Owner; }
+    /** What it looks at this tick (the player's pawn), or null: then it looks level, at its own eye height. */
+    void Watch(const AActor* Target);
     bool Blocked(double AX, double AY, double BX, double BY) const;
 
 private:
     AVcgsCharacterActor* Actor = nullptr;
+    const AActor* Target = nullptr;
+    /** The target's feet and top in the world (cm), when it has anything to collide with. */
+    bool bTargetBody = false;
+    double TargetBottom = 0, TargetTop = 0;
 };
 
 /**
@@ -811,6 +823,7 @@ void AVcgsCharacterActor::Tick(float DeltaSeconds)
         TX = At.Y / 100.0;
         TY = -At.X / 100.0;
     }
+    Perception->Watch(Pawn);
     Behavior->Tick(DeltaSeconds, Pawn != nullptr, TX, TY, false);
 }
 
@@ -881,15 +894,38 @@ const COMPONENTS_CPP = String.raw`${HEAD}
 using VcgsConvert::ToF;
 using VcgsConvert::ToStd;
 
+void UVcgsActorPerception::Watch(const AActor* Watched)
+{
+    Target = Watched;
+    bTargetBody = false;
+    if (!Watched) return;
+    FVector Origin, Extent;
+    Watched->GetActorBounds(true, Origin, Extent);
+    if (Extent.Z <= 0) return;
+    bTargetBody = true;
+    TargetBottom = Origin.Z - Extent.Z;
+    TargetTop = Origin.Z + Extent.Z;
+}
+
 bool UVcgsActorPerception::Blocked(double AX, double AY, double BX, double BY) const
 {
     UWorld* World = Actor ? Actor->GetWorld() : nullptr;
     if (!World) return false;
-    // At eye height (0.9 of its height) above its feet, wherever its origin is and on any map's floor; plan to world: X = -y, Y = x, in centimetres.
+    // From eye height (0.9 of its height) above its feet, wherever its origin is and on any map's floor; plan to world: X = -y, Y = x, in centimetres.
     const double Eye = Actor->FeetZ() + Actor->Data["stats"]["height"].Num(1.75) * 90.0;
     FCollisionQueryParams Params(FName(TEXT("VcgsSight")), false, Actor);
-    FHitResult Hit;
-    return World->LineTraceSingleByChannel(Hit, FVector(-AY * 100.0, AX * 100.0, Eye), FVector(-BY * 100.0, BX * 100.0, Eye), ECC_Visibility, Params);
+    if (Target) Params.AddIgnoredActor(Target);
+    const FVector From(-AY * 100.0, AX * 100.0, Eye);
+    // To the target's head, chest and knees: seen when any of them shows. With no body to go by, level.
+    const double Tall = TargetTop - TargetBottom;
+    const double Heights[3] = {TargetBottom + Tall * 0.9, TargetBottom + Tall * 0.5, TargetBottom + Tall * 0.2};
+    const int Count = bTargetBody ? 3 : 1;
+    for (int N = 0; N < Count; N++)
+    {
+        FHitResult Hit;
+        if (!World->LineTraceSingleByChannel(Hit, From, FVector(-BY * 100.0, BX * 100.0, bTargetBody ? Heights[N] : Eye), ECC_Visibility, Params)) return false;
+    }
+    return true;
 }
 
 void UVcgsActorBehavior::Setup(AVcgsCharacterActor* Owner)
