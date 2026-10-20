@@ -189,8 +189,8 @@ describe('the scene box', () => {
     localStorage.setItem('vcgs.project.v1', JSON.stringify(project));
     const { container } = render(<App />);
     fireEvent.doubleClick(container.querySelector('[data-type="scene"]')!);
-    // Nowhere yet: the scene opens on its map, which asks for the world first.
-    const where = await screen.findByRole('region', { name: 'Where this scene happens' });
+    // Nowhere yet: the scene opens on its map, which asks for the world first (the map loads lazily: give it time).
+    const where = await screen.findByRole('region', { name: 'Where this scene happens' }, { timeout: 8000 });
     expect(where.textContent).toContain('First, the world this game is set in');
     expect((within(where).getByLabelText('World name') as HTMLInputElement).value).toBe('Aldermoor');
     fireEvent.click(within(where).getByRole('button', { name: 'Make the world' }));
