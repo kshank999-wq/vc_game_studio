@@ -91,6 +91,15 @@ if placed["TRG_VaultChamber_DoorInTheDarkTrigger_002"].get_editor_property("zone
 trigger = placed["TRG_VaultChamber_DoorInTheDarkTrigger_002"]
 if trigger.get_editor_property("box").calls.get("set_collision_profile_name") != ("Trigger",):
     fail("a volume's box should be a trigger")
+# The vault's cast actors (a placed enemy with AI) come on with the map's own spawn group, for its placed actors only.
+with open(os.path.join(work, "Content/VCGS/Generated/Levels/sunken_vault.json"), encoding="utf-8") as f:
+    vault = json.load(f)
+cast_items = [i for i in vault["items"] if i.get("cast")]
+groups = [a for a in fake_unreal._actors if isinstance(a, fake_unreal.VcgsSpawnGroup) and a.get_editor_property("level_guid") == vault["guid"]]
+if cast_items and (len(groups) != 1 or not groups[0].get_editor_property("actors_only")):
+    fail("the vault should get its own Cast spawn group for its %d placed actor(s), got %d" % (len(cast_items), len(groups)))
+else:
+    print("vault cast: %d placed actor(s), %d spawn group" % (len(cast_items), len(groups)))
 directors = [a for a in fake_unreal._actors if isinstance(a, fake_unreal.VcgsLevelDirector)]
 if len(directors) != 1 or directors[0].get_editor_property("level_file") != "VCGS/Generated/Levels/sunken_vault.json":
     fail("a director should be placed with its level file")

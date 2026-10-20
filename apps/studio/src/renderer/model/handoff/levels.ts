@@ -1,4 +1,5 @@
 import { motionOf, PATROLLERS } from '../level/actors';
+import { profileOf } from '../character/profile';
 import { BODY } from '../level/controller';
 import { navGraph } from '../level/nav';
 import { limitsOf, METRICS, tallyOf, type Limits, type Metric } from '../level/budget';
@@ -111,6 +112,14 @@ export interface IrLevelItem {
    * or a companion's follow distance. Speeds in metres a second.
    */
   motion?: IrMotion;
+  /**
+   * A placed actor the Character Creator's cast plays (an enemy whose
+   * character has AI): characters.json has it, with its route and waits, and
+   * the level's own spawn group brings it on as a character actor. Its item
+   * here is only where it stands in the editor: the level runtime hides it
+   * and doesn't move it.
+   */
+  cast?: true;
   /** The darkness zones it is in that need a light (spec §6): while any is in the level and the player's light is off, it can't be used. */
   in_dark?: string[];
   /** The parts it plays in puzzles (spec V2 §14), as bound: the puzzle's key, the role, and the step's key. */
@@ -380,7 +389,14 @@ export const buildLevels = (project: Project, story: StoryKeys): IrLevel[] => {
       },
     };
   };
-  const motionFor = (item: (typeof set.items)[number]): { motion?: IrMotion } => {
+  // Placed enemies with AI are the cast's (characters.json): the character actor walks, not the item.
+  const castActor = (item: (typeof set.items)[number]): boolean => {
+    if (assetOf(set, item).role !== 'enemy') return false;
+    const o = project.objects[String(paramOf(set, item, 'character') ?? '')];
+    return o?.type === 'character' && profileOf(o).roles.includes('enemy');
+  };
+  const motionFor = (item: (typeof set.items)[number]): { motion?: IrMotion; cast?: true } => {
+    if (castActor(item)) return { cast: true };
     const m = motionOf(set, item);
     if (!m) return {};
     if (m.kind === 'follow') return { motion: { kind: 'follow', speed: round(m.speed), distance: round(m.distance) } };

@@ -1305,6 +1305,12 @@ namespace VCGS
         public string guid = "";
         [Tooltip("How the game reaches it (spec V2 §13): continuous, streamed, instanced, transition or mapOnly.")]
         public string boundary = "continuous";
+        [Tooltip("The Character Creator's cast (Assets/VCGS/Generated/characters.json): the level brings on its placed actors from it.")]
+        public TextAsset charactersJson = null;
+        [Tooltip("Bring on the cast's placed actors (an enemy with AI, the cell's guard) as character actors when the level is set up: a VcgsSpawnGroup named Cast. Off to place your own spawn groups.")]
+        public bool spawnCast = true;
+        /// <summary>The level's own spawn group for its cast's placed actors (null until it has one).</summary>
+        public Component CastGroup { get; private set; }
 
         public LevelLogic Logic { get; private set; }
         /// <summary>Where its people can walk (spec §19 navmesh), in level space (z south): characters under it steer round walls on it.</summary>
@@ -1336,6 +1342,7 @@ namespace VCGS
             }
             Logic.Refreshed += Refresh;
             state.Captured += OnCaptured;
+            SpawnCast();
             Dress();
             // Sight is blocked by anything solid but the player and the actors themselves.
             Logic.Blocked = (a, b) =>
@@ -1453,13 +1460,35 @@ namespace VCGS
             }
         }
 
+        /// <summary>
+        /// The level's own spawn group (spawnCast): the cast's placed actors in this level, only when it has
+        /// any and the project has characters. The spawn group is found by name, so a project without the
+        /// Character Creator's components still builds.
+        /// </summary>
+        void SpawnCast()
+        {
+            if (!spawnCast || CastGroup != null || charactersJson == null) return;
+            var any = false;
+            foreach (var guid in Logic.Order) if (D.Bool(Logic.Item(guid), "cast")) any = true;
+            var type = typeof(VcgsLevel).Assembly.GetType("VCGS.VcgsSpawnGroup");
+            if (!any || type == null) return;
+            var go = new GameObject("Cast");
+            go.transform.SetParent(transform, false);
+            var group = go.AddComponent(type);
+            type.GetField("charactersJson").SetValue(group, charactersJson);
+            type.GetField("levelGuid").SetValue(group, guid);
+            type.GetField("actorsOnly").SetValue(group, true);
+            CastGroup = group;
+        }
+
         /// <summary>Show what is there and hide what is not; open and shut doors.</summary>
         public void Refresh()
         {
             if (Logic == null) return;
             foreach (var pair in items)
             {
-                var here = Logic.IsPresent(pair.Key);
+                // A cast actor's item is only where it stands in the editor: its character actor plays it.
+                var here = Logic.IsPresent(pair.Key) && !D.Bool(Logic.Item(pair.Key), "cast");
                 pair.Value.gameObject.SetActive(here);
                 if (Logic.Role(pair.Key) != "door") continue;
                 var shut = here && !Logic.IsOpen(pair.Key);
@@ -1717,6 +1746,9 @@ namespace VCGS.EditorTools
             if (level == null) level = root.AddComponent<VcgsLevel>();
             var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(assetPath);
             if (asset != null) level.level = asset;
+            // The cast, next to the levels' folder: the level brings its placed actors on from it.
+            var cast = AssetDatabase.LoadAssetAtPath<TextAsset>(System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(assetPath)).Replace('\\', '/') + "/characters.json");
+            if (cast != null) level.charactersJson = cast;
 
             var existing = new Dictionary<string, VcgsLevelItem>();
             foreach (var item in root.GetComponentsInChildren<VcgsLevelItem>(true))

@@ -147,10 +147,9 @@ holding, the hero could never leave.
   the cell, past the door quickly and a long wait at the back, so there is a
   moment to slip out. If it sees the hero it chases them, and its blow
   captures them, back into the cell. A cell built before has **Post a guard**.
-  In the engines the guard is a character actor (a spawn group with the
-  level's GUID, or the guard's own item GUID, spawns it from
-  characters.json): its AI walks the same four stops, stands 1 s by the door
-  and 5 s at the back, and its blow captures. The room needs to be 5.5 m each way, and the
+  In the engines the guard is a character actor, and the level brings it on
+  itself: its AI walks the same four stops, stands 1 s by the door and 5 s at
+  the back, and its blow captures. The room needs to be 5.5 m each way, and the
   player can't start where the cell goes. In Play Mode the hero is caught,
   locked in, and gets out by playing the puzzle; caught again, the cell is
   locked again. A door linked to a story object with an Open state always

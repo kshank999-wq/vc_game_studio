@@ -909,6 +909,8 @@ namespace VCGS
         public TextAsset charactersJson;
         public string itemGuid = "";
         public string levelGuid = "";
+        [Tooltip("Only placed actors (an enemy with AI), not Character group areas: what a level's own spawn group brings on.")]
+        public bool actorsOnly;
         public readonly List<VcgsActor> Spawned = new List<VcgsActor>();
 
         void Start()
@@ -921,6 +923,7 @@ namespace VCGS
             foreach (var p in VcgsCast.Placements(cast, levelGuid))
             {
                 if (itemGuid != "" && D.Str(p, "item") != itemGuid) continue;
+                if (actorsOnly && D.Str(p, "kind") != "actor") continue;
                 foreach (var o in D.List(p, "members"))
                 {
                     var m = D.Map(o);

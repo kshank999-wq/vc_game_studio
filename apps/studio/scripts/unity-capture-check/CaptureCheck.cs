@@ -126,9 +126,23 @@ static class CaptureCheck
         if (post == null) Fail("the cell's guard should be placed on its round");
         else
         {
-            var spawner = new UnityEngine.GameObject("Cell watch").AddComponent<VcgsSpawnGroup>();
-            spawner.itemGuid = D.Str(post, "item");
-            var guard = spawner.Spawn(cast)[0];
+            // The level brings it on itself: built as the editor builds it (characters.json beside the levels), set up, its Cast spawn group made.
+            var levelPath = "Assets/VCGS/Generated/Levels/sunken_vault.json";
+            var levelJson = File.ReadAllText(levelPath);
+            UnityEditor.AssetDatabase.CreateAsset(new UnityEngine.TextAsset { text = File.ReadAllText("Assets/VCGS/Generated/characters.json") }, "Assets/VCGS/Generated/characters.json");
+            VCGS.EditorTools.VcgsLevelBuilder.Build(levelJson, levelPath, false);
+            var levelRoot = UnityEngine.GameObject.Find(D.Str(D.Map(Json.Parse(levelJson)), "export_name"));
+            var built = levelRoot.GetComponent<VcgsLevel>();
+            if (built.charactersJson == null) Fail("the builder should give the level its characters.json");
+            built.level = new UnityEngine.TextAsset { text = levelJson };
+            built.Setup(new GameState(story));
+            var group = built.CastGroup as VcgsSpawnGroup;
+            if (group == null || !group.actorsOnly || group.levelGuid != built.guid) { Fail("the level should make its own Cast spawn group for its placed actors"); return 1; }
+            // Start spawns in Unity; here, by hand.
+            var guard = group.Spawn(cast).Count == 1 ? group.Spawned[0] : null;
+            if (guard == null) { Fail("the level's Cast should bring on just the cell's guard, got " + group.Spawned.Count); return 1; }
+            var marker = levelRoot.transform.Find(D.Str(D.Map(D.List(D.Map(Json.Parse(levelJson)), "items").Find(i => D.Bool(D.Map(i), "cast"))), "export_name"));
+            if (marker == null || marker.gameObject.activeSelf) Fail("the guard's level item should be hidden: its character actor plays it");
             var reached = new HashSet<int>();
             double still = 0, longest = 0;
             var last = guard.PlanPosition();

@@ -131,7 +131,7 @@ func _initialize() -> void:
 	game.flow_now = null
 
 var orc: VCGSActor
-var guards: VCGSSpawnGroup
+var guards: Node
 var guard_place: Dictionary = {}
 var guard_near := {}
 var guard_inside := false
@@ -230,21 +230,24 @@ func _process(_delta: float) -> bool:
 		orc = VCGSActor.new()
 		orc.character_key = "orc_sentry"
 		root.add_child(orc)
-		# The cell's guard, as the studio placed it (characters.json): spawned on the Cell watch.
+		# The cell's guard, as the studio placed it (characters.json): the level brought it on itself (its Cast spawn group).
 		var cast: Dictionary = VCGSCast.load_cast("res://vcgs/generated/characters.json")
 		for p in cast.get("placements", []):
 			for m in p.get("members", []):
 				if str(m.get("character", "")) == "orc_sentry" and not (m.get("route", []) as Array).is_empty():
 					guard_place = m
-					guards = VCGSSpawnGroup.new()
-					guards.item_guid = p["item"]
-					root.add_child(guards)
+		if level != null and level.cast_group != null:
+			guards = level.cast_group
+		# Its level item is only where it stands in the editor: hidden, the character actor plays it.
+		for guid in level._data:
+			if level._data[guid].get("cast", false) and level.nodes.has(guid) and (level.nodes[guid] as Node3D).visible:
+				fail("the guard's level item should be hidden: its character actor plays it")
 		return false
 	if frames < 3:
 		return false
 	# The guard walks the Cell watch, round the outside of the cell, as the engine runs (20 s of frames).
-	if guards == null or guards.spawned.is_empty():
-		fail("the cell's guard should be spawned on its round")
+	if guards == null or guards.spawned.size() != 1:
+		fail("the level should bring the cell's guard on itself (one actor, only its placed actors), got " + (str(guards.spawned.size()) if guards else "no spawn group"))
 	else:
 		var g: VCGSActor = guards.spawned[0]
 		var route: Array = guard_place["route"]

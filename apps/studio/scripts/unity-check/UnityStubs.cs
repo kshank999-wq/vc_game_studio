@@ -86,6 +86,14 @@ namespace UnityEngine
 
         public void SetActive(bool value) => activeSelf = value;
 
+        public Component AddComponent(System.Type type)
+        {
+            var c = (Component)System.Activator.CreateInstance(type);
+            c.gameObject = this;
+            components.Add(c);
+            return c;
+        }
+
         public T AddComponent<T>() where T : Component, new()
         {
             var c = new T();

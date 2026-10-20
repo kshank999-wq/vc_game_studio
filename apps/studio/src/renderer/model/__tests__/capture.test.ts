@@ -331,8 +331,14 @@ describe('capture in Play Mode', () => {
     expect(door.length).toBeGreaterThan(0);
     expect(Math.max(...door.map((w) => w.for))).toBeLessThan(1.5);
     expect(s.world.flags[p.capture!.countId!]).toBe('1');
-    // The engines get it: an enemy on the Cell watch, and its stops.
-    const items = buildIR(p).levels!.flatMap((l) => l.items);
-    expect(items.find((i) => i.guid === guard.id)).toMatchObject({ role: 'enemy', motion: { kind: 'patrol', name: CELL_WATCH } });
+    // The engines get it as the cast's: in characters.json, on its round with its waits; its level item is only where it stands (the level's spawn group brings it on).
+    const ir = buildIR(p);
+    const item = ir.levels!.flatMap((l) => l.items).find((i) => i.guid === guard.id)!;
+    expect(item).toMatchObject({ role: 'enemy', cast: true });
+    expect(item.motion).toBeUndefined();
+    const placed = ir.cast!.placements.find((pl) => pl.item === guard.id)!;
+    expect(placed).toMatchObject({ level: levelId, kind: 'actor' });
+    expect(placed.members[0]!.route).toHaveLength(4);
+    expect(placed.members[0]!.route_wait).toEqual([1, 1, 5, 5]);
   });
 });

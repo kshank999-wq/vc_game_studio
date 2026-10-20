@@ -47,6 +47,7 @@ trap 'rm -rf "$work" "$puzzles" "$caught"' EXIT
 (cd "$here/.." && npx vite-node scripts/export-sample.ts "$caught" unreal capture > /dev/null)
 "$cxx" "${flags[@]}" -I "$here/unreal-check/core" -I "$caught/Plugins/VCGS/Source/VCGS/Public" -o "$caught/capture_check" "$here/unreal-check/capture_check.cpp"
 (cd "$caught" && ./capture_check)
+python3 "$here/unreal-check/check_cast_group.py" "$caught"
 # Rooms (sub-scenes): the sample with rooms in The Cave Mouth.
 rooms="$(mktemp -d)"
 trap 'rm -rf "$work" "$puzzles" "$caught" "$rooms"' EXIT

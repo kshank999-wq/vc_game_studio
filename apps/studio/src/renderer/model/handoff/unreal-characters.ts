@@ -702,6 +702,8 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString CharactersFile = TEXT("VCGS/Generated/characters.json");
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString ItemGuid;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString LevelGuid;
+    /** Only placed actors (an enemy with AI), not Character group areas: what a map's own Cast spawn group brings on. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") bool bActorsOnly = false;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VCGS") TArray<AVcgsCharacterActor*> Spawned;
 
     /** Spawn the placed people (once). */
@@ -1118,6 +1120,7 @@ void AVcgsSpawnGroup::Spawn(const vcgs::Value& Cast)
     for (const vcgs::Value* P : vcgs::Cast::Placements(Cast, ToStd(LevelGuid)))
     {
         if (!ItemGuid.IsEmpty() && (*P)["item"].Str() != ToStd(ItemGuid)) continue;
+        if (bActorsOnly && (*P)["kind"].Str() != "actor") continue;
         for (const auto& M : (*P)["members"].items)
         {
             // Level space (metres, x east, y up, z south) to the world (cm, X north, Y east, Z up).

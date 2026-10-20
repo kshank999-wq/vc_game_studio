@@ -157,6 +157,10 @@ class VcgsTravelLink(Actor):
     pass
 
 
+class VcgsSpawnGroup(Actor):
+    pass
+
+
 class StaticMeshActor(Actor):
     pass
 

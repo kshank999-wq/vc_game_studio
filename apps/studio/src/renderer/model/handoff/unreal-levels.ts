@@ -1884,7 +1884,8 @@ void AVcgsLevelDirector::Refresh()
     for (auto& Pair : ItemsByGuid)
     {
         const std::string Guid = ToStd(Pair.Key);
-        const bool Here = bMapLoaded && Logic->IsPresent(Guid);
+        // A cast actor's item is only where it stands in the editor: its character actor (the map's Cast spawn group) plays it.
+        const bool Here = bMapLoaded && Logic->IsPresent(Guid) && !Logic->Item(Guid)["cast"].Bool();
         const bool Door = Logic->Role(Guid) == "door";
         const bool Shut = Here && !Logic->IsOpen(Guid);
         AVcgsLevelItem* Item = Pair.Value;
@@ -2349,6 +2350,16 @@ def build():
     director.set_editor_property("boundary", data.get("map", {}).get("boundary", "continuous"))
     director.set_editor_property("map_origin", to_unreal(placement["position"]) if placement else unreal.Vector(0.0, 0.0, 0.0))
     director.set_editor_property("map_yaw", yaw_of(turn0))
+    # The cast's placed actors here (an enemy with AI, the cell's guard): the map's own spawn group brings them on in play.
+    cast_items = [i for i in data["items"] if i.get("cast")]
+    spawn_group = getattr(unreal, "VcgsSpawnGroup", None)
+    if cast_items and spawn_group is not None:
+        groups = unreal.GameplayStatics.get_all_actors_of_class(world, spawn_group)
+        cast = [g for g in groups if g.get_editor_property("level_guid") == data["guid"] and g.get_editor_property("actors_only")]
+        group = cast[0] if cast else spawn(spawn_group, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0), data["export_name"] + "_Cast")
+        group.set_editor_property("level_guid", data["guid"])
+        group.set_editor_property("actors_only", True)
+        report.append(data["export_name"] + ": its cast's " + str(len(cast_items)) + " placed actor(s) come on in play (" + data["export_name"] + "_Cast).")
     if placement:
         report.append(data["export_name"] + " is built inside " + str(data["map"]["parent"]) + (", streamed in as the player nears it." if data["map"]["boundary"] == "streamed" else "."))
     report.append(data["export_name"] + ": " + str(len(seen)) + " items up to date.")
