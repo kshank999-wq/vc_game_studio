@@ -875,8 +875,8 @@ bool UVcgsActorPerception::Blocked(double AX, double AY, double BX, double BY) c
 {
     UWorld* World = Actor ? Actor->GetWorld() : nullptr;
     if (!World) return false;
-    // At eye height (0.9 of its height), plan to world: X = -y, Y = x, in centimetres.
-    const double Eye = Actor->Data["stats"]["height"].Num(1.75) * 90.0;
+    // At eye height (0.9 of its height) above where it stands (its root is at its feet, so a child map's floor counts), plan to world: X = -y, Y = x, in centimetres.
+    const double Eye = Actor->GetActorLocation().Z + Actor->Data["stats"]["height"].Num(1.75) * 90.0;
     FCollisionQueryParams Params(FName(TEXT("VcgsSight")), false, Actor);
     FHitResult Hit;
     return World->LineTraceSingleByChannel(Hit, FVector(-AY * 100.0, AX * 100.0, Eye), FVector(-BY * 100.0, BX * 100.0, Eye), ECC_Visibility, Params);
