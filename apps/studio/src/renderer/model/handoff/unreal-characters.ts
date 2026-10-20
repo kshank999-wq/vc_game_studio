@@ -704,10 +704,15 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FString LevelGuid;
     /** Only placed actors (an enemy with AI), not Character group areas: what a map's own Cast spawn group brings on. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") bool bActorsOnly = false;
+    /** Where its map sits in the world and how it is turned (degrees), as the map's level director: a child map's placements land in it. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") FVector MapOrigin = FVector(0, 0, 0);
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VCGS") float MapYaw = 0;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VCGS") TArray<AVcgsCharacterActor*> Spawned;
 
     /** Spawn the placed people (once). */
     void Spawn(const vcgs::Value& Cast);
+    /** Level space (metres, x east, y up, z south) to the world (cm, X north, Y east, Z up) through MapOrigin and MapYaw, as the director's ToWorld. */
+    FVector ToWorld(double X, double Y, double Z) const;
     UFUNCTION(BlueprintCallable, Category = "VCGS") void ShowGroup();
     UFUNCTION(BlueprintCallable, Category = "VCGS") void HideGroup();
 
@@ -1095,6 +1100,7 @@ const SPAWN_CPP = String.raw`${HEAD}
 #include "Engine/World.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include <cmath>
 
 using VcgsConvert::ToF;
 using VcgsConvert::ToStd;
@@ -1123,25 +1129,33 @@ void AVcgsSpawnGroup::Spawn(const vcgs::Value& Cast)
         if (bActorsOnly && (*P)["kind"].Str() != "actor") continue;
         for (const auto& M : (*P)["members"].items)
         {
-            // Level space (metres, x east, y up, z south) to the world (cm, X north, Y east, Z up).
+            // Into the world through the map's origin and turn.
             const vcgs::Value& At = M["position"];
-            const FVector Where(-At[2].Num() * 100.0, At[0].Num() * 100.0, At[1].Num() * 100.0);
-            AVcgsCharacterActor* Actor = World->SpawnActor<AVcgsCharacterActor>(AVcgsCharacterActor::StaticClass(), Where, FRotator(0, -M["turn"].Num(), 0));
+            const FVector Where = ToWorld(At[0].Num(), At[1].Num(), At[2].Num());
+            AVcgsCharacterActor* Actor = World->SpawnActor<AVcgsCharacterActor>(AVcgsCharacterActor::StaticClass(), Where, FRotator(0, MapYaw - M["turn"].Num(), 0));
             if (!Actor) continue;
             Actor->CharacterKey = ToF(M["character"].Str());
             Actor->VariantKey = ToF(M["variant"].Str());
             Actor->Activity = ToF(M["activity"].Str());
             Actor->WanderRadius = static_cast<float>(M["wander_radius"].Num());
-            // Each stop, and how long it stands there (route_wait).
+            // Each stop, and how long it stands there (route_wait), on the world's plan (x = Y, y = -X, in metres), where the actor walks.
             const vcgs::Value& Waits = M["route_wait"];
             for (size_t N = 0; N < M["route"].items.size(); N++)
             {
                 const vcgs::Value& R = M["route"].items[N];
-                Actor->Route.push_back(vcgs::Cast::Point{R[0].Num(), R[2].Num(), N < Waits.Size() ? Waits[N].Num() : 0.0});
+                const FVector Stop = ToWorld(R[0].Num(), 0.0, R[2].Num());
+                Actor->Route.push_back(vcgs::Cast::Point{Stop.Y / 100.0, -Stop.X / 100.0, N < Waits.Size() ? Waits[N].Num() : 0.0});
             }
             if (Actor->Setup(Cast)) Spawned.Add(Actor);
         }
     }
+}
+
+FVector AVcgsSpawnGroup::ToWorld(double X, double Y, double Z) const
+{
+    const double LX = -Z * 100.0, LY = X * 100.0;
+    const double Yaw = MapYaw * 3.14159265358979323846 / 180.0;
+    return FVector(MapOrigin.X + LX * std::cos(Yaw) - LY * std::sin(Yaw), MapOrigin.Y + LX * std::sin(Yaw) + LY * std::cos(Yaw), MapOrigin.Z + Y * 100.0);
 }
 
 void AVcgsSpawnGroup::ShowGroup()

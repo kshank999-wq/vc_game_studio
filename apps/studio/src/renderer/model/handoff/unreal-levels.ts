@@ -2359,6 +2359,9 @@ def build():
         group = cast[0] if cast else spawn(spawn_group, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0), data["export_name"] + "_Cast")
         group.set_editor_property("level_guid", data["guid"])
         group.set_editor_property("actors_only", True)
+        # Where the map sits and how it is turned, as the director: a child map's actors spawn in it.
+        group.set_editor_property("map_origin", director.get_editor_property("map_origin"))
+        group.set_editor_property("map_yaw", director.get_editor_property("map_yaw"))
         report.append(data["export_name"] + ": its cast's " + str(len(cast_items)) + " placed actor(s) come on in play (" + data["export_name"] + "_Cast).")
     if placement:
         report.append(data["export_name"] + " is built inside " + str(data["map"]["parent"]) + (", streamed in as the player nears it." if data["map"]["boundary"] == "streamed" else "."))
