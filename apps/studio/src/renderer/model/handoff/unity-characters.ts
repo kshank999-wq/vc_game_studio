@@ -13,6 +13,8 @@
  * CHARACTERS.md), the hooks are here.
  */
 
+import { FOOTSTEP_SPEED, HEARING } from '../character/ai';
+
 const HEAD = '// VCGS Runtime for Unity. The same for every project; safe to commit.';
 
 const CORE = String.raw`${HEAD}
@@ -95,6 +97,8 @@ namespace VCGS
             public double X, Y;
             public bool Noisy;
             public bool Alive = true;
+            /// <summary>How far its feet are above (+) or below (-) the machine's, in metres.</summary>
+            public double Dz;
         }
 
         /// <summary>What a machine remembers between steps.</summary>
@@ -114,7 +118,8 @@ namespace VCGS
         public sealed class Senses
         {
             public bool Sees, Hears, Near;
-            public double Distance;
+            /// <summary>Across the plan; up and down too (Around); and how far it hears the target's footsteps (Hearing).</summary>
+            public double Distance, Around, Hearing;
             public string Why = "";
         }
 
@@ -141,6 +146,9 @@ namespace VCGS
             return new Memory { State = state, X = post[0], Y = post[1], Facing = facing, Health = health, MaxHealth = health };
         }
 
+        /// <summary>Hearing by height (as the studio): a floor between (this far apart, m) muffles footsteps to this share of the radius; the target makes footsteps moving faster than FootstepSpeed (m/s) across the ground.</summary>
+        public const double HearingFloor = ${HEARING.floor}, HearingMuffle = ${HEARING.muffle}, FootstepSpeed = ${FOOTSTEP_SPEED};
+
         static double Dist(double ax, double ay, double bx, double by) => Math.Sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
 
         static double Wrap(double r) => Math.Atan2(Math.Sin(r), Math.Cos(r));
@@ -158,7 +166,7 @@ namespace VCGS
         public static Senses Sense(Dictionary<string, object> ai, Memory m, Target t, List<double[][]> walls, Blocked blocked)
         {
             var distance = Dist(m.X, m.Y, t.X, t.Y);
-            if (!t.Alive) return new Senses { Distance = distance, Why = "No target." };
+            if (!t.Alive) return new Senses { Distance = distance, Around = distance, Hearing = D.Num(ai, "hearing_radius"), Why = "No target." };
             var off = Math.Abs(Wrap(Math.Atan2(t.Y - m.Y, t.X - m.X) - m.Facing)) * (180 / Math.PI);
             var cone = D.Num(ai, "vision_angle");
             var inCone = cone >= 360 || off <= cone / 2;
@@ -169,7 +177,10 @@ namespace VCGS
                 if (!isBlocked && blocked != null) isBlocked = blocked(m.X, m.Y, t.X, t.Y);
             }
             var view = D.Num(ai, "view_distance");
-            var s = new Senses { Distance = distance, Sees = distance <= view && inCone && !isBlocked, Hears = t.Noisy && distance <= D.Num(ai, "hearing_radius"), Near = distance <= D.Num(ai, "proximity_radius") };
+            // Footsteps and closeness carry up and down as across; a floor between them muffles footsteps.
+            var around = Math.Sqrt(distance * distance + t.Dz * t.Dz);
+            var hearing = D.Num(ai, "hearing_radius") * (Math.Abs(t.Dz) >= HearingFloor ? HearingMuffle : 1);
+            var s = new Senses { Distance = distance, Sees = distance <= view && inCone && !isBlocked, Hears = t.Noisy && around <= hearing, Near = around <= D.Num(ai, "proximity_radius"), Around = around, Hearing = hearing };
             s.Why = s.Sees ? "Sees it " + F1(distance) + " m away, " + Round(off) + "° off its facing (cone " + NumText(cone) + "°)."
                 : distance > view ? "Out of sight range (" + F1(distance) + " m > " + NumText(view) + " m)."
                 : !inCone ? "Outside its " + NumText(cone) + "° view (" + Round(off) + "° off its facing)."
@@ -277,7 +288,7 @@ namespace VCGS
                     break;
                 case "attack":
                     m.Facing = Math.Atan2(target.Y - m.Y, target.X - m.X);
-                    if (m.Cooldown <= 0 && s.Distance <= D.Num(ai, "attack_range"))
+                    if (m.Cooldown <= 0 && s.Around <= D.Num(ai, "attack_range"))
                     {
                         m.Cooldown = D.Num(ai, "attack_cooldown");
                         m.Attacks++;
@@ -312,10 +323,10 @@ namespace VCGS
             {
                 case "always": return "At once.";
                 case "seesTarget": return s.Sees ? s.Why : "";
-                case "hearsTarget": return s.Hears ? "Hears it " + F1(s.Distance) + " m away (hearing " + NumText(D.Num(ai, "hearing_radius")) + " m)." : "";
-                case "inProximity": return s.Near ? "It is " + F1(s.Distance) + " m away, inside its " + NumText(D.Num(ai, "proximity_radius")) + " m proximity radius." : "";
-                case "inAttackRange": return noticed && s.Distance <= D.Num(ai, "attack_range") ? "In attack range (" + F1(s.Distance) + " m ≤ " + NumText(D.Num(ai, "attack_range")) + " m)." : "";
-                case "outOfAttackRange": return s.Distance > D.Num(ai, "attack_range") * 1.25 ? "Out of attack range (" + F1(s.Distance) + " m)." : "";
+                case "hearsTarget": return s.Hears ? "Hears it " + F1(s.Around) + " m away (hearing " + NumText(s.Hearing) + " m)." : "";
+                case "inProximity": return s.Near ? "It is " + F1(s.Around) + " m away, inside its " + NumText(D.Num(ai, "proximity_radius")) + " m proximity radius." : "";
+                case "inAttackRange": return noticed && s.Around <= D.Num(ai, "attack_range") ? "In attack range (" + F1(s.Around) + " m ≤ " + NumText(D.Num(ai, "attack_range")) + " m)." : "";
+                case "outOfAttackRange": return s.Around > D.Num(ai, "attack_range") * 1.25 ? "Out of attack range (" + F1(s.Around) + " m)." : "";
                 case "lostTarget": return !noticed ? "Lost it: " + s.Why : "";
                 case "chaseTimeout": return m.SinceSeen >= D.Num(ai, "chase_timeout") ? "Hasn’t seen it for " + NumText(D.Num(ai, "chase_timeout")) + " s (chase timeout)." : "";
                 case "tooFarFromPost": return fromPost > D.Num(ai, "disengage_distance") ? F1(fromPost) + " m from its post, past its " + NumText(D.Num(ai, "disengage_distance")) + " m disengage distance." : "";
@@ -544,6 +555,10 @@ namespace VCGS
         bool body;
         float bottom, top;
 
+        /// <summary>Whether the watched target has colliders to go by, and the bottom of them (its feet).</summary>
+        public bool HasBody => body;
+        public float Bottom => bottom;
+
         public void Setup(VcgsActor owner) => actor = owner;
 
         /// <summary>What it looks at this tick (the player), or null.</summary>
@@ -606,6 +621,9 @@ namespace VCGS
         int wanderStop = 1;
         float wanderUntil;
         float clock;
+        // Where the player was last tick, for their footsteps (none yet).
+        Vector3 stride;
+        bool strode;
         double[] wanderTo;
         readonly System.Random random = new System.Random();
 
@@ -649,12 +667,17 @@ namespace VCGS
             }
             var player = GameObject.FindWithTag("Player");
             var target = new VcgsCast.Target { Alive = player != null };
+            if (actor.Perception != null) actor.Perception.Watch(player);
             if (player != null)
             {
                 target.X = player.transform.position.x;
                 target.Y = player.transform.position.z;
+                // Heard by its footsteps, and by height: how far the player's feet are above or below its own.
+                target.Noisy = Footsteps(player, dt);
+                var feet = actor.Perception != null && actor.Perception.HasBody ? actor.Perception.Bottom : player.transform.position.y;
+                target.Dz = feet - transform.position.y;
             }
-            if (actor.Perception != null) actor.Perception.Watch(player);
+            else strode = false;
             var here = actor.PlanPosition();
             Memory.X = here[0];
             Memory.Y = here[1];
@@ -679,6 +702,22 @@ namespace VCGS
                 }
             }
             actor.MoveTo(Memory.X, Memory.Y);
+        }
+
+        /// <summary>Footsteps: the player is heard moving faster than VcgsCast.FootstepSpeed across the ground (a crouched creep is silent), and not in the air (a CharacterController off the ground).</summary>
+        public bool Footsteps(GameObject player, float dt)
+        {
+            var at = player.transform.position;
+            var was = stride;
+            var had = strode;
+            stride = at;
+            strode = true;
+            if (!had || dt <= 0) return false;
+            var controller = player.GetComponent<CharacterController>();
+            if (controller != null && !controller.isGrounded) return false;
+            // (Faster than 20 m/s is the player being put somewhere, caught or travelling, not a step.)
+            var pace = Mathf.Sqrt((at.x - was.x) * (at.x - was.x) + (at.z - was.z) * (at.z - was.z)) / dt;
+            return pace >= VcgsCast.FootstepSpeed && pace < 20;
         }
 
         /// <summary>A captor's blow: the story captures the player (Rules.CatchPlayer). False when this character is no captor, there is no story, the story has no capture, or the player is held already.</summary>

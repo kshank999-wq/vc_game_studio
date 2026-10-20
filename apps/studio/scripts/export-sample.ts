@@ -97,6 +97,9 @@ const scenarios = (project: Project) => {
     runScenario(orc, { ...base, name: 'sees, reacts, chases, attacks', target: { x: 8, y: 0, vx: 0, vy: 0, noisy: false }, steps: 60 }),
     runScenario(orc, { ...base, name: 'disengages when outrun', target: { x: 8, y: 0, vx: 0.75, vy: 0, noisy: false }, steps: 300 }),
     runScenario(orc, { ...base, name: 'hears behind it, investigates', target: { x: -5, y: 0, vx: 0, vy: 0, noisy: true }, steps: 80 }),
+    // Hearing by height: footsteps on the floor below, close enough through the floor, and too far once the floor muffles them.
+    runScenario(orc, { ...base, name: 'hears footsteps on the floor below', target: { x: -3, y: 0, vx: 0, vy: 0, noisy: true, dz: -3 }, steps: 80 }),
+    runScenario(orc, { ...base, name: 'the floor muffles footsteps further off', target: { x: -4.5, y: 0, vx: 0, vy: 0, noisy: true, dz: -3 }, steps: 30 }),
     runScenario(orc, { ...base, name: 'blind behind a wall', walls: [[[4, -3], [4, 3]]], target: { x: 8, y: 0, vx: 0, vy: 0, noisy: false }, steps: 30 }),
     runScenario(lurker, { ...base, name: 'proximity aggro', target: { x: -1.5, y: 1, vx: 0, vy: 0, noisy: false }, steps: 40 }),
     // A guard's round (the cell watch): standing at each stop as long as it says, then on.

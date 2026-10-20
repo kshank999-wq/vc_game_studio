@@ -264,7 +264,10 @@ export const stepCast = (
             return r.next === goal ? to : r.next;
           }
         : undefined;
-      const r = aiStep(c.ai, c.speed, { ...p.mem, pos: { x: p.x, y: p.y } }, { target: { x: player.x, y: player.y, noisy: player.noisy, alive: player.alive && Math.abs(player.z - c.z) < 3 }, patrol: route, walls: [], blocked, ...(steer ? { steer } : {}) }, dt);
+      // On another floor (3 m or more apart) it can't see the player, only hear their footsteps through the floor.
+      const rise = player.z - c.z;
+      const across = Math.abs(rise) >= 3;
+      const r = aiStep(c.ai, c.speed, { ...p.mem, pos: { x: p.x, y: p.y } }, { target: { x: player.x, y: player.y, noisy: player.noisy, alive: player.alive && (Math.abs(rise) < 3 || player.noisy), ...(rise ? { dz: rise } : {}) }, patrol: route, walls: [], blocked: across ? () => true : blocked, ...(steer ? { steer } : {}) }, dt);
       const m = r.memory;
       if (r.reason) events.push(`${c.name}: ${r.reason}`);
       if (r.attacked) {

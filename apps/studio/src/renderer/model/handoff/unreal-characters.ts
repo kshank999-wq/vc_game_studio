@@ -14,6 +14,8 @@
  * CHARACTERS.md), the hooks are here.
  */
 
+import { FOOTSTEP_SPEED, HEARING } from '../character/ai';
+
 const HEAD = '// VCGS Runtime for Unreal. The same for every project; safe to commit.';
 
 const CORE = String.raw`${HEAD}
@@ -142,6 +144,8 @@ namespace Cast
         double X = 0, Y = 0;
         bool bNoisy = false;
         bool bAlive = true;
+        /** How far its feet are above (+) or below (-) the machine's, in metres. */
+        double Dz = 0;
     };
 
     /** What the machine remembers between steps. */
@@ -160,7 +164,8 @@ namespace Cast
     struct Senses
     {
         bool bSees = false, bHears = false, bNear = false;
-        double Distance = 0;
+        /** Across the plan; up and down too (Around); and how far it hears the target's footsteps (Hearing). */
+        double Distance = 0, Around = 0, Hearing = 0;
         std::string Why;
     };
 
@@ -196,6 +201,17 @@ namespace Cast
         return M;
     }
 
+    /** Hearing by height (as the studio): a floor between (this far apart, m) muffles footsteps to this share of the radius; the target makes footsteps moving faster than FootstepSpeed (m/s) across the ground. */
+    constexpr double HearingFloor = ${HEARING.floor}, HearingMuffle = ${HEARING.muffle}, FootstepSpeed = ${FOOTSTEP_SPEED};
+
+    /** Footsteps: a step of (DX, DY) metres across the ground in Dt seconds is heard when faster than FootstepSpeed (a crouched creep is silent), not in the air; faster than 20 m/s is the target being put somewhere, not a step. */
+    inline bool Footstep(double DX, double DY, double Dt, bool bGrounded)
+    {
+        if (Dt <= 0 || !bGrounded) return false;
+        const double Pace = std::sqrt(DX * DX + DY * DY) / Dt;
+        return Pace >= FootstepSpeed && Pace < 20;
+    }
+
     inline double Dist(double AX, double AY, double BX, double BY) { return std::sqrt((AX - BX) * (AX - BX) + (AY - BY) * (AY - BY)); }
 
     inline double Wrap(double R) { return std::atan2(std::sin(R), std::cos(R)); }
@@ -214,6 +230,8 @@ namespace Cast
     {
         Senses S;
         S.Distance = Dist(M.X, M.Y, T.X, T.Y);
+        S.Around = S.Distance;
+        S.Hearing = Ai["hearing_radius"].Num();
         if (!T.bAlive) { S.Why = "No target."; return S; }
         const double Pi = 3.14159265358979323846;
         const double Off = std::fabs(Wrap(std::atan2(T.Y - M.Y, T.X - M.X) - M.Facing)) * (180 / Pi);
@@ -228,8 +246,11 @@ namespace Cast
         }
         const double View = Ai["view_distance"].Num();
         S.bSees = S.Distance <= View && bInCone && !bBlocked;
-        S.bHears = T.bNoisy && S.Distance <= Ai["hearing_radius"].Num();
-        S.bNear = S.Distance <= Ai["proximity_radius"].Num();
+        // Footsteps and closeness carry up and down as across; a floor between them muffles footsteps.
+        S.Around = std::sqrt(S.Distance * S.Distance + T.Dz * T.Dz);
+        S.Hearing = Ai["hearing_radius"].Num() * (std::fabs(T.Dz) >= HearingFloor ? HearingMuffle : 1.0);
+        S.bHears = T.bNoisy && S.Around <= S.Hearing;
+        S.bNear = S.Around <= Ai["proximity_radius"].Num();
         S.Why = S.bSees ? "Sees it " + F1(S.Distance) + " m away, " + std::to_string(Round(Off)) + "° off its facing (cone " + NumText(Cone) + "°)."
             : S.Distance > View ? "Out of sight range (" + F1(S.Distance) + " m > " + NumText(View) + " m)."
             : !bInCone ? "Outside its " + NumText(Cone) + "° view (" + std::to_string(Round(Off)) + "° off its facing)."
@@ -275,10 +296,10 @@ namespace Cast
         const std::string When = Tr["when"].Str();
         if (When == "always") return "At once.";
         if (When == "seesTarget") return S.bSees ? S.Why : "";
-        if (When == "hearsTarget") return S.bHears ? "Hears it " + F1(S.Distance) + " m away (hearing " + NumText(Ai["hearing_radius"].Num()) + " m)." : "";
-        if (When == "inProximity") return S.bNear ? "It is " + F1(S.Distance) + " m away, inside its " + NumText(Ai["proximity_radius"].Num()) + " m proximity radius." : "";
-        if (When == "inAttackRange") return bNoticed && S.Distance <= Ai["attack_range"].Num() ? "In attack range (" + F1(S.Distance) + " m ≤ " + NumText(Ai["attack_range"].Num()) + " m)." : "";
-        if (When == "outOfAttackRange") return S.Distance > Ai["attack_range"].Num() * 1.25 ? "Out of attack range (" + F1(S.Distance) + " m)." : "";
+        if (When == "hearsTarget") return S.bHears ? "Hears it " + F1(S.Around) + " m away (hearing " + NumText(S.Hearing) + " m)." : "";
+        if (When == "inProximity") return S.bNear ? "It is " + F1(S.Around) + " m away, inside its " + NumText(Ai["proximity_radius"].Num()) + " m proximity radius." : "";
+        if (When == "inAttackRange") return bNoticed && S.Around <= Ai["attack_range"].Num() ? "In attack range (" + F1(S.Around) + " m ≤ " + NumText(Ai["attack_range"].Num()) + " m)." : "";
+        if (When == "outOfAttackRange") return S.Around > Ai["attack_range"].Num() * 1.25 ? "Out of attack range (" + F1(S.Around) + " m)." : "";
         if (When == "lostTarget") return !bNoticed ? "Lost it: " + S.Why : "";
         if (When == "chaseTimeout") return M.SinceSeen >= Ai["chase_timeout"].Num() ? "Hasn’t seen it for " + NumText(Ai["chase_timeout"].Num()) + " s (chase timeout)." : "";
         if (When == "tooFarFromPost") return FromPost > Ai["disengage_distance"].Num() ? F1(FromPost) + " m from its post, past its " + NumText(Ai["disengage_distance"].Num()) + " m disengage distance." : "";
@@ -373,7 +394,7 @@ namespace Cast
         else if (M.State == "attack")
         {
             M.Facing = std::atan2(T.Y - M.Y, T.X - M.X);
-            if (M.Cooldown <= 0 && S.Distance <= Ai["attack_range"].Num())
+            if (M.Cooldown <= 0 && S.Around <= Ai["attack_range"].Num())
             {
                 M.Cooldown = Ai["attack_cooldown"].Num();
                 M.Attacks++;
@@ -479,6 +500,9 @@ public:
     /** What it looks at this tick (the player's pawn), or null: then it looks level, at its own eye height. */
     void Watch(const AActor* Target);
     bool Blocked(double AX, double AY, double BX, double BY) const;
+    /** Whether the watched target has anything to collide with, and the bottom of it (its feet, cm). */
+    bool HasTargetBody() const { return bTargetBody; }
+    double TargetFeet() const { return TargetBottom; }
 
 private:
     AVcgsCharacterActor* Actor = nullptr;
@@ -504,7 +528,8 @@ public:
 
     void Setup(AVcgsCharacterActor* Owner);
     /** One step: where the player is on the plan (metres), whether they make noise. */
-    void Tick(float DeltaSeconds, bool bHasTarget, double TargetX, double TargetY, bool bNoisy);
+    /** TargetDz: how far the target's feet are above (+) or below (-) its own, in metres. */
+    void Tick(float DeltaSeconds, bool bHasTarget, double TargetX, double TargetY, bool bNoisy, double TargetDz = 0);
     void Hit(float Health);
     /** A captor's blow: the story captures the player (vcgs::Rules::CatchPlayer). False when this character is no captor, there is no story, the story has no capture, or the player is held already. */
     UFUNCTION(BlueprintCallable, Category = "VCGS") bool Catch();
@@ -679,6 +704,9 @@ public:
     std::vector<vcgs::Cast::Point> Route;
 
 private:
+    /** Where the player was last tick (cm), for their footsteps. */
+    FVector Stride = FVector(0, 0, 0);
+    bool bStrode = false;
     /** The level it stands in (one with a navigation graph), found once, and the way it is walking. */
     vcgs::NavPlace Place;
     bool bPlaceFound = false;
@@ -751,6 +779,7 @@ const ACTOR_CPP = String.raw`${HEAD}
 #include "Components/CapsuleComponent.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PawnMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -815,16 +844,24 @@ void AVcgsCharacterActor::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     if (!Data.IsObject()) return;
     Abilities->Advance(DeltaSeconds);
-    double TX = 0, TY = 0;
+    double TX = 0, TY = 0, Dz = 0;
+    bool bNoisy = false;
     const APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0);
+    Perception->Watch(Pawn);
     if (Pawn)
     {
         const FVector At = Pawn->GetActorLocation();
         TX = At.Y / 100.0;
         TY = -At.X / 100.0;
+        // Heard by its footsteps (on the ground, faster than a crouched creep), and by height: how far its feet are above or below these.
+        const UPawnMovementComponent* Moves = Pawn->GetMovementComponent();
+        bNoisy = bStrode && vcgs::Cast::Footstep((At.X - Stride.X) / 100.0, (At.Y - Stride.Y) / 100.0, DeltaSeconds, !(Moves && Moves->IsFalling()));
+        Stride = At;
+        bStrode = true;
+        Dz = ((Perception->HasTargetBody() ? Perception->TargetFeet() : At.Z) - FeetZ()) / 100.0;
     }
-    Perception->Watch(Pawn);
-    Behavior->Tick(DeltaSeconds, Pawn != nullptr, TX, TY, false);
+    else bStrode = false;
+    Behavior->Tick(DeltaSeconds, Pawn != nullptr, TX, TY, bNoisy, Dz);
 }
 
 void AVcgsCharacterActor::Hurt(float Amount)
@@ -943,7 +980,7 @@ void UVcgsActorBehavior::Setup(AVcgsCharacterActor* Owner)
 
 FString UVcgsActorBehavior::State() const { return ToF(Ai.IsObject() ? Memory.State : ToStd(Actor ? Actor->Activity : FString())); }
 
-void UVcgsActorBehavior::Tick(float DeltaSeconds, bool bHasTarget, double TargetX, double TargetY, bool bNoisy)
+void UVcgsActorBehavior::Tick(float DeltaSeconds, bool bHasTarget, double TargetX, double TargetY, bool bNoisy, double TargetDz)
 {
     if (!Actor) return;
     Clock += DeltaSeconds;
@@ -981,6 +1018,7 @@ void UVcgsActorBehavior::Tick(float DeltaSeconds, bool bHasTarget, double Target
     Target.Y = TargetY;
     Target.bNoisy = bNoisy;
     Target.bAlive = bHasTarget;
+    Target.Dz = TargetDz;
     UVcgsActorPerception* Eyes = Actor->Perception;
     const vcgs::Cast::Step Step = vcgs::Cast::AiStep(Ai, Actor->Data["stats"]["speed"].Num(3), Memory, Target, Patrol, {}, DeltaSeconds,
         [Eyes](double AX, double AY, double BX, double BY) { return Eyes && Eyes->Blocked(AX, AY, BX, BY); }, Way);

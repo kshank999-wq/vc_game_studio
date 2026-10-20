@@ -260,6 +260,11 @@ namespace UnityEngine
 
     public sealed class SphereCollider : Collider { }
 
+    public sealed class CharacterController : Collider
+    {
+        public bool isGrounded = true;
+    }
+
     public sealed class CapsuleCollider : Collider { }
 
     public sealed class MeshCollider : Collider
@@ -419,6 +424,7 @@ namespace UnityEngine
     {
         public static float Abs(float v) => Math.Abs(v);
         public static float Min(float a, float b) => Math.Min(a, b);
+        public static float Sqrt(float v) => (float)Math.Sqrt(v);
         public static float Max(float a, float b) => Math.Max(a, b);
         public static int RoundToInt(float v) => (int)Math.Round(v);
         public static float DeltaAngle(float a, float b)

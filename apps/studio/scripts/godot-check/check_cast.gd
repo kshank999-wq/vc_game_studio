@@ -30,7 +30,7 @@ func _initialize() -> void:
 		var trail: Array = []
 		for i in int(sc["steps"]):
 			var t: Dictionary = sc["target"]
-			var world := { "target": { "x": float(t["x"]) + float(t["vx"]) * i, "y": float(t["y"]) + float(t["vy"]) * i, "noisy": t["noisy"], "alive": true }, "patrol": patrol, "walls": sc["walls"] }
+			var world := { "target": { "x": float(t["x"]) + float(t["vx"]) * i, "y": float(t["y"]) + float(t["vy"]) * i, "noisy": t["noisy"], "alive": true, "dz": float(t.get("dz", 0.0)) }, "patrol": patrol, "walls": sc["walls"] }
 			var r: Dictionary = VCGSCast.ai_step(ai, float(sc["speed"]), m, world, float(sc["dt"]))
 			m = r["memory"]
 			if r["reason"] != "":
@@ -165,6 +165,28 @@ func _process(_delta: float) -> bool:
 		if level_hidden:
 			fail("with nothing to look at, a guard should look level, over the wall")
 		print("sight by height: standing %s, crouched %s, level %s" % ["seen" if not tall_hidden else "hidden", "hidden" if low_hidden else "seen", "seen" if not level_hidden else "hidden"])
+	# Footsteps: a walk (5 m/s) is heard, a crouched creep (1 m/s) is not, nor a body in the air; a "noisy" meta decides instead.
+	var ears: VCGSActorBehavior = lookout.behavior
+	var walker := Node3D.new()
+	root.add_child(walker)
+	walker.global_position = Vector3(0, 0, 60)
+	ears._stride = Vector2.INF
+	ears._footsteps(walker, 0.1)
+	walker.global_position.x += 0.5
+	var walk_heard := ears._footsteps(walker, 0.1)
+	walker.global_position.x += 0.1
+	var creep_heard := ears._footsteps(walker, 0.1)
+	walker.set_meta("noisy", true)
+	var meta_heard := ears._footsteps(walker, 0.1)
+	var flier := CharacterBody3D.new()
+	root.add_child(flier)
+	ears._stride = Vector2.INF
+	ears._footsteps(flier, 0.1)
+	flier.global_position.x += 0.5
+	var air_heard := ears._footsteps(flier, 0.1)
+	if not walk_heard or creep_heard or not meta_heard or air_heard:
+		fail("footsteps: a walk should be heard (%s), a creep not (%s), a noisy meta yes (%s), a body in the air not (%s)" % [walk_heard, creep_heard, meta_heard, air_heard])
+	print("footsteps: walk %s, creep %s, in the air %s" % ["heard" if walk_heard else "silent", "heard" if creep_heard else "silent", "heard" if air_heard else "silent"])
 	if failures > 0:
 		quit(1)
 		return true

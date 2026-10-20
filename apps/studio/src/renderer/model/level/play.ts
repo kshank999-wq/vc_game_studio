@@ -1,5 +1,6 @@
 import { canSee, sightOf, startPoses, stepActors, type ActorPose, type Blocker } from './actors';
 import { castOf, sightBlocked, startCast, stepCast, type CastMember, type CastPose } from '../character/crowd';
+import { FOOTSTEP_SPEED } from '../character/ai';
 import { collidersFrom } from './controller';
 import { craftCheck, recipeOf, recipesOf } from '../crafting';
 import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
@@ -54,6 +55,10 @@ export interface Spawned {
 export interface Where extends Point {
   /** Height of the feet above the level's origin. */
   z: number;
+  /** On the ground, climbing or swimming (the controller's body), for footsteps; on the ground when not given. */
+  grounded?: boolean;
+  climbing?: boolean;
+  swimming?: boolean;
 }
 
 export interface LevelPlayState {
@@ -92,6 +97,8 @@ export interface LevelPlayState {
   atDoors?: Record<string, boolean>;
   /** Actors that can see the player now (line of sight). */
   seen?: Record<string, boolean>;
+  /** Where the player was on the last tick, for their footsteps. */
+  stride?: Point;
   /** Rule id → when it last ran (timers). */
   timers: Record<string, number>;
   objective?: string;
@@ -898,8 +905,13 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
   if (cast.length) {
     const blockers = blockersOf(set, s.levelId, global).filter((b) => !(b.part === 'door' && s.open[b.itemId]));
     const here = cast.filter((c) => !c.placed || present(project, s, set.items.find((i) => i.id === c.itemId)!));
-    const step = stepCast(here, s.cast ?? startCast(cast), dt, s.time, { ...at, alive: s.health > 0, noisy: false }, sightBlocked(blockers, at.z), nav);
-    s = { ...s, cast: step.poses };
+    // Footsteps: on the ground and moving faster than a crouched creep, the player is heard (by height, character spec §6.2).
+    const stride = s.stride ?? at;
+    const pace = dt > 0 ? Math.hypot(at.x - stride.x, at.y - stride.y) / dt : 0;
+    // (A jump of more than 20 m/s is the player being put somewhere, caught or travelling, not a step.)
+    const noisy = at.grounded !== false && !at.climbing && !at.swimming && pace >= FOOTSTEP_SPEED && pace < 20;
+    const step = stepCast(here, s.cast ?? startCast(cast), dt, s.time, { x: at.x, y: at.y, z: at.z, alive: s.health > 0, noisy }, sightBlocked(blockers, at.z), nav);
+    s = { ...s, cast: step.poses, stride: { x: at.x, y: at.y } };
     for (const text of step.events) s = log(s, { kind: 'event', text });
     if (step.damage > 0) s = { ...s, health: Math.max(0, s.health - step.damage) };
     // A captor's blow catches the player instead.

@@ -513,8 +513,8 @@ export interface AiScenario {
   /** Its post and stops: x, y, and (third, when there is one) how long it stands there, in seconds. */
   patrol: ([number, number] | [number, number, number])[];
   walls: [[number, number], [number, number]][];
-  /** The target at step i: (x + vx·i, y + vy·i). */
-  target: { x: number; y: number; vx: number; vy: number; noisy: boolean };
+  /** The target at step i: (x + vx·i, y + vy·i), dz above (+) or below (-) the actor's feet. */
+  target: { x: number; y: number; vx: number; vy: number; noisy: boolean; dz?: number };
   steps: number;
   dt: number;
   /** What the studio's own machine does: every transition's reason, and where it ends. */
@@ -525,7 +525,7 @@ export interface AiScenario {
 /** Run a scenario with the studio's machine, for the engines' checks to compare against. */
 export const runScenario = (c: IrCastCharacter, s: Omit<AiScenario, 'trail' | 'final' | 'character' | 'speed' | 'health'>): AiScenario => {
   const ai = aiFromIr(c.ai!);
-  const world: AIWorld = { patrol: s.patrol.map(([x, y, wait]) => ({ x, y, ...(wait ? { wait } : {}) })), walls: s.walls.map(([a, b]) => [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }]), target: { x: s.target.x, y: s.target.y, noisy: s.target.noisy, alive: true } };
+  const world: AIWorld = { patrol: s.patrol.map(([x, y, wait]) => ({ x, y, ...(wait ? { wait } : {}) })), walls: s.walls.map(([a, b]) => [{ x: a[0], y: a[1] }, { x: b[0], y: b[1] }]), target: { x: s.target.x, y: s.target.y, noisy: s.target.noisy, alive: true, ...(s.target.dz ? { dz: s.target.dz } : {}) } };
   let m = studioStart(world, ai, c.stats.health);
   const trail: string[] = [];
   for (let i = 0; i < s.steps; i++) {

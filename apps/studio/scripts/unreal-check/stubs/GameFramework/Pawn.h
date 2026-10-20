@@ -1,3 +1,8 @@
 #pragma once
 #include "GameFramework/Actor.h"
-class APawn : public AActor {};
+class UPawnMovementComponent;
+class APawn : public AActor
+{
+public:
+    UPawnMovementComponent* GetMovementComponent() const { return nullptr; }
+};

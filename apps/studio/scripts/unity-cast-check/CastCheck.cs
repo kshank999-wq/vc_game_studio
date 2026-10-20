@@ -45,7 +45,7 @@ static class CastCheck
             var trail = new List<string>();
             for (var i = 0; i < (int)D.Num(sc, "steps"); i++)
             {
-                var target = new VcgsCast.Target { X = D.Num(t, "x") + D.Num(t, "vx") * i, Y = D.Num(t, "y") + D.Num(t, "vy") * i, Noisy = D.Bool(t, "noisy") };
+                var target = new VcgsCast.Target { X = D.Num(t, "x") + D.Num(t, "vx") * i, Y = D.Num(t, "y") + D.Num(t, "vy") * i, Noisy = D.Bool(t, "noisy"), Dz = D.Num(t, "dz", 0) };
                 var r = VcgsCast.AiStep(ai, D.Num(sc, "speed"), m, target, patrol, walls, D.Num(sc, "dt"));
                 m = r.Memory;
                 if (r.Reason != "") trail.Add(r.Reason);
@@ -96,6 +96,19 @@ static class CastCheck
         shut.transform.SetParent(yard.transform, false);
         if (shut.Steer(0.5, -0.5, 4.5, -0.5) != null) Fail("with no way through the wall, steer should say so");
         if (new GameObject("Loose").AddComponent<VcgsActor>().Steer(0, 0, 3, 4) != (3, 4, true)) Fail("with no level, an actor should steer straight there");
+        // Footsteps: a walk (5 m/s) is heard, a crouched creep (1 m/s) is not, nor a player whose controller is off the ground.
+        var ears = new GameObject("Ears").AddComponent<VcgsActorBehavior>();
+        var stepper = new GameObject("Walker");
+        ears.Footsteps(stepper, 0.1f);
+        stepper.transform.position = new Vector3(0.5f, 0, 0);
+        var walkHeard = ears.Footsteps(stepper, 0.1f);
+        stepper.transform.position = new Vector3(0.6f, 0, 0);
+        var creepHeard = ears.Footsteps(stepper, 0.1f);
+        stepper.AddComponent<CharacterController>().isGrounded = false;
+        stepper.transform.position = new Vector3(1.1f, 0, 0);
+        var airHeard = ears.Footsteps(stepper, 0.1f);
+        if (!walkHeard || creepHeard || airHeard) Fail($"footsteps: a walk should be heard ({walkHeard}), a creep not ({creepHeard}), a jump not ({airHeard})");
+        Console.WriteLine($"footsteps: walk {(walkHeard ? "heard" : "silent")}, creep {(creepHeard ? "heard" : "silent")}, in the air {(airHeard ? "heard" : "silent")}");
         // The spawn group: the Village Market's people where the studio put them, each with its components.
         Dictionary<string, object> market = null;
         foreach (var p in VcgsCast.Placements(cast)) if (D.Str(p, "kind") == "group") market = p;

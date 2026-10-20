@@ -259,7 +259,8 @@ export interface Vec {
 
 /** The flat world the preview runs in: walls (segments) block sight; the target may be making noise. */
 export interface AIWorld {
-  target: Vec & { noisy: boolean; alive: boolean };
+  /** The target; dz is how far its feet are above (+) or below (-) the actor's, in metres (0 when not given). */
+  target: Vec & { noisy: boolean; alive: boolean; dz?: number };
   /** The actor's post and patrol stops (the first is its post); a stop's wait is how long it stands there, in seconds. */
   patrol: (Vec & { wait?: number })[];
   walls: [Vec, Vec][];
@@ -325,17 +326,32 @@ export const startMemory = (world: AIWorld, ai: AIProfile, health: number): AIMe
   attacks: 0,
 });
 
+/**
+ * Hearing by height: footsteps are heard as far up and down as across (the
+ * distance between the two counts the difference in height), and with a floor
+ * between them (this far apart in height, metres) only to this share of the
+ * hearing radius.
+ */
+export const HEARING = { floor: 2.5, muffle: 0.75 } as const;
+
+/** Footsteps: the target is heard when it moves faster than this across the ground (m/s); a crouched creep (1.6 m/s) is silent, a walk (3.6) or a run (6.4) is not. */
+export const FOOTSTEP_SPEED = 2;
+
 /** What it senses of the target, and why. */
 export const sense = (ai: AIProfile, m: AIMemory, world: AIWorld) => {
   const t = world.target;
   const distance = dist(m.pos, t);
-  if (!t.alive) return { sees: false, hears: false, near: false, distance, why: 'No target.' };
+  if (!t.alive) return { sees: false, hears: false, near: false, distance, around: distance, hearing: ai.hearingRadius, why: 'No target.' };
   const off = Math.abs(wrap(angleTo(m.pos, t) - m.facing)) * (180 / Math.PI);
   const inCone = ai.visionAngle >= 360 || off <= ai.visionAngle / 2;
   const blocked = ai.lineOfSight && (world.walls.some(([a, b]) => crosses(m.pos, t, a, b)) || !!world.blocked?.(m.pos, t));
   const sees = distance <= ai.viewDistance && inCone && !blocked;
-  const hears = t.noisy && distance <= ai.hearingRadius;
-  const near = distance <= ai.proximityRadius;
+  // Footsteps and closeness carry up and down as well as across; a floor between them (HEARING.floor or more) muffles footsteps.
+  const rise = t.dz ?? 0;
+  const around = Math.hypot(distance, rise);
+  const hearing = ai.hearingRadius * (Math.abs(rise) >= HEARING.floor ? HEARING.muffle : 1);
+  const hears = t.noisy && around <= hearing;
+  const near = around <= ai.proximityRadius;
   const why = sees
     ? `Sees it ${distance.toFixed(1)} m away, ${Math.round(off)}° off its facing (cone ${ai.visionAngle}°).`
     : distance > ai.viewDistance
@@ -343,7 +359,7 @@ export const sense = (ai: AIProfile, m: AIMemory, world: AIWorld) => {
       : !inCone
         ? `Outside its ${ai.visionAngle}° view (${Math.round(off)}° off its facing).`
         : 'A wall blocks its line of sight.';
-  return { sees, hears, near, distance, why: `${why}${hears ? ' Hears it.' : ''}${near ? ' Close enough to sense.' : ''}` };
+  return { sees, hears, near, distance, around, hearing, why: `${why}${hears ? ' Hears it.' : ''}${near ? ' Close enough to sense.' : ''}` };
 };
 
 const TIMERS: Partial<Record<AIState, keyof AIProfile>> = { investigate: 'investigateSeconds', search: 'searchSeconds', stunned: 'stunSeconds', alert: 'reaction' };
@@ -370,13 +386,13 @@ export const aiStep = (ai: AIProfile, speed: number, m0: AIMemory, world: AIWorl
       case 'seesTarget':
         return s.sees ? s.why : undefined;
       case 'hearsTarget':
-        return s.hears ? `Hears it ${s.distance.toFixed(1)} m away (hearing ${ai.hearingRadius} m).` : undefined;
+        return s.hears ? `Hears it ${s.around.toFixed(1)} m away (hearing ${s.hearing} m).` : undefined;
       case 'inProximity':
-        return s.near ? `It is ${s.distance.toFixed(1)} m away, inside its ${ai.proximityRadius} m proximity radius.` : undefined;
+        return s.near ? `It is ${s.around.toFixed(1)} m away, inside its ${ai.proximityRadius} m proximity radius.` : undefined;
       case 'inAttackRange':
-        return noticed && s.distance <= ai.attackRange ? `In attack range (${s.distance.toFixed(1)} m ≤ ${ai.attackRange} m).` : undefined;
+        return noticed && s.around <= ai.attackRange ? `In attack range (${s.around.toFixed(1)} m ≤ ${ai.attackRange} m).` : undefined;
       case 'outOfAttackRange':
-        return s.distance > ai.attackRange * 1.25 ? `Out of attack range (${s.distance.toFixed(1)} m).` : undefined;
+        return s.around > ai.attackRange * 1.25 ? `Out of attack range (${s.around.toFixed(1)} m).` : undefined;
       case 'lostTarget':
         return !noticed ? `Lost it: ${s.why}` : undefined;
       case 'chaseTimeout':
@@ -458,7 +474,7 @@ export const aiStep = (ai: AIProfile, speed: number, m0: AIMemory, world: AIWorl
       break;
     case 'attack':
       m.facing = angleTo(m.pos, world.target);
-      if (m.cooldown <= 0 && s.distance <= ai.attackRange) {
+      if (m.cooldown <= 0 && s.around <= ai.attackRange) {
         m.cooldown = ai.attackCooldown;
         m.attacks += 1;
         attacked = true;

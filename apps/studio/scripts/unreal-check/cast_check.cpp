@@ -67,6 +67,7 @@ int main()
             target.X = t["x"].Num() + t["vx"].Num() * i;
             target.Y = t["y"].Num() + t["vy"].Num() * i;
             target.bNoisy = t["noisy"].Bool();
+            target.Dz = t["dz"].Num();
             const vcgs::Cast::Step r = vcgs::Cast::AiStep(ai, sc["speed"].Num(), m, target, patrol, walls, sc["dt"].Num());
             m = r.Mem;
             if (!r.Reason.empty()) trail.push_back(r.Reason);
@@ -79,6 +80,10 @@ int main()
             Fail(sc["name"].Str() + ": ends " + m.State + "/" + std::to_string(m.Attacks) + " at (" + std::to_string(m.X) + ", " + std::to_string(m.Y) + "), the studio " + fin["state"].Str() + "/" + fin["attacks"].Str());
         std::printf("ai: %s · %d transitions · ends %s\n", sc["name"].Str().c_str(), static_cast<int>(trail.size()), m.State.c_str());
     }
+    // Footsteps: a walk (0.5 m in 0.1 s) is heard, a crouched creep (0.1 m) is not, nor a step in the air, nor being put somewhere (5 m).
+    const bool bWalk = vcgs::Cast::Footstep(0.5, 0, 0.1, true), bCreep = vcgs::Cast::Footstep(0.1, 0, 0.1, true), bAir = vcgs::Cast::Footstep(0.5, 0, 0.1, false), bJump = vcgs::Cast::Footstep(5, 0, 0.1, true);
+    if (!bWalk || bCreep || bAir || bJump) Fail("footsteps: a walk should be heard, a creep, a step in the air and being put somewhere not");
+    std::printf("footsteps: walk %s, creep %s, in the air %s\n", bWalk ? "heard" : "silent", bCreep ? "heard" : "silent", bAir ? "heard" : "silent");
     // Inventory capacity and overflow.
     const vcgs::Value inv = vcgs::JsonReader::Parse(R"({"mode": "stack", "slots": 2, "stack": 10, "weight": 0})");
     const std::map<std::string, int> flares = {{"flare", 15}};
