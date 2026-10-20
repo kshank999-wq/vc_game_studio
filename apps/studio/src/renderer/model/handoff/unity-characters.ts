@@ -530,22 +530,55 @@ using UnityEngine;
 
 namespace VCGS
 {
-    /// <summary>PerceptionComponent: what blocks the character's sight (a ray at eye height through the level's colliders).</summary>
+    /// <summary>
+    /// PerceptionComponent: what blocks the character's sight, rays through the
+    /// level's colliders from its eyes (0.9 of its height) to the target's head,
+    /// chest and knees (from the bottom to the top of its colliders), so a target
+    /// taller or shorter, crouched, or on a floor above or below is seen by what
+    /// shows of it. With no colliders to go by, one ray, level.
+    /// </summary>
     public sealed class VcgsActorPerception : MonoBehaviour
     {
         VcgsActor actor;
+        Transform target;
+        bool body;
+        float bottom, top;
 
         public void Setup(VcgsActor owner) => actor = owner;
+
+        /// <summary>What it looks at this tick (the player), or null.</summary>
+        public void Watch(GameObject watched)
+        {
+            target = watched != null ? watched.transform : null;
+            body = false;
+            if (watched == null) return;
+            foreach (var c in watched.GetComponentsInChildren<Collider>(false))
+            {
+                if (!c.enabled || c.isTrigger) continue;
+                var b = c.bounds;
+                bottom = body ? Mathf.Min(bottom, b.min.y) : b.min.y;
+                top = body ? Mathf.Max(top, b.max.y) : b.max.y;
+                body = true;
+            }
+            if (body && top <= bottom) body = false;
+        }
 
         public bool Blocked(double ax, double ay, double bx, double by)
         {
             if (actor == null) return false;
-            var eye = transform.position.y + 1.6f;
+            var eye = transform.position.y + (float)D.Num(D.Map(actor.Data, "stats"), "height", 1.75) * 0.9f;
             var from = new Vector3((float)ax, eye, (float)ay);
-            var to = new Vector3((float)bx, eye, (float)by);
-            foreach (var hit in Physics.RaycastAll(from, (to - from).normalized, Vector3.Distance(from, to)))
-                if (hit.transform != null && !hit.transform.IsChildOf(transform)) return true;
-            return false;
+            var tall = top - bottom;
+            var heights = body ? new[] { bottom + tall * 0.9f, bottom + tall * 0.5f, bottom + tall * 0.2f } : new[] { eye };
+            foreach (var h in heights)
+            {
+                var to = new Vector3((float)bx, h, (float)by);
+                var hidden = false;
+                foreach (var hit in Physics.RaycastAll(from, (to - from).normalized, Vector3.Distance(from, to)))
+                    if (hit.transform != null && !hit.transform.IsChildOf(transform) && (target == null || !hit.transform.IsChildOf(target))) { hidden = true; break; }
+                if (!hidden) return false;
+            }
+            return true;
         }
     }
 }
@@ -621,6 +654,7 @@ namespace VCGS
                 target.X = player.transform.position.x;
                 target.Y = player.transform.position.z;
             }
+            if (actor.Perception != null) actor.Perception.Watch(player);
             var here = actor.PlanPosition();
             Memory.X = here[0];
             Memory.Y = here[1];

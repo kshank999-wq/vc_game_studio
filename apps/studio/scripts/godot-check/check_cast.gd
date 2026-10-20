@@ -81,6 +81,39 @@ func _initialize() -> void:
 	orc_actor = VCGSActor.new()
 	orc_actor.character_key = "orc_sentry"
 	root.add_child(orc_actor)
+	# Sight by the hero's height: a guard at x 0, a wall 1 m high at x 3.5, and past it at x 4
+	# a hero standing (1.8 m) and one crouched (0.8 m), side by side (well away from the rest).
+	lookout = VCGSActor.new()
+	lookout.character_key = "orc_sentry"
+	lookout.position = Vector3(0, 0, 50)
+	root.add_child(lookout)
+	var wall := StaticBody3D.new()
+	var wall_shape := CollisionShape3D.new()
+	var slab := BoxShape3D.new()
+	slab.size = Vector3(0.2, 1.0, 4.0)
+	wall_shape.shape = slab
+	wall.position = Vector3(3.5, 0.5, 50)
+	wall.add_child(wall_shape)
+	root.add_child(wall)
+	standing = _hero(1.8, 49.0)
+	crouched = _hero(0.8, 51.0)
+
+func _hero(tall: float, z: float) -> CharacterBody3D:
+	var hero := CharacterBody3D.new()
+	var shape := CollisionShape3D.new()
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.3
+	capsule.height = tall
+	shape.shape = capsule
+	shape.position.y = tall / 2.0
+	hero.add_child(shape)
+	hero.position = Vector3(4, 0, z)
+	root.add_child(hero)
+	return hero
+
+var lookout: VCGSActor
+var standing: CharacterBody3D
+var crouched: CharacterBody3D
 
 var spawner: VCGSSpawnGroup
 var orc_actor: VCGSActor
@@ -89,7 +122,7 @@ var frames := 0
 
 func _process(_delta: float) -> bool:
 	frames += 1
-	if frames < 2:
+	if frames < 3:
 		return false
 	var people: Array = spawner.spawned
 	# Everyone the studio placed (the count is the group's seeded population for this area).
@@ -114,6 +147,24 @@ func _process(_delta: float) -> bool:
 	if o.get_node_or_null("HandSocket") == null or o.get_node_or_null("HandSocket/Sword") == null:
 		fail("the Orc Sentry should carry its sword at the hand socket")
 	print("spawned %d villagers; orc %s" % [people.size(), o.behavior.memory.get("state", "?") if o.behavior else "?"])
+	# Seen by what shows over the wall: the standing hero's head; nothing of the crouched one.
+	var eyes: VCGSActorPerception = lookout.perception
+	if eyes == null:
+		fail("the lookout should have its perception")
+	else:
+		eyes.watch(standing)
+		var tall_hidden := eyes.blocked(0.0, 49.0, 4.0, 49.0)
+		eyes.watch(crouched)
+		var low_hidden := eyes.blocked(0.0, 51.0, 4.0, 51.0)
+		eyes.watch(null)
+		var level_hidden := eyes.blocked(0.0, 51.0, 4.0, 51.0)
+		if tall_hidden:
+			fail("a guard should see a standing hero's head over a 1 m wall (and not count the hero's own body as in the way)")
+		if not low_hidden:
+			fail("a guard should not see a hero crouched behind a 1 m wall")
+		if level_hidden:
+			fail("with nothing to look at, a guard should look level, over the wall")
+		print("sight by height: standing %s, crouched %s, level %s" % ["seen" if not tall_hidden else "hidden", "hidden" if low_hidden else "seen", "seen" if not level_hidden else "hidden"])
 	if failures > 0:
 		quit(1)
 		return true

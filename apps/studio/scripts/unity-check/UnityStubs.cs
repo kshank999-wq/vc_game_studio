@@ -235,13 +235,27 @@ namespace UnityEngine
         public static T Load<T>(string path) where T : Object => null;
     }
 
-    public class Collider : Component { }
+    public struct Bounds
+    {
+        public Vector3 min, max;
+        public void Encapsulate(Bounds b)
+        {
+            min = new Vector3(Math.Min(min.x, b.min.x), Math.Min(min.y, b.min.y), Math.Min(min.z, b.min.z));
+            max = new Vector3(Math.Max(max.x, b.max.x), Math.Max(max.y, b.max.y), Math.Max(max.z, b.max.z));
+        }
+    }
+
+    public class Collider : Component
+    {
+        public bool enabled = true;
+        public bool isTrigger;
+        public Bounds bounds;
+    }
 
     public sealed class BoxCollider : Collider
     {
         public Vector3 size = Vector3.one;
         public Vector3 center = Vector3.zero;
-        public bool isTrigger;
     }
 
     public sealed class SphereCollider : Collider { }
@@ -252,7 +266,6 @@ namespace UnityEngine
     {
         public Mesh sharedMesh;
         public bool convex;
-        public bool isTrigger;
     }
 
     public sealed class Mesh : Object
@@ -405,6 +418,8 @@ namespace UnityEngine
     public static class Mathf
     {
         public static float Abs(float v) => Math.Abs(v);
+        public static float Min(float a, float b) => Math.Min(a, b);
+        public static float Max(float a, float b) => Math.Max(a, b);
         public static int RoundToInt(float v) => (int)Math.Round(v);
         public static float DeltaAngle(float a, float b)
         {
