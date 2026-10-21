@@ -302,7 +302,8 @@ selection). Beside the button, choose where to start and what the story holds:
 **Controls.**
 - **Keyboard and mouse:** WASD or the arrows to move, the mouse to look, Shift to run, Space to jump, **C** or Left Ctrl to crouch, **L** for the light, **E** to use what's in reach, **R** to use what's in hand, **I** for the gear screen. Click the view to capture the mouse; Esc gives it back. Without pointer lock, dragging looks around.
 - **Controller:** the left stick moves, the right stick looks, A jumps, X uses, the right stick's press crouches, the right bumper works the light, the right trigger uses what's in hand, the left trigger opens the gear screen and Start pauses.
-- **Rebinding:** every action's keys and buttons can be changed in the pause panel's **Controls** tab, along with look speed, inverted look and the stick dead zone. These are kept on this computer.
+- **Rebinding:** every action's keys and buttons can be changed in the pause panel's **Controls** tab, along with look speed, inverted look, the stick dead zone and the footsteps volume. These are kept on this computer.
+- **Footsteps:** the player's footsteps sound as they walk or run on the ground, a stride apart (longer and louder at a run), left and right feet a touch apart. Crouch-walking, jumping, climbing and swimming are silent: the same rule the guards hear by (see CHARACTER-CREATOR). The sound is made on the spot (no sound file); **Footsteps volume** in the Controls tab sets it, and 0 turns it off.
 
 **What happens.** The player is a capsule that walks, climbs steps and stairs,
 slides along walls, falls off edges and stands on floors. Closed doors,

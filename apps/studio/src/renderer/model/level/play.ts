@@ -1,6 +1,6 @@
 import { canSee, sightOf, startPoses, stepActors, type ActorPose, type Blocker } from './actors';
 import { castOf, sightBlocked, startCast, stepCast, type CastMember, type CastPose } from '../character/crowd';
-import { FOOTSTEP_SPEED } from '../character/ai';
+import { makesFootsteps, paceOf } from './footsteps';
 import { collidersFrom } from './controller';
 import { craftCheck, recipeOf, recipesOf } from '../crafting';
 import { equipCheck, equipmentList, isEquipped, useCheck } from '../equipment';
@@ -907,9 +907,7 @@ export const tick = (project: Project, state: LevelPlayState, dt: number, at: Wh
     const here = cast.filter((c) => !c.placed || present(project, s, set.items.find((i) => i.id === c.itemId)!));
     // Footsteps: on the ground and moving faster than a crouched creep, the player is heard (by height, character spec §6.2).
     const stride = s.stride ?? at;
-    const pace = dt > 0 ? Math.hypot(at.x - stride.x, at.y - stride.y) / dt : 0;
-    // (A jump of more than 20 m/s is the player being put somewhere, caught or travelling, not a step.)
-    const noisy = at.grounded !== false && !at.climbing && !at.swimming && pace >= FOOTSTEP_SPEED && pace < 20;
+    const noisy = makesFootsteps(at, paceOf(stride, at, dt));
     const step = stepCast(here, s.cast ?? startCast(cast), dt, s.time, { x: at.x, y: at.y, z: at.z, alive: s.health > 0, noisy }, sightBlocked(blockers, at.z), nav);
     s = { ...s, cast: step.poses, stride: { x: at.x, y: at.y } };
     for (const text of step.events) s = log(s, { kind: 'event', text });

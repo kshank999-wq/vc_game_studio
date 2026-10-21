@@ -76,6 +76,7 @@ export interface Controls {
   lookSpeed: number;
   invertY: boolean;
   deadzone: number;
+  footstepVolume: number;
 }
 
 /** The defaults with what this computer changed. */
@@ -85,6 +86,7 @@ export const controlsOf = (prefs: PlayControlPrefs): Controls => ({
   lookSpeed: prefs.lookSpeed || 1,
   invertY: !!prefs.invertY,
   deadzone: prefs.deadzone ?? 0.18,
+  footstepVolume: prefs.footstepVolume ?? 0.6,
 });
 
 export const actionOfKey = (controls: Controls, code: string): Action | undefined =>

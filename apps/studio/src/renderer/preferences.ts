@@ -44,6 +44,8 @@ export interface PlayControlPrefs {
   lookSpeed: number;
   invertY: boolean;
   deadzone: number;
+  /** The player's footsteps in Play Mode, 0 (off) to 1. */
+  footstepVolume?: number;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -59,7 +61,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   uiScale: 100,
   pinned: { graph: [], scene: [] },
   paletteCollapsed: {},
-  playControls: { keys: {}, pad: {}, lookSpeed: 1, invertY: false, deadzone: 0.18 },
+  playControls: { keys: {}, pad: {}, lookSpeed: 1, invertY: false, deadzone: 0.18, footstepVolume: 0.6 },
   authorName: '',
   authorRole: '',
   prefabCatalogs: [],

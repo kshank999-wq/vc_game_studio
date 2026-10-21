@@ -10,6 +10,8 @@ import { levelsOf } from '../../model/level/level';
 import { exportNameOf } from '../../model/level/naming';
 import { levelCast } from '../../model/level/play';
 import { doorRules } from '../../model/level/doors';
+import { startGait, stepGait } from '../../model/level/footsteps';
+import { playFootstep } from './footstep-sound';
 import { answerScreen, darknessAt, dismiss, skipScene, inHand, interactWith, isOpen, leaveLevel, lightOf, offerFor, present, spendStamina, startLevelPlay, tick, toggleLight, tracksStamina, traversalAt, useInHand, waysOf, type LevelPlayState, type Offer, type Where } from '../../model/level/play';
 import { equipmentList, equipmentOf, usesLeft } from '../../model/equipment';
 import { recipesOf } from '../../model/crafting';
@@ -108,6 +110,8 @@ export const PlayMode = (props: Props) => {
 
   const state = useRef<LevelPlayState>(hud);
   const body = useRef<Body>({ x: props.start.x, y: props.start.y, z: props.start.z, vz: 0, yaw: props.start.yaw, pitch: 0, grounded: true });
+  // The player's walk, for the sound of their footsteps.
+  const gait = useRef(startGait());
   const held = useRef(new Set<Action>());
   const pressedOnce = useRef(new Set<Action>());
   const mouse = useRef({ dx: 0, dy: 0 });
@@ -464,6 +468,10 @@ export const PlayMode = (props: Props) => {
           const moving = Math.abs(forward) > 0.1 || Math.abs(strafe) > 0.1;
           s = spendStamina(p.project, s, dt, { run: running && moving && !next.swimming && !next.climbing, swim: !!next.swimming, climb: !!next.climbing && Math.abs(forward) > 0.1 }, p.global);
           if (top && (Math.abs(forward) > 0.1 || Math.abs(strafe + turnKeys) > 0.1)) next.yaw = Math.atan2(strafe + turnKeys, forward);
+          // Footsteps, as the guards hear them: on the ground, faster than a crouched creep.
+          const walk = stepGait(gait.current, body.current, next, dt, next);
+          gait.current = walk.gait;
+          for (const f of walk.steps) playFootstep(f, c.footstepVolume);
           body.current = next;
           // Fell out of the world: back to the checkpoint or the start.
           const lowest = Math.min(...(level?.floors.map((f) => f.elevation) ?? [0]));

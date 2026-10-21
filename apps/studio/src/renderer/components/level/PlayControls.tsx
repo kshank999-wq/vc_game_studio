@@ -105,6 +105,11 @@ export const PlayControls = () => {
         <input type="range" min={0} max={0.5} step={0.02} value={controls.deadzone} aria-label="Stick dead zone" onChange={(e) => save({ deadzone: Number(e.target.value) })} />
         <span className="mono">{Math.round(controls.deadzone * 100)}%</span>
       </label>
+      <label className="play-row">
+        <span>Footsteps volume</span>
+        <input type="range" min={0} max={1} step={0.05} value={controls.footstepVolume} aria-label="Footsteps volume" onChange={(e) => save({ footstepVolume: Number(e.target.value) })} />
+        <span className="mono">{controls.footstepVolume > 0 ? `${Math.round(controls.footstepVolume * 100)}%` : 'Off'}</span>
+      </label>
       <button className="tb-btn small" onClick={() => setPreferences({ playControls: { ...DEFAULT_PREFERENCES.playControls } })}>
         Restore the defaults
       </button>
