@@ -6,7 +6,7 @@
  *   npm run setup -w @vcgs/web -- keys
  *   npm run setup -w @vcgs/web -- stripe --studio-monthly=24.99 --studio-yearly=249.99 [--currency=usd]
  *   npm run setup -w @vcgs/web -- resend        (VERCEL_TOKEN in the file adds the DNS records too)
- *   npm run setup -w @vcgs/web -- supabase      (needs SUPABASE_ACCESS_TOKEN, a personal access token; writes the project's URL and keys)
+ *   npm run setup -w @vcgs/web -- supabase      (needs SUPABASE_ACCESS_TOKEN, a personal access token)
  *   npm run setup -w @vcgs/web -- vercel        (needs VERCEL_TOKEN)
  *   npm run setup -w @vcgs/web -- check
  */
@@ -17,15 +17,14 @@ import Stripe from 'stripe';
 import { missingVariables, parseEnv, upsertEnv } from '../src/lib/setup/env-file';
 import { setupResend } from '../src/lib/setup/resend-setup';
 import { parseAmounts, setupStripe } from '../src/lib/setup/stripe-setup';
-import { projectKeys, setupSupabaseAuth } from '../src/lib/setup/supabase-auth-setup';
+import { setupSupabaseAuth } from '../src/lib/setup/supabase-auth-setup';
 import { setupVercel } from '../src/lib/setup/vercel-setup';
 
 const FILE = resolve(import.meta.dirname, '../.env.production.local');
 const SITE = 'https://vc-gamestudio.com';
 const DOMAIN = 'vc-gamestudio.com';
 const TEAM = 'team_u7MT4rqOzxUsxMI5gdYsbVN0';
-// VC Game Studio's own Supabase project (vc-game-studio), separate from VC Writer's.
-const SUPABASE_REF = 'ikzjxigttvdvguawvtyf';
+const SUPABASE_REF = 'kpviyoqhmzignjyvixws';
 
 const read = (): Record<string, string> => (existsSync(FILE) ? parseEnv(readFileSync(FILE, 'utf8')) : {});
 const write = (entries: Record<string, string>) => {
@@ -76,26 +75,8 @@ switch (step) {
     break;
   }
   case 'supabase': {
-    const accessToken = need(env, 'SUPABASE_ACCESS_TOKEN');
-    // The project's own URL and keys, replacing any left from another project.
-    const keys = await projectKeys(fetch, { accessToken, projectRef: SUPABASE_REF });
-    write({ NEXT_PUBLIC_SUPABASE_URL: `https://${SUPABASE_REF}.supabase.co`, NEXT_PUBLIC_SUPABASE_ANON_KEY: keys.anon, SUPABASE_SERVICE_ROLE_KEY: keys.service });
-    const from = env['RESEND_FROM_ADDRESS'] ?? DEFAULTS.RESEND_FROM_ADDRESS;
-    const address = /<([^>]+)>/.exec(from)?.[1] ?? from;
-    const name = from.includes('<') ? from.slice(0, from.indexOf('<')).trim().replace(/^"|"$/g, '') : 'VC Game Studio';
-    const resendKey = env['RESEND_API_KEY'] ?? process.env['RESEND_API_KEY'];
-    const result = await setupSupabaseAuth(fetch, {
-      accessToken,
-      projectRef: SUPABASE_REF,
-      siteUrl: SITE,
-      callbackUrl: `${SITE}/auth/callback`,
-      ...(resendKey ? { smtp: { resendKey, fromAddress: address, fromName: name } } : {}),
-    });
-    say([
-      `Wrote the vc-game-studio project's NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY to the file.`,
-      ...result.notes,
-      `Then run the vercel step to upload them, and set the GitHub variables MAIN_VITE_SUPABASE_URL (https://${SUPABASE_REF}.supabase.co) and MAIN_VITE_SUPABASE_ANON_KEY (the NEXT_PUBLIC_SUPABASE_ANON_KEY now in the file; it is public).`,
-    ]);
+    const result = await setupSupabaseAuth(fetch, { accessToken: need(env, 'SUPABASE_ACCESS_TOKEN'), projectRef: SUPABASE_REF, callbackUrl: `${SITE}/auth/callback` });
+    say(result.notes);
     break;
   }
   case 'vercel': {
@@ -106,9 +87,6 @@ switch (step) {
     break;
   }
   case 'check': {
-    if (env['NEXT_PUBLIC_SUPABASE_URL'] && env['NEXT_PUBLIC_SUPABASE_URL'] !== DEFAULTS.NEXT_PUBLIC_SUPABASE_URL) {
-      say([`The file points at ${env['NEXT_PUBLIC_SUPABASE_URL']}, not VC Game Studio's project: run the supabase step to switch it.`]);
-    }
     const missing = missingVariables({ ...DEFAULTS, ...env });
     say(missing.length ? [`Still missing: ${missing.join(', ')}`] : ['Every variable vc-gamestudio.com needs is in the file.']);
     break;

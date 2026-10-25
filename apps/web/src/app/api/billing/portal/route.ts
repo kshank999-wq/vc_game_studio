@@ -26,7 +26,7 @@ export async function POST(): Promise<Response> {
     const session = await stripe().billingPortal.sessions.create({
       customer: data.stripe_customer_id as string,
       return_url: `${env.siteUrl}/account`,
-      // The portal set up for VC Game Studio's plans (npm run setup -- stripe).
+      // VC Game Studio's own portal (npm run setup -- stripe), not the account's default, which other VC products use.
       ...(env.stripePortalConfiguration ? { configuration: env.stripePortalConfiguration } : {}),
     });
     return NextResponse.json({ url: session.url });

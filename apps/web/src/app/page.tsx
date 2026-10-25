@@ -79,8 +79,8 @@ export default function Home() {
             <h2>One package, one account</h2>
             <p className="muted">
               VC Game Studio is the whole design tool and the engine handoff, monthly or yearly. Each license
-              runs on {DEVICES_PER_LICENSE} computers, Mac or Windows, and every update comes with it while you
-              subscribe.
+              runs on {DEVICES_PER_LICENSE} computers, Mac or Windows. Already use a VC app? Sign in with the same VC
+              Entertainment account; VC Game Studio is its own subscription.
             </p>
           </div>
           <div className="actions" style={{ justifyContent: 'flex-end' }}>

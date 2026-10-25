@@ -5,8 +5,8 @@ import { planFrom, readToken, type Entitlement, type Plan } from './license-toke
  * The license, as the desktop app keeps it.
  *
  * Signing in is activating: the customer types the email their subscription is
- * under, gets a code from VC Game Studio's account system (its own Supabase
- * project), and this computer takes one of the license's two
+ * under, gets a code from VC Entertainment's account system (one account for
+ * every VC app), and this computer takes one of the license's two
  * seats. The site answers with a signed entitlement (license-token.ts) that is
  * kept on disk; the app checks in when it starts and every few hours, and
  * offline the last entitlement lasts its grace (14 days).

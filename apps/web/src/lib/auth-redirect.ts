@@ -2,8 +2,9 @@
  * Where to send a request that landed on the wrong page carrying Supabase auth
  * parameters. A sign-in link goes
  * wherever Supabase allows; when `/auth/callback` is refused it falls back to
- * the project's Site URL (vc-gamestudio.com; the setup's supabase step sets
- * both, docs/DEPLOYMENT.md). On this site, a stray
+ * the project's Site URL. The accounts project is shared by every VC app, so
+ * that fallback is another product's site, which is why this site's callback
+ * must be on the project's redirect allow list (docs/DEPLOYMENT.md). On this site, a stray
  * `code` is forwarded to the callback.
  */
 export const CALLBACK_PATH = '/auth/callback';

@@ -61,9 +61,9 @@ export const env = {
     };
   },
   /**
-   * This product's customer portal (made by `npm run setup -- stripe`), with
-   * the monthly and yearly plans to switch between; without it the portal
-   * falls back to the account's default, so set it before selling.
+   * This product's own customer portal (made by `npm run setup -- stripe`),
+   * with its monthly and yearly plans to switch between. Not the account's
+   * default, which other VC products use; set it before selling.
    */
   get stripePortalConfiguration(): string | undefined {
     return process.env['STRIPE_PORTAL_CONFIGURATION']?.trim() || undefined;

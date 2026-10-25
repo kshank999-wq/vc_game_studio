@@ -5,7 +5,12 @@ import { useSearchParams } from 'next/navigation';
 import { safeNextPath } from '@/lib/auth-redirect';
 import { browserClient } from '@/lib/supabase-browser';
 
-/** Email sign-in: a link, no password. The first sign-in makes the account. */
+/**
+ * Email sign-in: a link, no password. The account is the customer's VC
+ * Entertainment account, the same one for every VC app, so someone who uses
+ * another VC app signs in with the address they already use; a first sign-in
+ * makes one.
+ */
 export default function SignInPage() {
   return (
     <Suspense fallback={null}>
@@ -42,7 +47,7 @@ function SignInForm() {
     <>
       <div className="hero">
         <h1>Sign in</h1>
-        <p className="lede">We will email you a link. Your first sign-in makes your VC Game Studio account.</p>
+        <p className="lede">We will email you a link. It is your VC Entertainment account: the same one for every VC app.</p>
       </div>
       <div className="panel" style={{ maxWidth: 520 }}>
         {failed && status !== 'sent' ? (

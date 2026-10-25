@@ -1,0 +1,112 @@
+diff --git a/apps/web/src/app/api/stripe/webhook/route.ts b/apps/web/src/app/api/stripe/webhook/route.ts
+index e961ed0..51a637e 100644
+--- a/apps/web/src/app/api/stripe/webhook/route.ts
++++ b/apps/web/src/app/api/stripe/webhook/route.ts
+@@ -6,6 +6,7 @@ import { adminClient } from '@/lib/supabase';
+ import { fulfillCheckout, parsePlatform } from '@/lib/fulfillment';
+ import { sendPurchaseEmail } from '@/lib/email';
+ import { recordSubscription } from '@/lib/room-billing';
++import { belongsElsewhere, isDesktopPurchase } from '@/lib/stripe-scope';
+ 
+ export const runtime = 'nodejs';
+ export const dynamic = 'force-dynamic';
+@@ -36,6 +37,13 @@ export async function POST(request: Request): Promise<Response> {
+     return NextResponse.json({ error: message }, { status: 400 });
+   }
+ 
++  // The Stripe account is shared with VC Game Studio, whose own endpoint
++  // handles what it created (`stripe-scope.ts`). Acknowledged, not claimed:
++  // the event id is that endpoint's to claim.
++  if (belongsElsewhere(event.data.object)) {
++    return NextResponse.json({ received: true, ignored: true });
++  }
++
+   const client = adminClient();
+ 
+   // Claim the event. If the insert loses to an earlier delivery, this is a
+@@ -58,7 +66,9 @@ export async function POST(request: Request): Promise<Response> {
+   try {
+     if (event.type === 'checkout.session.completed') {
+       const session = event.data.object as Stripe.Checkout.Session;
+-      if (session.payment_status === 'paid') {
++      // Only a one-off purchase is a desktop licence; a Writers Room seat
++      // checkout is a subscription, recorded by the subscription events below.
++      if (isDesktopPurchase(session)) {
+         const email = session.customer_details?.email ?? session.customer_email;
+         if (!email) throw new Error(`Checkout session ${session.id} has no customer email`);
+ 
+diff --git a/apps/web/src/lib/__tests__/stripe-scope.test.ts b/apps/web/src/lib/__tests__/stripe-scope.test.ts
+new file mode 100644
+index 0000000..de2c0f2
+--- /dev/null
++++ b/apps/web/src/lib/__tests__/stripe-scope.test.ts
+@@ -0,0 +1,23 @@
++import { describe, expect, it } from 'vitest';
++import { belongsElsewhere, isDesktopPurchase } from '../stripe-scope';
++
++describe('stripe scope', () => {
++  it('skips what VC Game Studio created on the shared account', () => {
++    expect(belongsElsewhere({ metadata: { product: 'vc-game-studio' } })).toBe(true);
++  });
++
++  it("keeps VC Writer's own events, tagged or not", () => {
++    expect(belongsElsewhere({ metadata: { platform: 'windows' } })).toBe(false);
++    expect(belongsElsewhere({ metadata: { room_id: 'r1' } })).toBe(false);
++    expect(belongsElsewhere({ metadata: {} })).toBe(false);
++    expect(belongsElsewhere({})).toBe(false);
++    expect(belongsElsewhere(null)).toBe(false);
++  });
++
++  it('issues a desktop licence only for a paid one-off checkout', () => {
++    expect(isDesktopPurchase({ mode: 'payment', payment_status: 'paid' })).toBe(true);
++    expect(isDesktopPurchase({ mode: 'payment', payment_status: 'unpaid' })).toBe(false);
++    // A Writers Room seat subscription completes paid too; it is not a licence.
++    expect(isDesktopPurchase({ mode: 'subscription', payment_status: 'paid' })).toBe(false);
++  });
++});
+diff --git a/apps/web/src/lib/stripe-scope.ts b/apps/web/src/lib/stripe-scope.ts
+new file mode 100644
+index 0000000..867ce46
+--- /dev/null
++++ b/apps/web/src/lib/stripe-scope.ts
+@@ -0,0 +1,40 @@
++/**
++ * Which Stripe events are VC Writer's to act on.
++ *
++ * The Stripe account is shared with VC Game Studio (vc-gamestudio.com), and
++ * Stripe sends every event of an account to every endpoint subscribed to that
++ * event type. So this endpoint also receives Game Studio's checkouts and
++ * subscriptions, and it must leave them alone: Game Studio's own webhook turns
++ * them into Game Studio licenses. Game Studio tags everything it creates with
++ * `metadata.product = 'vc-game-studio'` (the session, and through
++ * `subscription_data` the subscription too).
++ *
++ * Pure, so it is tested without a request.
++ */
++
++export const OTHER_PRODUCTS = new Set(['vc-game-studio']);
++
++/** The product an event's object says it belongs to, when it says. */
++const productOf = (object: unknown): string | null => {
++  if (!object || typeof object !== 'object') return null;
++  const metadata = (object as { metadata?: unknown }).metadata;
++  if (!metadata || typeof metadata !== 'object') return null;
++  const product = (metadata as Record<string, unknown>)['product'];
++  return typeof product === 'string' ? product : null;
++};
++
++/** True when the event belongs to another VC product and VC Writer should skip it. */
++export const belongsElsewhere = (object: unknown): boolean => {
++  const product = productOf(object);
++  return product !== null && OTHER_PRODUCTS.has(product);
++};
++
++/**
++ * A checkout that buys the desktop licence: a one-off payment.
++ *
++ * A Writers Room seat is bought through a subscription-mode checkout, which is
++ * also `paid` when it completes; that one is recorded by the subscription
++ * events (`room-billing.ts`) and must not issue a desktop licence as well.
++ */
++export const isDesktopPurchase = (session: { mode?: string | null; payment_status?: string | null }): boolean =>
++  session.mode === 'payment' && session.payment_status === 'paid';

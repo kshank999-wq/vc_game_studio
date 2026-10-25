@@ -37,7 +37,7 @@ export function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="wrap">
-        <span>© {new Date().getFullYear()} VC Game Studio</span>
+        <span>© {new Date().getFullYear()} VC Game Studio · a VC Entertainment product</span>
         <span>
           <Link href="/pricing">Pricing</Link> · <Link href="/download">Download</Link> · <Link href="/account">Account</Link>
         </span>

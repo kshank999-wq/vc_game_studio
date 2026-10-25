@@ -7,8 +7,10 @@ import { PLAN_ORDER, PLANS } from '../plans';
  * products, their four recurring prices, the webhook endpoint, and a customer
  * portal configuration of its own.
  *
- * The portal is a configuration of its own, offering exactly the monthly and
- * yearly plans to switch between; /api/billing/portal names it.
+ * The portal is a configuration of its own, not the account's default: the
+ * Stripe account is VC Entertainment's, shared by every VC product, and other
+ * products' customers must not be offered Game Studio plans to switch to.
+ * /api/billing/portal names it.
  */
 
 export const WEBHOOK_EVENTS: Stripe.WebhookEndpointCreateParams.EnabledEvent[] = [

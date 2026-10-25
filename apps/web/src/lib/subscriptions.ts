@@ -53,9 +53,10 @@ const findProfileByEmail = async (client: SupabaseClient, email: string): Promis
 };
 
 /**
- * The account this subscription belongs to: the signed-in customer's, else
- * the account for the checkout's email. Someone who checked out signed out
- * gets an account for their email, so a paid subscription is never stranded.
+ * The account this subscription belongs to: the customer's VC Entertainment
+ * account, shared by every VC app (the signed-in customer's, else the one for
+ * the checkout's email). Someone without one gets an account for their email,
+ * so a paid subscription is never stranded.
  */
 const resolveUser = async (client: SupabaseClient, metadataUserId: string | undefined, email: string): Promise<string> => {
   if (metadataUserId) return metadataUserId;

@@ -50,7 +50,7 @@ export async function POST(request: Request): Promise<Response> {
           : {}),
       client_reference_id: user.id,
       // On the session and, through subscription_data, on the subscription and
-      // its events: how the webhook knows them for its own.
+      // its events: how every VC product's webhook tells Game Studio's sales from its own.
       metadata,
       subscription_data: { metadata },
       allow_promotion_codes: true,

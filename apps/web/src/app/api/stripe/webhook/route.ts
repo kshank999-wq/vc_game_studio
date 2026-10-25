@@ -17,8 +17,10 @@ export const dynamic = 'force-dynamic';
  * gs_stripe_webhook_events); act, idempotently; email, whose failure is
  * logged and never fails the webhook.
  *
- * Events that are not VC Game Studio's (not tagged by this site and on none
- * of its prices) are acknowledged and left alone before anything is claimed.
+ * VC Entertainment's Stripe account sends every product's events to every
+ * product's endpoint. Events that are not VC Game Studio's (not tagged by this
+ * site and on none of its prices) are acknowledged and left alone before
+ * anything is claimed.
  */
 export async function POST(request: Request): Promise<Response> {
   const signature = request.headers.get('stripe-signature');
@@ -61,8 +63,8 @@ export async function POST(request: Request): Promise<Response> {
       const current = await stripe().subscriptions.retrieve((event.data.object as Stripe.Subscription).id);
       await issueFromSubscription(current);
     } else {
-      // A refund or dispute: follow the money back to its subscription. A
-      // charge with no subscription of ours changes nothing.
+      // A refund or dispute: follow the money back to its subscription. Another
+      // VC product's charge has no subscription of ours and changes nothing.
       // Read back through the SDK's pinned API version: newer webhook versions
       // drop `invoice` from the charge, and this is how a refund finds its subscription.
       const object = event.data.object as Stripe.Charge | Stripe.Dispute;

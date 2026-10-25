@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { env } from './env';
 
-/** Everything this site creates in Stripe carries this, so the webhook knows its own (and leaves anything else alone). */
+/** Everything this site creates in VC Entertainment's Stripe account carries this: how each VC product's webhook tells its own sales from the others'. */
 export const PRODUCT_TAG = 'vc-game-studio';
 
 let cached: Stripe | null = null;
