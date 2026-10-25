@@ -1,16 +1,11 @@
 -- VC Game Studio commerce: subscriptions, licenses, device seats and installer
--- releases, in the Supabase project VC Writer already runs (project VCWriter,
--- kpviyoqhmzignjyvixws).
+-- releases, in VC Game Studio's own Supabase project (vc-game-studio,
+-- ikzjxigttvdvguawvtyf), on the foundation in gs_0000 (profiles, the enums
+-- platform, license_status and release_channel, touch_updated_at()).
 --
--- Shared accounts: a customer is one row of public.profiles, the same row VC
--- Writer uses, so one sign-in covers both products. Everything else is
--- VC Game Studio's own and carries the gs_ prefix; nothing of VC Writer's is
--- altered. Its enums (platform, license_status, release_channel) and its
--- touch_updated_at() trigger function are reused as they are.
---
--- Entitlement is server-authoritative, as in VC Writer: rows here are written
--- only by the service role, from the Stripe webhook and the licensing routes,
--- and a customer can read their own and write none.
+-- Entitlement is server-authoritative: rows here are written only by the
+-- service role, from the Stripe webhook and the licensing routes, and a
+-- customer can read their own and write none.
 
 create type public.gs_plan as enum ('writer', 'studio');
 create type public.gs_interval as enum ('month', 'year');
@@ -94,9 +89,7 @@ create table public.gs_release_builds (
 
 create unique index gs_release_builds_active_idx on public.gs_release_builds (platform, channel) where active;
 
--- VC Game Studio's webhook endpoint claims event ids here. Its own table, not
--- VC Writer's: both endpoints receive every event of the shared Stripe
--- account, and each must be able to claim and skip independently.
+-- The Stripe webhook claims event ids here, so a redelivered event is acted on once.
 create table public.gs_stripe_webhook_events (
   id text primary key,
   type text not null,

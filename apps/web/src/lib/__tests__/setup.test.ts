@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { missingVariables, parseEnv, upsertEnv } from '../setup/env-file';
 import { setupResend, vercelRecord } from '../setup/resend-setup';
 import { lookupKey, parseAmounts, setupStripe, WEBHOOK_EVENTS } from '../setup/stripe-setup';
-import { addRedirect, carriesCode, setupSupabaseAuth } from '../setup/supabase-auth-setup';
+import { addRedirect, carriesCode, projectKeys, setupSupabaseAuth, SIGN_IN_EMAIL, SIGN_IN_SUBJECT } from '../setup/supabase-auth-setup';
 import { envPayload, setupVercel } from '../setup/vercel-setup';
 
 describe('the env file', () => {
@@ -150,26 +150,52 @@ describe('resend setup', () => {
 });
 
 describe('supabase sign-in settings', () => {
-  it("adds this site's callback and keeps VC Writer's", () => {
-    expect(addRedirect('https://vc-writer.com/auth/callback', 'https://vc-gamestudio.com/auth/callback')).toEqual({
-      list: 'https://vc-writer.com/auth/callback,https://vc-gamestudio.com/auth/callback',
-      changed: true,
-    });
+  it("adds this site's callback to the redirect list once", () => {
+    expect(addRedirect('', 'https://vc-gamestudio.com/auth/callback')).toEqual({ list: 'https://vc-gamestudio.com/auth/callback', changed: true });
     expect(addRedirect('https://vc-gamestudio.com/auth/callback', 'https://vc-gamestudio.com/auth/callback').changed).toBe(false);
     expect(carriesCode('<p>Code: {{ .Token }}</p>')).toBe(true);
     expect(carriesCode('<a href="{{ .ConfirmationURL }}">Sign in</a>')).toBe(false);
+    expect(carriesCode(SIGN_IN_EMAIL)).toBe(true);
   });
 
-  it('patches only the redirect list, and reports on the email', async () => {
-    let patched: unknown = null;
-    const url = 'https://api.supabase.com/v1/projects/ref/config/auth';
+  const url = 'https://api.supabase.com/v1/projects/ref/config/auth';
+  const options = { accessToken: 't', projectRef: 'ref', siteUrl: 'https://vc-gamestudio.com', callbackUrl: 'https://vc-gamestudio.com/auth/callback' };
+
+  it("sets a new project's site address, callback, sign-in email and mail server", async () => {
+    let patched: Record<string, unknown> | null = null;
     const { fetcher } = fakeFetch({
-      [`GET ${url}`]: () => [200, { uri_allow_list: 'https://vc-writer.com/auth/callback', mailer_templates_magic_link_content: '<a href="{{ .ConfirmationURL }}">x</a>' }],
-      [`PATCH ${url}`]: (body) => ((patched = body), [200, {}]),
+      [`GET ${url}`]: () => [200, { site_url: 'http://localhost:3000', uri_allow_list: '', mailer_templates_magic_link_content: '<a href="{{ .ConfirmationURL }}">x</a>' }],
+      [`PATCH ${url}`]: (body) => ((patched = body as Record<string, unknown>), [200, {}]),
     });
-    const result = await setupSupabaseAuth(fetcher, { accessToken: 't', projectRef: 'ref', callbackUrl: 'https://vc-gamestudio.com/auth/callback' });
-    expect(patched).toEqual({ uri_allow_list: 'https://vc-writer.com/auth/callback,https://vc-gamestudio.com/auth/callback' });
-    expect(result.codeInEmail).toBe(false);
+    await setupSupabaseAuth(fetcher, { ...options, smtp: { resendKey: 're_x', fromAddress: 'noreply@vc-gamestudio.com', fromName: 'VC Game Studio' } });
+    expect(patched).toMatchObject({
+      site_url: 'https://vc-gamestudio.com',
+      uri_allow_list: 'https://vc-gamestudio.com/auth/callback',
+      mailer_subjects_magic_link: SIGN_IN_SUBJECT,
+      mailer_templates_magic_link_content: SIGN_IN_EMAIL,
+      smtp_host: 'smtp.resend.com',
+      smtp_user: 'resend',
+      smtp_pass: 're_x',
+      smtp_admin_email: 'noreply@vc-gamestudio.com',
+    });
+  });
+
+  it('leaves settings that are already right alone', async () => {
+    let patched = false;
+    const { fetcher } = fakeFetch({
+      [`GET ${url}`]: () => [200, { site_url: 'https://vc-gamestudio.com', uri_allow_list: 'https://vc-gamestudio.com/auth/callback', mailer_templates_magic_link_content: 'My own words. {{ .Token }}', smtp_host: 'smtp.resend.com', smtp_admin_email: 'noreply@vc-gamestudio.com' }],
+      [`PATCH ${url}`]: () => ((patched = true), [200, {}]),
+    });
+    await setupSupabaseAuth(fetcher, { ...options, smtp: { resendKey: 're_x', fromAddress: 'noreply@vc-gamestudio.com', fromName: 'VC Game Studio' } });
+    expect(patched).toBe(false);
+  });
+
+  it("reads the project's publishable and secret keys, else the legacy ones", async () => {
+    const keysUrl = 'GET https://api.supabase.com/v1/projects/ref/api-keys?reveal=true';
+    const fresh = fakeFetch({ [keysUrl]: () => [200, [{ name: 'anon', type: 'legacy', api_key: 'eyA' }, { name: 'default', type: 'publishable', api_key: 'sb_publishable_1' }, { name: 'default', type: 'secret', api_key: 'sb_secret_1' }]] });
+    expect(await projectKeys(fresh.fetcher, { accessToken: 't', projectRef: 'ref' })).toEqual({ anon: 'sb_publishable_1', service: 'sb_secret_1' });
+    const legacy = fakeFetch({ [keysUrl]: () => [200, [{ name: 'anon', type: 'legacy', api_key: 'eyA' }, { name: 'service_role', type: 'legacy', api_key: 'eyS' }]] });
+    expect(await projectKeys(legacy.fetcher, { accessToken: 't', projectRef: 'ref' })).toEqual({ anon: 'eyA', service: 'eyS' });
   });
 });
 

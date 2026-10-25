@@ -1,15 +1,15 @@
 # Selling VC Game Studio: deployment and service wiring
 
-VC Game Studio is sold the way VC Writer is: **vc-gamestudio.com** sells
-subscriptions and issues licenses, and customers download the desktop app
+VC Game Studio is its own product, run on its own services, separate from
+VC Writer. **vc-gamestudio.com** sells subscriptions and issues licenses, and customers download the desktop app
 for Mac or Windows. Projects stay on the customer's computer, as files.
 
 | Piece | Where | What it is |
 | --- | --- | --- |
 | Website | `apps/web` (Next.js on Vercel) | Home, pricing, sign-in, account (license, computers, billing), downloads, the browser preview at `/preview`, and the API the app calls |
 | Desktop app | `apps/studio` (Electron) | Signs in, activates the computer, and checks its license (`src/main/licensing.ts`) |
-| Accounts and records | Supabase project **VCWriter** (`kpviyoqhmzignjyvixws`), shared with VC Writer | One account for both products. The tables are VC Game Studio's own, named `gs_*` (`supabase/migrations/gs_0001_commerce.sql`, **applied**) |
-| Payments | The Stripe account VC Writer uses | One package, VC Game Studio, monthly and yearly |
+| Accounts and records | Supabase project **vc-game-studio** (`ikzjxigttvdvguawvtyf`), its own | Customer accounts, subscriptions, licenses, computers and releases. `supabase/migrations/gs_0000`–`gs_0002`, **applied** |
+| Payments | VC Game Studio's own Stripe account | One package, VC Game Studio, monthly and yearly |
 | Email | Resend | The license email |
 
 ## Setting it up: six commands
@@ -24,10 +24,10 @@ your own computer, from the repository root, after `npm install`.
    cp apps/web/.env.example apps/web/.env.production.local
    ```
 
-   Fill in `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
-   `STRIPE_SECRET_KEY` and `RESEND_API_KEY` (the same values VC Writer's
-   Vercel project uses). Also fill in two personal tokens that are only for
-   these steps and never uploaded:
+   Fill in `STRIPE_SECRET_KEY` (VC Game Studio's own Stripe account: Stripe →
+   Developers → API keys) and `RESEND_API_KEY`. The Supabase URL and keys are
+   written by the supabase step. Also fill in two personal tokens that are
+   only for these steps and never uploaded:
    - `VERCEL_TOKEN`: Vercel → Account Settings → Tokens;
    - `SUPABASE_ACCESS_TOKEN`: supabase.com → Account → Access Tokens.
 2. `npm run setup -w @vcgs/web -- keys` makes the license key pair. It
@@ -38,15 +38,19 @@ your own computer, from the repository root, after `npm install`.
    - the webhook (its secret goes into the file);
    - **a customer portal of Game Studio's own**.
 
-   It must be its own portal: VC Writer's Writers Room uses the account's
-   default one, and its customers must not be offered Game Studio plans.
+   The portal offers exactly the monthly and yearly plans to switch between.
 4. `npm run setup -w @vcgs/web -- resend` adds vc-gamestudio.com to Resend,
    puts its DNS records in Vercel and asks Resend to verify it.
-5. `npm run setup -w @vcgs/web -- supabase` adds
-   `https://vc-gamestudio.com/auth/callback` to the shared project's
-   sign-in redirect list, keeping VC Writer's entries. It also checks
-   whether the sign-in email shows the sign-in code the desktop app needs
-   (see Supabase below).
+5. `npm run setup -w @vcgs/web -- supabase` sets up the vc-game-studio
+   project's sign-in:
+   - writes its URL and keys into the file (no copying from the dashboard);
+   - sets the site address to vc-gamestudio.com and allows its
+     `/auth/callback`;
+   - writes the sign-in email, with the six-digit code the desktop app asks
+     for;
+   - sends sign-in email through Resend from noreply@vc-gamestudio.com
+     (Supabase's own mail server sends only a few an hour). Run the resend
+     step first, so the domain is verified.
 6. `npm run setup -w @vcgs/web -- vercel` does the Vercel side:
    - creates the `vc-game-studio` project, linked to this repository, with
      root `apps/web`;
@@ -58,8 +62,8 @@ manual equivalents of each step are described below.
 
 ## How a sale works
 
-1. The customer signs in on vc-gamestudio.com with an emailed link. It is the
-   same account as VC Writer, if they have one.
+1. The customer signs in on vc-gamestudio.com with an emailed link; the
+   first sign-in makes their account.
 2. Pricing → **Subscribe** opens a Stripe Checkout in subscription mode.
    Everything this site creates in Stripe carries
    `metadata.product = vc-game-studio`.
@@ -84,27 +88,6 @@ manual equivalents of each step are described below.
 6. A lost computer: **Free this seat** on the account page, then activate
    the new one.
 
-## Before selling: one change to VC Writer
-
-Stripe sends every event in an account to every webhook endpoint, so VC
-Writer's webhook will see Game Studio's checkouts. As it stands, it would
-issue a **VC Writer** license for each one. It also has a related existing
-bug: it issues a desktop license for a Writers Room seat checkout.
-
-The fix is in `docs/commerce/vcwriter-stripe-scope.patch`:
-- skip events tagged `vc-game-studio`;
-- issue a license only for a paid one-off checkout.
-
-It is tested against VC Writer's own suite. Apply it to `kshank999-wq/VCWriter`
-and deploy it before the first Game Studio sale:
-
-```bash
-cd VCWriter && git checkout main && git pull
-git apply ../vc_game_studio/docs/commerce/vcwriter-stripe-scope.patch
-git add -A && git commit -m "Stripe webhook: leave VC Game Studio's events alone, no licence for a room seat"
-git push   # main deploys vc-writer.com
-```
-
 ## Vercel: the project
 
 - **New project** in team `kshank999-5979's projects`, from
@@ -122,20 +105,19 @@ git push   # main deploys vc-writer.com
 ## Vercel: environment variables
 
 Set these for Production, and for Preview if preview deployments should
-work. The "Same as VC Writer" values are copied from the `vcwriter` Vercel
-project.
+work. The vercel setup step uploads them all from the file.
 
 | Variable | Value | Notes |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://kpviyoqhmzignjyvixws.supabase.co` | Same as VC Writer. Public |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → VCWriter → Project Settings → API Keys → `sb_publishable_…` | Same as VC Writer. Public |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → VCWriter → API Keys → `sb_secret_…` | Same as VC Writer. **Secret**, server only |
-| `STRIPE_SECRET_KEY` | Stripe → Developers → API keys | Same as VC Writer. **Secret** |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://ikzjxigttvdvguawvtyf.supabase.co` | Written by the supabase step. Public |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → vc-game-studio → Project Settings → API Keys → `sb_publishable_…` | Written by the supabase step. Public |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → vc-game-studio → API Keys → `sb_secret_…` | Written by the supabase step. **Secret**, server only |
+| `STRIPE_SECRET_KEY` | VC Game Studio's Stripe account → Developers → API keys | **Secret** |
 | `STRIPE_WEBHOOK_SECRET` | Stripe → Webhooks → the **vc-gamestudio.com** endpoint → Signing secret | **New**, this endpoint's own. **Secret** |
 | `STRIPE_PRICE_STUDIO_MONTHLY` | Stripe price id | New |
 | `STRIPE_PRICE_STUDIO_YEARLY` | Stripe price id | New |
-| `STRIPE_PORTAL_CONFIGURATION` | `bpc_…`, made by the stripe step | New: Game Studio's own customer portal, so VC Writer's default portal is left as it is |
-| `RESEND_API_KEY` | Resend → API keys | Same as VC Writer, or a new key. **Secret** |
+| `STRIPE_PORTAL_CONFIGURATION` | `bpc_…`, made by the stripe step | The customer portal with the two plans |
+| `RESEND_API_KEY` | Resend → API keys | **Secret** |
 | `RESEND_FROM_ADDRESS` | `VC Game Studio <noreply@vc-gamestudio.com>` | Needs vc-gamestudio.com verified in Resend |
 | `LICENSE_SIGNING_PRIVATE_KEY` | The first line printed by `npm run keys:license -w @vcgs/web` | **Secret.** Signs what the app may do |
 | `NEXT_PUBLIC_SITE_URL` | `https://vc-gamestudio.com` | Must include `https://`. A bad value is warned about and ignored |
@@ -200,20 +182,19 @@ records). Vercel manages the domain's DNS, so add them under Vercel → Domains.
 A failed send is logged to `email_events` (templates `gs-license-*`) and
 never fails a purchase; the account page always shows the license.
 
-## Supabase (the shared VCWriter project)
+## Supabase (the vc-game-studio project)
 
-- **Database:** done. `gs_0001_commerce` is applied. The security advisor
-  reports only `gs_stripe_webhook_events` having no policies, which is
-  intended (service role only, like VC Writer's own webhook table). The
-  performance advisor has not been run; run it once from the Supabase
-  dashboard or connector.
-- **Auth → URL configuration → Redirect URLs:** add
-  `https://vc-gamestudio.com/auth/callback`. Keep VC Writer's entries. Leave
-  the Site URL as vc-writer.com.
-- **Auth → Email templates → Magic link:** the desktop app signs in with the
-  code, as VC Writer's app does, so the template must include
-  `{{ .Token }}`. The sign-in email is shared with VC Writer, so word it for
-  both products.
+- **Database:** done. `gs_0000_foundation` (accounts, email log, rate
+  limiter), `gs_0001_commerce` and `gs_0002_trigger_functions_private` are
+  applied. The security advisor reports only `email_events`, `rate_limits`
+  and `gs_stripe_webhook_events` having no policies, which is intended
+  (service role only).
+- **Sign-in:** the supabase setup step sets the site address, the redirect
+  list, the sign-in email (with `{{ .Token }}`, the code the desktop app
+  asks for) and Resend as the mail server. By hand: Auth → URL
+  configuration; Auth → Email templates → Magic link; Auth → SMTP settings
+  (host `smtp.resend.com`, port 465, user `resend`, the Resend API key as
+  the password).
 
 ## GitHub: building the installers
 
@@ -228,17 +209,17 @@ In Settings → Secrets and variables → Actions:
 | Kind | Name | Value |
 | --- | --- | --- |
 | Variable | `MAIN_VITE_SITE_URL` | `https://vc-gamestudio.com` |
-| Variable | `MAIN_VITE_SUPABASE_URL` | `https://kpviyoqhmzignjyvixws.supabase.co` |
+| Variable | `MAIN_VITE_SUPABASE_URL` | `https://ikzjxigttvdvguawvtyf.supabase.co` |
 | Variable | `MAIN_VITE_SUPABASE_ANON_KEY` | The same publishable key as above |
 | Variable | `MAIN_VITE_LICENSE_PUBLIC_KEY` | The second line from `keys:license` |
 | Secret | `SUPABASE_SERVICE_ROLE_KEY` | For the publish job |
 | Secret | `CSC_LINK`, `CSC_KEY_PASSWORD` | Apple Developer ID Application certificate (.p12, base64) and its password |
 | Secret | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarization |
-| Secret | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE` | Windows signing via Azure Artifact Signing, as VC Writer does. Alternatively `WINDOWS_CERTIFICATE` + `WINDOWS_CERTIFICATE_PASSWORD` |
+| Secret | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE` | Windows signing via Azure Artifact Signing (VC Entertainment LLC's certificate profile; Game Studio signs as its own app registration, `vcgs-github-signing`). Alternatively `WINDOWS_CERTIFICATE` + `WINDOWS_CERTIFICATE_PASSWORD` |
 
 The workflow refuses to package without the three licensing variables,
-because a build without them has licensing switched off. The signing secrets
-are the same ones VC Writer uses. Without them the installers are unsigned:
+because a build without them has licensing switched off. The Apple and
+Azure secrets are VC Entertainment LLC's signing credentials. Without them the installers are unsigned:
 macOS and Windows will warn on first run, so do not publish those.
 
 Then add the `release` environment (Settings → Environments) with yourself as

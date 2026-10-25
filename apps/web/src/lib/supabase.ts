@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { env } from './env';
 
 /**
- * Two clients, as in VC Writer. `serverClient()` acts as the signed-in visitor
+ * Two clients. `serverClient()` acts as the signed-in visitor
  * and is bound by row level security; `adminClient()` uses the service role
  * and is the only way subscriptions, licenses, seats and releases are written.
  */

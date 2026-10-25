@@ -4,7 +4,7 @@ import { strayAuthRedirect } from '@/lib/auth-redirect';
 
 /**
  * Refreshes the Supabase session cookie on navigation and sets a nonce-based
- * content security policy, as VC Writer's middleware does. The online preview
+ * content security policy. The online preview
  * (/preview, the studio's own bundle) is outside it and carries its own policy
  * from next.config.mjs; so are the static files and the Stripe webhook.
  */

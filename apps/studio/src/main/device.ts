@@ -5,7 +5,7 @@ import { hostname, userInfo } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * This installation, for its license seat (VC Writer's approach). A seat is a
+ * This installation, for its license seat. A seat is a
  * place the app is installed, not a piece of hardware: a random salt made on
  * first run and kept in the app's data, hashed with the machine's name. Stable
  * across restarts and reinstalls that keep app data; no hardware serial or MAC

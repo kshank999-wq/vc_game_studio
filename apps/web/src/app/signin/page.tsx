@@ -5,11 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { safeNextPath } from '@/lib/auth-redirect';
 import { browserClient } from '@/lib/supabase-browser';
 
-/**
- * Email sign-in, as VC Writer's: a link, no password. The account is shared
- * with VC Writer, so a VC Writer customer signs in with the address they
- * already use.
- */
+/** Email sign-in: a link, no password. The first sign-in makes the account. */
 export default function SignInPage() {
   return (
     <Suspense fallback={null}>
@@ -46,7 +42,7 @@ function SignInForm() {
     <>
       <div className="hero">
         <h1>Sign in</h1>
-        <p className="lede">We will email you a link. One account covers VC Game Studio and VC Writer.</p>
+        <p className="lede">We will email you a link. Your first sign-in makes your VC Game Studio account.</p>
       </div>
       <div className="panel" style={{ maxWidth: 520 }}>
         {failed && status !== 'sent' ? (

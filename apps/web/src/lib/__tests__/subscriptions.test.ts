@@ -37,7 +37,7 @@ describe('recording a subscription', () => {
     expect(db.tables['gs_licenses']?.[0]).toMatchObject({ user_id: 'u1', plan: 'studio', paid_through: new Date(1_800_000_000_000).toISOString() });
   });
 
-  it("uses the VC Writer customer's own account: one account across products", async () => {
+  it("uses the customer's existing account", async () => {
     const db = fakeSupabase({ profiles: [{ id: 'writer-customer', email: 'ken@example.com' }] });
     const record = await recordSubscription(subscription({ metadata: { product: 'vc-game-studio' } }), deps(db.client));
     expect(record?.userId).toBe('writer-customer');
@@ -94,7 +94,7 @@ describe('recording a subscription', () => {
     expect(db.tables['gs_licenses']?.[0]).toMatchObject({ paid_through: new Date(1_900_000_000_000).toISOString(), status: 'active' });
   });
 
-  it("leaves VC Writer's subscriptions on the shared account alone", async () => {
+  it("leaves subscriptions that are not VC Game Studio's alone", async () => {
     const db = fakeSupabase();
     const room = subscription({ metadata: { room_id: 'r1' }, price: 'price_writers_room_seat' });
     expect(isOurs(room, prices)).toBe(false);

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 /**
- * License serials, VC Writer's format with this product's prefix:
+ * License serials, with this product's prefix:
  * `VCGS-XXXXX-XXXXX-XXXXX-XXXXX` from an alphabet without I, O, 0 or 1, so one
  * can be read over the phone. A serial names a license row; it is not a secret
  * and grants nothing by itself — activation always checks the account.

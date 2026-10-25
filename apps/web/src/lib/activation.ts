@@ -1,5 +1,5 @@
 /**
- * Device seats (VC Writer's activation rules, for a subscription license).
+ * Device seats, for a subscription license.
  *
  * A seat is an installation, identified by a fingerprint the app makes on
  * first run. Reinstalling must not burn a second seat; a device that freed its

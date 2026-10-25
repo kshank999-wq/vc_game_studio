@@ -4,8 +4,8 @@ import { licenseIssued, licenseReminder, type RenderedEmail } from './email-temp
 import { adminClient } from './supabase';
 
 /**
- * Transactional email through Resend. As in VC Writer, the outcome is logged
- * to `email_events` (the shared log, template names prefixed gs-) and a send
+ * Transactional email through Resend. The outcome is logged
+ * to `email_events` (template names prefixed gs-) and a send
  * failure never fails the purchase: the license already exists and the
  * account page always shows it.
  */

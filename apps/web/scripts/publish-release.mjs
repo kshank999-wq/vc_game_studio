@@ -6,7 +6,7 @@
  *   NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
  *   npm run publish:release -w @vcgs/web -- <installer> <windows|macos> <version> ["notes"] ["minimum OS"]
  *
- * Packaging and publishing are separate steps on purpose, as in VC Writer: a
+ * Packaging and publishing are separate steps on purpose: a
  * build is published only when someone decides it should be.
  */
 import { createHash } from 'node:crypto';

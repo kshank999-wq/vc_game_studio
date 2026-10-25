@@ -7,10 +7,8 @@ import { PLAN_ORDER, PLANS } from '../plans';
  * products, their four recurring prices, the webhook endpoint, and a customer
  * portal configuration of its own.
  *
- * The portal is this product's own configuration rather than the account's
- * default, because the account is shared: VC Writer's Writers Room sends its
- * customers to the default portal, and they must not be offered Game Studio
- * plans to switch to. /api/billing/portal names this configuration.
+ * The portal is a configuration of its own, offering exactly the monthly and
+ * yearly plans to switch between; /api/billing/portal names it.
  */
 
 export const WEBHOOK_EVENTS: Stripe.WebhookEndpointCreateParams.EnabledEvent[] = [
@@ -134,6 +132,6 @@ export const setupStripe = async (
         metadata: { product: 'vc-game-studio' },
       });
   env['STRIPE_PORTAL_CONFIGURATION'] = portal.id;
-  notes.push(`${mine ? 'Updated' : 'Created'} the VC Game Studio customer portal (not the account default, which VC Writer uses).`);
+  notes.push(`${mine ? 'Updated' : 'Created'} the VC Game Studio customer portal.`);
   return { env, notes };
 };

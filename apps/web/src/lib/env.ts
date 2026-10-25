@@ -1,5 +1,5 @@
 /**
- * Environment access, as in VC Writer: every value is read lazily and fails
+ * Environment access: every value is read lazily and fails
  * loudly where it is used, so a missing Stripe key breaks checkout and not the
  * marketing pages or a build that has no secrets.
  */
@@ -17,7 +17,7 @@ export const DEFAULT_SITE_URL = 'https://vc-gamestudio.com';
 /**
  * The site's own origin, absolute and without a trailing slash. Forgiving,
  * unlike everything else: the root layout reads it at module scope, so a typo
- * (or the variable's name pasted in as its value, which happened to VC Writer)
+ * (or the variable's name pasted in as its value, an easy slip)
  * must warn and fall back rather than fail the build.
  */
 export const parseSiteUrl = (raw: string | undefined): string => {
@@ -61,9 +61,9 @@ export const env = {
     };
   },
   /**
-   * This product's own customer portal (made by `npm run setup -- stripe`).
-   * Not the account default, which VC Writer's Writers Room uses; without it
-   * the portal falls back to that default, so set it before selling.
+   * This product's customer portal (made by `npm run setup -- stripe`), with
+   * the monthly and yearly plans to switch between; without it the portal
+   * falls back to the account's default, so set it before selling.
    */
   get stripePortalConfiguration(): string | undefined {
     return process.env['STRIPE_PORTAL_CONFIGURATION']?.trim() || undefined;

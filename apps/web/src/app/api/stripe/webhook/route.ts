@@ -13,13 +13,12 @@ export const dynamic = 'force-dynamic';
  * Stripe webhook: where licenses follow their subscriptions (the checkout
  * return page also issues one, as a backup for a late webhook).
  *
- * VC Writer's order of operations: verify the signature; claim the event id
- * (in gs_stripe_webhook_events, this endpoint's own table, since VC Writer's
- * endpoint on the shared account sees the same events); act, idempotently;
- * email, whose failure is logged and never fails the webhook.
+ * In order: verify the signature; claim the event id (in
+ * gs_stripe_webhook_events); act, idempotently; email, whose failure is
+ * logged and never fails the webhook.
  *
- * Events that are not VC Game Studio's — VC Writer's purchases and rooms — are
- * acknowledged and left alone before anything is claimed.
+ * Events that are not VC Game Studio's (not tagged by this site and on none
+ * of its prices) are acknowledged and left alone before anything is claimed.
  */
 export async function POST(request: Request): Promise<Response> {
   const signature = request.headers.get('stripe-signature');
@@ -62,8 +61,8 @@ export async function POST(request: Request): Promise<Response> {
       const current = await stripe().subscriptions.retrieve((event.data.object as Stripe.Subscription).id);
       await issueFromSubscription(current);
     } else {
-      // A refund or dispute: follow the money back to its subscription. VC
-      // Writer's charges have no subscription of ours and change nothing.
+      // A refund or dispute: follow the money back to its subscription. A
+      // charge with no subscription of ours changes nothing.
       // Read back through the SDK's pinned API version: newer webhook versions
       // drop `invoice` from the charge, and this is how a refund finds its subscription.
       const object = event.data.object as Stripe.Charge | Stripe.Dispute;

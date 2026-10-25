@@ -3,7 +3,7 @@ import { PLAN_ORDER } from './plans';
 import { stripe } from './stripe';
 
 /**
- * Prices, read from Stripe rather than repeated here (VC Writer's rule): Stripe
+ * Prices, read from Stripe rather than repeated here: Stripe
  * is what the customer is charged, and a second copy would one day disagree.
  * Null when Stripe is not configured, so the pages still render and the price
  * simply appears at checkout.

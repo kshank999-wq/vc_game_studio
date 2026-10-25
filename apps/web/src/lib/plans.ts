@@ -6,8 +6,7 @@ import type { Interval, Plan, PriceIds } from './env';
  * database.
  *
  * One package, VC Game Studio, monthly or yearly: the whole design tool and
- * the engine handoff to Godot, Unity and Unreal. (It began inside VC Writer;
- * VC Writer now only links here.)
+ * the engine handoff to Godot, Unity and Unreal.
  */
 
 export const PLANS: Record<Plan, { name: string; tagline: string; features: string[] }> = {

@@ -10,7 +10,7 @@ import { PRODUCT_TAG } from './stripe';
  *
  * The only place a license is issued or changed, called from the webhook for
  * every `customer.subscription.*` event. Stripe delivers at least once and in
- * any order, so this is idempotent the way VC Writer's fulfillment is: the
+ * any order, so this is idempotent: the
  * subscription row is upserted on Stripe's id, and the license is unique per
  * subscription, so a race between two deliveries collides in Postgres rather
  * than minting two licenses. Every event carries the whole subscription, so
@@ -53,10 +53,9 @@ const findProfileByEmail = async (client: SupabaseClient, email: string): Promis
 };
 
 /**
- * The account this subscription belongs to. Shared with VC Writer: a VC Writer
- * customer who subscribes here is the same profile. Someone who checked out
- * signed out gets an account for their email, as in VC Writer, so a paid
- * subscription is never stranded.
+ * The account this subscription belongs to: the signed-in customer's, else
+ * the account for the checkout's email. Someone who checked out signed out
+ * gets an account for their email, so a paid subscription is never stranded.
  */
 const resolveUser = async (client: SupabaseClient, metadataUserId: string | undefined, email: string): Promise<string> => {
   if (metadataUserId) return metadataUserId;

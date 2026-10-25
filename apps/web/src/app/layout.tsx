@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * Every page renders per request, as VC Writer's do: the content security
+ * Every page renders per request: the content security
  * policy carries a fresh nonce per response (middleware.ts), and a page
  * prerendered at build time has scripts without it, which `strict-dynamic`
  * then refuses.

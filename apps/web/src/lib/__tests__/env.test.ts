@@ -7,7 +7,7 @@ describe('site url', () => {
     expect(parseSiteUrl('http://localhost:3000')).toBe('http://localhost:3000');
   });
 
-  it('falls back, warning, on the mistakes that took VC Writer down', () => {
+  it('falls back, warning, on easy setup mistakes', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(parseSiteUrl('NEXT_PUBLIC_SITE_URL')).toBe(DEFAULT_SITE_URL);
     expect(parseSiteUrl('ftp://vc-gamestudio.com')).toBe(DEFAULT_SITE_URL);

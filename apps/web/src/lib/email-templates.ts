@@ -1,5 +1,5 @@
 /**
- * Transactional email templates, versioned as VC Writer's are, so the version
+ * Transactional email templates, versioned, so the version
  * that sent any message is recorded in `email_events` and a change to what
  * customers receive is a reviewable diff. Email clients allow less than a
  * browser: tables, inline styles, solid colours, no web fonts.

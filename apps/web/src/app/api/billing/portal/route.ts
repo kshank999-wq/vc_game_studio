@@ -8,8 +8,8 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Stripe's customer portal: change plan or interval, update the card, read
- * invoices, cancel. Stripe's own rather than a screen here, as VC Writer does
- * for its rooms; whatever changes comes back through the webhook.
+ * invoices, cancel. Stripe's own rather than a screen here; whatever changes
+ * comes back through the webhook.
  */
 export async function POST(): Promise<Response> {
   const user = await currentUser();
@@ -26,7 +26,7 @@ export async function POST(): Promise<Response> {
     const session = await stripe().billingPortal.sessions.create({
       customer: data.stripe_customer_id as string,
       return_url: `${env.siteUrl}/account`,
-      // Game Studio's plans to switch between, not VC Writer's default portal.
+      // The portal set up for VC Game Studio's plans (npm run setup -- stripe).
       ...(env.stripePortalConfiguration ? { configuration: env.stripePortalConfiguration } : {}),
     });
     return NextResponse.json({ url: session.url });

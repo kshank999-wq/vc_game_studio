@@ -17,7 +17,7 @@ const bodySchema = z.object({ plan: z.literal('studio').default('studio'), inter
  * webhook once Stripe says the subscription exists.
  *
  * Signing in first is required, so the subscription lands on the right account
- * from the start (and a VC Writer customer's existing account is the one used).
+ * from the start.
  * A returning customer reuses their Stripe customer, so their cards and
  * invoices stay in one place. Someone whose subscription is still running is
  * sent to their account instead: a second checkout would bill them twice.
@@ -50,7 +50,7 @@ export async function POST(request: Request): Promise<Response> {
           : {}),
       client_reference_id: user.id,
       // On the session and, through subscription_data, on the subscription and
-      // its events: how VC Writer's webhook on the shared account knows to skip them.
+      // its events: how the webhook knows them for its own.
       metadata,
       subscription_data: { metadata },
       allow_promotion_codes: true,
