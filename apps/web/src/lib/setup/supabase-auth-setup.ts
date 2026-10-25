@@ -38,7 +38,7 @@ export const setupSupabaseAuth = async (
   notes.push(
     codeInEmail
       ? 'The sign-in email carries the six-digit code the desktop app asks for.'
-      : 'The sign-in email does not show the code. In Supabase → Authentication → Email Templates → Magic Link, add a line such as "Or type this code in the app: {{ .Token }}". It is every VC app's sign-in email, so word it for all of them.',
+      : 'The sign-in email does not show the code. In Supabase → Authentication → Email Templates → Magic Link, add a line such as "Or type this code in the app: {{ .Token }}". It is the sign-in email for every VC app, so word it for all of them.',
   );
   return { notes, codeInEmail };
 };
