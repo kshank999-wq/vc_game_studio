@@ -1,16 +1,16 @@
 # Selling VC Game Studio: deployment and service wiring
 
 VC Game Studio is its own product with its own subscription, one of VC
-Entertainment's apps: **vc-gamestudio.com** sells subscriptions and issues
+Software's apps: **vc-gamestudio.com** sells subscriptions and issues
 licenses, and customers download the desktop app for Mac or Windows. Projects
 stay on the customer's computer, as files.
 
 ## How the VC products fit together
 
-Shared by every VC app (VC Entertainment LLC):
+Shared by every VC Software app (www.vc-software.com; the company behind them is VC Entertainment LLC):
 - **one account per customer**, in the accounts project (Supabase project
   **VCWriter**, `kpviyoqhmzignjyvixws`, which every VC app signs in to);
-- **one Stripe account**, VC Entertainment's, with each product's own
+- **one Stripe account**, VC Software's, with each product's own
   products and prices in it;
 - **one code-signing identity**, VC Entertainment LLC's certificates.
 
@@ -27,8 +27,8 @@ Each product's own:
 | --- | --- | --- |
 | Website | `apps/web` (Next.js on Vercel) | Home, pricing, sign-in, account (license, computers, billing), downloads, the browser preview at `/preview`, and the API the app calls |
 | Desktop app | `apps/studio` (Electron) | Signs in, activates the computer, and checks its license (`src/main/licensing.ts`) |
-| Accounts and records | VC Entertainment's accounts project (Supabase **VCWriter**, `kpviyoqhmzignjyvixws`) | One account for every VC app. The tables are VC Game Studio's own, named `gs_*` (`supabase/migrations/gs_0001_commerce.sql`, **applied**) |
-| Payments | VC Entertainment's Stripe account | One package, VC Game Studio, monthly and yearly |
+| Accounts and records | VC Software's accounts project (Supabase **VCWriter**, `kpviyoqhmzignjyvixws`) | One account for every VC app. The tables are VC Game Studio's own, named `gs_*` (`supabase/migrations/gs_0001_commerce.sql`, **applied**) |
+| Payments | VC Software's Stripe account | One package, VC Game Studio, monthly and yearly |
 | Email | Resend | The license email |
 
 ## Setting it up: six commands
@@ -44,7 +44,7 @@ your own computer, from the repository root, after `npm install`.
    ```
 
    Fill in `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
-   `STRIPE_SECRET_KEY` and `RESEND_API_KEY` (VC Entertainment's, the same
+   `STRIPE_SECRET_KEY` and `RESEND_API_KEY` (VC Software's, the same
    values the other VC apps' Vercel projects use). Also fill in two personal tokens that are only for
    these steps and never uploaded:
    - `VERCEL_TOKEN`: Vercel → Account Settings → Tokens;
@@ -78,7 +78,7 @@ manual equivalents of each step are described below.
 ## How a sale works
 
 1. The customer signs in on vc-gamestudio.com with an emailed link. It is
-   their VC Entertainment account: the same one as any other VC app they use.
+   their VC Software account: the same one as any other VC app they use.
 2. Pricing → **Subscribe** opens a Stripe Checkout in subscription mode.
    Everything this site creates in Stripe carries
    `metadata.product = vc-game-studio`.
@@ -142,7 +142,7 @@ git push   # main deploys vc-writer.com
 ## Vercel: environment variables
 
 Set these for Production, and for Preview if preview deployments should
-work. The "Shared" values are VC Entertainment's, copied from the `vcwriter`
+work. The "Shared" values are VC Software's, copied from the `vcwriter`
 Vercel project.
 
 | Variable | Value | Notes |
@@ -220,7 +220,7 @@ records). Vercel manages the domain's DNS, so add them under Vercel → Domains.
 A failed send is logged to `email_events` (templates `gs-license-*`) and
 never fails a purchase; the account page always shows the license.
 
-## Supabase (VC Entertainment's accounts project, VCWriter)
+## Supabase (VC Software's accounts project, VCWriter)
 
 - **Database:** done. `gs_0001_commerce` is applied. The security advisor
   reports only `gs_stripe_webhook_events` having no policies, which is
@@ -233,7 +233,7 @@ never fails a purchase; the account page always shows the license.
 - **Auth → Email templates → Magic link:** the desktop app signs in with the
   code, as VC Writer's app does, so the template must include
   `{{ .Token }}`. The sign-in email is every VC app's, so word it as VC
-  Entertainment's, not one product's.
+  Software's, not one product's.
 
 ## GitHub: building the installers
 

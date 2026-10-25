@@ -7,7 +7,7 @@ import { browserClient } from '@/lib/supabase-browser';
 
 /**
  * Email sign-in: a link, no password. The account is the customer's VC
- * Entertainment account, the same one for every VC app, so someone who uses
+ * Software account, the same one for every VC app, so someone who uses
  * another VC app signs in with the address they already use; a first sign-in
  * makes one.
  */
@@ -47,7 +47,7 @@ function SignInForm() {
     <>
       <div className="hero">
         <h1>Sign in</h1>
-        <p className="lede">We will email you a link. It is your VC Entertainment account: the same one for every VC app.</p>
+        <p className="lede">We will email you a link. It is your VC Software account: the same one for every VC app.</p>
       </div>
       <div className="panel" style={{ maxWidth: 520 }}>
         {failed && status !== 'sent' ? (

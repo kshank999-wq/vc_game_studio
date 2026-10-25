@@ -8,7 +8,7 @@ import { PLAN_ORDER, PLANS } from '../plans';
  * portal configuration of its own.
  *
  * The portal is a configuration of its own, not the account's default: the
- * Stripe account is VC Entertainment's, shared by every VC product, and other
+ * Stripe account is VC Software's, shared by every VC product, and other
  * products' customers must not be offered Game Studio plans to switch to.
  * /api/billing/portal names it.
  */

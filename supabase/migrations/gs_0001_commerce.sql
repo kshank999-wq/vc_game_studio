@@ -1,8 +1,8 @@
 -- VC Game Studio commerce: subscriptions, licenses, device seats and installer
--- releases, in VC Entertainment's accounts project (Supabase project VCWriter,
+-- releases, in VC Software's accounts project (Supabase project VCWriter,
 -- kpviyoqhmzignjyvixws), which every VC app signs in to.
 --
--- One VC Entertainment account: a customer is one row of public.profiles,
+-- One VC Software account: a customer is one row of public.profiles,
 -- the same row every VC app uses, so one sign-in covers them all. Everything
 -- else is VC Game Studio's own and carries the gs_ prefix; nothing of another
 -- product's is altered. Its enums (platform, license_status, release_channel) and its
@@ -95,7 +95,7 @@ create table public.gs_release_builds (
 create unique index gs_release_builds_active_idx on public.gs_release_builds (platform, channel) where active;
 
 -- VC Game Studio's webhook endpoint claims event ids here. Its own table: every
--- VC product's endpoint receives every event of VC Entertainment's Stripe
+-- VC product's endpoint receives every event of VC Software's Stripe
 -- account, and each must be able to claim and skip independently.
 create table public.gs_stripe_webhook_events (
   id text primary key,

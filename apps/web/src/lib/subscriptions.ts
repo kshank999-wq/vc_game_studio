@@ -53,7 +53,7 @@ const findProfileByEmail = async (client: SupabaseClient, email: string): Promis
 };
 
 /**
- * The account this subscription belongs to: the customer's VC Entertainment
+ * The account this subscription belongs to: the customer's VC Software
  * account, shared by every VC app (the signed-in customer's, else the one for
  * the checkout's email). Someone without one gets an account for their email,
  * so a paid subscription is never stranded.

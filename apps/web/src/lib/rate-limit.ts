@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { adminClient } from './supabase';
 
 /**
- * Per-address rate limiting, on the limiter VC Entertainment's accounts
+ * Per-address rate limiting, on the limiter VC Software's accounts
  * database already keeps (`consume_rate_limit`). For noise and cost, not access: it
  * fails open, because a limiter that could take checkout down when it broke is
  * a worse risk than the burst it guards against. Keys are hashed addresses,

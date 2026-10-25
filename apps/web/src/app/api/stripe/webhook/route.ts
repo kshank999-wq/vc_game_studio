@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * gs_stripe_webhook_events); act, idempotently; email, whose failure is
  * logged and never fails the webhook.
  *
- * VC Entertainment's Stripe account sends every product's events to every
+ * VC Software's Stripe account sends every product's events to every
  * product's endpoint. Events that are not VC Game Studio's (not tagged by this
  * site and on none of its prices) are acknowledged and left alone before
  * anything is claimed.

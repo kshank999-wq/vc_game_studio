@@ -1,5 +1,5 @@
 /**
- * The sign-in settings of VC Entertainment's accounts project (shared by every
+ * The sign-in settings of VC Software's accounts project (shared by every
  * VC app), through the Management API: this site's callback added to the
  * redirect allow list (the other apps' entries kept), and a check that the
  * sign-in email carries the six-digit code the desktop app asks for. The
