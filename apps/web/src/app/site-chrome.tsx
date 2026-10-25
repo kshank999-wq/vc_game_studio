@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { VC_SOFTWARE_URL } from '@/lib/related';
 
 /** The mark: a gold diamond over a spine line, the studio's story track in a glyph. */
 export function Mark({ size = 26 }: { size?: number }) {
@@ -38,7 +39,7 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="wrap">
         <span>
-          © {new Date().getFullYear()} VC Game Studio · a <a href="https://www.vc-software.com">VC Software</a> product
+          © {new Date().getFullYear()} VC Game Studio · a <a href={VC_SOFTWARE_URL}>VC Software</a> product
         </span>
         <span>
           <Link href="/pricing">Pricing</Link> · <Link href="/download">Download</Link> · <Link href="/account">Account</Link>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { RELATED } from '@/lib/related';
 import { DEVICES_PER_LICENSE } from '@/lib/plans';
 
 export const dynamic = 'force-dynamic';
@@ -88,6 +89,19 @@ export default function Home() {
               Pricing
             </Link>
           </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="more-from-vc">
+        <h2 id="more-from-vc">More from VC Software</h2>
+        <div className="grid two">
+          {RELATED.map((product) => (
+            <div className="panel" key={product.name}>
+              <h3>{product.name}</h3>
+              <p className="muted">{product.tagline}</p>
+              {product.url ? <a href={product.url}>Visit {product.name}</a> : <span className="muted">Coming soon</span>}
+            </div>
+          ))}
         </div>
       </section>
     </>
