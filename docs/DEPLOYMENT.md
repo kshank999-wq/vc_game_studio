@@ -107,22 +107,26 @@ manual equivalents of each step are described below.
 
 The rule for every VC product: its webhook acts only on its own sales.
 Stripe sends every event in an account to every webhook endpoint, so VC
-Writer's webhook will see Game Studio's checkouts. As it stands, it would
-issue a **VC Writer** license for each one. It also has a related existing
-bug: it issues a desktop license for a Writers Room seat checkout.
+Writer's webhook sees Game Studio's checkouts. As it stands it issues a
+**VC Writer** license for every completed checkout, Game Studio's included,
+and for a Writers Room seat checkout too. (Subscriptions are already safe:
+VC Writer leaves any subscription not tagged as its own alone.)
 
-The fix is in `docs/commerce/vcwriter-stripe-scope.patch`:
-- skip events tagged `vc-game-studio`;
-- issue a license only for a paid one-off checkout.
+The fix is `docs/commerce/vcwriter-stripe-scope.patch`, made against VC
+Writer's `main` (commit c8b8ef0) and passing its test suite (146 tests):
+- `lib/checkout-kind.ts`: a checkout stamped with another product
+  (`metadata.product`, e.g. `vc-game-studio`) or a room's seats is no desktop
+  purchase; the webhook fulfils only VC Writer's own;
+- VC Writer's checkout stamps its own sales `product: 'vc-writer'`.
 
-It is tested against VC Writer's own suite. Apply it to `kshank999-wq/VCWriter`
-and deploy it before the first Game Studio sale:
+Apply it to `kshank999-wq/vcwriter` and deploy it before the first Game
+Studio sale:
 
 ```bash
-cd VCWriter && git checkout main && git pull
+cd vcwriter && git checkout main && git pull
 git apply ../vc_game_studio/docs/commerce/vcwriter-stripe-scope.patch
-git add -A && git commit -m "Stripe webhook: leave VC Game Studio's events alone, no licence for a room seat"
-git push   # main deploys vc-writer.com
+git add -A && git commit -m "Stripe webhook: fulfil only VC Writer's own checkouts"
+git push
 ```
 
 ## Vercel: the project
