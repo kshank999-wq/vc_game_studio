@@ -105,6 +105,8 @@ manual equivalents of each step are described below.
 
 ## Before selling: VC Writer's webhook must leave Game Studio's sales alone
 
+**Done:** applied to VC Writer as commit `d9c6c97` (on `main` and its working branch) and live on vc-writer.com. The rest of this section explains it.
+
 The rule for every VC product: its webhook acts only on its own sales.
 Stripe sends every event in an account to every webhook endpoint, so VC
 Writer's webhook sees Game Studio's checkouts. As it stands it issues a
